@@ -1,0 +1,86 @@
+/* ---- shell section (owner: shell builder) ---- */
+.dk-sc-shell-note {
+  max-width: 860px;
+  margin-bottom: 16px;
+  color: var(--c-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.dk-sc-shell-box {
+  height: 760px;
+}
+@media (max-width: 767px) {
+  .dk-sc-shell-box {
+    height: 720px;
+  }
+}
+.dk-sc-shell-canvas {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+.dk-sc-shell-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dk-sc-shell-view {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-sc-shell-view strong {
+  color: var(--dk-text);
+  font-weight: 650;
+}
+.dk-sc-shell-h {
+  margin-top: 4px;
+  font: 450 24px/1.2 var(--dk-font-display);
+}
+.dk-sc-shell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dk-sc-shell-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 12px;
+}
+.dk-sc-shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.dk-sc-shell-dl {
+  display: grid;
+  gap: 4px;
+}
+.dk-sc-shell-dl dt {
+  margin-top: 8px;
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-sc-shell-dl dt:first-child {
+  margin-top: 0;
+  color: var(--dk-text);
+  font: 650 var(--dk-t14) var(--dk-font);
+}
+.dk-sc-shell-dl dd {
+  margin: 0;
+  font: 400 var(--dk-t14) var(--dk-font);
+}
+@media (max-width: 900px) {
+  .dk-sc-shell-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dk-sc-shell-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -365,3 +365,61 @@ if (typeof document !== 'undefined') {
     }
   })
 }
+
+/* ------------------------------------------------------------------ demo UI feedback (spec §8.3) */
+
+/** Demo feedback sounds: soft click / notify / success, each ≤ 150 ms, synthesised. Plays ONLY while the
+ *  site's sound toggle is on (audio.isOn()) and the context is running — never autoplays, never throws. */
+const SFX = {
+  /** output level (the beds use AUDIO_MIX; these are short and sit below them) */
+  level: 0.07,
+  maxMs: 150,
+} as const
+
+type Note = { f: number; at: number; dur: number; to?: number }
+
+function playNotes(notes: Note[], type: OscillatorType, level: number = SFX.level): void {
+  const g = graph
+  if (!on || !g || g.ctx.state !== 'running') return
+  try {
+    const { ctx } = g
+    const out = gain(ctx, level)
+    out.connect(ctx.destination)
+    const t0 = ctx.currentTime + 0.005
+    let end = 0
+    for (const n of notes) {
+      const start = t0 + n.at
+      const stop = start + n.dur
+      end = Math.max(end, n.at + n.dur)
+      const osc = ctx.createOscillator()
+      osc.type = type
+      osc.frequency.setValueAtTime(n.f, start)
+      if (n.to) osc.frequency.exponentialRampToValueAtTime(n.to, stop)
+      const env = gain(ctx, 0)
+      env.gain.setValueAtTime(0, start)
+      env.gain.linearRampToValueAtTime(1, start + 0.004)
+      env.gain.exponentialRampToValueAtTime(0.001, stop)
+      osc.connect(env).connect(out)
+      osc.start(start)
+      osc.stop(stop + 0.01)
+    }
+    window.setTimeout(() => out.disconnect(), Math.min(SFX.maxMs, end * 1000) + 60)
+  } catch {
+    /* feedback sound is optional */
+  }
+}
+
+export const sfx = {
+  /** soft tick for toggles and selections (~30 ms) */
+  click(): void {
+    playNotes([{ f: 1800, to: 1200, at: 0, dur: 0.03 }], 'sine', SFX.level * 0.7)
+  },
+  /** two-note chime for a new cross-product event (~130 ms) */
+  notify(): void {
+    playNotes([{ f: 880, at: 0, dur: 0.06 }, { f: 1320, at: 0.06, dur: 0.07 }], 'sine')
+  },
+  /** rising three-note arpeggio for a completed mission (~150 ms) */
+  success(): void {
+    playNotes([{ f: 784, at: 0, dur: 0.05 }, { f: 988, at: 0.045, dur: 0.05 }, { f: 1319, at: 0.09, dur: 0.06 }], 'triangle')
+  },
+}

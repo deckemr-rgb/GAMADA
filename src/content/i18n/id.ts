@@ -13,6 +13,7 @@ import { why } from './home/why'
 import { testimonials } from './home/testimonials'
 import { faqPreview } from './home/faqPreview'
 import { contact } from './home/contact'
+import { eco } from './eco'
 
 export const id = {
   langName: 'Bahasa Indonesia',
@@ -100,6 +101,7 @@ export const id = {
     faqPreview: faqPreview.id,
     contact: contact.id,
   },
+  eco: eco.id,
   pages: {
     building: 'Halaman ini sedang dibangun. Isinya menyusul di fase berikutnya.',
     backHome: 'Kembali ke beranda',

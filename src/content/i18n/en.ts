@@ -11,6 +11,7 @@ import { why } from './home/why'
 import { testimonials } from './home/testimonials'
 import { faqPreview } from './home/faqPreview'
 import { contact } from './home/contact'
+import { eco } from './eco'
 
 export const en: Dict = {
   langName: 'English',
@@ -98,6 +99,7 @@ export const en: Dict = {
     faqPreview: faqPreview.en,
     contact: contact.en,
   },
+  eco: eco.en,
   pages: {
     building: 'This page is being built. Its content arrives in a later phase.',
     backHome: 'Back to home',

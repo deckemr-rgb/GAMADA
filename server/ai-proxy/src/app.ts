@@ -2,8 +2,11 @@
  * app.ts — Hono app factory shared by every runtime adapter (node, Vercel, Netlify, Workers).
  *
  *   GET  /api/ai/health   → { ok, live, mock, models: { fast, smart, extract }, reason? }
- *   POST /api/ai/chat     → SSE: text | tool_call | done | error   (JSON error before streaming)
+ *   POST /api/ai/chat     → SSE: text | tool_call | structured | followups | done | error
+ *                           (JSON error before streaming)
  *   POST /api/ai/extract  → Extracted JSON (multipart `image` ≤ 8 MB or `text`; or JSON { text })
+ *
+ * Wire protocol (all three endpoints): README.md → "Protokol SSE". Client: src/demo-kit/ai/live.ts.
  *
  * Error responses are always JSON `{ error: { code, message, retryable } }` with a status the site
  * treats as "fall back to simulation" (429 / 5xx) when the cause is on our side.
@@ -100,7 +103,7 @@ export function createApp(env: ProxyEnv, opts: AppOptions = {}) {
       origin: (origin) => (origin && originOk(origin) ? origin : null),
       allowMethods: ['GET', 'POST', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'X-Request-Id'],
-      exposeHeaders: ['X-Request-Id', 'Retry-After', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
+      exposeHeaders: ['X-Request-Id', 'X-AI-Mock', 'Retry-After', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
       maxAge: 600,
     }),
   )
@@ -330,7 +333,8 @@ export function createApp(env: ProxyEnv, opts: AppOptions = {}) {
 
       if (cfg.mock) {
         rec.mock = true
-        return done(c.json({ ...mockExtract(kind), mock: true }))
+        c.header('X-AI-Mock', '1')
+        return done(c.json(mockExtract(kind)))
       }
       const na = await unavailable(c)
       if (na) return done(na)

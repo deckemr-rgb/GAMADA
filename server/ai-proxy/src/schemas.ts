@@ -2,10 +2,12 @@
  * schemas.ts — zod schemas for (1) request bodies, (2) the structured outputs the model returns
  * through tool use, one tool per structured `kind`, and (3) the /extract result.
  *
- * Structured outputs reach the site as SSE `tool_call` events carrying
- * `structured: { kind, data }` — the same shape as `Structured` in src/demo-kit/ai/types.ts.
- * The site validates them again with its own zod schemas (spec §9.3); the proxy validates first
- * so an invalid output is sent back to the model for one correction instead of to the browser.
+ * Structured outputs reach the site as an SSE `tool_call` event followed by a `structured` event
+ * `{ value: { kind, data } }` — the same shape as `Structured` in src/demo-kit/ai/types.ts.
+ * The site validates them again (spec §9.3) with a MIRROR of these schemas
+ * (STRUCTURED_SCHEMAS in src/demo-kit/ai/live.ts); the site's structured-parity test fails when
+ * the two drift apart, so change both together. The proxy validates first so an invalid output is
+ * sent back to the model for one correction instead of to the browser.
  */
 import { z } from 'zod'
 import { PRODUCT_SLUGS, ROLE_IDS } from './products.js'
@@ -457,19 +459,15 @@ export function toExtracted(kind: ExtractKind, raw: z.infer<typeof ExtractionToo
 /* ------------------------------------------------------------------ SSE wire events */
 
 /**
- * The SSE `data:` payload of each event is JSON and (except `error`) is an `AiChunk` of the site:
- *   event: text       data: { type:'text', text }
- *   event: tool_call  data: { type:'tool_call', call:{ id, name, input }, structured?:{ kind, data } }
- *   event: done       data: { type:'done', mode:'live', model, stopReason, usage, mock?, budgetExhausted? }
- *   event: error      data: { type:'error', code, message, retryable }
+ * One SSE event per ProxyEvent: `event:` = `type`, `data:` = the whole object as JSON. The protocol
+ * is documented ONCE, in README.md → "Protokol SSE"; the site parses it in src/demo-kit/ai/live.ts.
+ * Every event except `error` is an `AiChunk` of the site (plus a few extra fields on `done`).
  */
 export type ProxyEvent =
   | { type: 'text'; text: string }
-  | {
-      type: 'tool_call'
-      call: { id: string; name: string; input: Record<string, unknown> }
-      structured?: { kind: string; data: Record<string, unknown> }
-    }
+  | { type: 'tool_call'; call: { id: string; name: string; input: Record<string, unknown> } }
+  | { type: 'structured'; value: { kind: string; data: Record<string, unknown> } }
+  | { type: 'followups'; chips: string[] }
   | {
       type: 'done'
       mode: 'live'
@@ -480,3 +478,23 @@ export type ProxyEvent =
       budgetExhausted?: boolean
     }
   | { type: 'error'; code: string; message: string; retryable: boolean }
+
+/** Structured kinds sent as `structured` events (every tool except suggest_followups). */
+export const STRUCTURED_KINDS = Object.values(TOOLS)
+  .map((t) => t.kind)
+  .filter((k) => k !== 'followups')
+
+/**
+ * The events for one VALIDATED tool use: `suggest_followups` → a single `followups` event;
+ * any other tool → `tool_call` (the visible agent step) followed by `structured`.
+ */
+export function toolEvents(def: ToolDef, id: string, data: Record<string, unknown>): ProxyEvent[] {
+  if (def.kind === 'followups') {
+    const chips = Array.isArray(data.chips) ? data.chips.filter((c): c is string => typeof c === 'string') : []
+    return [{ type: 'followups', chips }]
+  }
+  return [
+    { type: 'tool_call', call: { id, name: def.name, input: data } },
+    { type: 'structured', value: { kind: def.kind, data } },
+  ]
+}

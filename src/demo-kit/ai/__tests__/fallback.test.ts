@@ -3,7 +3,7 @@
  * malformed SSE, mid-stream error, invalid structured, caller abort, health timeout + cache, extract fallback.
  * Run: npx tsx src/demo-kit/ai/__tests__/fallback.test.ts
  */
-import { configureLive, checkHealth, parseSSE, peekHealth } from '../live'
+import { configureLive, checkHealth, liveChat, LiveError, parseSSE, peekHealth, wireMessages } from '../live'
 import { createLiveProvider, getAi, onLiveFallback, registerScenario, unregisterScenario, type FallbackInfo } from '../provider'
 import { sampleScenario, createFixtureWorld } from '../__fixtures__/sample-scenario'
 import type { AiChunk, ChatRequest } from '../types'
@@ -122,8 +122,52 @@ async function main() {
     fallbacks.length = 0
     const r = await collect(live.chat(req(Q)))
     assert(r.text === 'Sebagian ', `partial text kept only ("${r.text}")`)
-    assert(r.structured[0]?.kind === 'info' && r.done?.fellBack && r.done.mode === 'live', 'sim structured after partial live text')
+    assert(r.structured[0]?.kind === 'info' && r.done?.fellBack && r.done.mode === 'sim', 'sim structured after partial live text, done mode sim')
     console.log('mid-stream failure: OK')
+  }
+
+  // 7b. protocol details: unknown events ignored, error event carries the proxy code, JSON HTTP error code,
+  //     a 200 that is not an event stream (static host answering /api/ai/chat with index.html) falls back
+  useFetch(async () =>
+    new Response(sseBody([ev('ping', {}), ev('future_event', { x: 1 }), ev('text', { type: 'text', text: 'Hai ' }), ev('error', { type: 'error', code: 'refusal', message: 'no', retryable: false })]), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }),
+  )
+  {
+    fallbacks.length = 0
+    let code: string | undefined
+    const r = await collect(live.chat(req(Q)))
+    assert(r.text === 'Hai ' && r.done?.mode === 'sim' && fallbacks[0]?.reason === 'upstream', `unknown events ignored, error → upstream (${JSON.stringify(fallbacks)})`)
+    try {
+      for await (const _c of liveChat(req(Q))) void _c
+    } catch (e) {
+      code = e instanceof LiveError ? e.code : undefined
+    }
+    assert(code === 'refusal', `LiveError.code from SSE error (${code})`)
+  }
+  useFetch(async () => new Response(JSON.stringify({ error: { code: 'budget_exhausted', message: 'spent', retryable: true } }), { status: 503, headers: { 'content-type': 'application/json' } }))
+  {
+    let err: LiveError | undefined
+    try {
+      for await (const _c of liveChat(req(Q))) void _c
+    } catch (e) {
+      err = e as LiveError
+    }
+    assert(err?.kind === 'http' && err.status === 503 && err.code === 'budget_exhausted', `http error code ${err?.code}`)
+  }
+  useFetch(async () => new Response('<!doctype html><title>x</title>', { status: 200, headers: { 'content-type': 'text/html' } }))
+  {
+    fallbacks.length = 0
+    const r = await collect(live.chat(req(Q)))
+    assert(r.done?.mode === 'sim' && (fallbacks[0]?.reason as string | undefined) === 'protocol', 'html 200 → protocol fallback')
+  }
+  {
+    const long = 'x'.repeat(5000)
+    const msgs = [{ role: 'assistant' as const, content: 'Halo' }, ...Array.from({ length: 60 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', content: i === 59 ? long : `m${i}` })), { role: 'assistant' as const, content: '  ' }]
+    const w = wireMessages(msgs)
+    assert(w.length <= 40 && w.at(-1)!.content.length === 4000 && w[0]!.role === 'user' && w.every((m) => m.content.trim()), `wireMessages ${w.length}`)
+    console.log('protocol details (unknown events, error codes, html 200, history trim): OK')
   }
 
   // 8. invalid structured → sim structured
@@ -132,7 +176,7 @@ async function main() {
     fallbacks.length = 0
     const r = await collect(live.chat(req(Q)))
     assert(r.structured.length === 1 && r.structured[0]!.kind === 'info' && r.structured[0]!.data.place === 'MPP', `sim structured ${JSON.stringify(r.structured)}`)
-    assert(r.done?.fellBack === true && fallbacks[0]?.reason === 'invalid', 'invalid structured flagged')
+    assert(r.done?.fellBack === true && r.done.mode === 'sim' && (fallbacks[0]?.reason as string | undefined) === 'invalid', 'invalid structured flagged')
     console.log('invalid structured → sim structured: OK')
   }
 
@@ -170,11 +214,32 @@ async function main() {
     assert(calls.length === 1 && peekHealth()?.live === false, 'cached')
     console.log(`health timeout: ${ms.toFixed(0)} ms, deduped + cached: OK`)
   }
-  useFetch(async () => new Response(JSON.stringify({ ok: true, live: true, models: ['fast', 'smart'] }), { status: 200 }))
+  useFetch(async () =>
+    new Response(JSON.stringify({ ok: true, live: true, mock: false, models: { fast: 'f', smart: 's', extract: 's' } }), { status: 200 }),
+  )
   {
     const h = await checkHealth({ force: true })
-    assert(h.live && h.models.length === 2, `health ok ${JSON.stringify(h)}`)
+    assert(h.live && !h.mock && h.models?.extract === 's', `health ok ${JSON.stringify(h)}`)
     console.log('health ok: OK')
+  }
+  useFetch(async () => new Response(JSON.stringify({ ok: true, live: false, mock: false, models: { fast: 'f', smart: 's', extract: 's' }, reason: 'budget_exhausted' }), { status: 200 }))
+  {
+    const h = await checkHealth({ force: true })
+    assert(!h.live && h.reason === 'budget_exhausted', `health budget ${JSON.stringify(h)}`)
+  }
+  // same origin: VITE_AI_PROXY_URL="" → relative /api/ai/* (dev: the vite proxy)
+  {
+    calls = []
+    configureLive({
+      baseUrl: '',
+      fetch: async (url, init) => {
+        calls.push(`${init?.method ?? 'GET'} ${url}`)
+        return new Response(JSON.stringify({ ok: true, live: true, mock: true, models: { fast: 'mock', smart: 'mock', extract: 'mock' } }), { status: 200 })
+      },
+    })
+    const h = await checkHealth()
+    assert(h.live && h.mock && calls[0] === 'GET /api/ai/health', `same-origin health ${calls[0]}`)
+    console.log('health fields + same-origin base: OK')
   }
 
   // 12. extract: sim + live 500 → sim

@@ -35,7 +35,13 @@ export default defineConfig({
   // client-side routes (/karya, /faq …): dev + preview serve index.html for unknown paths.
   // Static hosts need the same rewrite (e.g. Netlify `/* /index.html 200`, Vercel rewrites).
   appType: 'spa',
-  server: { port: 5173, host: '127.0.0.1' },
+  server: {
+    port: 5173,
+    host: '127.0.0.1',
+    // dev only: same-origin /api/ai/* → the AI proxy (`npm run ai:mock` / `npm run ai:dev`), so the site can use
+    // VITE_AI_PROXY_URL="" (see .env.example). Without the proxy running, health fails and the demo stays on Simulation.
+    proxy: { '/api/ai': { target: process.env.AI_PROXY_TARGET ?? 'http://127.0.0.1:8787', changeOrigin: false } },
+  },
   preview: { port: 4173, host: '127.0.0.1' },
   build: {
     target: 'es2022',

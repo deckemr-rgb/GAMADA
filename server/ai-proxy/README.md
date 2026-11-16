@@ -25,12 +25,21 @@ npm run dev:mock            # mode tiruan: tanpa kunci, tanpa jaringan → http:
 npm run dev                 # mode sungguhan: isi .env dulu (cp .env.example .env → ANTHROPIC_API_KEY)
 
 npm run typecheck           # tsc --noEmit
-npm test                    # self-test (64 cek, tanpa jaringan; termasuk server Claude palsu lokal)
+npm test                    # self-test (69 cek, tanpa jaringan; termasuk server Claude palsu lokal)
 npm run build && npm start  # build ke dist/ lalu jalankan dengan Node
 ```
 
-Hubungkan situs dengan menyetel `VITE_AI_PROXY_URL=http://127.0.0.1:8787` di `.env.local` situs.
-`ALLOWED_ORIGINS` bawaan sudah mengizinkan `localhost`/`127.0.0.1` port 5173 dan 4173.
+Dari root situs ada pintasan: `npm run ai:install`, `npm run ai:mock` (proxy tiruan di 8787),
+`npm run ai:dev` (proxy sungguhan, `.env` di folder ini), dan `npm run ai:test` (self-test proxy +
+semua tes `src/demo-kit/ai/__tests__`, termasuk tes integrasi yang menyalakan proxy tiruan sungguhan).
+
+**Menghubungkan situs** (`.env.local` di root situs, lihat `.env.example` di root):
+
+- `VITE_AI_PROXY_URL=` (kosong) → same origin `/api/ai/*`. Saat `npm run dev`, `vite.config.ts`
+  meneruskan `/api/ai` ke `http://127.0.0.1:8787`, jadi cukup jalankan `npm run ai:mock` di terminal lain.
+- `VITE_AI_PROXY_URL=https://ai.domainanda.id` → proxy yang sudah di-deploy. `ALLOWED_ORIGINS` harus
+  memuat origin situs (bawaannya sudah mengizinkan `localhost`/`127.0.0.1` port 5173 dan 4173).
+- Variabel tidak ada → Live mati dan tidak ada permintaan sama sekali (situs tetap di Simulasi).
 
 Uji cepat dengan curl:
 
@@ -41,16 +50,33 @@ curl -N -X POST http://127.0.0.1:8787/api/ai/chat -H "content-type: application/
 curl -X POST http://127.0.0.1:8787/api/ai/extract -F product=cek-berkas -F kind=ktp-specimen -F image=@spesimen.png
 ```
 
-## Endpoint
+## Protokol SSE
+
+Satu-satunya dokumentasi protokol kabel antara situs dan proxy (ketiga endpoint). Pengurainya di sisi
+situs adalah `src/demo-kit/ai/live.ts`, dan provider + fallback-nya ada di `src/demo-kit/ai/provider.ts`.
+Bila protokol berubah, ubah kedua sisi bersamaan lalu jalankan `npm run ai:test` dari root situs.
 
 | Method | Path | Isi |
 |---|---|---|
-| GET | `/api/ai/health` | `{ ok, live, mock, models: { fast, smart, extract }, reason? }`. `live:false` bila tidak ada kunci (`reason: "no_api_key"`) atau anggaran harian habis (`"budget_exhausted"`). Tidak dihitung rate limit. |
+| GET | `/api/ai/health` | JSON health (di bawah). Tidak dihitung rate limit. |
 | POST | `/api/ai/chat` | Body JSON ≤ 64 KB: `{ product, role?, lang?, messages, context? }` → **SSE** |
 | POST | `/api/ai/extract` | `multipart/form-data` (`product`, `kind`, `lang?`, `image` ≤ 8 MB **atau** `text`) atau JSON `{ product, kind, text }` → JSON `Extracted` |
 
 `product` wajib salah satu dari 18 slug terdaftar (`src/products.ts`, harus sama dengan
 `src/content/products.ts`; `npm test` gagal bila keduanya berbeda). Slug lain menghasilkan 400.
+
+### Health
+
+```jsonc
+{ "ok": true, "live": true, "mock": false,
+  "models": { "fast": "claude-haiku-5-5", "smart": "claude-sonnet-5-5", "extract": "claude-sonnet-5-5" },
+  "reason": "no_api_key" }            // hanya bila live:false: "no_api_key" | "budget_exhausted"
+```
+
+Klien (`checkHealth()`) memberi timeout 3 detik, menyimpan hasil 60 detik bila `live` dan 15 detik
+bila tidak, dan mengembalikan bentuk yang sama: `{ ok, live, mock, models | null, reason? }`. Bila proxy
+tidak terjangkau, klien mengisi `ok:false, live:false, reason:"unreachable"`, dan bila
+`VITE_AI_PROXY_URL` tidak disetel, `reason:"not_configured"`. Toggle Live hanya ditawarkan bila `live:true`.
 
 ### Chat request
 
@@ -67,25 +93,72 @@ curl -X POST http://127.0.0.1:8787/api/ai/extract -F product=cek-berkas -F kind=
 }
 ```
 
-`context` tanpa kunci `region`/`world` diperlakukan seluruhnya sebagai `world`. Field `tools` dari
-klien diabaikan: alat ditentukan oleh server per produk.
+`context` tanpa kunci `region`/`world` diperlakukan seluruhnya sebagai `world`. Klien tidak mengirim
+`tools`: alat ditentukan oleh server per produk. Klien memangkas riwayat sebelum mengirim (pesan
+kosong dibuang, ≤ 4000 karakter per pesan, maksimal 40 pesan terbaru dalam ±48 KB) dan meringkas
+`context` menjadi ±6 KB, sehingga permintaan normal tidak pernah kena 400/413.
 
-### SSE stream
+### Event stream (`text/event-stream`)
 
-Setiap event memiliki `data:` berupa JSON. Kecuali `error`, bentuknya sama dengan `AiChunk` di
-`src/demo-kit/ai/types.ts`.
+Setiap event berisi baris `event: <nama>`, `data: <JSON satu baris>`, dan `id: <n>`, lalu baris kosong.
+Nama event sama dengan `data.type`. Kecuali `error`, setiap `data` adalah `AiChunk` dari
+`src/demo-kit/ai/types.ts` (`done` membawa beberapa field tambahan). Klien memakai nama event, dan
+event yang tidak dikenal serta baris komentar `:` diabaikan, sehingga event baru bisa ditambahkan
+tanpa merusak klien lama.
 
-| event | data |
-|---|---|
-| `text` | `{ "type": "text", "text": "…" }` (potongan token) |
-| `tool_call` | `{ "type": "tool_call", "call": { "id", "name", "input" }, "structured": { "kind", "data" } }` |
-| `done` | `{ "type": "done", "mode": "live", "model", "stopReason", "usage": { input, output, cacheRead, cacheWrite }, "mock"?, "budgetExhausted"? }` |
-| `error` | `{ "type": "error", "code", "message", "retryable" }`, lalu stream ditutup |
+| event | data | arti |
+|---|---|---|
+| `text` | `{ "type": "text", "text": "…" }` | potongan token jawaban, ditampilkan saat tiba |
+| `tool_call` | `{ "type": "tool_call", "call": { "id", "name", "input" } }` | langkah agen yang terlihat (chip "langkah agent", Inti Agen) |
+| `structured` | `{ "type": "structured", "value": { "kind", "data" } }` | hasil terstruktur, selalu tepat setelah `tool_call` miliknya |
+| `followups` | `{ "type": "followups", "chips": ["…"] }` | 1–3 chip pertanyaan lanjutan (dari alat `suggest_followups`, tanpa `tool_call`) |
+| `done` | `{ "type": "done", "mode": "live", "model", "stopReason", "usage": { input, output, cacheRead, cacheWrite }, "mock"?, "budgetExhausted"? }` | akhir jawaban; klien hanya memakai `mode` (+ `intentId`/`confidence` bila ada) |
+| `error` | `{ "type": "error", "code", "message", "retryable" }` | kegagalan di tengah stream, lalu stream ditutup |
+
+Urutan khas: `text`… `tool_call` `structured` `text`… `followups` `done`. Setelah `done` klien berhenti
+membaca.
 
 Keluaran terstruktur (tiket, klasifikasi, disposisi, skor, dll.) dikirim lewat **tool use**. Proxy
 memvalidasi input setiap alat dengan zod (`src/schemas.ts`). Input yang tidak valid tidak pernah
 diteruskan ke browser; input itu dikembalikan ke model sebagai `is_error` untuk diperbaiki
-(maksimal `AI_MAX_TOOL_ROUNDS` putaran). Klien tetap wajib memvalidasi ulang (spec §9.3).
+(maksimal `AI_MAX_TOOL_ROUNDS` putaran). Klien tetap memvalidasi ulang (spec §9.3) dengan
+`STRUCTURED_SCHEMAS` di `live.ts`, cermin field-demi-field dari skema alat di sini. Tes
+`src/demo-kit/ai/__tests__/structured-parity.test.ts` gagal bila kedua daftar berbeda (jenis, field,
+batas, enum), jadi ubah keduanya bersamaan. Produk boleh mendaftarkan skema yang lebih ketat dengan
+`registerStructuredSchema(kind, …)`, tetapi skema itu harus tetap menerima bentuk dari proxy.
+
+**Perilaku klien saat gagal** (`createLiveProvider`, otomatis):
+
+- Tidak ada event pertama dalam 10 detik (`DEMO.liveFirstTokenTimeoutMs`), HTTP ≥ 400 (termasuk error JSON
+  di bawah), jaringan putus, respons 200 yang bukan `text/event-stream`, data SSE rusak, atau event
+  `error` → simulasi melanjutkan giliran itu dan toast "AI Live sedang sibuk, beralih ke Simulasi" muncul.
+- Bila teks live sudah tampil, teks itu dibiarkan dan hanya bagian non-teks simulasi (langkah,
+  structured, chip) yang ditambahkan. `structured` yang tidak lolos validasi diganti structured simulasi.
+- Keputusan pemilik: **setiap** fallback, termasuk yang terjadi di tengah jawaban live, diakhiri dengan
+  `done = { mode: "sim", fellBack: true }`, sehingga lencana tidak pernah menyebut "Live" untuk jawaban
+  yang diselesaikan simulasi.
+- Pembatalan oleh pengguna (reset/navigasi) menghentikan stream tanpa fallback dan tanpa toast.
+- *Reduced motion* tetap menampilkan teks secara streaming karena ini konten, bukan animasi. Yang
+  dimatikan hanya animasinya.
+
+### Extract
+
+Respons 200 berisi tepat `Extracted` dari `src/demo-kit/ai/types.ts`, divalidasi ulang oleh klien
+(`ExtractedSchema` di `live.ts`, ikut dicek tes parity):
+
+```jsonc
+{ "kind": "ktp-specimen",
+  "fields": [{ "key": "nik", "label": { "id": "NIK", "en": "ID number" }, "value": "…", "confidence": 0.97,
+               "box": { "x": 22, "y": 14, "w": 46, "h": 6 } }],      // box dalam % halaman (0–100), opsional
+  "checks": [{ "id": "specimen_mark", "label": { "id": "…", "en": "…" }, "status": "ok", "note": "…" }],
+  "tamper": [{ "x": 60, "y": 20, "w": 10, "h": 8, "score": 0.12 }],  // opsional, skor 0..1
+  "mode": "live" }
+```
+
+Klien mengirim `multipart/form-data` dengan `product`, `kind`, `text?`, dan `image?` (≤ 8 MB, dicek
+sebelum dikirim). Model bawaannya `AI_MODEL_EXTRACT`, yaitu `AI_MODEL_SMART` (keputusan pemilik). Bila
+gagal, klien memakai ekstraksi simulasi produk itu. Mode tiruan menandai respons dengan header
+`X-AI-Mock: 1`; badannya tetap `Extracted` murni.
 
 | `structured.kind` | alat | produk |
 |---|---|---|
@@ -119,7 +192,7 @@ Kesalahan yang terjadi sebelum stream dimulai dikembalikan sebagai JSON
 
 | status | code | arti untuk klien |
 |---|---|---|
-| 400 | `invalid_request`, `invalid_json`, `invalid_body` | bug klien (tidak fallback otomatis) |
+| 400 | `invalid_request`, `invalid_json`, `invalid_body` | bug klien; klien tetap jatuh ke simulasi |
 | 403 | `origin_not_allowed` | origin tidak ada di `ALLOWED_ORIGINS` |
 | 413 | `payload_too_large` | chat > 64 KB, unggahan > 8 MB |
 | 415 | `unsupported_media_type` | bukan JPEG/PNG/WebP/GIF/PDF (dicek dari magic bytes) |
@@ -127,6 +200,9 @@ Kesalahan yang terjadi sebelum stream dimulai dikembalikan sebagai JSON
 | 502 | `invalid_output`, `upstream_bad_request`, `upstream_model_not_found` | → simulasi |
 | 503 | `not_configured`, `budget_exhausted`, `upstream_unavailable`, `upstream_auth`, `upstream_unreachable` | → simulasi |
 | 504 | `upstream_timeout` | → simulasi |
+
+Klien memperlakukan setiap status ≥ 400 sebagai alasan untuk jatuh ke simulasi (`FallbackInfo.reason = "http"`,
+`status`). `code` dibaca ke `LiveError.code` untuk keperluan log.
 
 Bila Claude gagal sebelum token pertama, proxy menahan respons agar klien menerima status HTTP
 yang sebenarnya, bukan SSE 200 yang kosong.
@@ -156,7 +232,7 @@ yang sebenarnya, bukan SSE 200 yang kosong.
 | `ANTHROPIC_BASE_URL` | SDK | Gateway opsional (juga dipakai self-test) |
 | `AI_MODEL_FAST` | `claude-haiku-5-5` | Model chat |
 | `AI_MODEL_SMART` | `claude-sonnet-5-5` | Briefing, notulen, analisis |
-| `AI_MODEL_EXTRACT` | = `AI_MODEL_FAST` | Model vision `/extract` |
+| `AI_MODEL_EXTRACT` | = `AI_MODEL_SMART` | Model vision `/extract` (keputusan pemilik: model smart) |
 | `AI_EFFORT_FAST` / `AI_EFFORT_SMART` | `low` / `low` | `low` \| `medium` \| `high` |
 | `AI_MAX_OUTPUT_TOKENS` | `2048` | Per giliran model, termasuk thinking |
 | `AI_MAX_TOOL_ROUNDS` | `3` | Giliran model per jawaban chat |
@@ -198,11 +274,11 @@ Penanda berikut bisa diletakkan di pesan user terakhir untuk pengujian Playwrigh
 |---|---|
 | `[mock:slow]` | token pertama setelah 12 detik (menguji fallback 10 detik) |
 | `[mock:error]` | beberapa token, lalu event `error` |
-| `[mock:invalid]` | `tool_call` dengan data yang tidak lolos skema (menguji fallback validasi klien) |
+| `[mock:invalid]` | `tool_call` + `structured` dengan data yang tidak lolos skema (menguji fallback validasi klien) |
 | `[mock:429]` | HTTP 429 sebelum stream |
 | `[mock:budget]` | HTTP 503 `budget_exhausted` |
 
-`/extract` di mode tiruan mengembalikan `Extracted` tetap per `kind` (+ `mock: true`).
+`/extract` di mode tiruan mengembalikan `Extracted` tetap per `kind`, dengan header `X-AI-Mock: 1`.
 
 ## Deploy
 
@@ -274,7 +350,7 @@ Di setiap target, pastikan `ALLOWED_ORIGINS` berisi origin situs produksi, lalu 
 ```
 src/app.ts        Hono app factory (middleware, 3 endpoint)
 src/claude.ts     panggilan Claude: stream + loop alat, vision extract, pemetaan error
-src/schemas.ts    zod: request, 25 alat/structured kind, Extracted, event SSE
+src/schemas.ts    zod: request, 25 alat (24 structured kind + followups), Extracted, event SSE, toolEvents()
 src/mock.ts       AI_MOCK
 src/budget.ts     anggaran token harian (WIB)
 src/ratelimit.ts  rate limit per IP

@@ -8,7 +8,7 @@
  * at the new content), ScrollTrigger refreshes and the curtain lifts.
  */
 import { useLayoutEffect, useRef } from 'react'
-import { Outlet, ScrollRestoration, useLocation } from 'react-router'
+import { Outlet, ScrollRestoration, useLocation, useMatches, type Params } from 'react-router'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { initSmoothScroll, getLenis } from '../lib/smoothScroll'
 import { revealPage } from '../lib/pageTransition'
@@ -23,6 +23,20 @@ import PageCurtain from '../components/PageCurtain'
 import ReadingProgress from '../components/ReadingProgress'
 import FpsHud, { isFpsDebug } from '../components/FpsHud'
 
+export type Chrome = 'site' | 'none'
+export interface RouteHandle {
+  chrome?: Chrome | ((params: Params) => Chrome)
+}
+
+function useChrome(): Chrome {
+  const matches = useMatches()
+  for (const m of [...matches].reverse()) {
+    const c = (m.handle as RouteHandle | undefined)?.chrome
+    if (c) return typeof c === 'function' ? c(m.params) : c
+  }
+  return 'site'
+}
+
 /** Frames to wait for a #hash target that lives in a lazy chunk (e.g. /#layanan) before giving up. */
 const HASH_RETRY_FRAMES = 120
 
@@ -30,6 +44,7 @@ export default function RootLayout() {
   const { t } = useI18n()
   const location = useLocation()
   const isHome = location.pathname === '/'
+  const bare = useChrome() === 'none'
   const mainRef = useRef<HTMLElement>(null)
   const prevKey = useRef<string | null>(null)
 
@@ -87,15 +102,15 @@ export default function RootLayout() {
         {t.a11y.skip}
       </a>
       {isFpsDebug() ? <FpsHud /> : null}
-      <Cursor />
-      <Navbar />
-      {isHome ? null : <ReadingProgress />}
-      <main id="main" ref={mainRef} tabIndex={-1} data-page={isHome ? 'home' : 'page'}>
+      {bare ? null : <Cursor />}
+      {bare ? null : <Navbar />}
+      {isHome || bare ? null : <ReadingProgress />}
+      <main id="main" ref={mainRef} tabIndex={-1} data-page={isHome ? 'home' : bare ? 'bare' : 'page'}>
         <Outlet />
       </main>
-      <Footer />
-      <WhatsAppFloat />
-      <PageCurtain />
+      {bare ? null : <Footer />}
+      {bare ? null : <WhatsAppFloat />}
+      {bare ? null : <PageCurtain />}
       <ScrollRestoration />
     </>
   )

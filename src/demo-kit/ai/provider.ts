@@ -4,17 +4,20 @@
  * 'sim' runs the registered Scenario through the scripted engine. 'live' calls the proxy and falls back to the
  * simulation automatically — no first chunk within DEMO.liveFirstTokenTimeoutMs, HTTP 429/5xx/any HTTP error,
  * network failure, an aborted stream (not aborted by the caller), malformed SSE or an `error` event ⇒ the
- * simulated answer continues the turn and `done.fellBack` is true. If the live stream already produced text,
- * only the simulation's non-text chunks (steps, structured, follow-ups) are appended. An invalid structured
- * result (zod) is replaced by the simulation's structured result. Every fallback notifies onLiveFallback()
- * listeners (the shell shows the toast "AI Live sedang sibuk, beralih ke Simulasi", spec §8.5).
+ * simulated answer continues the turn. If the live stream already produced text, only the simulation's
+ * non-text chunks (steps, structured, follow-ups) are appended. An invalid structured result (zod; default
+ * schemas = STRUCTURED_SCHEMAS, mirrored from the proxy) is replaced by the simulation's structured result.
+ * Owner decision: ANY fallback, also one part-way through a live answer, ends with done = { mode: 'sim',
+ * fellBack: true }, so the badge never says "Live" for an answer the simulation completed. Every fallback
+ * notifies onLiveFallback() listeners (the shell shows the toast "AI Live sedang sibuk, beralih ke Simulasi",
+ * spec §8.5). Wire protocol: server/ai-proxy/README.md → "Protokol SSE".
  */
 import { z } from 'zod'
 import { DEMO } from '../../lib/motion'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import type { AiChunk, AiProvider, ChatRequest, Extracted, ExtractRequest, Scenario, SimResponse, Structured } from './types'
 import { simChunks, simulate, type SimResult } from './scripted/engine'
-import { checkHealth, isLiveConfigured, LiveError, liveChat, liveExtract, peekHealth, type LiveErrorKind } from './live'
+import { checkHealth, isLiveConfigured, LiveError, liveChat, liveExtract, peekHealth, STRUCTURED_SCHEMAS, type LiveErrorKind } from './live'
 import { sleep } from './stream'
 
 /* ------------------------------------------------------------------ constants (module-local, see report) */
@@ -50,9 +53,12 @@ export function getScenario(slug: ProductSlug): Scenario<unknown> | undefined {
 /* ------------------------------------------------------------------ structured validation */
 
 const StructuredEnvelope = z.object({ kind: z.string().min(1), data: z.record(z.string(), z.unknown()) })
-const kindSchemas = new Map<string, z.ZodType<Record<string, unknown>>>()
+const kindSchemas = new Map<string, z.ZodType<Record<string, unknown>>>(Object.entries(STRUCTURED_SCHEMAS))
 
-/** Per-kind zod schema for Structured.data (products register theirs, e.g. 'ticket'). */
+/**
+ * Per-kind zod schema for Structured.data. The proxy's 24 kinds are pre-registered (STRUCTURED_SCHEMAS); a product
+ * may replace one with a stricter schema, which must still accept the proxy's shape (else live always falls back).
+ */
 export function registerStructuredSchema(kind: string, schema: z.ZodType<Record<string, unknown>>): void {
   kindSchemas.set(kind, schema)
 }
@@ -160,7 +166,7 @@ export function createLiveProvider(opts: LiveProviderOptions = {}): AiProvider {
     notify({ product: req.product, reason: err.kind, op: 'chat', ...(err.status !== undefined ? { status: err.status } : {}) })
     for await (const c of simProvider.chat(req)) {
       if (afterText && c.type === 'text') continue
-      if (c.type === 'done') yield { ...c, mode: afterText ? 'live' : 'sim', fellBack: true }
+      if (c.type === 'done') yield { ...c, mode: 'sim', fellBack: true }
       else yield c
     }
   }
@@ -233,6 +239,7 @@ export function createLiveProvider(opts: LiveProviderOptions = {}): AiProvider {
         notify({ product: req.product, reason: 'invalid', op: 'chat' })
         const sim = simulateReq(req).response.structured
         if (sim) yield { type: 'structured', value: sim }
+        out.mode = 'sim'
         out.fellBack = true
       }
       yield out

@@ -53,13 +53,14 @@ const str = (v: string | undefined): string | undefined => (v && v.trim() ? v.tr
 
 export function readConfig(env: ProxyEnv): Config {
   const mock = bool(env.AI_MOCK, false)
-  const modelFast = str(env.AI_MODEL_FAST) ?? 'claude-haiku-5-5'
+  const modelSmart = str(env.AI_MODEL_SMART) ?? 'claude-sonnet-5-5'
   return {
     apiKey: str(env.ANTHROPIC_API_KEY),
     baseUrl: str(env.ANTHROPIC_BASE_URL),
-    modelFast,
-    modelSmart: str(env.AI_MODEL_SMART) ?? 'claude-sonnet-5-5',
-    modelExtract: str(env.AI_MODEL_EXTRACT) ?? modelFast,
+    modelFast: str(env.AI_MODEL_FAST) ?? 'claude-haiku-5-5',
+    modelSmart,
+    // owner decision: extraction reads documents with the SMART model unless overridden
+    modelExtract: str(env.AI_MODEL_EXTRACT) ?? modelSmart,
     effortFast: effort(env.AI_EFFORT_FAST, 'low'),
     effortSmart: effort(env.AI_EFFORT_SMART, 'low'),
     maxOutputTokens: int(env.AI_MAX_OUTPUT_TOKENS, 2048, 256, 16000),

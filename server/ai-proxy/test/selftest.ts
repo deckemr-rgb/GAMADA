@@ -10,7 +10,7 @@ import path from 'node:path'
 import { createApp, sniffType } from '../src/app.js'
 import { PRODUCT_SLUGS, ROLE_IDS } from '../src/products.js'
 import { PROMPTS } from '../prompts/index.js'
-import { TOOLS, ExtractedSchema, toInputSchema, ChatRequestSchema } from '../src/schemas.js'
+import { TOOLS, ExtractedSchema, toInputSchema, ChatRequestSchema, STRUCTURED_KINDS } from '../src/schemas.js'
 import type { ToolName } from '../src/schemas.js'
 import { MOCK_STRUCTURED, mockExtract } from '../src/mock.js'
 import { buildChatParams } from '../src/claude.js'
@@ -90,6 +90,7 @@ for (const name of Object.keys(TOOLS) as ToolName[]) {
   if (js.type !== 'object' || '$schema' in js || !r.success) ok(false, `tool ${name}`, r.success ? js : r.error.issues)
 }
 ok(true, `${Object.keys(TOOLS).length} tool schemas convert to JSON Schema and accept their mock example`)
+ok(STRUCTURED_KINDS.length === 24 && new Set(STRUCTURED_KINDS).size === 24 && !STRUCTURED_KINDS.includes('followups'), '24 distinct structured kinds (+ followups)')
 for (const k of ['document', 'invoice', 'cv', 'ktp-specimen'] as const) {
   ok(ExtractedSchema.safeParse(mockExtract(k)).success, `mockExtract(${k}) matches Extracted`)
 }
@@ -110,6 +111,8 @@ section('prompt caching layout')
   const p2 = buildChatParams(cfg, { ...req, context: { world: { complaintsToday: 99 }, region: { name: 'Kabupaten Bojonegoro', id: 'bojonegoro' } } })
   ok(p1.model === 'claude-haiku-5-5' && p1.output_config.effort === 'low', 'sapa-warga → AI_MODEL_FAST, effort low')
   ok(buildChatParams(cfg, { ...req, product: 'meja-pimpinan' }).model === 'claude-sonnet-5-5', 'meja-pimpinan → AI_MODEL_SMART')
+  ok(cfg.modelExtract === cfg.modelSmart && readConfig({ AI_MODEL_SMART: 'x-smart' }).modelExtract === 'x-smart' && readConfig({ AI_MODEL_EXTRACT: 'x-ex' }).modelExtract === 'x-ex', 'AI_MODEL_EXTRACT defaults to AI_MODEL_SMART')
+  ok(cfg.dailyTokenBudget === 2_000_000, 'daily budget default 2 000 000 tokens')
   ok(p1.system.length === 2 && p1.system.every((b) => b.cache_control?.type === 'ephemeral'), 'system prompt + region block both carry cache_control')
   ok(JSON.stringify(p1.system) === JSON.stringify(p2.system) && JSON.stringify(p1.tools) === JSON.stringify(p2.tools), 'cached prefix byte-stable when world changes and region key order differs')
   ok(p1.messages.length === 1 && p1.messages[0]?.role === 'user', 'leading assistant greeting dropped')
@@ -142,23 +145,28 @@ section('AI_MOCK=1 over HTTP')
   ok(r.headers.get('access-control-allow-origin') === ORIGIN, 'CORS echoes allowed origin')
   const evs = parseSSE(await r.text())
   const types = evs.map((e) => e.event)
-  ok(types[0] === 'text' && types.at(-1) === 'done' && types.includes('tool_call'), 'events: text… tool_call… done', types)
-  const tc = evs.find((e) => e.event === 'tool_call')?.data as { structured?: { kind: string; data: unknown } } | undefined
-  ok(tc?.structured?.kind === 'ticket' && TOOLS.create_ticket.schema.safeParse(tc.structured.data).success, 'tool_call carries a valid ticket')
+  const tail = types.slice(types.indexOf('tool_call'))
+  ok(types[0] === 'text' && JSON.stringify(tail) === JSON.stringify(['tool_call', 'structured', 'followups', 'done']), 'events: text… tool_call, structured, followups, done', types)
+  ok(evs.every((e) => e.data.type === e.event), 'every data.type equals its event name')
+  const tc = evs.find((e) => e.event === 'tool_call')?.data as { call?: { name: string; input: unknown } } | undefined
+  const st = evs.find((e) => e.event === 'structured')?.data as { value?: { kind: string; data: unknown } } | undefined
+  ok(tc?.call?.name === 'create_ticket' && st?.value?.kind === 'ticket' && TOOLS.create_ticket.schema.safeParse(st.value.data).success, 'tool_call step + structured carries a valid ticket')
+  const fu = evs.find((e) => e.event === 'followups')?.data as { chips?: unknown } | undefined
+  ok(Array.isArray(fu?.chips) && (fu.chips as unknown[]).length === 2 && !evs.some((e) => e.event === 'tool_call' && (e.data as { call: { name: string } }).call.name === 'suggest_followups'), 'suggest_followups → one followups event, no tool_call step')
   ok((evs.at(-1)?.data as { mode?: string; mock?: boolean }).mode === 'live' && (evs.at(-1)?.data as { mock?: boolean }).mock === true, 'done: mode live, mock true')
   const r2 = parseSSE(await (await post(app, '/api/ai/chat', chatBody())).text())
   ok(JSON.stringify(r2) === JSON.stringify(evs), 'mock output is deterministic')
 
   const en = parseSSE(await (await post(app, '/api/ai/chat', chatBody({ lang: 'en', product: 'naskah-pintar', role: 'sekretariat' }))).text())
   ok(String(en[0]?.data.text).startsWith('[Test'), 'EN mock text when lang=en')
-  ok(en.some((e) => (e.data as { structured?: { kind: string } }).structured?.kind === 'minutes'), 'naskah-pintar mock → minutes')
+  ok(en.some((e) => e.event === 'structured' && (e.data as { value: { kind: string } }).value.kind === 'minutes'), 'naskah-pintar mock → minutes')
 
   const err = parseSSE(await (await post(app, '/api/ai/chat', chatBody({ messages: [{ role: 'user', content: 'tes [mock:error]' }] }))).text())
   ok(err.at(-1)?.event === 'error' && err.some((e) => e.event === 'text'), '[mock:error] → text then SSE error')
   const r429 = await post(app, '/api/ai/chat', chatBody({ messages: [{ role: 'user', content: '[mock:429]' }] }))
   ok(r429.status === 429 && r429.headers.get('retry-after') === '30', '[mock:429] → HTTP 429 + Retry-After')
   const inv = parseSSE(await (await post(app, '/api/ai/chat', chatBody({ messages: [{ role: 'user', content: '[mock:invalid]' }] }))).text())
-  ok(inv.some((e) => e.event === 'tool_call' && !TOOLS.create_ticket.schema.safeParse((e.data as { structured: { data: unknown } }).structured.data).success), '[mock:invalid] → invalid structured for client fallback tests')
+  ok(inv.some((e) => e.event === 'structured' && !TOOLS.create_ticket.schema.safeParse((e.data as { value: { data: unknown } }).value.data).success), '[mock:invalid] → invalid structured for client fallback tests')
 
   const bad = await post(app, '/api/ai/chat', chatBody({ product: 'kasirku' }))
   const bj = (await bad.json()) as { error: { code: string; issues?: string[] } }
@@ -173,7 +181,7 @@ section('AI_MOCK=1 over HTTP')
 
   const ex = await post(app, '/api/ai/extract', JSON.stringify({ product: 'pajak-beres', kind: 'invoice', text: 'NOTA TOKO CONTOH total 1.250.000' }))
   const exj = await ex.json()
-  ok(ex.status === 200 && ExtractedSchema.safeParse(exj).success, 'extract (JSON text) → valid Extracted')
+  ok(ex.status === 200 && ExtractedSchema.strict().safeParse(exj).success && ex.headers.get('x-ai-mock') === '1', 'extract (JSON text) → exactly Extracted (mock flag in X-AI-Mock header)', exj)
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
   const fd = new FormData()
   fd.set('product', 'cek-berkas')
@@ -274,7 +282,7 @@ section('live path against a local fake Claude API')
   ok(hj.live === true && hj.mock === false, 'health live:true with a key')
   const evs = parseSSE(await (await post(app, '/api/ai/chat', chatBody())).text())
   const types = evs.map((e) => e.event)
-  ok(JSON.stringify(types) === JSON.stringify(['text', 'tool_call', 'text', 'done']), 'stream: text, tool_call, text (after tool_result), done', types)
+  ok(JSON.stringify(types) === JSON.stringify(['text', 'tool_call', 'structured', 'text', 'done']), 'stream: text, tool_call, structured, text (after tool_result), done', types)
   const done = evs.at(-1)?.data as { usage: { input: number; output: number; cacheRead: number }; stopReason: string }
   ok(done.usage.input === 240 && done.usage.output === 80 && done.usage.cacheRead === 1800 && done.stopReason === 'end_turn', 'usage summed over both model turns', done)
   const req1 = seen[0] as { system: { cache_control?: unknown }[]; tools: { name: string }[]; output_config: { effort: string }; model: string; tool_choice: { type: string } }
@@ -286,7 +294,7 @@ section('live path against a local fake Claude API')
   seen.length = 0
   mode = 'invalid'
   const inv = parseSSE(await (await post(app, '/api/ai/chat', chatBody())).text())
-  ok(!inv.some((e) => e.event === 'tool_call'), 'invalid tool input is never forwarded to the browser')
+  ok(!inv.some((e) => e.event === 'tool_call' || e.event === 'structured'), 'invalid tool input is never forwarded to the browser')
   const retry = seen[1] as { messages: { content: { is_error?: boolean }[] }[] } | undefined
   ok(retry?.messages.at(-1)?.content[0]?.is_error === true, 'invalid tool input → is_error tool_result back to the model')
 

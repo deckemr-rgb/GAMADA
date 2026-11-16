@@ -22,7 +22,7 @@ export {
 } from './provider'
 export { createMatcher, extractSlots, normalize, stem, DEFAULT_SYNONYMS, MATCH, type Matcher, type MatcherOptions, type SynonymMap } from './intents'
 export { streamText, streamSchedule, tokenize, thinkingDelayMs, hashString, prng, type StreamTextOptions, type StreamSchedule } from './stream'
-export { checkHealth, peekHealth, configureLive, isLiveConfigured, liveBaseUrl, liveChat, liveExtract, parseSSE, LiveError, LIVE, type Health, type LiveErrorKind } from './live'
+export { checkHealth, peekHealth, configureLive, isLiveConfigured, liveBaseUrl, liveChat, liveExtract, parseSSE, sseToChunk, wireMessages, LiveError, LIVE, STRUCTURED_SCHEMAS, STRUCTURED_KINDS, FOLLOWUPS_SCHEMA, ExtractedSchema, type Health, type LiveErrorKind, type StructuredKind } from './live'
 export { summarize, byteLength, CONTEXT } from './context'
 export { simulate, simChunks, getMatcher, setScenarioSynonyms, ENGINE, type SimResult, type SimInput } from './scripted/engine'
 export { useAiChat, staticConversation, type ChatMessage, type ChatStatus, type UseAiChat, type UseAiChatOptions } from './useAiChat'

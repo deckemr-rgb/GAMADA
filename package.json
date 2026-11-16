@@ -11,7 +11,11 @@
     "art:optimize": "node tools/optimize-svg.mjs",
     "art:build": "node tools/build-layers.mjs",
     "art": "npm run art:optimize && npm run art:build",
-    "perf": "node tools/perf.mjs http://127.0.0.1:4173/ 4 1440 900 1.25"
+    "perf": "node tools/perf.mjs http://127.0.0.1:4173/ 4 1440 900 1.25",
+    "ai:install": "npm --prefix server/ai-proxy install",
+    "ai:mock": "npm --prefix server/ai-proxy run dev:mock",
+    "ai:dev": "npm --prefix server/ai-proxy run dev",
+    "ai:test": "npm --prefix server/ai-proxy test && npx tsx src/demo-kit/ai/__tests__/matcher.test.ts && npx tsx src/demo-kit/ai/__tests__/stream.test.ts && npx tsx src/demo-kit/ai/__tests__/fallback.test.ts && npx tsx src/demo-kit/ai/__tests__/structured-parity.test.ts && npx tsx src/demo-kit/ai/__tests__/proxy.integration.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

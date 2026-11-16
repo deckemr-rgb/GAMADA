@@ -12,8 +12,12 @@ export const LOADERS = {
   karyaDetail: () => import('./routes/KaryaDetail'),
   proses: () => import('./routes/Proses'),
   faq: () => import('./routes/Faq'),
-  tools: () => import('./routes/Tools'),
-  scrappulse: () => import('./routes/ScrapPulse'),
+  ekosistem: () => import('./routes/Ekosistem'),
+  ekosistemDetail: () => import('./routes/EkosistemDetail'),
+  produk: () => import('./routes/Produk'),
+  demo: () => import('./routes/Demo'),
+  tur: () => import('./routes/Tur'),
+  lab: () => import('./routes/Lab'),
   phonefarm: () => import('./routes/PhoneFarmPanel'),
   labDesign: () => import('./routes/LabDesign'),
   labKit: () => import('./routes/LabKit'),
@@ -25,11 +29,19 @@ function loaderFor(pathname: string): Loader | null {
   const p = pathname.replace(/\/+$/, '') || '/'
   if (p === '/') return null
   if (p === '/karya') return LOADERS.karya
+  // redirects (router.tsx): warm the destination's chunk
+  if (p === '/karya/kasirku') return LOADERS.produk
+  if (p === '/tools') return LOADERS.lab
+  if (p === '/tools/scrappulse') return LOADERS.demo
   if (p.startsWith('/karya/')) return LOADERS.karyaDetail
+  if (p === '/ekosistem') return LOADERS.ekosistem
+  if (p.startsWith('/ekosistem/')) return LOADERS.ekosistemDetail
+  if (p.startsWith('/produk/')) return LOADERS.produk
+  if (p.startsWith('/demo/')) return LOADERS.demo
+  if (p === '/tur' || p.startsWith('/tur/')) return LOADERS.tur
+  if (p === '/lab') return LOADERS.lab
   if (p === '/proses') return LOADERS.proses
   if (p === '/faq') return LOADERS.faq
-  if (p === '/tools') return LOADERS.tools
-  if (p === '/tools/scrappulse') return LOADERS.scrappulse
   if (p === '/panel/phonefarm') return LOADERS.phonefarm
   if (p === '/lab/_design') return LOADERS.labDesign
   if (p === '/lab/_kit') return LOADERS.labKit

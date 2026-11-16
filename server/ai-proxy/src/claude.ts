@@ -2,7 +2,8 @@
  * claude.ts — the two calls the proxy makes to the Claude API (@anthropic-ai/sdk).
  *
  * chat: streamed Messages API call with the product's tools. Structured outputs come back as tool
- * calls; each one is validated with zod and forwarded to the browser as a `tool_call` event. The
+ * calls; each one is validated with zod and forwarded to the browser as `tool_call` + `structured`
+ * events (`suggest_followups` → one `followups` event; see toolEvents in schemas.ts). The
  * tool result we send back is only an acknowledgement ("shown on screen") so the model can finish
  * its sentence — the site executes/visualises the result itself. Invalid input goes back to the
  * model as an `is_error` tool result for one correction (max AI_MAX_TOOL_ROUNDS model turns).
@@ -21,7 +22,7 @@ import type { Budget } from './budget.js'
 import { billableTokens } from './budget.js'
 import { PROMPTS, EXTRACT_SYSTEM } from '../prompts/index.js'
 import type { ChatRequest, ExtractKind, Extracted, ProxyEvent, ToolName, AcceptedFileType } from './schemas.js'
-import { ExtractionToolSchema, TOOLS, splitContext, toExtracted, toInputSchema } from './schemas.js'
+import { ExtractionToolSchema, TOOLS, splitContext, toExtracted, toInputSchema, toolEvents } from './schemas.js'
 import type { ProductSlug } from './products.js'
 
 export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number }
@@ -202,11 +203,7 @@ export async function* runChat(
       if (def.kind !== 'followups') onlyFollowups = false
       run.toolCalls++
       const data = parsed.data as Record<string, unknown>
-      yield {
-        type: 'tool_call',
-        call: { id: tu.id, name: tu.name, input: data },
-        structured: { kind: def.kind, data },
-      }
+      yield* toolEvents(def, tu.id, data)
       results.push({ type: 'tool_result', tool_use_id: tu.id, content: ACK[def.kind] ?? 'Ditampilkan di layar pengguna.' })
     }
 

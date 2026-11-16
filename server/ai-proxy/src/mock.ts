@@ -5,12 +5,12 @@
  * Test switches (put the marker anywhere in the LAST user message):
  *   [mock:slow]     first token after 12 s  → exercises the site's 10 s first-token fallback
  *   [mock:error]    a little text, then an SSE `error` event
- *   [mock:invalid]  a tool_call whose structured data fails the schema → client must fall back
+ *   [mock:invalid]  a `structured` event whose data fails the schema → client must fall back
  *   [mock:429]      HTTP 429 JSON before streaming (handled in app.ts)
  *   [mock:budget]   HTTP 503 budget_exhausted before streaming (handled in app.ts)
  */
 import type { ChatRequest, ExtractKind, Extracted, ProxyEvent, ToolName } from './schemas.js'
-import { TOOLS } from './schemas.js'
+import { TOOLS, toolEvents } from './schemas.js'
 import { PROMPTS } from '../prompts/index.js'
 import { PRODUCT_NAMES } from './products.js'
 
@@ -117,16 +117,10 @@ export async function* mockChat(req: ChatRequest, delayMs: number, signal: Abort
 
   const first = PROMPTS[req.product].tools[0]
   if (first) {
-    const def = TOOLS[first]
     const data = last.includes('[mock:invalid]') ? { invalid: true } : MOCK_STRUCTURED[first]
-    yield { type: 'tool_call', call: { id: 'mock_tool_1', name: def.name, input: data }, structured: { kind: def.kind, data } }
+    yield* toolEvents(TOOLS[first], 'mock_tool_1', data)
   }
-  const chips = FOLLOWUPS[req.lang]
-  yield {
-    type: 'tool_call',
-    call: { id: 'mock_tool_2', name: 'suggest_followups', input: { chips } },
-    structured: { kind: 'followups', data: { chips } },
-  }
+  yield* toolEvents(TOOLS.suggest_followups, 'mock_tool_2', { chips: [...FOLLOWUPS[req.lang]] })
   yield {
     type: 'done',
     mode: 'live',
