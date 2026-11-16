@@ -68,6 +68,14 @@ export const FLAGS = {
   pageCurtain: true,
   /** Site: low-tier fireflies / dust behind content sections and the footer. */
   sectionParticles: true,
+  /** Demo: micro-interactions inside the product sandboxes (KPI roll, row slide-in, chip drop, stamps). */
+  demoAnimations: true,
+  /** Demo: cinematic parts of the guided tour (fog curtain, map fly, clock spin). */
+  tourCinematics: true,
+  /** Demo: animated rain cells / flood growth on maps (static frames when off). */
+  mapRain: true,
+  /** Demo: animated constellation on /ekosistem (static SVG when off). */
+  constellation: true,
 } as const
 
 export type FlagKey = keyof typeof FLAGS
@@ -95,6 +103,10 @@ const MOTION_HEAVY: ReadonlySet<FlagKey> = new Set<FlagKey>([
   'statCounter',
   'pageCurtain',
   'sectionParticles',
+  'demoAnimations',
+  'tourCinematics',
+  'mapRain',
+  'constellation',
 ])
 
 const query = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
@@ -586,4 +598,46 @@ export const SITE_REVEAL = {
   tiltPerspective: 900,
   /** Slow dusk gradient drift behind sections (s per loop). */
   ambientLoop: 38,
+} as const
+
+/* ------------------------------------------------------------------ demos (ekosistem) */
+
+/**
+ * DEMO — timings for the product sandboxes (spec §8.3). Seconds unless the name says ms.
+ * Reduced motion: every movement becomes a fade of at most `reducedFade`.
+ */
+export const DEMO = {
+  hover: 0.12,
+  press: 0.2,
+  panel: 0.32,
+  screen: 0.6,
+  /** "wow" moments: min / max */
+  wowMin: 0.9,
+  wowMax: 1.4,
+  reducedFade: 0.15,
+  /** KPI count-up upper bound */
+  countUp: 0.6,
+  /** new row: slide distance (px), highlight alpha, highlight fade (s) */
+  rowSlidePx: 8,
+  rowHighlightAlpha: 0.12,
+  rowHighlightFade: 1.5,
+  /** structured chips drop stagger (s) */
+  chipStagger: 0.06,
+  /** AI token stream: tokens per second range + punctuation pause (ms) */
+  tokensPerSecMin: 25,
+  tokensPerSecMax: 45,
+  punctuationPauseMs: 140,
+  /** skeleton max duration in simulation mode (ms) */
+  skeletonMaxMs: 400,
+  /** chart draw-in (s) */
+  chartDraw: 0.8,
+  /** confetti on mission complete (s) */
+  confetti: 1,
+  /** toasts: max stacked, auto-dismiss (ms) */
+  toastMax: 3,
+  toastMs: 6000,
+  /** live AI: no first token within this → fall back to simulation (ms) */
+  liveFirstTokenTimeoutMs: 10000,
+  /** map rain animation cap (fps) on mid tier */
+  rainFpsMid: 30,
 } as const
