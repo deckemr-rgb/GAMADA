@@ -117,3 +117,7 @@ Experiments that were reverted (no gain): ambient gradient layer off, fireflies 
 **Remaining spikes (honest status).** The 200–500 ms frames in "scroll content sections" are **GPU raster flushes** (`RasterDecoderImpl::DoEndRasterCHROMIUM::Flush` on `CrGpuMain`), not main-thread work: the trace has no main-thread task over 40 ms. They happen where Portofolio and the Kontak panel first come into view. A **second pass in the same session has none** (max 0 ms / 82 ms in those zones). That makes this a first-use cost, shader compilation or first raster, on a cold profile; the harness always starts with a fresh profile. Real browsers keep a persistent shader cache, so a returning visitor should not hit it. Open for phase 7: CPU 2× scroll p95 is 28–34 ms, above the 20 ms target. Next things to test are the cost of the many section ScrollTriggers on every scroll update, and warming those paints during idle.
 
 Re-run: `node tools/perf.mjs http://127.0.0.1:4173/ 2 1440 900 1.25`. Probe one scenario with `TRACE=1 TRACE_ON=content` and save the raw trace with `TRACE_OUT=<file>`.
+
+## Tahap 0 (ekosistem): rute /lab/_design
+
+Perubahan tahap 0 tidak menyentuh beranda: hanya satu rute lazy baru dan tiga chunk arah visual (20–27 KB gzip JS masing-masing). Uji A/B bergantian terhadap commit `aa30cac` pada CPU 2× menunjukkan tidak ada penurunan (detail: [perf/tahap0-ab.txt](perf/tahap0-ab.txt)). Catatan: layar kini berjalan di 144 Hz (Fase 2 diukur di 60 Hz), jadi bandingkan hanya A/B pada sesi yang sama, bukan dengan tabel Fase 2.

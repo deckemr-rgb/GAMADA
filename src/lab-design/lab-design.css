@@ -1,0 +1,95 @@
+/* /lab/_design page chrome only (the directions style themselves in their own folders). */
+.labd {
+  min-height: 100vh;
+  padding: calc(var(--nav-h) + 40px) var(--gutter) 80px;
+  background: linear-gradient(180deg, var(--c-ink) 0%, var(--c-ink-2) 60%, var(--c-ink) 100%);
+  color: var(--c-text);
+}
+.labd-head {
+  max-width: var(--content-w);
+  margin: 0 auto 32px;
+}
+.labd-eyebrow {
+  font: 600 12px/1.2 var(--font-body);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c-peach-soft);
+}
+.labd-title {
+  margin-top: 12px;
+  font: 500 clamp(2rem, 4.2vw, 3.4rem) / 1.05 var(--font-display);
+}
+.labd-lead {
+  margin-top: 12px;
+  max-width: 62ch;
+  color: var(--c-muted);
+}
+.labd-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+.labd-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: 600 14px/1 var(--font-body);
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.labd-tab:hover {
+  border-color: var(--c-line-strong);
+}
+.labd-tab[aria-selected='true'] {
+  background: var(--c-lavender-soft);
+  border-color: var(--c-lavender-soft);
+  color: var(--c-ink);
+}
+.labd-tab-code {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(185, 178, 255, 0.16);
+  font: 600 13px/1 var(--font-display);
+}
+.labd-tab[aria-selected='true'] .labd-tab-code {
+  background: var(--c-ink);
+  color: var(--c-lavender-soft);
+}
+.labd-tab:focus-visible {
+  outline: 2px solid var(--c-lavender);
+  outline-offset: 2px;
+}
+.labd-brief {
+  margin-top: 16px;
+  max-width: 70ch;
+  color: var(--c-muted);
+  font-size: 15px;
+}
+.labd-panel {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.labd-loading {
+  min-height: 60vh;
+}
+.labd-empty {
+  padding: 80px 0;
+  text-align: center;
+  color: var(--c-muted);
+}
+.labd-note {
+  max-width: var(--content-w);
+  margin: 40px auto 0;
+  color: var(--c-muted);
+  font-size: 13px;
+}
