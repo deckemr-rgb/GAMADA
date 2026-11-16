@@ -1,0 +1,278 @@
+/*
+ * Demo Kit tokens (--dk-*) — direction C "Data-dense tenang" + grafts (docs/design/ARAH-VISUAL-TAHAP0.md §5.2).
+ * Derived from src/styles/tokens.css (--c-*). Scope: .dk-root (the shell, the showcase, every portal the kit opens).
+ *
+ * Accent API
+ *   [data-eco="satu-daerah" | "usaha-pintar" | "pasar-daerah" | "inti"] on .dk-root or any descendant re-colours
+ *   --dk-accent, --dk-accent-2, --dk-on-accent (text ON the accent, ≥ 4.5:1, tested in __tests__/tokens.test.ts),
+ *   --dk-accent-paper (accent on the light paper theme) and every token derived from them.
+ *   Short aliases from the tahap-0 doc: --dk-acc, --dk-acc-2, --dk-acc-on, --dk-acc-12.
+ * Themes
+ *   default = dark dusk console; [data-theme="paper"] = light paper (PaperFrame, printable reports).
+ * Durations are NOT tokens: they live in src/lib/motion.ts → DEMO (CSS transitions mirror 120 / 200 / 320 ms).
+ */
+
+.dk-root {
+  /* surfaces: canvas → panel → raised / hover */
+  --dk-bg: var(--c-ink); /* #1A1638 */
+  --dk-s1: var(--c-ink-2); /* #231B48 */
+  --dk-s2: var(--c-indigo); /* #2B2152 */
+  --dk-s3: #34295f; /* pressed / selected on s2 */
+  --dk-chrome: #16122f; /* app bars, table headers */
+  --dk-overlay: rgba(9, 7, 26, 0.62); /* modal scrim (no blur) */
+
+  /* text */
+  --dk-text: var(--c-text);
+  --dk-muted: var(--c-muted);
+  --dk-faint: #a29bcc; /* 12 px labels; ≥ 4.5:1 on --dk-s2 */
+
+  /* lines */
+  --dk-line: rgba(185, 178, 255, 0.12);
+  --dk-line-2: rgba(185, 178, 255, 0.22);
+
+  /* semantic colour — never decoration. Gold = attention (SLA < 8 h), red = danger only. */
+  --dk-warn: var(--c-gold);
+  --dk-warn-ink: var(--c-gold); /* warn text */
+  --dk-warn-12: rgba(255, 215, 126, 0.12);
+  --dk-danger: var(--c-red); /* fills, dots */
+  --dk-danger-ink: #ff8d82; /* danger text on dark */
+  --dk-danger-12: rgba(200, 56, 47, 0.16);
+  --dk-pos: #6fe8cf; /* improving delta */
+  --dk-neutral-dot: #8f88bd; /* status chip dot */
+
+  /* 4 px spacing grid */
+  --dk-1: 4px;
+  --dk-2: 8px;
+  --dk-3: 12px;
+  --dk-4: 16px;
+  --dk-5: 20px;
+  --dk-6: 24px;
+  --dk-8: 32px;
+  --dk-10: 40px;
+  --dk-12: 48px;
+  --dk-16: 64px;
+
+  /* radius */
+  --dk-r-chip: 6px;
+  --dk-r-input: 10px;
+  --dk-r-card: 14px;
+  --dk-r-panel: 20px;
+  --dk-r-pill: 999px;
+
+  /* elevation: 3 levels + 1 px inner top highlight; no backdrop-filter, no animated blur */
+  --dk-hi: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --dk-e1: var(--dk-hi), 0 1px 2px rgba(6, 4, 22, 0.45);
+  --dk-e2: var(--dk-hi), 0 1px 2px rgba(6, 4, 22, 0.4), 0 8px 20px -8px rgba(6, 4, 22, 0.7);
+  --dk-e3: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 6px rgba(6, 4, 22, 0.45), 0 24px 48px -18px rgba(6, 4, 22, 0.9);
+
+  /* dusk graft (B): ONLY on the outermost frame (BrowserFrame / DemoShell) */
+  --dk-edge: linear-gradient(90deg, transparent, var(--c-peach) 30%, var(--c-lavender) 70%, transparent);
+  --dk-dusk: radial-gradient(120% 80% at 85% -10%, rgba(141, 90, 154, 0.22), transparent 60%);
+  --dk-glow: 0 30px 80px -40px rgba(5, 3, 20, 0.95), 0 0 48px -18px rgba(185, 178, 255, 0.3);
+
+  /* type: Manrope size/line-height pairs (use as `font: 500 var(--dk-t13) var(--font-body)`);
+   * Fraunces only for the page title and ONE hero number per screen */
+  --dk-font: var(--font-body);
+  --dk-font-display: var(--font-display);
+  --dk-t12: 12px/17px;
+  --dk-t13: 13px/18px;
+  --dk-t14: 14px/20px;
+  --dk-t16: 16px/24px;
+  --dk-t20: 20px/28px;
+  --dk-t24: 24px/32px;
+  --dk-t32: 32px/40px;
+  --dk-hero-num: 400 56px/1 var(--font-display);
+
+  /* density */
+  --dk-row: 40px; /* comfortable */
+  --dk-row-dense: 32px; /* compact (toggle) */
+  --dk-target: 44px; /* minimum touch target below 768 px */
+
+  /* focus: 2 px lavender ring, 2 px offset */
+  --dk-focus-c: var(--c-lavender);
+  --dk-focus: 0 0 0 2px var(--dk-bg), 0 0 0 4px var(--dk-focus-c);
+
+  /* paper palette (read by [data-theme='paper'] and by PaperFrame) */
+  --dk-paper: #f8f6f0;
+  --dk-paper-ink: #1f1d2b;
+  --dk-paper-muted: #4d4a60;
+  --dk-ocr: #0b7565;
+  --dk-ocr-low: #8a5a00;
+
+  /* layers (above the site nav --z-nav: 50, below the cursor --z-cursor: 90) */
+  --dk-z-pop: 70;
+  --dk-z-overlay: 80;
+  --dk-z-toast: 84;
+  --dk-z-tip: 86;
+
+  /* ecosystem raw values — default Satu Daerah (teal / cyan) */
+  --dk-eco-acc: var(--c-teal);
+  --dk-eco-acc-2: var(--c-cyan);
+  --dk-eco-on: #06231e;
+  --dk-eco-paper: #0b6a59;
+  --dk-eco-fill: #2aa58d; /* area fills (charts, maps) */
+}
+
+/* ecosystems: one attribute recolours the accent, the text on the accent and the paper accent */
+[data-eco='satu-daerah'] {
+  --dk-eco-acc: var(--c-teal);
+  --dk-eco-acc-2: var(--c-cyan);
+  --dk-eco-on: #06231e;
+  --dk-eco-paper: #0b6a59;
+  --dk-eco-fill: #2aa58d;
+}
+[data-eco='usaha-pintar'] {
+  --dk-eco-acc: var(--c-peach);
+  --dk-eco-acc-2: var(--c-gold);
+  --dk-eco-on: #2a1204;
+  --dk-eco-paper: #94400f;
+  --dk-eco-fill: #d97a43;
+}
+[data-eco='pasar-daerah'] {
+  /* #c08ad0 instead of plum #8d5a9a: plum is too dark for text and active lines on --dk-s1; plum stays the fill */
+  --dk-eco-acc: #c08ad0;
+  --dk-eco-acc-2: var(--c-lavender);
+  --dk-eco-on: #24102c;
+  --dk-eco-paper: #6e3a7c;
+  --dk-eco-fill: var(--c-plum);
+}
+[data-eco='inti'] {
+  --dk-eco-acc: var(--c-lavender-soft);
+  --dk-eco-acc-2: var(--c-white);
+  --dk-eco-on: var(--c-ink);
+  --dk-eco-paper: #3d3478;
+  --dk-eco-fill: #8f86e0;
+}
+
+/* derived accent tokens — re-declared on every element that changes eco / theme so var() re-resolves there */
+.dk-root,
+.dk-root [data-eco],
+.dk-root [data-theme],
+[data-eco].dk-root {
+  --dk-accent: var(--dk-eco-acc);
+  --dk-accent-2: var(--dk-eco-acc-2);
+  --dk-on-accent: var(--dk-eco-on);
+  --dk-accent-paper: var(--dk-eco-paper);
+  --dk-accent-fill: var(--dk-eco-fill);
+  --dk-accent-12: color-mix(in srgb, var(--dk-accent) 12%, transparent); /* new-row highlight */
+  --dk-accent-16: color-mix(in srgb, var(--dk-accent) 16%, transparent); /* chart areas */
+  --dk-line-act: color-mix(in srgb, var(--dk-accent) 60%, transparent);
+  /* tahap-0 doc aliases */
+  --dk-acc: var(--dk-accent);
+  --dk-acc-2: var(--dk-accent-2);
+  --dk-acc-on: var(--dk-on-accent);
+  --dk-acc-12: var(--dk-accent-12);
+}
+
+/* light paper theme: documents, minutes, printable reports */
+.dk-root[data-theme='paper'],
+.dk-root [data-theme='paper'],
+[data-theme='paper'] .dk-root,
+.dk-root [data-theme='paper'] [data-eco] {
+  --dk-bg: var(--dk-paper);
+  --dk-s1: #fffdf8;
+  --dk-s2: #efece3;
+  --dk-s3: #e4e0d4;
+  --dk-chrome: #ece8dd;
+  --dk-overlay: rgba(31, 29, 43, 0.4);
+  --dk-text: var(--dk-paper-ink);
+  --dk-muted: var(--dk-paper-muted);
+  --dk-faint: #5c5872;
+  --dk-line: rgba(31, 29, 43, 0.12);
+  --dk-line-2: rgba(31, 29, 43, 0.24);
+  --dk-warn: #b07a00;
+  --dk-warn-ink: #7a5200;
+  --dk-warn-12: rgba(176, 122, 0, 0.12);
+  --dk-danger: #b3261e;
+  --dk-danger-ink: #a3221b;
+  --dk-danger-12: rgba(179, 38, 30, 0.1);
+  --dk-pos: #0b6a59;
+  --dk-neutral-dot: #77728f;
+  --dk-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --dk-e1: 0 1px 2px rgba(31, 29, 43, 0.08);
+  --dk-e2: 0 1px 2px rgba(31, 29, 43, 0.08), 0 8px 20px -10px rgba(31, 29, 43, 0.22);
+  --dk-e3: 0 2px 6px rgba(31, 29, 43, 0.1), 0 24px 48px -20px rgba(31, 29, 43, 0.35);
+  /* lavender on paper is ~1.9:1, so the paper ring uses violet (≥ 3:1 for non-text) */
+  --dk-focus-c: var(--c-violet);
+  --dk-accent: var(--dk-eco-paper);
+  --dk-accent-2: var(--dk-eco-paper);
+  --dk-on-accent: #ffffff;
+  color: var(--dk-text);
+}
+
+/* ------------------------------------------------------------------ base */
+.dk-root {
+  color: var(--dk-text);
+  font: 400 var(--dk-t13) var(--dk-font);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+.dk-root *,
+.dk-root *::before,
+.dk-root *::after {
+  box-sizing: border-box;
+}
+/* zero-specificity reset so variants always win (fix for the tahap-0 A contrast bug) */
+:where(.dk-root) :where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+:where(.dk-root) :where(button) {
+  cursor: pointer;
+}
+:where(.dk-root) :where(h1, h2, h3, h4, p, ul, ol, dl, dd, figure) {
+  margin: 0;
+}
+.dk-root :focus-visible {
+  outline: 2px solid var(--dk-focus-c);
+  outline-offset: 2px;
+}
+.dk-num {
+  font-variant-numeric: tabular-nums;
+}
+.dk-display {
+  font-family: var(--dk-font-display);
+  font-weight: 450;
+  letter-spacing: -0.012em;
+}
+.dk-hero-num {
+  font: var(--dk-hero-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.dk-sr {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.dk-muted {
+  color: var(--dk-muted);
+}
+.dk-faint {
+  color: var(--dk-faint);
+}
+
+/* keyboard hints only for people with a fine pointer + hover (staff at a desk), never on touch */
+@media not ((hover: hover) and (pointer: fine)) {
+  .dk-root .dk-kbd-hint {
+    display: none !important;
+  }
+}
+
+/* reduced-motion safety net: every CSS transition / animation becomes (almost) instant */
+@media (prefers-reduced-motion: reduce) {
+  .dk-root *,
+  .dk-root *::before,
+  .dk-root *::after {
+    transition-duration: 0.01s !important;
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

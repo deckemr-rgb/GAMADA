@@ -1,0 +1,48 @@
+# VPS deployment: the proxy behind Caddy (automatic HTTPS).
+#   cp .env.example .env   # fill ANTHROPIC_API_KEY, ALLOWED_ORIGINS, AI_DOMAIN
+#   docker compose up -d --build
+services:
+  ai-proxy:
+    build: .
+    image: gamada-ai-proxy:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8787"
+      # Caddy sets X-Forwarded-For itself, so the client IP can be trusted here
+      TRUST_PROXY: "1"
+    expose:
+      - "8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - ai-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      AI_DOMAIN: ${AI_DOMAIN:-ai.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

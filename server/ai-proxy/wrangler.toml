@@ -1,0 +1,14 @@
+# Cloudflare Workers: `npx wrangler deploy` from server/ai-proxy.
+# Secrets: `npx wrangler secret put ANTHROPIC_API_KEY` (and REDIS_TOKEN if used).
+name = "gamada-ai-proxy"
+main = "src/worker.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGINS = "https://gamada.id,https://www.gamada.id"
+AI_MODEL_FAST = "claude-haiku-5-5"
+AI_MODEL_SMART = "claude-sonnet-5-5"
+AI_DAILY_TOKEN_BUDGET = "2000000"
+RATE_LIMIT_PER_IP = "20"
+# REDIS_URL = "https://<your-db>.upstash.io"   # strongly recommended on Workers (per-isolate memory otherwise)

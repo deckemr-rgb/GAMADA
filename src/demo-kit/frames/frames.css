@@ -1,0 +1,394 @@
+/* Device frames (dk-*-frame). Static decoration only: no animated filters, no backdrop-filter, no blend modes. */
+
+/* ------------------------------------------------------------------ BrowserFrame */
+.dk-bframe {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-bg);
+  box-shadow: var(--dk-glow);
+  overflow: hidden;
+  isolation: isolate;
+}
+.dk-bframe.has-dusk {
+  background: var(--dk-dusk), var(--dk-bg);
+}
+.dk-bframe.has-dusk::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  height: 1px;
+  background: var(--dk-edge);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.dk-bframe-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--dk-line);
+  background: var(--dk-chrome);
+}
+.dk-bframe-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.dk-bframe-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(185, 178, 255, 0.22);
+}
+.dk-bframe-url {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(440px, 100%);
+  min-width: 0;
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-pill);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-bframe-url > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-bframe-host {
+  color: var(--dk-muted);
+}
+.dk-bframe-path {
+  color: var(--dk-text);
+}
+.dk-bframe-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 27px;
+}
+.dk-bframe-body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+@media (max-width: 640px) {
+  .dk-bframe-dots {
+    display: none;
+  }
+  .dk-bframe-bar {
+    padding-left: 8px;
+  }
+  .dk-bframe-url {
+    justify-self: start;
+  }
+}
+
+/* ------------------------------------------------------------------ PhoneFrame (9 : 19.5, 10 px bezel, capsule) */
+.dk-phone-stage {
+  max-width: 100%;
+  perspective: 1200px;
+  align-self: start;
+}
+.dk-phone {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  padding: 10px;
+  border-radius: 46px;
+  background: linear-gradient(150deg, #463a76 0%, #241c49 30%, #17122f 62%, #362c5e 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1.5px rgba(185, 178, 255, 0.2), 0 40px 80px -36px rgba(5, 3, 20, 0.95),
+    0 0 60px -26px rgba(185, 178, 255, 0.4), 0 0 0 1px rgba(10, 8, 24, 0.9);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.dk-phone-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 36px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1d173f 0%, #15112f 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.dk-phone-status {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 22px 0 26px;
+  color: var(--dk-text);
+  font: 700 13px/1 var(--dk-font);
+}
+.dk-phone-notch {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  width: 88px;
+  height: 24px;
+  margin-left: -44px;
+  border-radius: 999px;
+  background: #07051a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.dk-phone-sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dk-phone-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.dk-phone-home {
+  flex: none;
+  align-self: center;
+  width: 108px;
+  height: 4px;
+  margin: 8px 0 8px;
+  border-radius: 2px;
+  background: rgba(243, 240, 255, 0.55);
+}
+
+/* ------------------------------------------------------------------ TabletFrame */
+.dk-tablet {
+  position: relative;
+  width: 100%;
+  padding: 16px;
+  border-radius: 30px;
+  background: linear-gradient(150deg, #3b3168 0%, #1e183f 40%, #15112e 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1.5px rgba(185, 178, 255, 0.18), 0 36px 70px -34px rgba(5, 3, 20, 0.95);
+}
+.dk-tablet.is-landscape .dk-tablet-screen {
+  aspect-ratio: 4 / 3;
+}
+.dk-tablet.is-portrait {
+  max-width: 560px;
+}
+.dk-tablet.is-portrait .dk-tablet-screen {
+  aspect-ratio: 3 / 4;
+}
+.dk-tablet-cam {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: #0b0920;
+  box-shadow: inset 0 0 0 1px rgba(185, 178, 255, 0.2);
+}
+.dk-tablet.is-portrait .dk-tablet-cam {
+  top: 7px;
+  left: 50%;
+  margin: 0 0 0 -2.5px;
+}
+.dk-tablet-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--dk-bg);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.dk-tablet-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 14px;
+  color: var(--dk-muted);
+  font: 700 11px/1 var(--dk-font);
+}
+.dk-tablet-sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dk-tablet-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+@media (max-width: 640px) {
+  .dk-tablet {
+    padding: 10px;
+    border-radius: 22px;
+  }
+  .dk-tablet-screen {
+    border-radius: 12px;
+  }
+  .dk-tablet.is-landscape .dk-tablet-screen {
+    aspect-ratio: auto;
+  }
+}
+
+/* ------------------------------------------------------------------ WallScreenFrame */
+.dk-wall {
+  position: relative;
+  margin: 0;
+  padding: 8px 0 0;
+  perspective: 2400px;
+}
+.dk-wall-tilt {
+  position: relative;
+  transform: rotateX(4deg);
+  transform-origin: 50% 100%;
+}
+.dk-wall-screen {
+  position: relative;
+  padding: 8px;
+  border-radius: 12px;
+  background: #0c0a1f;
+  box-shadow: inset 0 0 0 1px rgba(185, 178, 255, 0.16), 0 50px 90px -50px rgba(5, 3, 20, 1), 0 0 80px -40px rgba(185, 178, 255, 0.35);
+}
+.dk-wall-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0 12% auto;
+  z-index: 3;
+  height: 1px;
+  background: var(--dk-edge);
+  opacity: 0.6;
+}
+.dk-wall-body {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--dk-dusk), var(--dk-bg);
+}
+.dk-wall-glare {
+  position: absolute;
+  inset: 8px;
+  border-radius: 5px;
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.025) 28%, transparent 42%, transparent 100%);
+  pointer-events: none;
+}
+.dk-wall-led {
+  position: absolute;
+  right: 18px;
+  bottom: 3px;
+  width: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dk-accent);
+  opacity: 0.8;
+}
+.dk-wall-stand {
+  display: block;
+  width: 22%;
+  height: 14px;
+  margin: 0 auto;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #1a1538, #0f0c24);
+  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+}
+.dk-wall-cap {
+  margin-top: 10px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .dk-wall-tilt {
+    transform: none;
+  }
+  .dk-wall-body {
+    aspect-ratio: auto;
+  }
+}
+
+/* ------------------------------------------------------------------ PaperFrame */
+.dk-paper {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  color: var(--dk-paper-ink);
+}
+.dk-paper-sheet {
+  position: relative;
+  min-height: 100%;
+  padding: 52px 56px 56px;
+  border-radius: 3px;
+  background: var(--dk-paper);
+  box-shadow: 0 1px 1px rgba(5, 3, 20, 0.2), 0 2px 4px rgba(5, 3, 20, 0.22), 0 22px 46px -16px rgba(5, 3, 20, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  font: 400 var(--dk-t14) var(--dk-font);
+}
+.dk-paper.is-a4 .dk-paper-sheet {
+  aspect-ratio: 210 / 297;
+}
+.dk-paper.is-scanned .dk-paper-sheet {
+  background: linear-gradient(175deg, rgba(255, 255, 255, 0.5), transparent 30%), linear-gradient(0deg, rgba(120, 100, 60, 0.05), transparent 50%), var(--dk-paper);
+}
+@media (max-width: 640px) {
+  .dk-paper-sheet {
+    padding: 28px 20px 32px;
+  }
+  .dk-paper.is-a4 .dk-paper-sheet {
+    aspect-ratio: auto;
+  }
+}
+
+/* print: only the paper. printPaper(el) → only that one; Ctrl/Cmd+P → every PaperFrame on the page. */
+@media print {
+  html.dk-printing body *:not(:has(.dk-paper.is-print-target)):not(.dk-paper.is-print-target):not(.dk-paper.is-print-target *),
+  html:not(.dk-printing):has(.dk-paper) body *:not(:has(.dk-paper)):not(.dk-paper):not(.dk-paper *) {
+    display: none !important;
+  }
+  html:has(.dk-paper) body *:has(.dk-paper) {
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+  }
+  html:has(.dk-paper),
+  html:has(.dk-paper) body {
+    background: #fff !important;
+  }
+  .dk-paper {
+    max-width: none;
+    break-inside: avoid;
+  }
+  .dk-paper + .dk-paper {
+    break-before: page;
+  }
+  .dk-paper-sheet {
+    aspect-ratio: auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  @page {
+    size: A4;
+    margin: 18mm 20mm;
+  }
+}

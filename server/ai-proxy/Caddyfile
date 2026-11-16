@@ -1,0 +1,18 @@
+# Example Caddyfile for docker-compose.yml. AI_DOMAIN comes from the environment
+# (e.g. ai.gamada.id); Caddy obtains the TLS certificate automatically.
+{$AI_DOMAIN} {
+	# only the AI API is served from this host
+	@api path /api/ai/*
+	handle @api {
+		request_body {
+			max_size 9MB
+		}
+		reverse_proxy ai-proxy:8787 {
+			# stream SSE tokens immediately
+			flush_interval -1
+		}
+	}
+	handle {
+		respond 404
+	}
+}

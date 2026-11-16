@@ -1,0 +1,348 @@
+/**
+ * world/reducers.ts — one pure reducer per event type: (state, event) → new state with structural sharing
+ * (untouched tables keep their identity, so memoised selectors and useWorld slices do not re-render).
+ * Payload ids are already assigned by engine.prepare() when a reducer runs.
+ */
+import type { Alert, EventType, Instruction, LngLat, MarketOperation, Program, Sale, SalesDay, Ticket, WorldEvent, WorldState } from './types'
+import { CATEGORY_SLA_DAYS, CATEGORY_LABEL } from './catalog'
+import { DAY_MIN, centroid, get, monthOf, patch, patchMany, upsert } from './util'
+
+export type Reducer<K extends EventType> = (s: WorldState, e: WorldEvent<K>) => WorldState
+export type ReducerMap = { [K in EventType]?: Reducer<K> }
+
+const must = <T>(v: T | undefined | null, what: string): T => {
+  if (v === undefined || v === null) throw new Error(`reducer: missing ${what}`)
+  return v
+}
+
+export const REDUCERS: ReducerMap = {
+  /* ---------------------------------------------------------------- Sapa Warga */
+  'complaint.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'complaint id')
+    const ticketId = must(p.ticketId, 'ticket id')
+    const sla = CATEGORY_SLA_DAYS[p.category] * DAY_MIN
+    const ticket: Ticket = {
+      id: ticketId, code: p.code ?? id, complaintId: id, status: 'baru', opdId: s.region.categoryOpd[p.category], createdAt: e.at, updatedAt: e.at,
+      slaDueAt: e.at + sla, closedAt: null, rating: null, history: [{ at: e.at, status: 'baru' }],
+    }
+    return {
+      ...s,
+      complaints: upsert(s.complaints, {
+        id, code: p.code ?? id, citizenId: p.citizenId ?? null, category: p.category, channel: p.channel, text: p.text, lang: p.lang ?? 'id',
+        summary: p.summary ?? { id: p.text, en: `${CATEGORY_LABEL[p.category].en} report` }, kecamatanId: p.kecamatanId, desaId: p.desaId, coord: p.coord,
+        urgency: p.urgency ?? 'sedang', at: e.at, ticketId, clusterId: null, templateId: p.templateId, photo: p.photo,
+      }),
+      tickets: upsert(s.tickets, ticket),
+    }
+  },
+  'complaint.clustered': (s, e) => {
+    const p = e.payload
+    const id = must(p.clusterId, 'cluster id')
+    const prev = s.clusters.byId[id]
+    const ids = [...new Set([...(prev?.complaintIds ?? []), ...p.complaintIds])]
+    const pts = ids.map((c) => s.complaints.byId[c]?.coord).filter((c): c is LngLat => !!c)
+    const cluster = prev
+      ? { ...prev, complaintIds: ids, center: centroid(pts), updatedAt: e.at }
+      : { id, category: p.category, kecamatanId: p.kecamatanId, desaId: p.desaId, center: pts.length ? centroid(pts) : p.center, radiusKm: p.radiusKm, complaintIds: ids, at: e.at, updatedAt: e.at }
+    return { ...s, clusters: upsert(s.clusters, cluster), complaints: patchMany(s.complaints, p.complaintIds, (c) => (c.clusterId === id ? c : { ...c, clusterId: id })) }
+  },
+  'ticket.statusChanged': (s, e) => {
+    const p = e.payload
+    return {
+      ...s,
+      tickets: patch(s.tickets, p.ticketId, (t) => ({
+        ...t, status: p.status, opdId: p.opdId ?? t.opdId, updatedAt: e.at, closedAt: p.status === 'selesai' ? e.at : null,
+        rating: p.rating ?? t.rating, history: [...t.history, { at: e.at, status: p.status, ...(p.note ? { note: p.note } : {}) }],
+      })),
+    }
+  },
+  'service.booked': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'booking id')
+    return { ...s, bookings: upsert(s.bookings, { id, code: p.code ?? id, serviceId: p.serviceId, citizenId: p.citizenId ?? null, slotAt: p.slotAt, channel: p.channel ?? 'mpp', at: e.at }) }
+  },
+
+  /* ---------------------------------------------------------------- Meja Pimpinan · Naskah Pintar */
+  'briefing.generated': (s, e) => ({ ...s, briefings: upsert(s.briefings, { id: must(e.payload.id, 'briefing id'), at: e.at, items: e.payload.items }) }),
+  'instruction.issued': (s, e) => {
+    const p = e.payload
+    const ins: Instruction = {
+      id: must(p.id, 'instruction id'), at: e.at, text: p.text, opdIds: p.opdIds, dueAt: p.dueAt ?? e.at + DAY_MIN, refs: p.refs ?? [], letterId: null, actionItemIds: [],
+      ...(p.origin ? { origin: p.origin } : {}),
+    }
+    let next: WorldState = { ...s, instructions: upsert(s.instructions, ins) }
+    // accepting a market-operation suggestion moves it forward
+    const origin = p.origin?.startsWith('marketOps:') ? p.origin.slice('marketOps:'.length) : null
+    if (origin) next = { ...next, marketOps: patch(next.marketOps, origin, (m) => (m.stage === 'recommended' ? { ...m, stage: 'approved' } : m)) }
+    return next
+  },
+  'meeting.transcribed': (s, e) => ({
+    ...s,
+    meetings: patch(s.meetings, e.payload.meetingId, (m) => ({
+      ...m, transcribed: true, status: 'selesai', summary: e.payload.summary ?? m.summary, durationMin: e.payload.durationMin ?? m.durationMin,
+    })),
+  }),
+  'actionItem.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'action item id')
+    const opd = s.region.opd.find((o) => o.id === p.opdId)
+    const source = p.source ?? { kind: 'manual' as const, id: null }
+    let next: WorldState = {
+      ...s,
+      actionItems: upsert(s.actionItems, { id, title: p.title, opdId: p.opdId, pic: p.pic ?? `Kepala ${opd?.short ?? p.opdId}`, dueAt: p.dueAt, status: 'baru', source, createdAt: e.at }),
+    }
+    if (source.kind === 'meeting' && source.id) next = { ...next, meetings: patch(next.meetings, source.id, (m) => ({ ...m, actionItemIds: [...m.actionItemIds, id] })) }
+    if (source.kind === 'instruction' && source.id) next = { ...next, instructions: patch(next.instructions, source.id, (m) => ({ ...m, actionItemIds: [...m.actionItemIds, id] })) }
+    return next
+  },
+  'letter.dispositioned': (s, e) => {
+    const p = e.payload
+    const id = must(p.letterId, 'letter id')
+    const disposition = { to: p.to, note: p.note, by: p.by ?? 'Kepala Daerah', at: e.at }
+    const exists = !!s.letters.byId[id]
+    const letters = exists
+      ? patch(s.letters, id, (l) => ({ ...l, status: 'didisposisi' as const, disposition }))
+      : upsert(s.letters, {
+          id, number: `ND-${id}/${s.day.slice(0, 4)}`, from: p.by ?? 'Kepala Daerah', subject: p.subject ?? p.note, kind: 'nota-dinas', sifat: 'segera', receivedAt: e.at,
+          dueAt: e.at + DAY_MIN, status: 'didisposisi', scanned: false, disposition, ...(p.instructionId ? { instructionId: p.instructionId } : {}),
+        })
+    let next: WorldState = { ...s, letters }
+    if (p.instructionId) next = { ...next, instructions: patch(next.instructions, p.instructionId, (i) => ({ ...i, letterId: id })) }
+    return next
+  },
+
+  /* ---------------------------------------------------------------- Radar Isu */
+  'hoax.detected': (s, e) => {
+    const p = e.payload
+    return {
+      ...s,
+      hoaxAlerts: upsert(s.hoaxAlerts, {
+        id: must(p.id, 'hoax id'), at: e.at, claim: p.claim, score: p.score, spreadPerHour: p.spreadPerHour, accounts: p.accounts, evidence: p.evidence ?? null,
+        topic: p.topic, status: 'aktif', clarification: null,
+      }),
+    }
+  },
+  'clarification.published': (s, e) => ({
+    ...s,
+    hoaxAlerts: patch(s.hoaxAlerts, e.payload.hoaxId, (h) => ({ ...h, status: 'diklarifikasi', clarification: { at: e.at, tone: e.payload.tone, channels: e.payload.channels } })),
+  }),
+  'mention.created': (s, e) => ({ ...s, mentions: upsert(s.mentions, { ...e.payload, id: must(e.payload.id, 'mention id'), at: e.payload.at ?? e.at }) }),
+
+  /* ---------------------------------------------------------------- Siaga Wilayah */
+  'rain.forecast': (s, e) => {
+    // rain cells are transient: a new forecast replaces the previous field
+    const cells = e.payload.cells.map((c, i) => ({ ...c, id: `HJ-${e.id}-${i + 1}`, at: e.at }))
+    const byId: Record<string, (typeof cells)[number]> = {}
+    for (const c of cells) byId[c.id] = c
+    return { ...s, rainCells: { byId, ids: cells.map((c) => c.id).reverse() } }
+  },
+  'flood.alert': (s, e) => {
+    const p = e.payload
+    const names = p.kecamatanIds.map((k) => s.region.kecamatan.find((x) => x.id === k)?.name ?? k).join(', ')
+    const alert: Alert = {
+      id: must(p.id, 'alert id'), at: e.at, kind: 'banjir', level: p.level, kecamatanIds: p.kecamatanIds, desaIds: p.desaIds ?? [], riverId: p.riverId ?? s.region.floodRiverId,
+      expectedAt: p.expectedAt ?? null, status: 'aktif', broadcast: null,
+      title: p.title ?? { id: `Peringatan banjir level ${p.level} — Kec. ${names}`, en: `Flood warning level ${p.level} — ${names}` },
+    }
+    return { ...s, alerts: upsert(s.alerts, alert) }
+  },
+  'alert.broadcast': (s, e) => {
+    const a = s.alerts.byId[e.payload.alertId]
+    if (!a) return s
+    const zone = new Set(a.kecamatanIds)
+    const recipients = e.payload.recipients ?? s.citizens.ids.reduce((n, id) => (zone.has(s.citizens.byId[id]?.kecamatanId ?? '') ? n + 1 : n), 0)
+    return { ...s, alerts: patch(s.alerts, a.id, (x) => ({ ...x, broadcast: { at: e.at, recipients, channels: e.payload.channels } })) }
+  },
+  'eligibility.opened': (s, e) => {
+    const p = e.payload
+    const prog: Program = {
+      id: must(p.id, 'program id'), kind: p.kind, kecamatanIds: p.kecamatanIds, quota: p.quota, open: true, openedAt: e.at, alertId: p.alertId,
+      title: { id: 'Pendaftaran bansos korban banjir', en: 'Flood-relief social aid registration' },
+    }
+    return { ...s, programs: upsert(s.programs, prog) }
+  },
+
+  /* ---------------------------------------------------------------- Awas Belanja · Cek Berkas */
+  'procurement.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'procurement id')
+    return {
+      ...s,
+      procurements: upsert(s.procurements, {
+        ...p, id, code: p.code ?? id, status: p.status ?? 'pengumuman', riskScore: null, flagged: false, findings: [], createdAt: e.at,
+      }),
+    }
+  },
+  'procurement.flagged': (s, e) => ({
+    ...s,
+    procurements: patch(s.procurements, e.payload.procurementId, (p) => ({ ...p, riskScore: e.payload.riskScore, flagged: true, findings: e.payload.findings })),
+  }),
+  'document.verified': (s, e) => {
+    const d = s.documents.byId[e.payload.documentId]
+    if (!d) return s
+    const result = e.payload.status === 'lengkap' ? 'lolos' : e.payload.status === 'kurang' ? 'kurang' : e.payload.status === 'cek-manual' ? 'cek-manual' : 'kurang'
+    return {
+      ...s,
+      documents: patch(s.documents, d.id, (x) => ({ ...x, status: e.payload.status })),
+      verifications: upsert(s.verifications, { id: `VF-${e.id}`, subjectKind: 'document', subjectId: d.id, kind: 'document', result, score: result === 'lolos' ? 95 : 60, at: e.at, by: e.source }),
+    }
+  },
+
+  /* ---------------------------------------------------------------- Toko Autopilot */
+  'sale.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'sale id')
+    const outlet = s.outlets.byId[p.outletId]
+    const total = p.items.reduce((a, it) => a + it.qty * it.price, 0)
+    let cost = 0
+    for (const it of p.items) cost += it.qty * (s.products.byId[it.productId]?.cost ?? 0)
+    const sale: Sale = { id, code: p.code ?? id, outletId: p.outletId, businessId: outlet?.businessId ?? s.meta.shopId, at: e.at, items: p.items, total, payment: p.payment }
+    const day = Math.floor(e.at / DAY_MIN)
+    const dayId = `${p.outletId}:${day}`
+    const prev = s.salesDaily.byId[dayId]
+    const sd: SalesDay = prev ? { ...prev, revenue: prev.revenue + total, cost: prev.cost + cost, tx: prev.tx + 1 } : { id: dayId, outletId: p.outletId, day, revenue: total, cost, tx: 1 }
+    const qty = new Map<string, number>()
+    for (const it of p.items) qty.set(it.productId, (qty.get(it.productId) ?? 0) + it.qty)
+    return {
+      ...s,
+      sales: upsert(s.sales, sale),
+      salesDaily: upsert(s.salesDaily, sd),
+      stock: patchMany(s.stock, [...qty.keys()], (st) => ({ ...st, onHand: Math.max(0, st.onHand - (qty.get(st.id) ?? 0)), updatedAt: e.at })),
+    }
+  },
+  'stock.forecastChanged': (s, e) => ({
+    ...s,
+    stock: patchMany(s.stock, e.payload.productIds, (st) => ({ ...st, factor: e.payload.factor, reason: e.payload.reason, updatedAt: e.at })),
+  }),
+  'po.sent': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'po id')
+    const total = p.items.reduce((a, it) => a + it.qty * it.cost, 0)
+    if (s.purchaseOrders.byId[id]) return { ...s, purchaseOrders: patch(s.purchaseOrders, id, (po) => ({ ...po, items: p.items, total, status: 'terkirim', at: e.at })) }
+    return { ...s, purchaseOrders: upsert(s.purchaseOrders, { id, code: p.code ?? id, businessId: p.businessId, supplierId: p.supplierId, items: p.items, total, status: 'terkirim', at: e.at, reply: null }) }
+  },
+  'supplier.replied': (s, e) => ({
+    ...s,
+    purchaseOrders: patch(s.purchaseOrders, e.payload.poId, (po) => ({ ...po, status: 'dibalas', reply: { at: e.at, message: e.payload.message, eta: e.payload.eta ?? null } })),
+  }),
+
+  /* ---------------------------------------------------------------- Pajak Beres */
+  'ledger.posted': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'ledger id')
+    // re-posting an existing id replaces it (e.g. "rapikan jurnal" clears needsReview)
+    return {
+      ...s,
+      ledger: upsert(s.ledger, {
+        id, businessId: p.businessId, at: s.ledger.byId[id]?.at ?? e.at, memo: p.memo, lines: p.lines, source: p.source, refId: p.refId ?? null,
+        needsReview: p.needsReview ?? false, confidence: p.confidence ?? 0.98,
+      }),
+    }
+  },
+  'tax.ready': (s, e) => {
+    const p = e.payload
+    const ids = p.taxItemIds ?? s.taxItems.ids.filter((id) => {
+      const t = s.taxItems.byId[id]
+      return t && t.businessId === p.businessId && t.period === p.period && t.status === 'perlu-hitung'
+    })
+    return {
+      ...s,
+      taxItems: patchMany(s.taxItems, ids, (t) => (t.status === 'perlu-hitung' ? { ...t, status: 'siap' } : t)),
+      businesses: patch(s.businesses, p.businessId, (b) => (b.taxTidy ? b : { ...b, taxTidy: true })),
+    }
+  },
+
+  /* ---------------------------------------------------------------- Juara Jualan · Kenal Mitra */
+  'call.scored': (s, e) => ({ ...s, calls: patch(s.calls, e.payload.callId, (c) => ({ ...c, score: e.payload.score, criteria: e.payload.criteria ?? c.criteria })) }),
+  'coaching.assigned': (s, e) => ({
+    ...s,
+    coachings: upsert(s.coachings, { id: must(e.payload.id, 'coaching id'), agentId: e.payload.agentId, focus: e.payload.focus, callId: e.payload.callId ?? null, at: e.at, status: 'baru' }),
+  }),
+  'partner.verified': (s, e) => {
+    const p = e.payload
+    let next: WorldState = {
+      ...s,
+      verifications: upsert(s.verifications, { id: `VF-${e.id}`, subjectKind: p.subjectKind, subjectId: p.subjectId, kind: p.kind, result: p.result, score: p.score ?? (p.result === 'lolos' ? 90 : 55), at: e.at, by: e.source }),
+    }
+    if (p.subjectKind === 'business') next = { ...next, businesses: patch(next.businesses, p.subjectId, (b) => ({ ...b, verified: p.result === 'lolos' })) }
+    if (p.subjectKind === 'candidate') {
+      next = { ...next, candidates: patch(next.candidates, p.subjectId, (c) => ({ ...c, score: p.score ?? c.score, status: p.result === 'lolos' ? 'shortlist' : p.result === 'ditolak' ? 'ditolak' : c.status })) }
+    }
+    return next
+  },
+
+  /* ---------------------------------------------------------------- TenderPilot · Katalog Lokal */
+  'tender.matched': (s, e) => ({ ...s, tenders: patch(s.tenders, e.payload.tenderId, (t) => ({ ...t, matches: { ...t.matches, [e.payload.businessId]: e.payload.probability } })) }),
+  'bid.submitted': (s, e) => ({
+    ...s,
+    bids: upsert(s.bids, { id: must(e.payload.id, 'bid id'), tenderId: e.payload.tenderId, businessId: e.payload.businessId, price: e.payload.price, at: e.at, status: 'terkirim' }),
+  }),
+  'need.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'need id')
+    return {
+      ...s,
+      catalogNeeds: upsert(s.catalogNeeds, { id, code: p.code ?? id, at: e.at, title: p.title, items: p.items, kecamatanId: p.kecamatanId, deadlineDays: p.deadlineDays, emergency: p.emergency ?? false, status: 'baru', cause: p.cause ?? null }),
+    }
+  },
+  'match.made': (s, e) => ({
+    ...s,
+    matches: upsert(s.matches, { id: must(e.payload.id, 'match id'), needId: e.payload.needId, businessId: e.payload.businessId, score: e.payload.score, at: e.at, status: 'kandidat' }),
+    catalogNeeds: patch(s.catalogNeeds, e.payload.needId, (n) => (n.status === 'baru' ? { ...n, status: 'dicocokkan' } : n)),
+  }),
+  'order.created': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'order id')
+    const total = p.items.reduce((a, it) => a + it.qty * it.price, 0)
+    let next: WorldState = { ...s, orders: upsert(s.orders, { id, code: p.code ?? id, needId: p.needId ?? null, businessId: p.businessId, items: p.items, total, status: 'dipesan', at: e.at }) }
+    if (p.needId) {
+      const needId = p.needId
+      next = { ...next, catalogNeeds: patch(next.catalogNeeds, needId, (n) => ({ ...n, status: 'dipesan' })) }
+      const picked = next.matches.ids.filter((m) => next.matches.byId[m]?.needId === needId && next.matches.byId[m]?.businessId === p.businessId)
+      next = { ...next, matches: patchMany(next.matches, picked, (m) => ({ ...m, status: 'dipilih' })) }
+    }
+    return next
+  },
+
+  /* ---------------------------------------------------------------- Rapor Usaha */
+  'score.updated': (s, e) => ({
+    ...s,
+    bizScores: patch(s.bizScores, e.payload.businessId, (b) => {
+      const history = [...b.history]
+      history[history.length - 1] = e.payload.score
+      return { ...b, score: e.payload.score, factors: e.payload.factors ?? b.factors, history, updatedAt: e.at }
+    }),
+  }),
+  'loan.applied': (s, e) => {
+    const p = e.payload
+    return {
+      ...s,
+      loanApps: upsert(s.loanApps, { id: must(p.id, 'loan id'), businessId: p.businessId, lender: p.lender, amount: p.amount, tenorMonths: p.tenorMonths, score: get(s.bizScores, p.businessId)?.score ?? 0, status: 'diajukan', at: e.at, decidedAt: null }),
+    }
+  },
+  'loan.approved': (s, e) => ({ ...s, loanApps: patch(s.loanApps, e.payload.loanId, (l) => ({ ...l, status: 'disetujui', decidedAt: e.at })) }),
+
+  /* ---------------------------------------------------------------- Indeks Ekonomi · Sinyal Pasar */
+  'econ.updated': (s, e) => {
+    const p = e.payload
+    const id = `${p.kecamatanId}:${p.month || monthOf(s.day)}`
+    return { ...s, econIndex: patch(s.econIndex, id, (x) => ({ ...x, index: p.index, omzet: Math.round((x.omzet * p.index) / Math.max(1, x.index)) })) }
+  },
+  'price.updated': (s, e) => ({ ...s, prices: patch(s.prices, `${e.payload.marketId}:${e.payload.commodityId}`, (x) => ({ ...x, price: e.payload.price, updatedAt: e.at })) }),
+  'price.anomaly': (s, e) => ({ ...s, prices: patch(s.prices, `${e.payload.marketId}:${e.payload.commodityId}`, (x) => ({ ...x, price: e.payload.price, anomaly: true, updatedAt: e.at })) }),
+  'market.operation': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'market op id')
+    const prev = s.marketOps.byId[id]
+    const clearAnomaly = (st: WorldState, marketIds: string[], commodityId: string): WorldState =>
+      p.stage === 'done' ? { ...st, prices: patchMany(st.prices, marketIds.map((m) => `${m}:${commodityId}`), (x) => (x.anomaly ? { ...x, anomaly: false } : x)) } : st
+    if (prev) return clearAnomaly({ ...s, marketOps: patch(s.marketOps, id, (m) => ({ ...m, stage: p.stage, effectPct: p.effectPct ?? m.effectPct })) }, prev.marketIds, prev.commodityId)
+    const name = s.region.commodities.find((c) => c.id === p.commodityId)?.name ?? { id: p.commodityId, en: p.commodityId }
+    const op: MarketOperation = {
+      id, at: e.at, stage: p.stage, commodityId: p.commodityId, marketIds: p.marketIds, effectPct: p.effectPct ?? -8, forRole: p.forRole ?? 'kepala-daerah', cause: p.cause ?? null,
+      reason: p.reason ?? { id: `Operasi pasar ${name.id}`, en: `Market operation: ${name.en}` },
+    }
+    return clearAnomaly({ ...s, marketOps: upsert(s.marketOps, op) }, p.marketIds, p.commodityId)
+  },
+}

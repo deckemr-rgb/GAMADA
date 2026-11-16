@@ -1,0 +1,2 @@
+# raw downloads (recreate with: node tools/region/fetch-bojonegoro.mjs)
+.cache/

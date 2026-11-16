@@ -1,0 +1,9 @@
+# Netlify: set the site's base directory to server/ai-proxy.
+[build]
+  command = "npm run typecheck"
+  # nothing static is served; an empty-ish folder keeps the source tree private
+  publish = "netlify/public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
