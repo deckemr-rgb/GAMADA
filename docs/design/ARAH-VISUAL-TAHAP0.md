@@ -332,3 +332,18 @@ Catatan token:
 | `MapPanel` | C + B | Peringkat, detail, label bernilai, label mobile, Flip saat lapisan berganti. |
 | `PaperFrame` | B + A | Kop serif, lencana keyakinan per kotak, penanda bernomor ke baris ekstraksi, tema kertas. |
 | `SectionHeader` (lapis GAMADA di `/produk`) | B | Indeks Fraunces miring dan judul manfaat. |
+
+---
+
+## Keputusan pemilik proyek (17 November 2026)
+
+Semua usulan tahap 0 disetujui:
+- Arah visual: **C (Data-dense tenang)** sebagai dasar, dengan cangkokan dari B dan A seperti di bagian 1.
+- Region pack: **[DAERAH_1] Kabupaten Bojonegoro** (Basa Jawa, region utama untuk tur), **[DAERAH_2] Kota Bandung** (Basa Sunda), **[DAERAH_3] Kota Padang** (Baso Minang).
+- Peta dasar: OpenFreeMap (data OpenStreetMap, tanpa API key). Citra satelit tetap disembunyikan sampai penyedia dan lisensinya dipastikan (EOX Sentinel-2 2016 dikonfirmasi ke EOX, atau penyedia ber-key).
+- AI: mode Simulasi sebagai bawaan. Mode Live diaktifkan setelah API key, anggaran harian, dan hosting tersedia.
+- Halaman produk: tanpa harga, cukup CTA "Hubungi kami".
+- Nama bank/koperasi mitra dan supplier: fiktif, dibuat oleh agent.
+- Prioritas: prompt ekosistem dulu. Fase 3–7 prompt GATRA cukup menjadi halaman studi kasus `/karya` tanpa membangun ulang demonya.
+- `PROMPT-VSCODE-PRODUK-E2E.md` **dihapus** dan digantikan oleh ekosistem 17 produk (masih bisa dipulihkan dari commit `99398dc`). Spesifikasi di `docs/products/` disimpan hanya sebagai bahan tulisan studi kasus `/karya`, bukan untuk dibangun.
+- Tarif pajak Pajak Beres diriset di tahap 3, lalu sumbernya dikonfirmasi pemilik.
