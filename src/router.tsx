@@ -31,6 +31,7 @@ export const router = createBrowserRouter([
       { path: 'tools/scrappulse', lazy: page(LOADERS.scrappulse) },
       { path: 'panel/phonefarm', lazy: page(LOADERS.phonefarm) },
       { path: 'lab/_design', lazy: page(LOADERS.labDesign) },
+      { path: 'lab/_kit', lazy: page(LOADERS.labKit) },
       { path: '*', lazy: page(LOADERS.notFound) },
     ],
   },

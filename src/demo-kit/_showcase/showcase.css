@@ -1,0 +1,12 @@
+.dk-sc { min-height: 100vh; padding: calc(var(--nav-h) + 32px) var(--gutter) 96px; background: var(--c-ink); color: var(--c-text); }
+.dk-sc-head { max-width: 1320px; margin: 0 auto 24px; }
+.dk-sc-eyebrow { font: 600 12px/1.2 var(--font-body); letter-spacing: .18em; text-transform: uppercase; color: var(--c-peach-soft); }
+.dk-sc-title { margin-top: 10px; font: 500 clamp(2rem, 4vw, 3rem)/1.05 var(--font-display); }
+.dk-sc-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 16px; font-size: 14px; }
+.dk-sc-nav a { color: var(--c-muted); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
+.dk-sc-nav a:hover { color: var(--c-text); }
+.dk-sc-nav a:focus-visible { outline: 2px solid var(--c-lavender); outline-offset: 2px; }
+.dk-sc-section { max-width: 1320px; margin: 0 auto; padding: 40px 0; border-top: 1px solid rgba(185,178,255,.12); scroll-margin-top: calc(var(--nav-h) + 16px); }
+.dk-sc-h2 { font: 500 28px/1.15 var(--font-display); margin-bottom: 20px; }
+.dk-sc-loading { min-height: 200px; }
+.dk-sc-empty { color: var(--c-muted); font-size: 14px; }

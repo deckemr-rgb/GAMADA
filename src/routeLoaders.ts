@@ -16,6 +16,7 @@ export const LOADERS = {
   scrappulse: () => import('./routes/ScrapPulse'),
   phonefarm: () => import('./routes/PhoneFarmPanel'),
   labDesign: () => import('./routes/LabDesign'),
+  labKit: () => import('./routes/LabKit'),
   notFound: () => import('./routes/NotFound'),
 } satisfies Record<string, Loader>
 
@@ -31,6 +32,7 @@ function loaderFor(pathname: string): Loader | null {
   if (p === '/tools/scrappulse') return LOADERS.scrappulse
   if (p === '/panel/phonefarm') return LOADERS.phonefarm
   if (p === '/lab/_design') return LOADERS.labDesign
+  if (p === '/lab/_kit') return LOADERS.labKit
   return LOADERS.notFound
 }
 
