@@ -93,3 +93,27 @@ TRACE=1 node tools/perf.mjs …   # long-task breakdown
 TICKS=1 node tools/perf.mjs …   # gsap.ticker callbacks > 8 ms
 ```
 A/B any effect with `?off=<flag>`. Force a perf tier with `?tier=low|mid|high` and a degrade level with `?degrade=1..4`.
+
+## Phase 2: complete home page (content sections)
+
+The home now has ten content sections below the scenes. They are bundled as one lazy chunk (`HomeSections`), so the first paint does not wait for them. The main JS chunk is **177 KB gzip** and the section chunk is 35 KB gzip.
+
+**Measurement conditions changed.** During these runs the laptop was locked to **60 Hz** (an idle hero shows 16.4 ms per frame, where phase A showed 7 ms / 144 fps), most likely a power state such as battery saver. The CPU and refresh state is not comparable to phase A, so the tables below are **not a before/after against the tables above**. Raw output is in `docs/perf/fase2-cpu1x.txt` and `fase2-cpu2x.txt`.
+
+| scenario | CPU 1× p50 / p95 / max (ms) | >50 ms | CPU 2× p50 / p95 / max (ms) | >50 ms |
+|---|---|---|---|---|
+| idle hero | 16.4 / 17.0 / 22.5 | 0 | 16.4 / 17.8 / 22.0 | 0 |
+| hero → tranquility | 16.5 / 19.6 / 95.5 | 3 | 18.3 / 34.4 / 74.0 | 3 |
+| tranquility → biodiversity | 16.4 / 19.0 / 34.7 | 0 | 17.0 / 30.1 / 47.3 | 0 |
+| scroll content sections (new) | 16.4 / 18.5 / 515 | 4 | 16.7 / 28.8 / 308 | 5 |
+| back to hero | 16.4 / 18.5 / 131.7 | 4 | 16.6 / 28.2 / 146.1 | 2 |
+
+What was found and fixed (one change, one measurement each):
+- **Scene effects ran under the content sections.** WebGL waterfalls, birds and wind kept running while the user was reading the content. The master timeline now ANDs scene visibility with "is the stage on screen". Effect: the idle hero went from 15 fps with a 1.7 s stall (taken while reviewers were also running Chrome) to 0 long frames.
+- **Leak:** pointer-parallax `quickTo` tweens are now killed when the home unmounts.
+
+Experiments that were reverted (no gain): ambient gradient layer off, fireflies off (`?off=sectionParticles`), and dropping the "live" scenes once the stage is far off screen.
+
+**Remaining spikes (honest status).** The 200–500 ms frames in "scroll content sections" are **GPU raster flushes** (`RasterDecoderImpl::DoEndRasterCHROMIUM::Flush` on `CrGpuMain`), not main-thread work: the trace has no main-thread task over 40 ms. They happen where Portofolio and the Kontak panel first come into view. A **second pass in the same session has none** (max 0 ms / 82 ms in those zones). That makes this a first-use cost, shader compilation or first raster, on a cold profile; the harness always starts with a fresh profile. Real browsers keep a persistent shader cache, so a returning visitor should not hit it. Open for phase 7: CPU 2× scroll p95 is 28–34 ms, above the 20 ms target. Next things to test are the cost of the many section ScrollTriggers on every scroll update, and warming those paints during idle.
+
+Re-run: `node tools/perf.mjs http://127.0.0.1:4173/ 2 1440 900 1.25`. Probe one scenario with `TRACE=1 TRACE_ON=content` and save the raw trace with `TRACE_OUT=<file>`.
