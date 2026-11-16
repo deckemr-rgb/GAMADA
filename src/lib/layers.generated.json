@@ -1,0 +1,1228 @@
+{
+ "biodiversity/backdrop": {
+  "bbox": {
+   "x": 0,
+   "y": 0,
+   "w": 2560,
+   "h": 2304
+  },
+  "opaque": true,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 1152,
+    "webp": "/scenes/biodiversity/backdrop-1280.webp",
+    "avif": "/scenes/biodiversity/backdrop-1280.avif",
+    "bytes": 10573,
+    "bytesWebp": 16536
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1728,
+    "webp": "/scenes/biodiversity/backdrop-1920.webp",
+    "avif": "/scenes/biodiversity/backdrop-1920.avif",
+    "bytes": 20019,
+    "bytesWebp": 28186
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 2304,
+    "webp": "/scenes/biodiversity/backdrop-2560.webp",
+    "avif": "/scenes/biodiversity/backdrop-2560.avif",
+    "bytes": 27456,
+    "bytesWebp": 42790
+   }
+  ]
+ },
+ "biodiversity/deer-alert": {
+  "bbox": {
+   "x": 1341,
+   "y": 1004,
+   "w": 512,
+   "h": 731
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 256,
+    "h": 366,
+    "webp": "/scenes/biodiversity/deer-alert-1280.webp",
+    "avif": "/scenes/biodiversity/deer-alert-1280.avif",
+    "bytes": 7127,
+    "bytesWebp": 11686
+   },
+   {
+    "canvasW": 2560,
+    "w": 512,
+    "h": 731,
+    "webp": "/scenes/biodiversity/deer-alert-2560.webp",
+    "avif": "/scenes/biodiversity/deer-alert-2560.avif",
+    "bytes": 14037,
+    "bytesWebp": 19994
+   }
+  ]
+ },
+ "biodiversity/deer-ear": {
+  "bbox": {
+   "x": 1341,
+   "y": 1004,
+   "w": 512,
+   "h": 731
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 256,
+    "h": 366,
+    "webp": "/scenes/biodiversity/deer-ear-1280.webp",
+    "avif": "/scenes/biodiversity/deer-ear-1280.avif",
+    "bytes": 7227,
+    "bytesWebp": 11796
+   },
+   {
+    "canvasW": 2560,
+    "w": 512,
+    "h": 731,
+    "webp": "/scenes/biodiversity/deer-ear-2560.webp",
+    "avif": "/scenes/biodiversity/deer-ear-2560.avif",
+    "bytes": 14214,
+    "bytesWebp": 20110
+   }
+  ]
+ },
+ "biodiversity/deer-rest": {
+  "bbox": {
+   "x": 1304,
+   "y": 1331,
+   "w": 549,
+   "h": 404
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 275,
+    "h": 202,
+    "webp": "/scenes/biodiversity/deer-rest-1280.webp",
+    "avif": "/scenes/biodiversity/deer-rest-1280.avif",
+    "bytes": 6154,
+    "bytesWebp": 10660
+   },
+   {
+    "canvasW": 2560,
+    "w": 549,
+    "h": 404,
+    "webp": "/scenes/biodiversity/deer-rest-2560.webp",
+    "avif": "/scenes/biodiversity/deer-rest-2560.avif",
+    "bytes": 13364,
+    "bytesWebp": 19008
+   }
+  ]
+ },
+ "biodiversity/flowers-back": {
+  "bbox": {
+   "x": 324,
+   "y": 1488,
+   "w": 2236,
+   "h": 307
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1118,
+    "h": 154,
+    "webp": "/scenes/biodiversity/flowers-back-1280.webp",
+    "avif": "/scenes/biodiversity/flowers-back-1280.avif",
+    "bytes": 9642,
+    "bytesWebp": 18662
+   },
+   {
+    "canvasW": 1920,
+    "w": 1677,
+    "h": 230,
+    "webp": "/scenes/biodiversity/flowers-back-1920.webp",
+    "avif": "/scenes/biodiversity/flowers-back-1920.avif",
+    "bytes": 24073,
+    "bytesWebp": 34498
+   },
+   {
+    "canvasW": 2560,
+    "w": 2236,
+    "h": 307,
+    "webp": "/scenes/biodiversity/flowers-back-2560.webp",
+    "avif": "/scenes/biodiversity/flowers-back-2560.avif",
+    "bytes": 32780,
+    "bytesWebp": 45916
+   }
+  ]
+ },
+ "biodiversity/flowers-front": {
+  "bbox": {
+   "x": 0,
+   "y": 1360,
+   "w": 2560,
+   "h": 944
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 472,
+    "webp": "/scenes/biodiversity/flowers-front-1280.webp",
+    "avif": "/scenes/biodiversity/flowers-front-1280.avif",
+    "bytes": 24992,
+    "bytesWebp": 47742
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 708,
+    "webp": "/scenes/biodiversity/flowers-front-1920.webp",
+    "avif": "/scenes/biodiversity/flowers-front-1920.avif",
+    "bytes": 56098,
+    "bytesWebp": 82174
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 944,
+    "webp": "/scenes/biodiversity/flowers-front-2560.webp",
+    "avif": "/scenes/biodiversity/flowers-front-2560.avif",
+    "bytes": 70112,
+    "bytesWebp": 106382
+   }
+  ],
+  "blur": {
+   "bbox": {
+    "x": 0,
+    "y": 1339,
+    "w": 2560,
+    "h": 965
+   },
+   "webp": "/scenes/biodiversity/flowers-front-blur.webp",
+   "avif": "/scenes/biodiversity/flowers-front-blur.avif",
+   "w": 1280,
+   "h": 483,
+   "bytes": 13021,
+   "bytesWebp": 27328
+  }
+ },
+ "biodiversity/forest-far": {
+  "bbox": {
+   "x": 0,
+   "y": 18,
+   "w": 2560,
+   "h": 1806
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 903,
+    "webp": "/scenes/biodiversity/forest-far-1280.webp",
+    "avif": "/scenes/biodiversity/forest-far-1280.avif",
+    "bytes": 16918,
+    "bytesWebp": 27272
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1355,
+    "webp": "/scenes/biodiversity/forest-far-1920.webp",
+    "avif": "/scenes/biodiversity/forest-far-1920.avif",
+    "bytes": 29790,
+    "bytesWebp": 43258
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1806,
+    "webp": "/scenes/biodiversity/forest-far-2560.webp",
+    "avif": "/scenes/biodiversity/forest-far-2560.avif",
+    "bytes": 32101,
+    "bytesWebp": 50754
+   }
+  ]
+ },
+ "biodiversity/forest-mid": {
+  "bbox": {
+   "x": 0,
+   "y": 0,
+   "w": 2560,
+   "h": 1872
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 936,
+    "webp": "/scenes/biodiversity/forest-mid-1280.webp",
+    "avif": "/scenes/biodiversity/forest-mid-1280.avif",
+    "bytes": 27902,
+    "bytesWebp": 39018
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1404,
+    "webp": "/scenes/biodiversity/forest-mid-1920.webp",
+    "avif": "/scenes/biodiversity/forest-mid-1920.avif",
+    "bytes": 50192,
+    "bytesWebp": 61468
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1872,
+    "webp": "/scenes/biodiversity/forest-mid-2560.webp",
+    "avif": "/scenes/biodiversity/forest-mid-2560.avif",
+    "bytes": 53843,
+    "bytesWebp": 72496
+   }
+  ]
+ },
+ "biodiversity/river": {
+  "bbox": {
+   "x": 0,
+   "y": 1506,
+   "w": 2560,
+   "h": 798
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 399,
+    "webp": "/scenes/biodiversity/river-1280.webp",
+    "avif": "/scenes/biodiversity/river-1280.avif",
+    "bytes": 7887,
+    "bytesWebp": 12158
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 599,
+    "webp": "/scenes/biodiversity/river-1920.webp",
+    "avif": "/scenes/biodiversity/river-1920.avif",
+    "bytes": 15272,
+    "bytesWebp": 20352
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 798,
+    "webp": "/scenes/biodiversity/river-2560.webp",
+    "avif": "/scenes/biodiversity/river-2560.avif",
+    "bytes": 19091,
+    "bytesWebp": 26438
+   }
+  ]
+ },
+ "biodiversity/waterfall": {
+  "bbox": {
+   "x": 1713,
+   "y": 318,
+   "w": 635,
+   "h": 1458
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 318,
+    "h": 729,
+    "webp": "/scenes/biodiversity/waterfall-1280.webp",
+    "avif": "/scenes/biodiversity/waterfall-1280.avif",
+    "bytes": 11355,
+    "bytesWebp": 31608
+   },
+   {
+    "canvasW": 2560,
+    "w": 635,
+    "h": 1458,
+    "webp": "/scenes/biodiversity/waterfall-2560.webp",
+    "avif": "/scenes/biodiversity/waterfall-2560.avif",
+    "bytes": 25214,
+    "bytesWebp": 74038
+   }
+  ]
+ },
+ "bridges/hero-tranquility": {
+  "bbox": {
+   "x": 0,
+   "y": 560,
+   "w": 2560,
+   "h": 1171
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 586,
+    "webp": "/scenes/bridges/hero-tranquility-1280.webp",
+    "avif": "/scenes/bridges/hero-tranquility-1280.avif",
+    "bytes": 26316,
+    "bytesWebp": 44990
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 878,
+    "webp": "/scenes/bridges/hero-tranquility-1920.webp",
+    "avif": "/scenes/bridges/hero-tranquility-1920.avif",
+    "bytes": 52150,
+    "bytesWebp": 75434
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1171,
+    "webp": "/scenes/bridges/hero-tranquility-2560.webp",
+    "avif": "/scenes/bridges/hero-tranquility-2560.avif",
+    "bytes": 70260,
+    "bytesWebp": 104120
+   }
+  ]
+ },
+ "bridges/tranquility-biodiversity": {
+  "bbox": {
+   "x": 0,
+   "y": 638,
+   "w": 2560,
+   "h": 1046
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 523,
+    "webp": "/scenes/bridges/tranquility-biodiversity-1280.webp",
+    "avif": "/scenes/bridges/tranquility-biodiversity-1280.avif",
+    "bytes": 18516,
+    "bytesWebp": 34512
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 785,
+    "webp": "/scenes/bridges/tranquility-biodiversity-1920.webp",
+    "avif": "/scenes/bridges/tranquility-biodiversity-1920.avif",
+    "bytes": 40589,
+    "bytesWebp": 57446
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1046,
+    "webp": "/scenes/bridges/tranquility-biodiversity-2560.webp",
+    "avif": "/scenes/bridges/tranquility-biodiversity-2560.avif",
+    "bytes": 57798,
+    "bytesWebp": 83180
+   }
+  ]
+ },
+ "hero/clouds-back": {
+  "bbox": {
+   "x": 0,
+   "y": 158,
+   "w": 2560,
+   "h": 667
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 334,
+    "webp": "/scenes/hero/clouds-back-1280.webp",
+    "avif": "/scenes/hero/clouds-back-1280.avif",
+    "bytes": 11426,
+    "bytesWebp": 24180
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 500,
+    "webp": "/scenes/hero/clouds-back-1920.webp",
+    "avif": "/scenes/hero/clouds-back-1920.avif",
+    "bytes": 25320,
+    "bytesWebp": 40426
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 667,
+    "webp": "/scenes/hero/clouds-back-2560.webp",
+    "avif": "/scenes/hero/clouds-back-2560.avif",
+    "bytes": 23648,
+    "bytesWebp": 30940
+   }
+  ]
+ },
+ "hero/clouds-front": {
+  "bbox": {
+   "x": 1040,
+   "y": 865,
+   "w": 1520,
+   "h": 466
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 760,
+    "h": 233,
+    "webp": "/scenes/hero/clouds-front-1280.webp",
+    "avif": "/scenes/hero/clouds-front-1280.avif",
+    "bytes": 8850,
+    "bytesWebp": 14764
+   },
+   {
+    "canvasW": 1920,
+    "w": 1140,
+    "h": 350,
+    "webp": "/scenes/hero/clouds-front-1920.webp",
+    "avif": "/scenes/hero/clouds-front-1920.avif",
+    "bytes": 16769,
+    "bytesWebp": 23434
+   },
+   {
+    "canvasW": 2560,
+    "w": 1520,
+    "h": 466,
+    "webp": "/scenes/hero/clouds-front-2560.webp",
+    "avif": "/scenes/hero/clouds-front-2560.avif",
+    "bytes": 16768,
+    "bytesWebp": 21328
+   }
+  ]
+ },
+ "hero/grass-back": {
+  "bbox": {
+   "x": 1263,
+   "y": 1421,
+   "w": 1297,
+   "h": 883
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 649,
+    "h": 442,
+    "webp": "/scenes/hero/grass-back-1280.webp",
+    "avif": "/scenes/hero/grass-back-1280.avif",
+    "bytes": 29183,
+    "bytesWebp": 52708
+   },
+   {
+    "canvasW": 2560,
+    "w": 1297,
+    "h": 883,
+    "webp": "/scenes/hero/grass-back-2560.webp",
+    "avif": "/scenes/hero/grass-back-2560.avif",
+    "bytes": 61259,
+    "bytesWebp": 105406
+   }
+  ]
+ },
+ "hero/grass-front": {
+  "bbox": {
+   "x": 0,
+   "y": 1545,
+   "w": 2560,
+   "h": 759
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 380,
+    "webp": "/scenes/hero/grass-front-1280.webp",
+    "avif": "/scenes/hero/grass-front-1280.avif",
+    "bytes": 21312,
+    "bytesWebp": 37594
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 569,
+    "webp": "/scenes/hero/grass-front-1920.webp",
+    "avif": "/scenes/hero/grass-front-1920.avif",
+    "bytes": 41146,
+    "bytesWebp": 63130
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 759,
+    "webp": "/scenes/hero/grass-front-2560.webp",
+    "avif": "/scenes/hero/grass-front-2560.avif",
+    "bytes": 44718,
+    "bytesWebp": 75734
+   }
+  ],
+  "blur": {
+   "bbox": {
+    "x": 0,
+    "y": 1524,
+    "w": 2560,
+    "h": 780
+   },
+   "webp": "/scenes/hero/grass-front-blur.webp",
+   "avif": "/scenes/hero/grass-front-blur.avif",
+   "w": 1280,
+   "h": 390,
+   "bytes": 12522,
+   "bytesWebp": 24826
+  }
+ },
+ "hero/hills": {
+  "bbox": {
+   "x": 0,
+   "y": 1245,
+   "w": 2560,
+   "h": 419
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 210,
+    "webp": "/scenes/hero/hills-1280.webp",
+    "avif": "/scenes/hero/hills-1280.avif",
+    "bytes": 9638,
+    "bytesWebp": 15226
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 314,
+    "webp": "/scenes/hero/hills-1920.webp",
+    "avif": "/scenes/hero/hills-1920.avif",
+    "bytes": 18742,
+    "bytesWebp": 25336
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 419,
+    "webp": "/scenes/hero/hills-2560.webp",
+    "avif": "/scenes/hero/hills-2560.avif",
+    "bytes": 22560,
+    "bytesWebp": 30850
+   }
+  ]
+ },
+ "hero/lake": {
+  "bbox": {
+   "x": 0,
+   "y": 1420,
+   "w": 2560,
+   "h": 884
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 442,
+    "webp": "/scenes/hero/lake-1280.webp",
+    "avif": "/scenes/hero/lake-1280.avif",
+    "bytes": 5639,
+    "bytesWebp": 9370
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 663,
+    "webp": "/scenes/hero/lake-1920.webp",
+    "avif": "/scenes/hero/lake-1920.avif",
+    "bytes": 10614,
+    "bytesWebp": 15270
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 884,
+    "webp": "/scenes/hero/lake-2560.webp",
+    "avif": "/scenes/hero/lake-2560.avif",
+    "bytes": 14499,
+    "bytesWebp": 22430
+   }
+  ]
+ },
+ "hero/mountain": {
+  "bbox": {
+   "x": 0,
+   "y": 694,
+   "w": 2560,
+   "h": 1070
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 535,
+    "webp": "/scenes/hero/mountain-1280.webp",
+    "avif": "/scenes/hero/mountain-1280.avif",
+    "bytes": 8848,
+    "bytesWebp": 11994
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 803,
+    "webp": "/scenes/hero/mountain-1920.webp",
+    "avif": "/scenes/hero/mountain-1920.avif",
+    "bytes": 16203,
+    "bytesWebp": 20290
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1070,
+    "webp": "/scenes/hero/mountain-2560.webp",
+    "avif": "/scenes/hero/mountain-2560.avif",
+    "bytes": 15527,
+    "bytesWebp": 22244
+   }
+  ]
+ },
+ "hero/rocks": {
+  "bbox": {
+   "x": 203,
+   "y": 1532,
+   "w": 1436,
+   "h": 406
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 718,
+    "h": 203,
+    "webp": "/scenes/hero/rocks-1280.webp",
+    "avif": "/scenes/hero/rocks-1280.avif",
+    "bytes": 6914,
+    "bytesWebp": 10512
+   },
+   {
+    "canvasW": 1920,
+    "w": 1077,
+    "h": 305,
+    "webp": "/scenes/hero/rocks-1920.webp",
+    "avif": "/scenes/hero/rocks-1920.avif",
+    "bytes": 12721,
+    "bytesWebp": 16222
+   },
+   {
+    "canvasW": 2560,
+    "w": 1436,
+    "h": 406,
+    "webp": "/scenes/hero/rocks-2560.webp",
+    "avif": "/scenes/hero/rocks-2560.avif",
+    "bytes": 12678,
+    "bytesWebp": 16858
+   }
+  ]
+ },
+ "hero/scarf": {
+  "bbox": {
+   "x": 1805,
+   "y": 1300,
+   "w": 536,
+   "h": 141
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 268,
+    "h": 71,
+    "webp": "/scenes/hero/scarf-1280.webp",
+    "avif": "/scenes/hero/scarf-1280.avif",
+    "bytes": 2725,
+    "bytesWebp": 3268
+   },
+   {
+    "canvasW": 2560,
+    "w": 536,
+    "h": 141,
+    "webp": "/scenes/hero/scarf-2560.webp",
+    "avif": "/scenes/hero/scarf-2560.avif",
+    "bytes": 4077,
+    "bytesWebp": 4590
+   }
+  ]
+ },
+ "hero/sky": {
+  "bbox": {
+   "x": 0,
+   "y": 0,
+   "w": 2560,
+   "h": 2304
+  },
+  "opaque": true,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 1152,
+    "webp": "/scenes/hero/sky-1280.webp",
+    "avif": "/scenes/hero/sky-1280.avif",
+    "bytes": 4019,
+    "bytesWebp": 8750
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1728,
+    "webp": "/scenes/hero/sky-1920.webp",
+    "avif": "/scenes/hero/sky-1920.avif",
+    "bytes": 8461,
+    "bytesWebp": 16062
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 2304,
+    "webp": "/scenes/hero/sky-2560.webp",
+    "avif": "/scenes/hero/sky-2560.avif",
+    "bytes": 12571,
+    "bytesWebp": 25168
+   }
+  ]
+ },
+ "hero/traveler": {
+  "bbox": {
+   "x": 1661,
+   "y": 1176,
+   "w": 390,
+   "h": 842
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 195,
+    "h": 421,
+    "webp": "/scenes/hero/traveler-1280.webp",
+    "avif": "/scenes/hero/traveler-1280.avif",
+    "bytes": 7357,
+    "bytesWebp": 11992
+   },
+   {
+    "canvasW": 2560,
+    "w": 390,
+    "h": 842,
+    "webp": "/scenes/hero/traveler-2560.webp",
+    "avif": "/scenes/hero/traveler-2560.avif",
+    "bytes": 14500,
+    "bytesWebp": 21192
+   }
+  ]
+ },
+ "tranquility/backdrop": {
+  "bbox": {
+   "x": 0,
+   "y": 0,
+   "w": 2560,
+   "h": 2304
+  },
+  "opaque": true,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 1152,
+    "webp": "/scenes/tranquility/backdrop-1280.webp",
+    "avif": "/scenes/tranquility/backdrop-1280.avif",
+    "bytes": 6207,
+    "bytesWebp": 11070
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1728,
+    "webp": "/scenes/tranquility/backdrop-1920.webp",
+    "avif": "/scenes/tranquility/backdrop-1920.avif",
+    "bytes": 12270,
+    "bytesWebp": 20022
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 2304,
+    "webp": "/scenes/tranquility/backdrop-2560.webp",
+    "avif": "/scenes/tranquility/backdrop-2560.avif",
+    "bytes": 16601,
+    "bytesWebp": 30156
+   }
+  ]
+ },
+ "tranquility/cave-far": {
+  "bbox": {
+   "x": 0,
+   "y": 531,
+   "w": 2560,
+   "h": 1153
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 577,
+    "webp": "/scenes/tranquility/cave-far-1280.webp",
+    "avif": "/scenes/tranquility/cave-far-1280.avif",
+    "bytes": 11293,
+    "bytesWebp": 15854
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 865,
+    "webp": "/scenes/tranquility/cave-far-1920.webp",
+    "avif": "/scenes/tranquility/cave-far-1920.avif",
+    "bytes": 20247,
+    "bytesWebp": 26882
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1153,
+    "webp": "/scenes/tranquility/cave-far-2560.webp",
+    "avif": "/scenes/tranquility/cave-far-2560.avif",
+    "bytes": 19666,
+    "bytesWebp": 30092
+   }
+  ]
+ },
+ "tranquility/cave-mid": {
+  "bbox": {
+   "x": 0,
+   "y": 0,
+   "w": 2560,
+   "h": 1823
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 912,
+    "webp": "/scenes/tranquility/cave-mid-1280.webp",
+    "avif": "/scenes/tranquility/cave-mid-1280.avif",
+    "bytes": 13294,
+    "bytesWebp": 21744
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1367,
+    "webp": "/scenes/tranquility/cave-mid-1920.webp",
+    "avif": "/scenes/tranquility/cave-mid-1920.avif",
+    "bytes": 23296,
+    "bytesWebp": 35254
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 1823,
+    "webp": "/scenes/tranquility/cave-mid-2560.webp",
+    "avif": "/scenes/tranquility/cave-mid-2560.avif",
+    "bytes": 23423,
+    "bytesWebp": 40112
+   }
+  ]
+ },
+ "tranquility/elder-rod": {
+  "bbox": {
+   "x": 619,
+   "y": 1074,
+   "w": 307,
+   "h": 653
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 154,
+    "h": 327,
+    "webp": "/scenes/tranquility/elder-rod-1280.webp",
+    "avif": "/scenes/tranquility/elder-rod-1280.avif",
+    "bytes": 3056,
+    "bytesWebp": 4314
+   },
+   {
+    "canvasW": 2560,
+    "w": 307,
+    "h": 653,
+    "webp": "/scenes/tranquility/elder-rod-2560.webp",
+    "avif": "/scenes/tranquility/elder-rod-2560.avif",
+    "bytes": 5134,
+    "bytesWebp": 5100
+   }
+  ]
+ },
+ "tranquility/elder": {
+  "bbox": {
+   "x": 680,
+   "y": 944,
+   "w": 718,
+   "h": 809
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 359,
+    "h": 405,
+    "webp": "/scenes/tranquility/elder-1280.webp",
+    "avif": "/scenes/tranquility/elder-1280.avif",
+    "bytes": 7453,
+    "bytesWebp": 13028
+   },
+   {
+    "canvasW": 2560,
+    "w": 718,
+    "h": 809,
+    "webp": "/scenes/tranquility/elder-2560.webp",
+    "avif": "/scenes/tranquility/elder-2560.avif",
+    "bytes": 18092,
+    "bytesWebp": 26642
+   }
+  ]
+ },
+ "tranquility/plants-back": {
+  "bbox": {
+   "x": 0,
+   "y": 995,
+   "w": 2560,
+   "h": 782
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 391,
+    "webp": "/scenes/tranquility/plants-back-1280.webp",
+    "avif": "/scenes/tranquility/plants-back-1280.avif",
+    "bytes": 32724,
+    "bytesWebp": 50566
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 587,
+    "webp": "/scenes/tranquility/plants-back-1920.webp",
+    "avif": "/scenes/tranquility/plants-back-1920.avif",
+    "bytes": 65366,
+    "bytesWebp": 86810
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 782,
+    "webp": "/scenes/tranquility/plants-back-2560.webp",
+    "avif": "/scenes/tranquility/plants-back-2560.avif",
+    "bytes": 65055,
+    "bytesWebp": 97130
+   }
+  ]
+ },
+ "tranquility/plants-front": {
+  "bbox": {
+   "x": 0,
+   "y": 195,
+   "w": 2560,
+   "h": 2109
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 1055,
+    "webp": "/scenes/tranquility/plants-front-1280.webp",
+    "avif": "/scenes/tranquility/plants-front-1280.avif",
+    "bytes": 23512,
+    "bytesWebp": 42978
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 1582,
+    "webp": "/scenes/tranquility/plants-front-1920.webp",
+    "avif": "/scenes/tranquility/plants-front-1920.avif",
+    "bytes": 47475,
+    "bytesWebp": 73060
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 2109,
+    "webp": "/scenes/tranquility/plants-front-2560.webp",
+    "avif": "/scenes/tranquility/plants-front-2560.avif",
+    "bytes": 57654,
+    "bytesWebp": 94516
+   }
+  ],
+  "blur": {
+   "bbox": {
+    "x": 0,
+    "y": 174,
+    "w": 2560,
+    "h": 2130
+   },
+   "webp": "/scenes/tranquility/plants-front-blur.webp",
+   "avif": "/scenes/tranquility/plants-front-blur.avif",
+   "w": 1280,
+   "h": 1065,
+   "bytes": 13450,
+   "bytesWebp": 32030
+  }
+ },
+ "tranquility/pond": {
+  "bbox": {
+   "x": 0,
+   "y": 1462,
+   "w": 2560,
+   "h": 842
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 1280,
+    "h": 421,
+    "webp": "/scenes/tranquility/pond-1280.webp",
+    "avif": "/scenes/tranquility/pond-1280.avif",
+    "bytes": 8429,
+    "bytesWebp": 13666
+   },
+   {
+    "canvasW": 1920,
+    "w": 1920,
+    "h": 632,
+    "webp": "/scenes/tranquility/pond-1920.webp",
+    "avif": "/scenes/tranquility/pond-1920.avif",
+    "bytes": 15897,
+    "bytesWebp": 22532
+   },
+   {
+    "canvasW": 2560,
+    "w": 2560,
+    "h": 842,
+    "webp": "/scenes/tranquility/pond-2560.webp",
+    "avif": "/scenes/tranquility/pond-2560.avif",
+    "bytes": 18040,
+    "bytesWebp": 28400
+   }
+  ]
+ },
+ "tranquility/turtle-head": {
+  "bbox": {
+   "x": 1114,
+   "y": 1649,
+   "w": 57,
+   "h": 46
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 29,
+    "h": 23,
+    "webp": "/scenes/tranquility/turtle-head-1280.webp",
+    "avif": "/scenes/tranquility/turtle-head-1280.avif",
+    "bytes": 747,
+    "bytesWebp": 526
+   },
+   {
+    "canvasW": 2560,
+    "w": 57,
+    "h": 46,
+    "webp": "/scenes/tranquility/turtle-head-2560.webp",
+    "avif": "/scenes/tranquility/turtle-head-2560.avif",
+    "bytes": 876,
+    "bytesWebp": 678
+   }
+  ]
+ },
+ "tranquility/turtle": {
+  "bbox": {
+   "x": 1068,
+   "y": 1641,
+   "w": 260,
+   "h": 117
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 130,
+    "h": 59,
+    "webp": "/scenes/tranquility/turtle-1280.webp",
+    "avif": "/scenes/tranquility/turtle-1280.avif",
+    "bytes": 1751,
+    "bytesWebp": 2472
+   },
+   {
+    "canvasW": 2560,
+    "w": 260,
+    "h": 117,
+    "webp": "/scenes/tranquility/turtle-2560.webp",
+    "avif": "/scenes/tranquility/turtle-2560.avif",
+    "bytes": 2860,
+    "bytesWebp": 3756
+   }
+  ]
+ },
+ "tranquility/waterfall": {
+  "bbox": {
+   "x": 162,
+   "y": 276,
+   "w": 677,
+   "h": 1528
+  },
+  "opaque": false,
+  "files": [
+   {
+    "canvasW": 1280,
+    "w": 339,
+    "h": 764,
+    "webp": "/scenes/tranquility/waterfall-1280.webp",
+    "avif": "/scenes/tranquility/waterfall-1280.avif",
+    "bytes": 7230,
+    "bytesWebp": 13850
+   },
+   {
+    "canvasW": 2560,
+    "w": 677,
+    "h": 1528,
+    "webp": "/scenes/tranquility/waterfall-2560.webp",
+    "avif": "/scenes/tranquility/waterfall-2560.avif",
+    "bytes": 13318,
+    "bytesWebp": 27850
+   }
+  ]
+ }
+}

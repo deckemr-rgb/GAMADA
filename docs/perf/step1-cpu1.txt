@@ -1,0 +1,15 @@
+{"name":"idle hero (4s)","frames":577,"p50":6.9,"p95":7.3,"p99":8.8,"max":14.3,"long":0,"fps":144}
+{"name":"scroll hero→tranquility","frames":779,"p50":7,"p95":8.1,"p99":17.2,"max":213,"long":5,"fps":129}
+{"name":"scroll tranquility→biodiversity","frames":766,"p50":7,"p95":12.9,"p99":18.6,"max":52,"long":1,"fps":132.3}
+{"name":"scroll back to hero","frames":1032,"p50":6.9,"p95":7.9,"p99":15.2,"max":354.6,"long":4,"fps":128.4}
+
+**STEP A3+A5 (compositing + quickSetter)** · 1440×900 @1.25x · CPU 1× slowdown · GPU: ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028E0) Direct3D11 vs_5_0 ps_5_0, D3D11)
+
+| scenario | frames | fps | p50 ms | p95 ms | p99 ms | max ms | frames >50ms |
+|---|---|---|---|---|---|---|---|
+| idle hero (4s) | 577 | 144 | 6.9 | 7.3 | 8.8 | 14.3 | 0 |
+| scroll hero→tranquility | 779 | 129 | 7 | 8.1 | 17.2 | 213 | 5 |
+| scroll tranquility→biodiversity | 766 | 132.3 | 7 | 12.9 | 18.6 | 52 | 1 |
+| scroll back to hero | 1032 | 128.4 | 6.9 | 7.9 | 15.2 | 354.6 | 4 |
+
+no console errors

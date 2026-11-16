@@ -1,0 +1,17 @@
+/* stats.css — the landing band after the scenes + the first stat strip. */
+.landing {
+  position: relative;
+}
+/* the pinned stage scrolls away above this band: blend the last scene's humid green-violet grade
+ * into the content background so the camera "lands" instead of cutting. */
+.landing-band {
+  position: relative;
+  height: clamp(80px, 14vw, 180px);
+  margin-top: calc(clamp(80px, 14vw, 180px) * -1);
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(35, 27, 72, 0) 0%, rgba(35, 27, 72, 0.75) 55%, var(--c-ink-2) 100%);
+}
+.landing .sec {
+  padding-top: clamp(48px, 7vw, 96px);
+}

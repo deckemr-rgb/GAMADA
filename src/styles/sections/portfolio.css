@@ -1,0 +1,387 @@
+/* portfolio.css — "Portofolio unggulan": three featured cards with stylised art that zooms on hover.
+ * Arts size in em on a container-query font size (the media box), so they scale with the card. */
+
+.pf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(18px, 2.2vw, 28px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-item {
+  display: flex;
+  min-width: 0;
+}
+.pf-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ media + hover zoom */
+.pf-media {
+  position: relative;
+  aspect-ratio: 16 / 10.5;
+  overflow: hidden;
+  container-type: inline-size;
+  border-bottom: 1px solid var(--sec-line);
+  background: #161235;
+}
+.pf-art {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-body);
+  font-size: max(7px, 3.4cqi);
+  line-height: 1;
+  transform-origin: 50% 55%;
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.pf-card:hover .pf-art,
+.pf-card:focus-within .pf-art {
+  transform: scale(1.07);
+}
+
+/* ------------------------------------------------------------------ body */
+.pf-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 24px 18px;
+}
+.pf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.pf-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.35rem, 1.9vw, 1.6rem);
+  line-height: 1.15;
+  color: var(--sec-fg);
+}
+.pf-desc {
+  flex: 1;
+  margin: 0;
+  color: var(--sec-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+/* one link per card, stretched over the whole card (single tab stop, whole card clickable) */
+.pf-card .pf-link {
+  position: static;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.pf-card .pf-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+/* the whole card is the click target, so keyboard focus outlines the whole card too */
+.pf-card:has(.pf-link:focus-visible) {
+  outline: 2px solid var(--c-peach-soft);
+  outline-offset: 4px;
+}
+
+.pf-more {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(36px, 5vw, 56px);
+}
+.pf-more .btn-label span {
+  transition: transform 0.3s ease;
+}
+.pf-more .btn:hover .btn-label span {
+  transform: translateX(4px);
+}
+
+/* ------------------------------------------------------------------ art: PhoneFarm */
+.pf-art--farm {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.8em;
+  padding: 6% 7%;
+  background:
+    radial-gradient(60% 70% at 80% 10%, rgba(63, 224, 192, 0.16), transparent 70%),
+    linear-gradient(150deg, #2b2152 0%, #161235 100%);
+}
+.pa-farm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pa-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.45em 0.9em;
+  border-radius: 99px;
+  background: rgba(185, 178, 255, 0.12);
+  color: var(--c-lavender);
+  font-size: 0.82em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.pa-pill--live {
+  background: rgba(63, 224, 192, 0.12);
+  color: var(--c-teal);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.pa-pill--live i {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pa-farm-rack {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 0.6em 0.7em;
+  min-height: 0;
+}
+.pa-phone {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.3em;
+  min-height: 0;
+  padding: 0.5em 0.45em;
+  border-radius: 0.75em;
+  border: 1px solid rgba(185, 178, 255, 0.26);
+  background: linear-gradient(170deg, rgba(63, 224, 192, 0.42), rgba(18, 15, 44, 0.92) 72%);
+}
+.pa-phone--b {
+  background: linear-gradient(170deg, rgba(255, 215, 126, 0.5), rgba(18, 15, 44, 0.92) 72%);
+}
+.pa-phone--i {
+  background: rgba(18, 15, 44, 0.85);
+}
+.pa-phone-l {
+  display: block;
+  width: 80%;
+  height: 0.32em;
+  border-radius: 1em;
+  background: rgba(255, 255, 255, 0.35);
+}
+.pa-phone-l--s {
+  width: 50%;
+  opacity: 0.6;
+}
+.pa-farm-log {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.4fr;
+  gap: 0.6em;
+}
+.pa-farm-log i {
+  height: 0.45em;
+  border-radius: 1em;
+  background: rgba(185, 178, 255, 0.22);
+}
+.pa-farm-log i:first-child {
+  background: rgba(63, 224, 192, 0.45);
+}
+
+/* ------------------------------------------------------------------ art: automation flow */
+.pf-art--flow {
+  display: grid;
+  place-items: center;
+  padding: 4% 6%;
+  background:
+    radial-gradient(45% 60% at 52% 50%, rgba(79, 209, 255, 0.14), transparent 70%),
+    linear-gradient(155deg, #1d2450 0%, #161235 100%);
+}
+.pa-flow {
+  width: 100%;
+  height: 100%;
+}
+.pa-links path {
+  fill: none;
+  stroke: rgba(79, 209, 255, 0.55);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  stroke-linecap: round;
+}
+.pa-pulses circle {
+  fill: var(--c-cyan);
+}
+.pa-node rect {
+  fill: #1d1840;
+  stroke: rgba(185, 178, 255, 0.38);
+  stroke-width: 1.5;
+}
+.pa-node--ai rect {
+  fill: #12324d;
+  stroke: var(--c-cyan);
+}
+.pa-node--out rect {
+  stroke: rgba(63, 224, 192, 0.5);
+}
+.pa-ic {
+  fill: none;
+  stroke: var(--c-lavender);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pa-node--ai .pa-ic {
+  fill: var(--c-cyan);
+  stroke: none;
+}
+.pa-node--out .pa-ic {
+  stroke: var(--c-teal);
+}
+
+/* ------------------------------------------------------------------ art: mobile demos */
+.pf-art--phones {
+  background:
+    radial-gradient(55% 60% at 50% 100%, rgba(245, 154, 98, 0.2), transparent 70%),
+    linear-gradient(150deg, #3a2463 0%, #1d1840 100%);
+}
+.pa-mob {
+  --r: 0deg;
+  --y: 0%;
+  position: absolute;
+  bottom: -14%;
+  width: 25%;
+  aspect-ratio: 9 / 18;
+  padding: 0.32em;
+  border-radius: 1.3em;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #0f0c26;
+  box-shadow: 0 1.2em 2em -0.8em rgba(5, 3, 20, 0.75);
+  transform: translateY(var(--y)) rotate(var(--r));
+  transform-origin: 50% 100%;
+}
+.pa-mob[data-i='0'] {
+  left: 9%;
+  --r: -12deg;
+  --y: 10%;
+}
+.pa-mob[data-i='1'] {
+  left: 29%;
+  --r: -4deg;
+  --y: 0%;
+}
+.pa-mob[data-i='2'] {
+  left: 48%;
+  --r: 4deg;
+  --y: 2%;
+}
+.pa-mob[data-i='3'] {
+  left: 67%;
+  --r: 12deg;
+  --y: 12%;
+}
+.pa-mob-scr {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  height: 100%;
+  padding: 1.1em 0.6em 0.6em;
+  overflow: hidden;
+  border-radius: 1em;
+  background: linear-gradient(170deg, #ffc79a, #f59a62);
+  color: var(--c-ink);
+}
+.pa-mob[data-i='1'] .pa-mob-scr {
+  background: linear-gradient(170deg, #8ff0dc, #3fe0c0);
+}
+.pa-mob[data-i='2'] .pa-mob-scr {
+  background: linear-gradient(170deg, #dcd8ff, #b9b2ff);
+}
+.pa-mob[data-i='3'] .pa-mob-scr {
+  background: linear-gradient(170deg, #f0c6f6, #c58fd2);
+}
+.pa-mob-scr b {
+  font-size: 0.72em;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pa-mob-hero {
+  display: block;
+  height: 32%;
+  border-radius: 0.6em;
+  background: rgba(26, 22, 56, 0.16);
+}
+.pa-mob-l {
+  display: block;
+  width: 85%;
+  height: 0.35em;
+  border-radius: 1em;
+  background: rgba(26, 22, 56, 0.28);
+}
+.pa-mob-l--s {
+  width: 55%;
+}
+.pa-mob-btn {
+  display: block;
+  height: 1.2em;
+  margin-top: auto;
+  border-radius: 1em;
+  background: var(--c-ink);
+  opacity: 0.85;
+}
+
+/* ------------------------------------------------------------------ responsive */
+@media (max-width: 1000px) {
+  .pf-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pf-item--apk {
+    grid-column: 1 / -1;
+  }
+  .pf-card--apk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .pf-card--apk .pf-media {
+    aspect-ratio: auto;
+    min-height: 260px;
+    border-bottom: 0;
+    border-right: 1px solid var(--sec-line);
+  }
+}
+@media (max-width: 680px) {
+  .pf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pf-card--apk {
+    display: flex;
+  }
+  .pf-card--apk .pf-media {
+    aspect-ratio: 16 / 10.5;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--sec-line);
+  }
+}
+
+/* ------------------------------------------------------------------ reduced motion: no zoom */
+@media (prefers-reduced-motion: reduce) {
+  .pf-art {
+    transition: none;
+  }
+  .pf-card:hover .pf-art,
+  .pf-card:focus-within .pf-art {
+    transform: none;
+  }
+}
+html[data-motion='reduced'] .pf-art {
+  transition: none;
+}
+html[data-motion='reduced'] .pf-card:hover .pf-art,
+html[data-motion='reduced'] .pf-card:focus-within .pf-art {
+  transform: none;
+}

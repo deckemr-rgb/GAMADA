@@ -1,0 +1,419 @@
+/* about.css — "Sekilas tentang GAMADA": copy + three mock dashboards fanned in a stage + facts row.
+ * Mock UIs size in em on a container-query font size, so each one scales with its window. */
+
+.ab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: clamp(40px, 6vw, 88px);
+  align-items: center;
+}
+.ab-copy .sec-head {
+  margin-bottom: 22px;
+}
+/* the title sits in a ~45 % column here, so it scales with the column, not the full viewport
+   (the shared 4.6vw left "Kami" alone on its first line around 1024 px) */
+@media (min-width: 1001px) {
+  .ab-copy .sec-title {
+    font-size: clamp(2.2rem, 3.7vw, 3.4rem);
+  }
+}
+.ab-body {
+  max-width: 40em;
+  margin: 0;
+  color: var(--sec-muted);
+  font-size: clamp(0.98rem, 1.15vw, 1.05rem);
+  line-height: 1.75;
+}
+
+/* ------------------------------------------------------------------ stage */
+.ab-figure {
+  margin: 0;
+}
+.ab-stage {
+  position: relative;
+  aspect-ratio: 1 / 0.84;
+}
+/* soft lavender halo under the pile (static) */
+.ab-stage::before {
+  content: '';
+  position: absolute;
+  inset: 8% 6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(141, 90, 154, 0.32), rgba(141, 90, 154, 0));
+  pointer-events: none;
+}
+.ab-win {
+  position: absolute;
+  container-type: inline-size;
+}
+.ab-win--pos {
+  left: 0;
+  top: 10%;
+  width: 57%;
+  z-index: 1;
+}
+.ab-win--farm {
+  right: 0;
+  top: 0;
+  width: 45%;
+  z-index: 2;
+}
+.ab-win--queue {
+  left: 20%;
+  bottom: 0;
+  width: 56%;
+  z-index: 3;
+}
+.ab-win .device {
+  border-radius: 12px;
+}
+.ab-win .device-bar {
+  height: 24px;
+}
+.ab-caption {
+  margin: 14px 0 0;
+  color: var(--sec-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ mock UI (shared) */
+.mk {
+  display: grid;
+  gap: 0.85em;
+  padding: 1.1em;
+  font-family: var(--font-body);
+  font-size: max(7px, 3cqi);
+  line-height: 1.2;
+  color: var(--c-text);
+  background: linear-gradient(170deg, #1a1640 0%, #120f2c 100%);
+  transform-origin: 50% 0%;
+}
+.mk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+.mk-title {
+  font-weight: 700;
+  font-size: 1.12em;
+  white-space: nowrap;
+}
+.mk-title b {
+  color: var(--c-teal);
+}
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.75em;
+  border-radius: 99px;
+  background: rgba(185, 178, 255, 0.12);
+  color: var(--c-lavender);
+  font-size: 0.78em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mk-chip--live {
+  background: rgba(63, 224, 192, 0.1);
+  color: var(--c-teal);
+}
+.mk-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- POS */
+.mk-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6em;
+}
+.mk-kpi {
+  display: grid;
+  gap: 0.4em;
+  padding: 0.75em;
+  border-radius: 0.6em;
+  border: 1px solid var(--c-line);
+  background: rgba(255, 255, 255, 0.045);
+}
+.mk-kpi-l {
+  color: var(--c-muted);
+  font-size: 0.72em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mk-kpi-v {
+  font-family: var(--font-display);
+  font-size: 1.4em;
+  white-space: nowrap;
+}
+.mk-kpi[data-i='1'] .mk-kpi-v {
+  color: var(--c-peach-soft);
+}
+.mk-chart {
+  padding: 0.75em 0.75em 0.55em;
+  border-radius: 0.6em;
+  border: 1px solid var(--c-line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.mk-sub {
+  display: block;
+  margin-bottom: 0.6em;
+  color: var(--c-muted);
+  font-size: 0.72em;
+}
+.mk-bars {
+  display: block;
+  width: 100%;
+  height: 5.6em;
+}
+.mk-bars rect {
+  fill: rgba(185, 178, 255, 0.42);
+}
+.mk-bars rect.is-peak {
+  fill: var(--c-peach);
+}
+.mk-bars line {
+  stroke: rgba(185, 178, 255, 0.25);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.mk-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-top: 0.4em;
+  color: var(--c-muted);
+  font-size: 0.62em;
+  text-align: center;
+}
+
+/* ---- device farm */
+.mk-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5em;
+}
+.mk-slot {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 5;
+  padding: 0.28em;
+  border-radius: 0.5em;
+  border: 1px solid var(--c-line);
+  background: #1f1a45;
+}
+.mk-slot-scr {
+  display: block;
+  height: 100%;
+  border-radius: 0.3em;
+  background: linear-gradient(165deg, rgba(63, 224, 192, 0.42), rgba(79, 209, 255, 0.1));
+}
+.mk-slot--b .mk-slot-scr {
+  background: linear-gradient(165deg, rgba(255, 215, 126, 0.5), rgba(245, 154, 98, 0.14));
+}
+.mk-slot--i .mk-slot-scr {
+  background: rgba(185, 178, 255, 0.07);
+}
+.mk-slot-dot {
+  position: absolute;
+  top: 0.55em;
+  right: 0.55em;
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: 50%;
+  background: var(--c-teal);
+}
+.mk-slot--b .mk-slot-dot {
+  background: var(--c-gold);
+}
+.mk-slot--i .mk-slot-dot {
+  background: rgba(201, 195, 234, 0.45);
+}
+.mk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1.1em;
+  color: var(--c-muted);
+  font-size: 0.72em;
+}
+.mk-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.mk-lg {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 0.2em;
+}
+.mk-lg--o {
+  background: var(--c-teal);
+}
+.mk-lg--b {
+  background: var(--c-gold);
+}
+.mk-lg--i {
+  background: rgba(201, 195, 234, 0.45);
+}
+
+/* ---- automation queue */
+.mk-jobs {
+  display: grid;
+  gap: 0.45em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mk-job {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65em;
+  padding: 0.65em 0.75em;
+  overflow: hidden;
+  border-radius: 0.55em;
+  border: 1px solid var(--c-line);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.92em;
+}
+.mk-job-ic {
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  border: 0.16em solid var(--c-lavender);
+  opacity: 0.7;
+}
+.mk-job[data-state='done'] .mk-job-ic {
+  border-color: var(--c-teal);
+  background: var(--c-teal);
+  opacity: 1;
+}
+.mk-job[data-state='run'] .mk-job-ic {
+  border-color: var(--c-gold);
+  opacity: 1;
+}
+.mk-job-n {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mk-job-s {
+  color: var(--c-muted);
+  font-size: 0.8em;
+  font-weight: 700;
+}
+.mk-job[data-state='done'] .mk-job-s {
+  color: var(--c-teal);
+}
+.mk-job[data-state='run'] .mk-job-s {
+  color: var(--c-gold);
+}
+.mk-job[data-state='run'] {
+  border-color: rgba(255, 215, 126, 0.3);
+}
+.mk-prog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(255, 215, 126, 0.14);
+}
+.mk-prog-fill {
+  display: block;
+  height: 100%;
+  background: var(--c-gold);
+  transform: scaleX(0.6);
+  transform-origin: 0% 50%;
+}
+
+/* ------------------------------------------------------------------ facts */
+.ab-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(18px, 2.6vw, 32px);
+  margin: clamp(48px, 6vw, 84px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ab-fact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 4px;
+  align-content: start;
+  padding-top: 22px;
+  border-top: 1px solid var(--sec-line);
+}
+.ab-fact-ic {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line);
+  background: rgba(185, 178, 255, 0.08);
+  color: var(--c-lavender);
+}
+.ab-fact-ic svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ab-fact-t {
+  color: var(--sec-fg);
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.ab-fact-d {
+  color: var(--sec-muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+/* ------------------------------------------------------------------ responsive */
+@media (max-width: 1000px) {
+  .ab-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ab-figure {
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+}
+@media (max-width: 860px) {
+  .ab-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .ab-stage {
+    aspect-ratio: 1 / 1.08;
+  }
+  .ab-win--pos {
+    top: 0;
+    width: 80%;
+  }
+  .ab-win--farm {
+    top: 25%;
+    width: 60%;
+  }
+  .ab-win--queue {
+    left: 3%;
+    bottom: 0;
+    width: 76%;
+  }
+}

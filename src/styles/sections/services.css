@@ -1,0 +1,253 @@
+/* services.css — "Layanan & Produk" (#layanan): dawn section, four service cards + WhatsApp strip.
+ * Hover language: Card (tilt + spotlight + glow) + the line icon redrawing itself
+ * (stroke-dashoffset keyframes, the one non-transform property the brief allows here). */
+
+/* AA on the dawn gradient: the shared dawn accent (#b4532a) is ~3.6:1 on lavender-soft for the
+ * small eyebrow / text links, so this section uses a deeper burnt peach (≥ 4.8:1 on every stop). */
+.sec.svc {
+  --sec-accent: #8f3f1a;
+}
+/* site.css's inner-page `.eyebrow::before` adds a second rule next to SectionHeader's .eyebrow-line
+ * ("—— —— LABEL"); keep the single animated line here until the shared rule is scoped. */
+.svc .eyebrow::before {
+  content: none;
+}
+
+/* ------------------------------------------------------------------ grid */
+.svc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .svc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+@media (min-width: 1140px) {
+  .svc-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* side-by-side cards share their rows (icon · title + text · "included" · list · footer), so the
+ * dividers and footers line up across a row whatever the copy length */
+@supports (grid-template-rows: subgrid) {
+  @media (min-width: 640px) {
+    .svc-grid > .svc-card {
+      display: grid;
+      grid-template-rows: subgrid;
+      grid-row: span 5;
+      row-gap: 0;
+    }
+    .svc-grid .svc-body {
+      align-self: start;
+    }
+    .svc-grid .svc-foot {
+      align-self: end;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ card */
+.svc-card {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(22px, 2.2vw, 28px);
+  min-width: 0;
+}
+.svc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.svc-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  color: var(--c-violet);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(74, 53, 119, 0.14);
+  transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.svc-card:hover .svc-icon,
+.svc-card:focus-within .svc-icon {
+  transform: translate3d(0, -3px, 0) rotate(-4deg);
+}
+.svc-icon-svg {
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+}
+.svc-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.svc-stroke--accent {
+  stroke: #d0682f;
+  stroke-width: 2.4;
+}
+.svc-card:hover .svc-stroke,
+.svc-card:focus-within .svc-stroke {
+  animation: svc-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes svc-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.svc-num {
+  font: 400 0.95rem/1 var(--font-display);
+  color: var(--sec-muted);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.svc-title {
+  margin: 0;
+  font: 500 clamp(1.3rem, 1.7vw, 1.5rem) / 1.2 var(--font-display);
+  color: var(--sec-fg);
+  letter-spacing: -0.005em;
+}
+.svc-desc {
+  text-wrap: pretty;
+  margin: 10px 0 0;
+  color: var(--sec-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.svc-inc-label {
+  margin: 20px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sec-line);
+  color: var(--sec-fg);
+  font: 700 0.72rem/1.2 var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.svc-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.svc-list li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--sec-fg);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+/* small check drawn with borders (no icon font) */
+.svc-list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.32em;
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #0d6b58;
+  border-bottom: 2px solid #0d6b58;
+  transform: rotate(-45deg);
+}
+.svc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: auto;
+  padding-top: 22px;
+}
+.svc-foot .tag {
+  white-space: normal;
+}
+.svc-link {
+  white-space: normal;
+  text-align: left;
+}
+.svc-link:focus-visible,
+.svc-cta .btn:focus-visible {
+  outline: 2px solid var(--c-violet);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.svc-cta .btn:focus-visible {
+  border-radius: var(--radius-pill);
+}
+
+/* ------------------------------------------------------------------ WhatsApp strip */
+.svc-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 32px;
+  margin-top: clamp(28px, 4vw, 48px);
+  padding: clamp(22px, 3vw, 32px) clamp(22px, 3vw, 36px);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--sec-line);
+}
+.svc-cta-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.svc-cta-title {
+  margin: 0;
+  font: 500 clamp(1.2rem, 1.8vw, 1.45rem) / 1.25 var(--font-display);
+  color: var(--sec-fg);
+}
+.svc-cta-text {
+  margin: 6px 0 0;
+  color: var(--sec-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+@media (max-width: 520px) {
+  .svc-cta .btn {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
+/* ------------------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .svc-card:hover .svc-stroke,
+  .svc-card:focus-within .svc-stroke {
+    animation: none;
+  }
+  .svc-icon {
+    transition: none;
+  }
+  .svc-card:hover .svc-icon,
+  .svc-card:focus-within .svc-icon {
+    transform: none;
+  }
+}
+html[data-motion='reduced'] .svc-card:hover .svc-stroke,
+html[data-motion='reduced'] .svc-card:focus-within .svc-stroke {
+  animation: none;
+}
+html[data-motion='reduced'] .svc-card:hover .svc-icon,
+html[data-motion='reduced'] .svc-card:focus-within .svc-icon {
+  transform: none;
+}

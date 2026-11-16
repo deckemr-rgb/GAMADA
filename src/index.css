@@ -1,0 +1,470 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+@theme {
+  --font-display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --font-body: 'Manrope Variable', 'Manrope', system-ui, sans-serif;
+  --color-ink: #1a1638;
+  --color-peach: #f59a62;
+  --color-lavender: #b9b2ff;
+}
+
+/* ---------------------------------------------------------------- base */
+html {
+  background: var(--c-ink);
+  color: var(--c-text);
+}
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--c-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+img {
+  user-select: none;
+}
+:focus-visible {
+  outline: 2px solid var(--c-peach-soft);
+  outline-offset: 4px;
+}
+
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -60px;
+  z-index: 200;
+  background: var(--c-white);
+  color: var(--c-ink);
+  padding: 10px 16px;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 16px;
+}
+
+/* ---------------------------------------------------------------- scene system */
+.track {
+  position: relative;
+  height: 500vh;
+}
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100lvh;
+  width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--c-indigo);
+}
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-scenes);
+  pointer-events: none;
+}
+.scene-clip,
+.scene-inner {
+  position: absolute;
+  inset: 0;
+}
+.scene-clip {
+  overflow: hidden;
+}
+.layer {
+  position: absolute;
+  left: -3%;
+  width: 106%;
+  top: -30%;
+  height: 160%;
+  transform-origin: 50% 50%;
+}
+.layer-pointer,
+.layer-wind,
+.slot-box {
+  position: absolute;
+  inset: 0;
+}
+.layer-art {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+}
+.layer-art--blur {
+  opacity: 0;
+}
+.frame-space {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+/* Permanent compositing for live scenes (active + next): promoting/demoting at the start/end of
+   every transition forced a re-raster and a hitch. Non-live scenes are not rendered at all. */
+.scene[data-live='true'] .scene-clip,
+.scene[data-live='true'] .scene-inner,
+.scene[data-live='true'] .layer,
+.scene[data-live='true'] .layer-wind[data-wind],
+.scene[data-live='true'] .layer-wind[data-sway],
+.bridge {
+  will-change: transform;
+}
+.pointer-parallax .scene[data-live='true'] .layer-pointer {
+  will-change: transform;
+}
+.scene[data-live='false'] {
+  content-visibility: hidden;
+}
+/* never clickable while the camera moves (copy may be mid-fade) */
+.stage.is-moving .scene-copy {
+  pointer-events: none;
+}
+
+.bridge-frame {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-bridge);
+  pointer-events: none;
+}
+.bridge {
+  position: absolute;
+  left: -3%;
+  width: 106%;
+  top: -30%;
+  height: 160%;
+  z-index: var(--z-bridge);
+  pointer-events: none;
+  visibility: hidden;
+}
+.bridge-mist {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 34%;
+  transform: translateY(-50%);
+  background: radial-gradient(120% 50% at 50% 50%, rgba(226, 214, 255, 0.5), rgba(226, 214, 255, 0) 70%);
+}
+.seam-mist {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-mist);
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(140% 60% at 50% 55%, rgba(214, 205, 255, 0.5), rgba(214, 205, 255, 0) 70%),
+    linear-gradient(180deg, rgba(40, 32, 90, 0) 0%, rgba(190, 180, 245, 0.22) 50%, rgba(40, 32, 90, 0) 100%);
+}
+.grade-stack {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-grade);
+  pointer-events: none;
+}
+.grade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* ---------------------------------------------------------------- copy */
+.copy-layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-copy);
+  pointer-events: none;
+}
+.copy-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-scrim);
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(26, 22, 56, 0.62) 0%, rgba(26, 22, 56, 0.2) 42%, rgba(26, 22, 56, 0) 62%);
+  transition: background 0.6s;
+}
+html[data-scene='tranquility'] .copy-scrim {
+  background: linear-gradient(270deg, rgba(14, 16, 48, 0.66) 0%, rgba(14, 16, 48, 0.22) 42%, rgba(14, 16, 48, 0) 62%);
+}
+.scene-copy {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-46%);
+  width: min(720px, calc(100% - var(--gutter) * 2));
+  pointer-events: auto;
+  color: var(--c-white);
+}
+.scene-copy[data-align='left'] {
+  left: var(--gutter);
+}
+.scene-copy[data-copy='hero'] {
+  width: min(1180px, calc(100% - var(--gutter) * 2));
+}
+.scene-copy[data-copy='hero'] .copy-body,
+.scene-copy[data-copy='hero'] .copy-eyebrow {
+  max-width: 640px;
+}
+.scene-copy[data-align='right'] {
+  right: calc(var(--gutter) + 48px);
+  width: min(560px, 40vw);
+}
+/* local scrim that travels with right-aligned copy (keeps AA over busy art at mid widths) */
+.scene-copy[data-align='right']::before {
+  content: '';
+  position: absolute;
+  inset: -48px -56px -40px -64px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(14, 16, 48, 0.62), rgba(14, 16, 48, 0));
+}
+.copy-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 clamp(24px, 7vh, 96px);
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(0.95rem, 1.55vw, 1.6rem);
+  font-variation-settings: 'opsz' 48;
+  color: var(--c-lavender);
+  letter-spacing: -0.01em;
+}
+.scene-copy:not([data-copy='hero']) .copy-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--c-peach-soft);
+  margin-bottom: 18px;
+}
+.copy-eyebrow-icon {
+  width: clamp(28px, 2.4vw, 44px);
+  flex: none;
+  fill: var(--c-lavender);
+}
+.copy-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 0.86;
+  font-variation-settings: 'opsz' 144, 'SOFT' 30;
+  letter-spacing: -0.02em;
+  perspective: 600px;
+}
+.copy-title--hero {
+  max-width: 11.5em;
+  font-size: clamp(3rem, 7.6vw, 9rem);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.015em;
+}
+.copy-title:not(.copy-title--hero) {
+  font-size: clamp(2.8rem, 6.6vw, 7rem);
+  font-weight: 300;
+  font-style: italic;
+}
+.copy-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+.copy-char {
+  display: inline-block;
+  transform-origin: 50% 100%;
+}
+/* SplitText char masks clip at the line box: give descenders (j, y, g) and accents room;
+ * the negative margins keep the layout identical */
+.copy-title .copy-char-mask {
+  padding-top: 0.06em;
+  margin-top: -0.06em;
+  padding-bottom: 0.24em;
+  margin-bottom: -0.24em;
+}
+.copy-rule {
+  display: block;
+  width: 140px;
+  height: 1px;
+  margin: 26px 0 22px;
+  background: rgba(255, 255, 255, 0.7);
+  transform-origin: 0 50%;
+}
+.copy-body {
+  margin: clamp(20px, 4.5vh, 52px) 0 clamp(22px, 4.5vh, 46px);
+  max-width: 34em;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-variation-settings: 'opsz' 14;
+  font-size: clamp(0.98rem, 1.12vw, 1.18rem);
+  line-height: 1.45;
+  color: #f6f3ff;
+}
+.scene-copy:not([data-copy='hero']) .copy-body {
+  margin-top: 0;
+}
+.copy-line {
+  display: block;
+}
+
+/* ---------------------------------------------------------------- mobile copy: bottom + scrim */
+@media (max-width: 768px) {
+  .copy-scrim,
+  html[data-scene='tranquility'] .copy-scrim {
+    background: linear-gradient(0deg, rgba(20, 16, 46, 0.7) 0%, rgba(20, 16, 46, 0.35) 38%, rgba(20, 16, 46, 0) 64%);
+  }
+  /* copy lives in the small viewport (toolbars visible); the art stays at 100lvh */
+  .copy-layer,
+  .copy-scrim {
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100svh;
+  }
+  /* scrim tied to the copy block: ≥ .8 alpha behind every line incl. the eyebrow */
+  .scene-copy::before,
+  .scene-copy[data-align='right']::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -64px calc(var(--gutter) * -1) calc(max(28px, env(safe-area-inset-bottom)) * -1);
+    background: linear-gradient(to top, rgba(20, 16, 46, 0.92) 0, rgba(20, 16, 46, 0.8) calc(100% - 64px), rgba(20, 16, 46, 0) 100%);
+  }
+  .scene-copy,
+  .scene-copy[data-align='right'] {
+    top: auto;
+    bottom: max(28px, env(safe-area-inset-bottom));
+    transform: none;
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+  }
+  .copy-eyebrow {
+    margin-bottom: 14px;
+  }
+  .copy-body {
+    margin: 16px 0 22px;
+  }
+}
+
+/* ---------------------------------------------------------------- short landscape (e.g. 844×390) */
+@media (min-width: 769px) and (max-height: 520px) {
+  .scene-copy,
+  .scene-copy[data-align='right'] {
+    top: 80px;
+    bottom: 12px;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .copy-eyebrow {
+    margin-bottom: 10px;
+  }
+  .copy-title--hero {
+    font-size: clamp(2.6rem, 9vw, 5rem);
+  }
+  .copy-title:not(.copy-title--hero) {
+    font-size: clamp(2.2rem, 6vw, 3.6rem);
+  }
+  .copy-body {
+    margin: 10px 0 14px;
+    font-size: 0.92rem;
+  }
+}
+
+/* ---------------------------------------------------------------- hero (studio story) */
+/* badge: pill instead of the big serif eyebrow */
+.scene-copy[data-copy='hero'] .copy-badge {
+  display: inline-flex;
+  max-width: 100%;
+  margin-bottom: clamp(18px, 4vh, 40px);
+  padding: 8px 16px 8px 12px;
+  border: 1px solid rgba(185, 178, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(26, 22, 56, 0.45);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: clamp(0.78rem, 0.95vw, 0.92rem);
+  letter-spacing: 0.01em;
+  color: var(--c-lavender-soft);
+}
+.scene-copy[data-copy='hero'] .copy-badge .copy-eyebrow-icon {
+  width: 18px;
+}
+.scene-copy[data-copy='hero'] .copy-body {
+  margin: clamp(16px, 3.2vh, 34px) 0 clamp(20px, 3.6vh, 36px);
+}
+.copy-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 16px;
+}
+.copy-cta-row .btn {
+  min-height: 58px;
+  padding: 0 28px;
+  font-size: 1rem;
+  box-shadow: 0 18px 40px -20px rgba(245, 154, 98, 0.65);
+}
+.btn-start--down .btn-start-arrow {
+  transform: rotate(90deg);
+}
+.copy-demo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--c-lavender-soft);
+  text-shadow: 0 1px 8px rgba(18, 14, 44, 0.6);
+}
+.copy-demo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-teal);
+  box-shadow: 0 0 0 4px rgba(63, 224, 192, 0.18);
+}
+@media (max-width: 768px) {
+  .copy-cta-row .btn,
+  .copy-cta-row .btn-start {
+    width: 100%;
+    min-height: 52px;
+    justify-content: center;
+  }
+  .copy-cta-row .btn-start {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .scene-copy[data-copy='hero'] .copy-body {
+    font-size: 0.95rem;
+  }
+  .copy-demo {
+    margin-top: 12px;
+    font-size: 0.78rem;
+  }
+}
+@media (min-width: 769px) and (max-height: 520px) {
+  .copy-title--hero {
+    font-size: clamp(2.4rem, 7vw, 4.2rem);
+  }
+  .copy-cta-row .btn {
+    min-height: 48px;
+  }
+  .copy-demo {
+    display: none;
+  }
+}

@@ -1,0 +1,33 @@
+/* webgl.css — layout for the OGL effect canvases (WaterfallGL, Particles, CurtainGL). */
+
+/* Waterfall: positioned in FrameSpace canvas px (left/top/width/height set inline from the rect). */
+.gl-waterfall {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+/* Full-stage overlays: sized by CSS, the drawing buffer follows via ResizeObserver. */
+.gl-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+/* The actual <canvas> is created per effect lifetime inside the host element. */
+.gl-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.gl-curtain {
+  z-index: var(--z-curtain);
+}
+.gl-particles {
+  z-index: var(--z-particles);
+}

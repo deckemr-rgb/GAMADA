@@ -1,0 +1,12 @@
+
+**fase-2 CPU 1x** · 1440×900 @1.25x · CPU 1× slowdown · GPU: ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028E0) Direct3D11 vs_5_0 ps_5_0, D3D11)
+
+| scenario | frames | fps | p50 ms | p95 ms | p99 ms | max ms | frames >50ms |
+|---|---|---|---|---|---|---|---|
+| idle hero (4s) | 245 | 61.1 | 16.4 | 17 | 19.4 | 22.5 | 0 |
+| scroll hero→tranquility | 531 | 59.1 | 16.5 | 19.6 | 33.5 | 95.5 | 3 |
+| scroll tranquility→biodiversity | 533 | 60.6 | 16.4 | 19 | 21.4 | 34.7 | 0 |
+| scroll content sections | 1237 | 58.7 | 16.4 | 18.5 | 21.1 | 515.3 | 4 |
+| scroll back to hero | 956 | 59.8 | 16.4 | 18.5 | 20.3 | 131.7 | 4 |
+
+no console errors

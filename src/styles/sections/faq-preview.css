@@ -1,0 +1,124 @@
+/* faq-preview.css — the light "dawn" FAQ preview on the home (sections/FaqPreview.tsx). */
+
+/* The kit's dawn accent (#b4532a) is 3.3–3.8:1 on this gradient: darken it for this section so the
+ * eyebrow and the text link pass AA (≥ 4.6:1 on every stop). Focus rings switch to ink. */
+#faq.sec--dawn {
+  --sec-accent: #8a3a17;
+}
+#faq :focus-visible {
+  outline-color: var(--c-violet);
+}
+
+.faqp {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: start;
+}
+.faqp .sec-head {
+  margin-bottom: 0;
+}
+.faqp-more {
+  margin-top: 18px;
+}
+.faqp-more .btn--text {
+  font-size: 1rem;
+}
+
+/* "ask us" card */
+.faqp-ask {
+  position: relative;
+  overflow: hidden;
+  margin-top: clamp(28px, 4vw, 44px);
+  padding: 26px 24px 24px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--sec-line);
+  box-shadow: 0 14px 36px -24px rgba(26, 22, 56, 0.45);
+}
+.faqp-ask-art {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 190px;
+  height: 95px;
+  pointer-events: none;
+}
+.faqp-ask-art circle {
+  fill: var(--c-peach);
+  opacity: 0.45;
+}
+.faqp-ask-art path {
+  fill: var(--c-plum);
+  opacity: 0.22;
+}
+.faqp-ask-art path + path {
+  opacity: 0.3;
+}
+.faqp-ask > :not(.faqp-ask-art) {
+  position: relative;
+}
+.faqp-ask-title {
+  position: relative;
+  margin: 0;
+  max-width: 14em;
+  font: 400 1.35rem/1.25 var(--font-display);
+  color: var(--sec-fg);
+}
+.faqp-ask-body {
+  position: relative;
+  margin: 8px 0 18px;
+  color: var(--sec-muted);
+  line-height: 1.6;
+}
+
+/* accordion on dawn: a touch more surface so the rows read as cards */
+#faq .acc {
+  gap: 14px;
+}
+#faq .acc-item {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 28px -22px rgba(26, 22, 56, 0.5);
+}
+#faq .acc-btn {
+  font-size: clamp(1.02rem, 1.3vw, 1.1rem);
+  padding: 20px 24px;
+}
+#faq .acc-icon {
+  color: var(--sec-accent);
+}
+#faq .acc-body {
+  padding: 0 24px 22px;
+  color: var(--sec-muted);
+}
+#faq .acc-body p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 960px) {
+  .faqp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* list right under the heading, the "ask" card after it */
+  .faqp-side {
+    display: contents;
+  }
+  .faqp .sec-head {
+    order: 1;
+  }
+  .faqp-list {
+    order: 2;
+  }
+  .faqp-ask {
+    order: 3;
+    margin-top: 0;
+  }
+}
+@media (max-width: 480px) {
+  #faq .acc-btn {
+    padding: 18px 18px;
+  }
+  #faq .acc-body {
+    padding: 0 18px 20px;
+  }
+}

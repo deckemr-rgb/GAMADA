@@ -1,0 +1,66 @@
+/* Ambient life: bird canvases + god rays. */
+
+/* Birds only allocate a canvas over their flight band: left / top / width / height are set inline
+   (percent of the layer box) from motion.ts → BIRD_FLIGHT.canvas. */
+.birds-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* The god-ray layer screens onto the scene layers beneath it (the layer wrapper is the
+   element that shares a stacking context with its siblings, so the blend lives here). */
+.layer[data-layer='godrays'] {
+  mix-blend-mode: screen;
+}
+
+.godrays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  contain: layout style;
+}
+
+.godray,
+.godray-glow {
+  position: absolute;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* Promote the rays only while their scene is on screen (GodRays toggles .is-live). */
+.godrays.is-live .godray,
+.godrays.is-live .godray-glow {
+  will-change: opacity, transform;
+}
+
+.godray {
+  top: 0;
+  transform-origin: 50% 0;
+  /* colour → transparent along the ray */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--ray-color) 0%, transparent) 0%,
+    var(--ray-color) 7%,
+    color-mix(in srgb, var(--ray-color) 70%, transparent) 38%,
+    color-mix(in srgb, var(--ray-color) 28%, transparent) 72%,
+    transparent 100%
+  );
+  /* soft edges across the ray */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 34%, #000 66%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 34%, #000 66%, transparent 100%);
+}
+
+.godray-glow {
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ray-color) 70%, transparent) 0%,
+    color-mix(in srgb, var(--ray-color) 22%, transparent) 45%,
+    transparent 100%
+  );
+}

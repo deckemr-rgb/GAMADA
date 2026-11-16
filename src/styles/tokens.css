@@ -1,0 +1,80 @@
+/* Design tokens — palette: dusk violet-indigo, orange-peach, red accent. */
+:root {
+  --c-ink: #1a1638;
+  --c-ink-2: #231b48;
+  --c-indigo: #2b2152;
+  --c-violet: #4a3577;
+  --c-plum: #8d5a9a;
+  --c-peach: #f59a62;
+  --c-peach-soft: #ffc79a;
+  --c-gold: #ffd77e;
+  --c-red: #c8382f;
+  --c-lavender: #b9b2ff;
+  --c-lavender-soft: #dcd8ff;
+  --c-teal: #3fe0c0;
+  --c-cyan: #4fd1ff;
+  --c-white: #ffffff;
+  --c-text: #f3f0ff;
+  --c-muted: #c9c3ea;
+
+  --font-display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --font-body: 'Manrope Variable', 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --gutter: clamp(16px, 4.2vw, 72px);
+  --nav-h: 76px;
+  --z-scenes: 1;
+  --z-bridge: 10;
+  --z-mist: 11;
+  --z-curtain: 12;
+  --z-particles: 13;
+  --z-grade: 14;
+  --z-scrim: 15;
+  --z-copy: 20;
+  --z-rail: 30;
+  --z-nav: 50;
+  --z-cursor: 90;
+  --z-preloader: 100;
+
+  /* ---- site (multi-page) tokens. Role map from the brief: CTA = peach (hover gold), secondary =
+   * lavender / plum, "tech / live" = teal / cyan, danger / sold out = red. */
+  --c-wa: #25d366;
+  --c-wa-ink: #0b3d22;
+  --c-surface: rgba(255, 255, 255, 0.04);
+  --c-surface-2: rgba(255, 255, 255, 0.07);
+  --c-line: rgba(185, 178, 255, 0.16);
+  --c-line-strong: rgba(185, 178, 255, 0.32);
+  --c-bar: rgba(22, 19, 50, 0.94);
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  /* dark shadows with a thin lavender glow */
+  --shadow-1: 0 1px 0 rgba(185, 178, 255, 0.06) inset, 0 8px 24px -12px rgba(5, 3, 20, 0.7);
+  --shadow-2: 0 1px 0 rgba(185, 178, 255, 0.08) inset, 0 18px 40px -18px rgba(5, 3, 20, 0.85), 0 0 0 1px rgba(185, 178, 255, 0.08);
+  --shadow-glow: 0 20px 50px -20px rgba(5, 3, 20, 0.9), 0 0 36px -8px rgba(185, 178, 255, 0.28);
+  --shadow-nav: 0 10px 30px -14px rgba(5, 3, 20, 0.85);
+
+  /* spacing scale (4 px base) + fluid section rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-section: clamp(72px, 10vw, 140px);
+  --content-w: 1200px;
+
+  --z-reading: calc(var(--z-nav) + 1);
+  --z-wa: calc(var(--z-nav) - 2);
+  --z-page-curtain: 95;
+}
+@media (max-width: 960px) {
+  :root {
+    --nav-h: 64px;
+  }
+}

@@ -1,0 +1,20 @@
+# dependencies + build output (recreate with `npm install` / `npm run build`)
+node_modules/
+dist/
+
+# local scratch screenshots from development (docs/shots holds the curated ones)
+.shots/
+
+# logs / OS / editor noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# local env files (never commit secrets)
+.env
+.env.*
+!.env.example

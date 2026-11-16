@@ -1,0 +1,370 @@
+/* contact.css — closing CTA + contact form (sections/Contact.tsx).
+ * Dusk panel: CSS sky + horizon glow (no photos), SVG hills with a scroll-drawn rim light. */
+
+.ctc-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: clamp(20px, 3vw, 36px);
+  background: var(--c-ink-2);
+  border: 1px solid var(--c-line-strong);
+  box-shadow: var(--shadow-glow);
+}
+
+/* ---- art */
+.ctc-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.ctc-sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #1f1944 0%,
+    #2b2152 30%,
+    #45306f 52%,
+    #7a4688 70%,
+    #c46b78 82%,
+    #f59a62 92%,
+    #ffc58a 100%
+  );
+}
+.ctc-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 140%;
+  height: 70%;
+  transform: translate(-28%, 34%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 215, 126, 0.6), rgba(245, 154, 98, 0.28) 45%, rgba(245, 154, 98, 0) 100%);
+}
+.ctc-flies {
+  z-index: 1;
+}
+.ctc-hills {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: clamp(150px, 22vw, 300px);
+  z-index: 2;
+}
+.ctc-sun {
+  opacity: 0.95;
+}
+.ctc-hill--back {
+  fill: #4e3478;
+}
+.ctc-hill--mid {
+  fill: #2f2259;
+}
+.ctc-hill--front {
+  fill: var(--c-ink-2);
+}
+.ctc-ridge {
+  fill: none;
+  stroke: var(--c-gold);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- layout */
+.ctc-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: start;
+  padding: clamp(28px, 5.5vw, 88px) clamp(20px, 5.5vw, 88px) clamp(150px, 18vw, 250px);
+}
+.ctc .sec-head {
+  max-width: 34rem;
+  margin-bottom: 0;
+}
+.ctc .sec-title {
+  font-size: clamp(2.2rem, 4.2vw, 3.7rem);
+}
+.ctc .sec-lead {
+  color: #ddd7f5;
+}
+.ctc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+  margin-top: clamp(26px, 3.4vw, 38px);
+}
+.ctc-wa {
+  min-height: 56px;
+  padding: 0 30px;
+  font-size: 1.02rem;
+}
+.ctc-email {
+  margin: 0;
+  color: var(--c-muted);
+}
+.ctc-email a {
+  color: var(--c-peach-soft);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+.ctc-points {
+  display: grid;
+  gap: 10px;
+  margin: clamp(26px, 3.4vw, 36px) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--c-text);
+}
+.ctc-points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ctc-points svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border-radius: 50%;
+  color: var(--c-teal);
+  background: rgba(63, 224, 192, 0.12);
+  border: 1px solid rgba(63, 224, 192, 0.35);
+}
+
+/* ---- form card */
+.ctc-card {
+  position: relative;
+  padding: clamp(22px, 3vw, 36px);
+  border-radius: var(--radius-lg);
+  background: rgba(22, 18, 48, 0.9);
+  border: 1px solid var(--c-line-strong);
+  box-shadow: 0 30px 60px -30px rgba(5, 3, 20, 0.9);
+  color-scheme: dark;
+}
+.ctc-form-title {
+  margin: 0;
+  font: 400 clamp(1.35rem, 2vw, 1.6rem) / 1.2 var(--font-display);
+  color: var(--c-text);
+}
+.ctc-form-note {
+  margin: 8px 0 22px;
+  color: var(--c-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.ctc-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.ctc-field label {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--c-text);
+}
+.ctc-field input,
+.ctc-field select,
+.ctc-field textarea {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(185, 178, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--c-text);
+  /* ≥ 16 px: no iOS zoom on focus */
+  font: 500 1rem/1.5 var(--font-body);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.ctc-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.ctc-field ::placeholder {
+  color: #a39dc6;
+  opacity: 1;
+}
+.ctc-field input:hover,
+.ctc-field select:hover,
+.ctc-field textarea:hover {
+  border-color: rgba(185, 178, 255, 0.5);
+}
+.ctc-field input:focus-visible,
+.ctc-field select:focus-visible,
+.ctc-field textarea:focus-visible {
+  outline: 2px solid var(--c-peach-soft);
+  outline-offset: 2px;
+  border-color: var(--c-peach-soft);
+}
+.ctc-field[data-invalid='true'] input,
+.ctc-field[data-invalid='true'] select,
+.ctc-field[data-invalid='true'] textarea {
+  border-color: #ff8a7d;
+}
+.ctc-select {
+  position: relative;
+}
+.ctc-select select {
+  padding-right: 44px;
+  cursor: pointer;
+}
+.ctc-select select:invalid,
+.ctc-select select:has(option[value='']:checked) {
+  color: #a39dc6;
+}
+.ctc-select option {
+  color: var(--c-text);
+  background: #1d1840;
+}
+.ctc-select svg {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  color: var(--c-lavender);
+  pointer-events: none;
+}
+.ctc-err {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  color: #ffb4a8;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  animation: ctc-err-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ctc-err::before {
+  content: '!';
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: rgba(255, 138, 125, 0.18);
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+@keyframes ctc-err-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ctc-submit {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 6px;
+  font-size: 1rem;
+}
+
+/* ---- success: stacked over the (hidden) form in the same grid cell, so the panel keeps its height */
+.ctc-card {
+  display: grid;
+}
+.ctc-card > .ctc-form,
+.ctc-card > .ctc-done {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.ctc-form[data-done='true'] {
+  visibility: hidden;
+}
+/* empty (zero height) until the form is sent; the role="status" inside stays rendered so it is announced */
+.ctc-done {
+  align-self: center;
+}
+.ctc-ok {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 8px 0;
+}
+.ctc-ok-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: var(--c-ink);
+  background: var(--c-teal);
+  box-shadow: 0 0 0 8px rgba(63, 224, 192, 0.14);
+}
+.ctc-ok-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.ctc-ok-title {
+  margin: 8px 0 0;
+  font: 400 clamp(1.5rem, 2.4vw, 1.9rem) / 1.2 var(--font-display);
+  color: var(--c-text);
+}
+.ctc-ok-title:focus {
+  outline: none;
+}
+.ctc-ok-title:focus-visible {
+  outline: 2px solid var(--c-peach-soft);
+  outline-offset: 4px;
+}
+.ctc-ok-body {
+  margin: 0;
+  color: var(--c-muted);
+  line-height: 1.65;
+}
+.ctc-ok-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+.ctc-ok-actions .btn {
+  white-space: normal;
+  text-align: center;
+  min-height: 50px;
+  padding-block: 10px;
+}
+
+@media (max-width: 960px) {
+  .ctc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .ctc-grid {
+    padding-bottom: 130px;
+  }
+  .ctc-wa {
+    width: 100%;
+  }
+  .ctc-card {
+    padding: 20px 16px;
+  }
+  .ctc-ok-actions .btn {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctc-err {
+    animation: none;
+  }
+}
+html[data-motion='reduced'] .ctc-err {
+  animation: none;
+}

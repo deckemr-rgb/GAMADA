@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font: 12px/1.4 system-ui; }
+  .stage { position: fixed; inset: 0; overflow: hidden; }
+  .layer { position: absolute; left: -3%; width: 106%; top: -30%; height: 160%; }
+  .layer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .clip { position: absolute; inset: 0; overflow: hidden; }
+  .inner { position: absolute; inset: 0; }
+  .frame { position: absolute; left: 0; right: 0; top: 0; height: 100%; outline: 1px dashed rgba(255,0,0,.6); pointer-events: none; display: none; }
+  .label { position: fixed; left: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 4px 8px; z-index: 9; }
+  .rect { position: absolute; outline: 2px solid #0ff; z-index: 99; }
+</style>
+</head>
+<body>
+<!--
+  Dev-only tool for checking illustration layers without the app.
+  Usage (served by Vite at http://127.0.0.1:5173/tools/preview.html):
+    ?scene=hero                         all layers of a scene, stacked
+    ?scene=hero&only=sky,mountain       a subset
+    ?scene=hero&solo=mountain           one layer on a checker background
+    ?scene=hero&to=tranquility&seam=.5  a transition frame: scene A above the seam,
+                                        scene B below, the bridge centred on the seam
+    &focus=.62                          object-position x (defaults to the scene's)
+    &rects=1                            outline waterfall rects (canvas coords)
+    &silhouette=1                       fill layers black (silhouette test)
+  Sources live in /src-art/scenes (runtime WebP is generated into /public/scenes by tools/build-layers.mjs).
+-->
+<div class="stage" id="stage"></div>
+<div class="label" id="label"></div>
+<script>
+  const SCENES = {
+    hero: { focus: 0.7, layers: ['sky','clouds-back','mountain','clouds-front','hills','lake','rocks','grass-back','traveler','scarf','grass-front'] },
+    tranquility: { focus: 0.38, layers: ['backdrop','cave-far','waterfall','cave-mid','plants-back','pond','elder','elder-rod','turtle','turtle-head','plants-front'] },
+    biodiversity: { focus: 0.6, layers: ['backdrop','forest-far','waterfall','forest-mid','river','flowers-back','deer-rest','flowers-front'] },
+  }
+  const BLEND = { 'sun-glow': 'screen' }
+  const WATERFALLS = { tranquility: { x: 360, y: 300, w: 260, h: 1380 }, biodiversity: { x: 1930, y: 380, w: 210, h: 1180 } }
+  const q = new URLSearchParams(location.search)
+  const sceneId = q.get('scene') || 'hero'
+  const to = q.get('to')
+  const seam = parseFloat(q.get('seam') || '0.5')
+  const stage = document.getElementById('stage')
+  const pick = (id) => {
+    const s = SCENES[id]
+    const only = q.get('only'); const solo = q.get('solo')
+    let list = s.layers
+    if (only) list = only.split(',')
+    if (solo) list = [solo]
+    return list
+  }
+  function sceneEl(id, clipTop, clipBottom) {
+    const s = SCENES[id]
+    const focus = parseFloat(q.get('focus') || s.focus)
+    const clip = document.createElement('div'); clip.className = 'clip'
+    const inner = document.createElement('div'); inner.className = 'inner'
+    // clip window [clipTop, clipBottom] in viewport fractions
+    clip.style.clipPath = `inset(${clipTop * 100}% 0 ${(1 - clipBottom) * 100}% 0)`
+    for (const l of pick(id)) {
+      const d = document.createElement('div'); d.className = 'layer'
+      if (BLEND[l]) d.style.mixBlendMode = BLEND[l]
+      const img = new Image(); img.src = `/src-art/scenes/${id}/${l}.svg`; img.style.objectPosition = `${focus * 100}% 50%`
+      d.appendChild(img); inner.appendChild(d)
+    }
+    if (q.get('rects') && WATERFALLS[id]) inner.appendChild(rectEl(WATERFALLS[id], focus))
+    clip.appendChild(inner)
+    return clip
+  }
+  function rectEl(r, focus) {
+    const el = document.createElement('div'); el.className = 'rect'
+    const W = innerWidth * 1.06, H = innerHeight * 1.6
+    const s = Math.max(W / 2560, H / 2304), ox = (W - 2560 * s) * focus - innerWidth * 0.03, oy = (H - 2304 * s) / 2 - innerHeight * 0.3
+    Object.assign(el.style, { left: ox + r.x * s + 'px', top: oy + r.y * s + 'px', width: r.w * s + 'px', height: r.h * s + 'px' })
+    return el
+  }
+  // &silhouette=1 renders every layer pure black (silhouette readability test)
+  if (q.get('silhouette')) document.head.insertAdjacentHTML('beforeend', '<style>.layer img{filter:brightness(0)}</style>')
+  if (q.get('solo')) stage.style.background = 'repeating-conic-gradient(#444 0 25%, #666 0 50%) 0 0/32px 32px'
+  if (to) {
+    stage.appendChild(sceneEl(sceneId, 0, seam))
+    stage.appendChild(sceneEl(to, seam, 1))
+    const b = document.createElement('div'); b.className = 'layer'
+    b.style.transform = `translateY(${(seam - 0.5) * 100}vh)`
+    const img = new Image(); img.src = `/src-art/scenes/bridges/${sceneId}-${to}.svg`; img.style.objectPosition = '50% 50%'
+    b.appendChild(img); stage.appendChild(b)
+  } else {
+    stage.appendChild(sceneEl(sceneId, 0, 1))
+  }
+  document.getElementById('label').textContent = `${sceneId}${to ? ' → ' + to + ' seam ' + seam : ''} · ${innerWidth}×${innerHeight}`
+</script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+/* testimonials.css — the illustrative testimonial carousel (sections/Testimonials.tsx).
+ * Track / slides / dot fills are moved by GSAP (transform + opacity only). */
+
+.tsm {
+  position: relative;
+}
+.tsm-viewport {
+  position: relative;
+  overflow: hidden;
+  /* room for the card glow without clipping, then pulled back */
+  padding: 28px 0;
+  /* full-bleed (symmetric around the content column, so "centred" stays centred) */
+  margin: -28px calc(50% - 50vw);
+  cursor: grab;
+  outline-offset: -4px;
+}
+.tsm-viewport:active {
+  cursor: grabbing;
+}
+.tsm-track {
+  position: relative;
+  display: flex;
+  gap: clamp(16px, 2.4vw, 32px);
+  width: max-content;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tsm-slide {
+  flex: none;
+  width: min(760px, calc(100vw - 2 * var(--gutter) - 40px));
+  transform-origin: 50% 50%;
+}
+@media (max-width: 640px) {
+  .tsm-slide {
+    width: calc(100vw - 2 * var(--gutter) - 28px);
+  }
+}
+.tsm-card {
+  height: 100%;
+  padding: clamp(22px, 3.6vw, 44px);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+  border-color: var(--c-line-strong);
+}
+.tsm-fig {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+}
+.tsm-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tsm-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: var(--c-gold);
+  background: radial-gradient(circle at 30% 25%, rgba(255, 215, 126, 0.28), rgba(245, 154, 98, 0.1) 70%);
+  border: 1px solid rgba(255, 215, 126, 0.32);
+}
+.tsm-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.tsm-card .tsm-label {
+  white-space: normal;
+  text-align: left;
+  color: var(--c-lavender-soft);
+  background: rgba(185, 178, 255, 0.08);
+}
+.tsm-label-i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.tsm-mark {
+  position: absolute;
+  right: -6px;
+  top: 34px;
+  font: 400 clamp(7rem, 14vw, 11rem) / 1 var(--font-display);
+  color: var(--c-peach);
+  opacity: 0.16;
+  pointer-events: none;
+}
+.tsm-quote {
+  position: relative;
+  flex: 1;
+  margin: clamp(20px, 3vw, 32px) 0 0;
+}
+.tsm-quote p {
+  margin: 0;
+  padding-right: clamp(0px, 5vw, 64px);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.18rem, 2vw, 1.6rem);
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  color: var(--c-text);
+  text-wrap: pretty;
+}
+.tsm-cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-top: clamp(22px, 3vw, 34px);
+  padding-top: 18px;
+  border-top: 1px solid var(--c-line);
+}
+.tsm-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tsm-role {
+  font-weight: 700;
+  color: var(--c-text);
+}
+.tsm-place {
+  color: var(--c-muted);
+  font-size: 0.92rem;
+}
+.tsm-service {
+  color: var(--c-peach-soft);
+  font: 700 0.74rem/1.3 var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---- controls */
+.tsm-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: clamp(28px, 4vw, 44px);
+}
+.tsm-btn {
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--c-line-strong);
+  background: none;
+  color: var(--c-text);
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+.tsm-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgba(185, 178, 255, 0.16);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.tsm-btn:hover::before,
+.tsm-btn:focus-visible::before {
+  opacity: 1;
+}
+.tsm-btn:active {
+  transform: scale(0.94);
+}
+.tsm-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tsm-btn svg .tsm-fillpath {
+  fill: currentColor;
+  stroke: none;
+}
+.tsm-btn--play {
+  margin-left: 6px;
+}
+.tsm-dots {
+  display: flex;
+  align-items: center;
+}
+.tsm-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.tsm-dot-track {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  width: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(185, 178, 255, 0.34);
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.tsm-dot:hover .tsm-dot-track {
+  transform: scale(1.3);
+}
+.tsm-dot[data-active='true'] .tsm-dot-track {
+  width: 32px;
+  /* brighter than the idle dots so the current slide reads even while paused (fill at 0) */
+  background: rgba(185, 178, 255, 0.6);
+}
+.tsm-dot-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--c-peach);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+.tsm-hint {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  text-align: center;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+}
+@media (max-width: 640px) {
+  .tsm-controls {
+    justify-content: center;
+    gap: 8px;
+  }
+}
+@media (max-width: 640px) {
+  /* the label wraps under the icon here: tuck the quote mark into the free corner beside the icon */
+  .tsm-mark {
+    top: -6px;
+    right: -4px;
+    font-size: 6.5rem;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .tsm-viewport {
+    cursor: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tsm-btn,
+  .tsm-dot-track {
+    transition: none;
+  }
+}
+html[data-motion='reduced'] .tsm-btn,
+html[data-motion='reduced'] .tsm-dot-track {
+  transition: none;
+}

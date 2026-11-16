@@ -1,0 +1,373 @@
+/* ecosystem.css — hub diagram (SVG lines + HTML node buttons) and the detail panel.
+ * State changes ride on opacity / transform only; colours are fixed per node. */
+
+.eco-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: clamp(28px, 4vw, 64px);
+  align-items: center;
+}
+@media (max-width: 960px) {
+  .eco-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* per-node colour */
+.eco-link--web,
+.eco-node--web {
+  --node-c: var(--c-lavender);
+}
+.eco-link--app,
+.eco-node--app {
+  --node-c: #e3c2ee;
+}
+.eco-link--auto,
+.eco-node--auto {
+  --node-c: var(--c-teal);
+}
+.eco-link--ai,
+.eco-node--ai {
+  --node-c: var(--c-cyan);
+}
+.eco-link--infra,
+.eco-node--infra {
+  --node-c: var(--c-gold);
+}
+.eco-node--hub {
+  --node-c: var(--c-peach);
+}
+
+/* =================================================================== diagram */
+.eco-figure {
+  margin: 0;
+  min-width: 0;
+}
+.eco-stage {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+}
+.eco-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.eco-ring {
+  fill: none;
+  stroke: rgba(185, 178, 255, 0.16);
+  stroke-width: 1.5;
+}
+.eco-ring + .eco-ring {
+  stroke: rgba(185, 178, 255, 0.09);
+}
+.eco-link {
+  transition: opacity 0.4s ease;
+}
+.eco-link.is-dim {
+  opacity: 0.16;
+}
+.eco-line {
+  fill: none;
+  stroke: var(--node-c);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-opacity: 0.75;
+}
+.eco-glow {
+  fill: none;
+  stroke: var(--node-c);
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-opacity: 0.16;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.eco-link[data-hot='true'] .eco-glow,
+.eco-grid[data-shown='hub'] .eco-glow {
+  opacity: 1;
+}
+.eco-grid[data-shown='hub'] .eco-glow {
+  opacity: 0.55;
+}
+.eco-dot {
+  fill: var(--node-c);
+  opacity: 0;
+}
+[data-layout='narrow'] .eco-line {
+  stroke-width: 2;
+}
+[data-layout='narrow'] .eco-glow {
+  stroke-width: 9;
+}
+
+/* nodes: the <li> sits on the point (orb centre), the button inside is what the reveal moves */
+.eco-nodes {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eco-node {
+  --orb: 60px;
+  position: absolute;
+  transform: translate(-50%, calc(var(--orb) / -2 - 6px));
+}
+.eco-node--hub {
+  --orb: 84px;
+}
+.eco-node-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 4px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--c-text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.eco-node-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--orb);
+  height: var(--orb);
+  border-radius: 50%;
+  /* opaque so the lines end under the orb */
+  background: radial-gradient(circle at 35% 30%, #3a2d6c 0%, #221a4a 70%);
+  border: 1px solid var(--c-line-strong);
+  color: var(--node-c);
+  box-shadow: 0 10px 26px -14px rgba(5, 3, 20, 0.9);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.eco-node--hub .eco-node-orb {
+  background: radial-gradient(circle at 35% 30%, #4a3577 0%, #271d55 72%);
+  border-color: rgba(245, 154, 98, 0.55);
+}
+.eco-node--hub .eco-node-orb svg {
+  width: 32px;
+  height: 32px;
+}
+.eco-node-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--node-c);
+  opacity: 0;
+  transform: scale(0.86);
+  transition:
+    opacity 0.35s ease,
+    transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.eco-node[data-current='true'] .eco-node-ring {
+  opacity: 1;
+  transform: scale(1);
+}
+.eco-node-btn:hover .eco-node-orb,
+.eco-node[data-current='true'] .eco-node-orb {
+  transform: scale(1.06);
+}
+.eco-node-btn[aria-pressed='true'] .eco-node-ring {
+  opacity: 1;
+  transform: scale(1);
+}
+.eco-node-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 10px;
+  /* section colour behind the text so a line never runs through a label */
+  background: var(--c-indigo);
+  font: 700 0.9rem/1.2 var(--font-body);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: opacity 0.4s ease;
+}
+.eco-node--hub .eco-node-label {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.08rem;
+}
+.eco-node-sub {
+  margin-top: 2px;
+  color: var(--c-muted);
+  font: 600 0.72rem/1.2 var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.eco-node.is-dim .eco-node-orb {
+  opacity: 0.42;
+}
+.eco-node.is-dim .eco-node-label {
+  opacity: 0.62;
+}
+
+@media (max-width: 640px) {
+  .eco-node {
+    --orb: 50px;
+  }
+  .eco-node--hub {
+    --orb: 66px;
+  }
+  .eco-node-orb svg {
+    width: 21px;
+    height: 21px;
+  }
+  .eco-node--hub .eco-node-orb svg {
+    width: 26px;
+    height: 26px;
+  }
+  .eco-node-btn {
+    gap: 6px;
+    padding: 4px 6px 3px;
+  }
+  .eco-node-label {
+    font-size: 0.82rem;
+  }
+  .eco-node--hub .eco-node-label {
+    font-size: 0.95rem;
+  }
+  .eco-node-sub {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+  }
+}
+
+.eco-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: min(36em, 100%);
+  margin: clamp(18px, 3vw, 28px) auto 0;
+  color: var(--c-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.eco-hint-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-teal);
+  box-shadow: 0 0 0 4px rgba(63, 224, 192, 0.16);
+}
+
+/* =================================================================== detail panel */
+.eco-panel {
+  position: relative;
+  min-width: 0;
+  padding: clamp(22px, 3vw, 34px);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+  border: 1px solid var(--c-line-strong);
+  box-shadow: var(--shadow-2);
+}
+.eco-panel::before {
+  content: '';
+  position: absolute;
+  left: clamp(22px, 3vw, 34px);
+  right: clamp(22px, 3vw, 34px);
+  top: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--c-peach), var(--c-lavender) 55%, var(--c-teal));
+  opacity: 0.85;
+}
+.eco-detail {
+  min-height: 330px;
+}
+.eco-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--c-peach-soft);
+  font: 700 0.76rem/1.3 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.eco-kicker-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(185, 178, 255, 0.1);
+  border: 1px solid var(--c-line);
+  color: var(--c-lavender);
+}
+.eco-kicker-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.eco-detail-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.4rem, 2.2vw, 1.75rem);
+  line-height: 1.18;
+  color: var(--c-text);
+  text-wrap: balance;
+}
+.eco-detail-body {
+  margin: 12px 0 0;
+  color: var(--c-muted);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+.eco-points {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.eco-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--c-text);
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+.eco-points svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--c-teal);
+}
+.eco-cta {
+  margin-top: 14px;
+}
+@media (max-width: 960px) {
+  .eco-detail {
+    min-height: 0;
+  }
+}
+
+/* reduced motion: hover scale snaps (no overshoot spring); the opacity fades stay */
+@media (prefers-reduced-motion: reduce) {
+  .eco-node-orb {
+    transition: opacity 0.4s ease;
+  }
+  .eco-node-ring {
+    transition: opacity 0.35s ease;
+  }
+}
+html[data-motion='reduced'] .eco-node-orb {
+  transition: opacity 0.4s ease;
+}
+html[data-motion='reduced'] .eco-node-ring {
+  transition: opacity 0.35s ease;
+}

@@ -1,0 +1,254 @@
+/* why.css — "Kenapa GAMADA" (#fondasi): bento grid of six principles + the second stat strip.
+ * Desktop (≥ 1024): 4 columns × 3 rows — ecosystem 2×2, security 2×1, ops + insight 1×1,
+ * scale + local 2×1. Tablet: 2 columns (ecosystem + local full width). Phone: one column. */
+
+/* site.css's inner-page `.eyebrow::before` doubles SectionHeader's .eyebrow-line: keep one line. */
+.why .eyebrow::before {
+  content: none;
+}
+
+.why-bento {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .why-bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .why-tile--ecosystem,
+  .why-tile--local {
+    grid-column: span 2;
+  }
+}
+@media (min-width: 1024px) {
+  .why-bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .why-tile--ecosystem {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+  .why-tile--security,
+  .why-tile--scale,
+  .why-tile--local {
+    grid-column: span 2;
+  }
+}
+
+/* ------------------------------------------------------------------ tile */
+.why-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(22px, 2.2vw, 30px);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+.why-tile--ecosystem {
+  background:
+    radial-gradient(80% 60% at 85% 0%, rgba(141, 90, 154, 0.28), transparent 70%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+}
+.why-tile--local {
+  background:
+    radial-gradient(70% 90% at 100% 100%, rgba(245, 154, 98, 0.14), transparent 70%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.why-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  color: var(--c-teal);
+  background: rgba(63, 224, 192, 0.08);
+  border: 1px solid rgba(63, 224, 192, 0.28);
+  transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.why-tile--security .why-icon,
+.why-tile--scale .why-icon {
+  color: var(--c-lavender);
+  background: rgba(185, 178, 255, 0.08);
+  border-color: rgba(185, 178, 255, 0.3);
+}
+.why-tile--local .why-icon,
+.why-tile--ops .why-icon {
+  color: var(--c-peach-soft);
+  background: rgba(245, 154, 98, 0.08);
+  border-color: rgba(245, 154, 98, 0.32);
+}
+.why-tile:hover .why-icon {
+  transform: translate3d(0, -3px, 0) scale(1.06);
+}
+.why-icon-svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.why-title {
+  margin: 0;
+  font: 500 clamp(1.2rem, 1.6vw, 1.4rem) / 1.25 var(--font-display);
+  color: var(--sec-fg);
+}
+.why-tile--ecosystem .why-title {
+  font-size: clamp(1.4rem, 2.3vw, 1.95rem);
+}
+.why-text {
+  text-wrap: pretty;
+  margin: 10px 0 0;
+  max-width: 34em;
+  color: var(--sec-muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ decorative art */
+.why-art {
+  margin-top: auto;
+  padding-top: 22px;
+}
+.why-art--eco {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+}
+.why-eco {
+  display: block;
+  width: 100%;
+  max-width: 460px;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+.why-eco-line,
+.why-eco-ring {
+  fill: none;
+  stroke: rgba(185, 178, 255, 0.55);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.why-eco-ring {
+  stroke: rgba(63, 224, 192, 0.6);
+  stroke-dasharray: 3 5;
+}
+.why-eco-core {
+  fill: rgba(63, 224, 192, 0.14);
+  stroke: rgba(63, 224, 192, 0.7);
+  stroke-width: 1.5;
+}
+.why-eco-core-t {
+  fill: var(--c-teal);
+  font: 700 13px var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.why-eco-node {
+  fill: rgba(26, 22, 56, 0.85);
+  stroke: rgba(185, 178, 255, 0.4);
+  stroke-width: 1;
+}
+.why-eco-t {
+  fill: var(--c-text);
+  font: 600 13px var(--font-body);
+}
+
+.why-spark {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.why-spark-area {
+  fill: rgba(63, 224, 192, 0.1);
+}
+.why-spark-line {
+  fill: none;
+  stroke: var(--c-teal);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.why-art--steps {
+  display: flex;
+  justify-content: flex-end;
+}
+.why-steps {
+  display: block;
+  width: 92px;
+  height: auto;
+}
+@media (min-width: 1024px) {
+  .why-steps {
+    width: 124px;
+  }
+}
+.why-step {
+  fill: rgba(185, 178, 255, 0.1);
+  stroke: rgba(185, 178, 255, 0.45);
+  stroke-width: 1;
+}
+.why-step--top {
+  fill: rgba(245, 154, 98, 0.22);
+  stroke: var(--c-peach);
+}
+
+.why-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: auto 0 0;
+  padding: 20px 0 0;
+  list-style: none;
+}
+.why-chip {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(245, 154, 98, 0.4);
+  background: rgba(245, 154, 98, 0.08);
+  color: var(--c-peach-soft);
+  font: 600 0.8rem/1.2 var(--font-body);
+}
+
+/* ------------------------------------------------------------------ stat strip */
+.why-stats-wrap {
+  margin-top: clamp(56px, 7vw, 96px);
+}
+.why-stats-title {
+  margin: 0 0 clamp(24px, 3vw, 36px);
+  max-width: 26em;
+  font: 400 clamp(1.35rem, 2.4vw, 2rem) / 1.2 var(--font-display);
+  color: var(--sec-fg);
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .why-icon {
+    transition: none;
+  }
+  .why-tile:hover .why-icon {
+    transform: none;
+  }
+}
+html[data-motion='reduced'] .why-tile:hover .why-icon {
+  transform: none;
+}
+
+/* the diagram scales down with the tile: keep its labels legible on phones */
+@media (max-width: 520px) {
+  .why-eco-t {
+    font-size: 15px;
+  }
+  .why-eco-core-t {
+    font-size: 14px;
+  }
+}
