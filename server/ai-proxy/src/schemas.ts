@@ -310,6 +310,64 @@ export const PlanSchema = z.object({
   steps: z.array(z.object({ product: ProductSlugSchema, action: s(200) })).min(1).max(8),
 })
 
+/* ---- tahap 2 (Satu Daerah) ---- */
+
+export const ServiceInfoSchema = z.object({
+  serviceId: opt(60),
+  service: s(120),
+  slaDays: z.number().int().min(0).max(60).optional(),
+  channel: z.enum(['mpp', 'online', 'kecamatan', 'dinas']).optional(),
+  office: opt(120),
+  fee: opt(80),
+  steps: z.array(s(160)).max(8).optional(),
+})
+
+export const BookingSchema = z.object({
+  serviceId: opt(60),
+  service: s(120),
+  slot: z.string().trim().regex(/^([01]\d|2[0-3])[.:][0-5]\d$/),
+  date: opt(40),
+  office: opt(120),
+  notes: opt(200),
+})
+
+export const TicketStatusSchema = z.object({
+  ticketCode: s(30),
+  status: z.enum(['baru', 'diverifikasi', 'diteruskan', 'diproses', 'selesai', 'tidak-ditemukan']),
+  opd: opt(80),
+  eta: opt(80),
+  note: opt(240),
+})
+
+export const BriefingSchema = z.object({
+  items: z.array(z.object({ title: s(160), source: ProductSlugSchema, detail: opt(240) })).min(1).max(10),
+  closing: opt(400),
+})
+
+export const TopicAnalysisSchema = z.object({
+  keywords: z.array(s(40)).min(1).max(4),
+  periodDays: z.number().int().min(1).max(90),
+  volumeTrend: z.enum(['naik', 'turun', 'stabil']),
+  sentiment: z.object({ negatif: z.number().min(0).max(1), netral: z.number().min(0).max(1), positif: z.number().min(0).max(1) }),
+  topics: z.array(z.object({ label: s(80), share: z.number().min(0).max(1) })).max(6),
+  quotes: z.array(s(240)).max(5),
+  surveyQuestions: z.array(s(200)).max(5),
+})
+
+export const AuditMemoSchema = z.object({
+  title: s(160),
+  findings: z.array(s(300)).min(1).max(8),
+  hpsCorrected: z.number().min(0).optional(),
+  recommendations: z.array(s(300)).min(1).max(6),
+  inviteLocal: z.boolean(),
+})
+
+export const ReminderSchema = z.object({
+  to: s(120),
+  message: s(600),
+  dueText: opt(80),
+})
+
 export const FollowupsSchema = z.object({
   chips: z.array(z.string().trim().min(1).max(60)).min(1).max(3),
 })
@@ -357,6 +415,13 @@ export const TOOLS = {
   econ_insight: tool('econ_insight', 'insight', EconInsightSchema, 'Ringkas satu temuan indikator ekonomi daerah: tren dan penjelasan.'),
   price_alert: tool('price_alert', 'price-alert', PriceAlertSchema, 'Susun peringatan harga/pasokan bahan pokok dengan horizon hari dan rekomendasi.'),
   plan_agents: tool('plan_agents', 'plan', PlanSchema, 'Susun rencana langkah agen lintas produk GAMADA.'),
+  lookup_service: tool('lookup_service', 'service', ServiceInfoSchema, 'Tampilkan kartu info satu layanan (SLA, kanal, kantor, biaya, langkah) dari data layanan region.'),
+  book_queue: tool('book_queue', 'booking', BookingSchema, 'Pesan slot antrean 30 menit di Mal Pelayanan Publik untuk sebuah layanan. Panggil setelah warga memilih jam.'),
+  ticket_status: tool('ticket_status', 'ticket-status', TicketStatusSchema, 'Tampilkan status tiket aduan dari konteks dunia (nomor SW-YYYY-####).'),
+  compose_briefing: tool('compose_briefing', 'briefing', BriefingSchema, 'Susun butir briefing pagi pimpinan dari data dunia demo, tiap butir dengan produk sumbernya.'),
+  analyze_topic: tool('analyze_topic', 'analysis', TopicAnalysisSchema, 'Analisis mendalam percakapan publik untuk 1–4 kata kunci: tren volume, sentimen, topik, kutipan, pertanyaan survei.'),
+  draft_audit_memo: tool('draft_audit_memo', 'audit-memo', AuditMemoSchema, 'Susun memo audit pengadaan: temuan, koreksi HPS, rekomendasi (termasuk mengundang UMKM lokal).'),
+  draft_reminder: tool('draft_reminder', 'reminder', ReminderSchema, 'Susun pesan pengingat singkat (WhatsApp) ke PIC tindak lanjut yang mendekati atau lewat tenggat.'),
   suggest_followups: tool('suggest_followups', 'followups', FollowupsSchema, 'Opsional, di akhir jawaban: 1–3 chip pertanyaan lanjutan singkat dalam bahasa pengguna.'),
 } as const satisfies Record<string, ToolDef>
 

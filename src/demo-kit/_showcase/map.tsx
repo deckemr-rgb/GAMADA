@@ -21,6 +21,7 @@ import {
   belowThreshold,
   choropleth,
   countByKecamatan,
+  facilityMarkers,
   heatPoints,
   landmarkMarkers,
   marketMarkers,
@@ -63,6 +64,9 @@ const T = {
   hazard: { id: 'Zona risiko banjir (turunan)', en: 'Flood-risk zones (derived)' },
   heat: { id: 'Kepadatan aduan', en: 'Complaint density' },
   complaints: { id: 'Titik aduan', en: 'Complaint points' },
+  zones: { id: 'Zona peringatan (skenario)', en: 'Warning zones (scenario)' },
+  imagery: { id: 'Citra satelit', en: 'Satellite imagery' },
+  facilities: { id: 'Fasilitas & pengungsian', en: 'Facilities & shelters' },
   markets: { id: 'Pasar tradisional', en: 'Traditional markets' },
   landmarks: { id: 'Fasilitas penting', en: 'Key facilities' },
   flood: { id: 'Prediksi genangan', en: 'Predicted inundation' },
@@ -81,7 +85,7 @@ const T = {
 const t = (k: keyof typeof T, lang: Lang) => T[k][lang]
 const URG: Record<Complaint['urgency'], 'danger' | 'warn' | 'neutral'> = { tinggi: 'danger', sedang: 'warn', rendah: 'neutral' }
 
-type ToggleId = 'kec' | 'desa' | 'rivers' | 'hazard' | 'choro' | 'heat' | 'complaints' | 'markets' | 'landmarks' | 'flood' | 'rain'
+type ToggleId = 'kec' | 'desa' | 'rivers' | 'hazard' | 'choro' | 'heat' | 'complaints' | 'markets' | 'landmarks' | 'flood' | 'rain' | 'zones' | 'imagery' | 'facilities'
 
 export default function Section() {
   const { lang } = useI18n()
@@ -104,6 +108,9 @@ export default function Section() {
     landmarks: false,
     flood: true,
     rain: true,
+    zones: false,
+    imagery: false,
+    facilities: false,
   })
 
   useEffect(() => {
@@ -134,6 +141,10 @@ export default function Section() {
     [list, lang],
   )
 
+  const floodKec = useWorld((s) => s.region.floodKecamatanIds)
+  const zones = useMemo(() => [{ kecamatanIds: floodKec.slice(0, 2), tone: 'danger' as const }, { kecamatanIds: floodKec.slice(2), tone: 'warn' as const }], [floodKec])
+  const facilityRows = useWorld((s) => s.facilities)
+  const facilities = useMemo(() => facilityMarkers(rows(facilityRows).filter((f) => f.kind === 'pengungsian' || f.kind === 'rs'), lang), [facilityRows, lang])
   const layers = useMemo<MapLayer[]>(
     () => [
       { id: 'kec', kind: 'kecamatan', visible: on.kec, labels: 'name+value' },
@@ -147,6 +158,9 @@ export default function Section() {
       { id: 'landmarks', kind: 'markers', visible: on.landmarks, items: landmarks },
       { id: 'markets', kind: 'markers', visible: on.markets, items: markets },
       { id: 'complaints', kind: 'markers', visible: on.complaints, items: points, size: 'sm' },
+      { id: 'zones', kind: 'zones', visible: on.zones, zones: zones },
+      { id: 'imagery', kind: 'imagery', visible: on.imagery, opacity: 0.85 },
+      { id: 'facilities', kind: 'markers', visible: on.facilities, items: facilities },
     ],
     [on, choroSpec, heat, landmarks, markets, points, isStatic],
   )
@@ -176,6 +190,9 @@ export default function Section() {
     { id: 'heat', label: t('heat', lang), icon: 'pulse' },
     { id: 'complaints', label: t('complaints', lang), icon: 'chat' },
     { id: 'hazard', label: t('hazard', lang), icon: 'alert' },
+    { id: 'zones', label: t('zones', lang), icon: 'alert' },
+    { id: 'facilities', label: t('facilities', lang), icon: 'home' },
+    { id: 'imagery', label: t('imagery', lang), icon: 'map' },
     { id: 'rivers', label: t('rivers', lang), icon: 'water' },
     { id: 'desa', label: t('desa', lang), hint: t('desaHint', lang), icon: 'grid' },
     { id: 'kec', label: t('kec', lang), icon: 'map' },

@@ -38,6 +38,8 @@ export function createParamSelector<P extends string | number, D extends unknown
     }
     if (cache.has(p)) return cache.get(p) as R
     const v = combine(p, ...d)
+    // time-keyed params (world minutes) would grow the cache while the tables stay unchanged: keep it small
+    if (cache.size >= 64) cache = new Map()
     cache.set(p, v)
     return v
   }

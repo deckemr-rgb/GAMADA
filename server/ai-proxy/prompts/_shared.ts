@@ -5,7 +5,8 @@
  */
 import type { ProductSlug } from '../src/products.js'
 import { PRODUCT_NAMES } from '../src/products.js'
-import type { ToolName } from '../src/schemas.js'
+import type { ToolDef, ToolName } from '../src/schemas.js'
+import type { z } from 'zod'
 
 export type Tier = 'fast' | 'smart'
 
@@ -23,13 +24,32 @@ export interface ProductPromptSpec {
   output: string
   /** product tools (suggest_followups is always added) */
   tools: ToolName[]
+  /**
+   * Product-owned structured tools that are not in the shared TOOLS registry (build them with `productTool`).
+   * Their kind is '<slug>/<name>'; the site validates it with a validator the product registers through
+   * registerStructuredSchema(kind, { safeParse }) — no change to the shared schemas or the parity test needed.
+   */
+  customTools?: ToolDef[]
+  /** one valid example per custom tool (name → data): the proxy self-test and AI_MOCK use it */
+  customMocks?: Record<string, Record<string, unknown>>
 }
 
 export interface ProductPrompt {
   slug: ProductSlug
   tier: Tier
   tools: ToolName[]
+  customTools: ToolDef[]
+  customMocks: Record<string, Record<string, unknown>>
   system: string
+}
+
+/**
+ * A structured tool only one product uses, declared in that product's prompt file:
+ *   customTools: [productTool('sapa-warga', 'rate_service', z.object({ stars: z.number().int().min(1).max(5) }), 'Catat penilaian warga 1–5.')]
+ * Name: snake_case, unique across all tools. Kind sent to the site: 'sapa-warga/rate_service'.
+ */
+export function productTool(slug: ProductSlug, name: string, schema: z.ZodType, description: string): ToolDef {
+  return { name, kind: `${slug}/${name}`, schema, description }
 }
 
 const STYLE = `## Gaya bahasa
@@ -71,5 +91,5 @@ export function definePrompt(spec: ProductPromptSpec): ProductPrompt {
     CONTEXT,
     SAFETY,
   ].join('\n\n')
-  return { slug: spec.slug, tier: spec.tier, tools: spec.tools, system }
+  return { slug: spec.slug, tier: spec.tier, tools: spec.tools, customTools: spec.customTools ?? [], customMocks: spec.customMocks ?? {}, system }
 }

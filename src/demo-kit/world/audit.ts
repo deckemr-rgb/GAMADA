@@ -42,6 +42,15 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const st = TICKET_STATUS[e.payload.status] ?? { id: e.payload.status, en: e.payload.status }
       return { summary: { id: `Tiket ${t?.code ?? e.payload.ticketId} → ${st.id}`, en: `Ticket ${t?.code ?? e.payload.ticketId} → ${st.en}` }, refs: [ref('tickets', e.payload.ticketId), ...(t ? [ref('complaints', t.complaintId)] : [])] }
     }
+    case 'citizen.notified': {
+      const K: Record<string, Bi> = { peringatan: { id: 'Peringatan', en: 'Warning' }, tiket: { id: 'Kabar tiket', en: 'Ticket update' }, antrean: { id: 'Tiket antrean', en: 'Queue ticket' }, info: { id: 'Info', en: 'Info' } }
+      const k = K[e.payload.kind] ?? K.info!
+      const n = e.payload.to.length
+      return {
+        summary: { id: `${k.id} terkirim ke HP ${n} warga`, en: `${k.en} sent to ${n} citizen phone${n === 1 ? '' : 's'}` },
+        refs: [ref('messages', e.payload.id ?? ''), ...(e.payload.refs ?? []), ...e.payload.to.slice(0, 3).map((c) => ref('citizens', c))],
+      }
+    }
     case 'service.booked': {
       const sv = s.region.services.find((x) => x.id === e.payload.serviceId)?.name ?? { id: e.payload.serviceId, en: e.payload.serviceId }
       return { summary: { id: `Antrean ${sv.id} pukul ${hhmm(e.payload.slotAt)}`, en: `Queue booked: ${sv.en} at ${hhmm(e.payload.slotAt)}` }, refs: [ref('bookings', e.payload.id ?? '')] }
@@ -62,6 +71,14 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
         summary: { id: `Tindak lanjut untuk ${opdShort(s, e.payload.opdId)}: ${e.payload.title.id}`, en: `Action item for ${opdShort(s, e.payload.opdId)}: ${e.payload.title.en}` },
         refs: [ref('actionItems', e.payload.id ?? ''), ...(e.payload.source?.id ? [ref(e.payload.source.kind === 'meeting' ? 'meetings' : e.payload.source.kind === 'instruction' ? 'instructions' : 'letters', e.payload.source.id)] : [])],
       }
+    case 'actionItem.statusChanged': {
+      const a = s.actionItems.byId[e.payload.actionItemId]
+      return { summary: { id: `Tindak lanjut ${a?.title.id ?? e.payload.actionItemId} → ${e.payload.status}`, en: `Action item ${a?.title.en ?? e.payload.actionItemId} → ${e.payload.status}` }, refs: [ref('actionItems', e.payload.actionItemId)] }
+    }
+    case 'actionItem.reminded': {
+      const a = s.actionItems.byId[e.payload.actionItemId]
+      return { summary: { id: `Pengingat WA terkirim ke ${a?.pic ?? 'PIC'}`, en: `WhatsApp reminder sent to ${a?.pic ?? 'the person in charge'}` }, refs: [ref('actionItems', e.payload.actionItemId)] }
+    }
     case 'letter.dispositioned': {
       const l = s.letters.byId[e.payload.letterId ?? '']
       const to = e.payload.to.map((o) => opdShort(s, o)).join(', ')
@@ -87,6 +104,23 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const a = s.alerts.byId[e.payload.alertId]
       return { summary: { id: `Peringatan dini terkirim ke ${a?.broadcast?.recipients ?? 0} penerima`, en: `Early warning sent to ${a?.broadcast?.recipients ?? 0} recipients` }, refs: [ref('alerts', e.payload.alertId)] }
     }
+    case 'flood.confirmed': {
+      const n = e.payload.complaintIds.length
+      return {
+        summary: { id: `${n} aduan warga mengonfirmasi genangan di Kec. ${kecName(s, e.payload.kecamatanId)}`, en: `${n} citizen report${n === 1 ? '' : 's'} confirm flooding in ${kecName(s, e.payload.kecamatanId)}` },
+        refs: [ref('clusters', e.payload.clusterId), ...(e.payload.alertId ? [ref('alerts', e.payload.alertId)] : [])],
+      }
+    }
+    case 'harvest.updated': {
+      const names = e.payload.kecamatanIds.map((k) => kecName(s, k)).join(', ')
+      return e.payload.scenario === 'pasca-banjir'
+        ? { summary: { id: `Estimasi panen pascabanjir: Kec. ${names}`, en: `Post-flood harvest estimate: ${names}` }, refs: e.payload.kecamatanIds.map((k) => `kecamatan:${k}`) }
+        : { summary: { id: `Estimasi panen normal: Kec. ${names}`, en: `Normal harvest estimate: ${names}` }, refs: e.payload.kecamatanIds.map((k) => `kecamatan:${k}`) }
+    }
+    case 'supply.signal': {
+      const c = commodity(s, e.payload.commodityId)
+      return { summary: { id: `Sinyal pasokan ${c.id} ${pct(e.payload.pct)} (${e.payload.horizonDays} hari)`, en: `${c.en} supply signal ${pct(e.payload.pct)} (${e.payload.horizonDays} days)` }, refs: [ref('supplySignals', e.payload.id ?? ''), ...(e.payload.cause ? [e.payload.cause] : [])] }
+    }
     case 'eligibility.opened':
       return { summary: { id: `Kuota pendaftar bansos banjir dibuka (${e.payload.quota})`, en: `Flood-relief aid registration opened (${e.payload.quota})` }, refs: [ref('programs', e.payload.id ?? ''), ...(e.payload.alertId ? [ref('alerts', e.payload.alertId)] : [])] }
     case 'procurement.created':
@@ -94,6 +128,13 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'procurement.flagged': {
       const p = s.procurements.byId[e.payload.procurementId]
       return { summary: { id: `Paket ${p?.name.id ?? ''} ditandai berisiko (${e.payload.riskScore})`, en: `Package ${p?.name.en ?? ''} flagged as risky (${e.payload.riskScore})` }, refs: [ref('procurements', e.payload.procurementId)] }
+    }
+    case 'procurement.recommended': {
+      const p = s.procurements.byId[e.payload.procurementId]
+      return {
+        summary: { id: `Rekomendasi audit ${p?.name.id ?? ''}: HPS dikoreksi ke ${fmtRp(e.payload.hpsCorrected)}`, en: `Audit recommendation ${p?.name.en ?? ''}: HPS corrected to ${fmtRp(e.payload.hpsCorrected)}` },
+        refs: [ref('procurements', e.payload.procurementId)],
+      }
     }
     case 'document.verified':
       return { summary: { id: `Berkas ${e.payload.documentId} diverifikasi: ${e.payload.status}`, en: `Document ${e.payload.documentId} verified: ${e.payload.status}` }, refs: [ref('documents', e.payload.documentId), ref('verifications', `VF-${e.id}`)] }

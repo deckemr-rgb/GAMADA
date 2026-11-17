@@ -8,7 +8,7 @@ import { pad } from './util'
 export const ID_PREFIX: Record<TableKey, string> = {
   citizens: 'WG', complaints: 'SW', tickets: 'TK', clusters: 'KL', bookings: 'AN', briefings: 'BR', instructions: 'IN',
   letters: 'SR', meetings: 'RP', actionItems: 'TL', mentions: 'MN', hoaxAlerts: 'HX', alerts: 'PW', rainCells: 'HJ',
-  programs: 'PG', procurements: 'PK', bidders: 'PS', documents: 'DK', verifications: 'VF', businesses: 'UM', outlets: 'OT',
+  programs: 'PG', messages: 'PSN', facilities: 'FS', harvests: 'PN', supplySignals: 'SPS', gauges: 'TMA', procurements: 'PK', bidders: 'PS', documents: 'DK', verifications: 'VF', businesses: 'UM', outlets: 'OT',
   products: 'SKU', sales: 'TR', salesDaily: 'SD', stock: 'ST', purchaseOrders: 'PO', suppliers: 'SP', ledger: 'JR',
   taxItems: 'PJ', calls: 'CL', chats: 'CH', agentsSales: 'AG', coachings: 'CO', candidates: 'KD', brandMentions: 'BM',
   tenders: 'TD', bids: 'BD', catalogNeeds: 'KB', matches: 'MC', orders: 'OR', bizScores: 'RU', loanApps: 'LN',

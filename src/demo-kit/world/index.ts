@@ -15,7 +15,7 @@
  */
 export * from './types'
 export { world, emit, onEvent, settled, loadWorld, resetWorld, preloadWorldGenerator, preloadWorldEngine, exportWorld, importWorld, useWorld, useWorldStatus, emptyWorld, type WorldStatus } from './store'
-export { createEvent, prepare } from './events'
+export { createEvent, prepare, isEvent } from './events'
 export type { Reducer, ReducerMap } from './reducers'
 export type { Reaction } from './reactions'
 export type { BatchResult } from './engine'

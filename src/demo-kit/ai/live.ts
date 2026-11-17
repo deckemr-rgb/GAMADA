@@ -276,6 +276,55 @@ export const STRUCTURED_SCHEMAS = {
   plan: z.object({
     steps: z.array(z.object({ product: ProductSlugEnum, action: s(200) })).min(1).max(8),
   }),
+  service: z.object({
+    serviceId: opt(60),
+    service: s(120),
+    slaDays: z.number().int().min(0).max(60).optional(),
+    channel: z.enum(['mpp', 'online', 'kecamatan', 'dinas']).optional(),
+    office: opt(120),
+    fee: opt(80),
+    steps: z.array(s(160)).max(8).optional(),
+  }),
+  booking: z.object({
+    serviceId: opt(60),
+    service: s(120),
+    slot: z.string().trim().regex(/^([01]\d|2[0-3])[.:][0-5]\d$/),
+    date: opt(40),
+    office: opt(120),
+    notes: opt(200),
+  }),
+  'ticket-status': z.object({
+    ticketCode: s(30),
+    status: z.enum(['baru', 'diverifikasi', 'diteruskan', 'diproses', 'selesai', 'tidak-ditemukan']),
+    opd: opt(80),
+    eta: opt(80),
+    note: opt(240),
+  }),
+  briefing: z.object({
+    items: z.array(z.object({ title: s(160), source: ProductSlugEnum, detail: opt(240) })).min(1).max(10),
+    closing: opt(400),
+  }),
+  analysis: z.object({
+    keywords: z.array(s(40)).min(1).max(4),
+    periodDays: z.number().int().min(1).max(90),
+    volumeTrend: z.enum(['naik', 'turun', 'stabil']),
+    sentiment: z.object({ negatif: z.number().min(0).max(1), netral: z.number().min(0).max(1), positif: z.number().min(0).max(1) }),
+    topics: z.array(z.object({ label: s(80), share: z.number().min(0).max(1) })).max(6),
+    quotes: z.array(s(240)).max(5),
+    surveyQuestions: z.array(s(200)).max(5),
+  }),
+  'audit-memo': z.object({
+    title: s(160),
+    findings: z.array(s(300)).min(1).max(8),
+    hpsCorrected: z.number().min(0).optional(),
+    recommendations: z.array(s(300)).min(1).max(6),
+    inviteLocal: z.boolean(),
+  }),
+  reminder: z.object({
+    to: s(120),
+    message: s(600),
+    dueText: opt(80),
+  }),
 } as const satisfies Record<string, z.ZodType<Record<string, unknown>>>
 
 export type StructuredKind = keyof typeof STRUCTURED_SCHEMAS

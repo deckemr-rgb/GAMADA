@@ -81,6 +81,25 @@ for (const s of PRODUCT_SLUGS) {
   if (!good) ok(false, `prompt ${s} well-formed`)
 }
 ok(true, 'every prompt has role/scope/output text and only registered tools')
+// product-owned custom tools (prompts/<slug>.ts customTools): unique names, kind '<slug>/<name>', a valid mock each
+{
+  const names = new Set<string>(Object.keys(TOOLS))
+  let customOk = true
+  let n = 0
+  for (const s of PRODUCT_SLUGS) {
+    for (const t of PROMPTS[s].customTools) {
+      n++
+      const mock = PROMPTS[s].customMocks[t.name]
+      const good = /^[a-z][a-z0-9_]{2,63}$/.test(t.name) && !names.has(t.name) && t.kind === `${s}/${t.name}` && toInputSchema(t.schema).type === 'object' && !!mock && t.schema.safeParse(mock).success
+      if (!good) {
+        customOk = false
+        ok(false, `custom tool ${s}/${t.name}`)
+      }
+      names.add(t.name)
+    }
+  }
+  ok(customOk, `custom product tools well-formed (${n})`)
+}
 ok(PROMPTS['naskah-pintar'].tier === 'smart' && PROMPTS['sapa-warga'].tier === 'fast', 'tiers: minutes=smart, chat=fast')
 
 section('schemas')
@@ -90,7 +109,7 @@ for (const name of Object.keys(TOOLS) as ToolName[]) {
   if (js.type !== 'object' || '$schema' in js || !r.success) ok(false, `tool ${name}`, r.success ? js : r.error.issues)
 }
 ok(true, `${Object.keys(TOOLS).length} tool schemas convert to JSON Schema and accept their mock example`)
-ok(STRUCTURED_KINDS.length === 24 && new Set(STRUCTURED_KINDS).size === 24 && !STRUCTURED_KINDS.includes('followups'), '24 distinct structured kinds (+ followups)')
+ok(STRUCTURED_KINDS.length === 31 && new Set(STRUCTURED_KINDS).size === 31 && !STRUCTURED_KINDS.includes('followups'), '31 distinct structured kinds (+ followups)')
 for (const k of ['document', 'invoice', 'cv', 'ktp-specimen'] as const) {
   ok(ExtractedSchema.safeParse(mockExtract(k)).success, `mockExtract(${k}) matches Extracted`)
 }
@@ -287,7 +306,7 @@ section('live path against a local fake Claude API')
   ok(done.usage.input === 240 && done.usage.output === 80 && done.usage.cacheRead === 1800 && done.stopReason === 'end_turn', 'usage summed over both model turns', done)
   const req1 = seen[0] as { system: { cache_control?: unknown }[]; tools: { name: string }[]; output_config: { effort: string }; model: string; tool_choice: { type: string } }
   ok(req1.model === 'claude-haiku-5-5' && req1.output_config.effort === 'low' && req1.tool_choice.type === 'auto', 'request: model, effort, tool_choice auto')
-  ok(req1.system.every((b) => b.cache_control) && req1.tools.map((t) => t.name).join() === 'create_ticket,service_checklist,suggest_followups', 'request: cached system blocks + product tools')
+  ok(req1.system.every((b) => b.cache_control) && req1.tools.map((t) => t.name).join() === 'create_ticket,service_checklist,lookup_service,book_queue,ticket_status,suggest_followups', 'request: cached system blocks + product tools')
   const req2 = seen[1] as { messages: { role: string; content: { type: string; is_error?: boolean }[] }[] }
   ok(req2.messages.at(-1)?.content[0]?.type === 'tool_result' && !req2.messages.at(-1)?.content[0]?.is_error, 'second turn sends tool_result ack')
 

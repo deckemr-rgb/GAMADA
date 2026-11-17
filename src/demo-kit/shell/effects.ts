@@ -6,6 +6,13 @@
  *   follow-up's chain back to its root, and report an effect when the root's source is this product and the
  *   follow-up lands in another product (its `source`, or EFFECT_TARGET for follow-ups that keep the source
  *   but are consumed elsewhere, e.g. a Sapa Warga complaint cluster that goes to Meja Pimpinan).
+ *
+ * Tahap 2:
+ *   - ONE toast per root: every further product the same root reaches is added to that toast (same key, so the
+ *     shell's queue replaces it): "Peringatan banjir diteruskan ke Awas Belanja, Cek Berkas +3".
+ *   - Background roots (source 'clock') are announced only when THIS product itself reacted to them and the
+ *     follow-up is consumed elsewhere (EFFECT_TARGET): e.g. the 10:00 rumor burst → Radar Isu detects the hoax →
+ *     "… diteruskan ke Meja Pimpinan" on the Radar Isu page.
  */
 import { PRODUCT_BY_SLUG, isProductSlug, type Bi, type ProductSlug } from '../../content/products'
 import type { AuditEntry, EventType, WorldEvent, WorldState } from '../world'
@@ -16,13 +23,17 @@ import { SHELL } from './constants'
 export const EFFECT_TARGET: Partial<Record<EventType, ProductSlug>> = {
   'complaint.clustered': 'meja-pimpinan',
   'briefing.generated': 'meja-pimpinan',
+  'hoax.detected': 'meja-pimpinan',
 }
 
 export interface CrossEffect {
-  /** dedupe key: root event + target product */
+  /** one toast per root event: the key stays the same while more targets are added */
   key: string
   rootId: string
+  /** the first product reached (the toast opens it) */
   target: ProductSlug
+  /** every product this root reached so far, in order */
+  targets: ProductSlug[]
   title: Bi
   body: Bi
   /** entity to open in the target product (`?focus=`) */
@@ -89,10 +100,22 @@ const refId = (r: string | undefined): string | null => {
   return id || null
 }
 
+/** follow-ups that name the toast themselves (they are the news, not the root that caused them) */
+const HEADLINE = new Set<EventType>(['complaint.clustered', 'hoax.detected'])
+
+/** "A", "A & B", "A, B & C", "A, B +2" */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  if (names.length === 2) return `${names[0]} & ${names[1]}`
+  if (names.length === 3) return `${names[0]}, ${names[1]} & ${names[2]}`
+  return `${names[0]}, ${names[1]} +${names.length - 2}`
+}
+
 /** Stateful tracker for one product. Feed it every processed event (onEvent('*')). */
 export function createEffectTracker(product: ProductSlug) {
   const recent = new Map<string, Recent>()
   const seen = new Set<string>()
+  const byRoot = new Map<string, { targets: ProductSlug[]; body: Bi; focus: string | null; what: Bi }>()
 
   function remember(e: WorldEvent) {
     recent.set(e.id, {
@@ -124,34 +147,52 @@ export function createEffectTracker(product: ProductSlug) {
       remember(e)
       if (!e.depth || !e.causeId) return null
       const root = rootOf(recent.get(e.id)!)
-      if (!root || root.id === e.id || root.source !== product) return null
-      const target: ProductSlug | undefined = isProductSlug(e.source) && e.source !== product ? e.source : EFFECT_TARGET[e.type]
+      if (!root || root.id === e.id) return null
+      let target: ProductSlug | undefined
+      if (root.source === product) target = isProductSlug(e.source) && e.source !== product ? e.source : EFFECT_TARGET[e.type]
+      // a background root this product reacted to (e.g. the clock's rumor burst → Radar Isu detects the hoax)
+      else if (root.source === 'clock' && e.source === product) target = EFFECT_TARGET[e.type]
       if (!target || target === product) return null
       const k = `${root.id}>${target}`
       if (seen.has(k)) return null
       seen.add(k)
       const row = auditOf(s, e.id)
-      const rootRow = auditOf(s, root.id)
-      const name = PRODUCT_BY_SLUG[target].name
+      let acc = byRoot.get(root.id)
+      if (!acc) {
+        const name = PRODUCT_BY_SLUG[target].name
+        // a headline follow-up names the toast itself ("Klaster aduan …", "Indikasi hoaks …"), else the root does
+        const lead = HEADLINE.has(e.type) ? (recent.get(e.id) ?? root) : root
+        const leadRow = auditOf(s, lead.id)
+        acc = {
+          targets: [], body: row?.summary ?? { id: dict('id').openIn(name), en: dict('en').openIn(name) }, focus: refId(row?.entityRefs[0]),
+          what: { id: rootLabel(lead, 'id', leadRow?.summary.id ?? null), en: rootLabel(lead, 'en', leadRow?.summary.en ?? null) },
+        }
+        byRoot.set(root.id, acc)
+        if (byRoot.size > SHELL.recentEvents) {
+          const first = byRoot.keys().next().value
+          if (first !== undefined) byRoot.delete(first)
+        }
+      }
+      acc.targets.push(target)
+      const names = joinNames(acc.targets.map((t) => PRODUCT_BY_SLUG[t].name))
       return {
-        key: k,
+        key: root.id,
         rootId: root.id,
-        target,
+        target: acc.targets[0]!,
+        targets: [...acc.targets],
         title: {
-          id: dict('id').forwardedTo(rootLabel(root, 'id', rootRow?.summary.id ?? null), name),
-          en: dict('en').forwardedTo(rootLabel(root, 'en', rootRow?.summary.en ?? null), name),
+          id: dict('id').forwardedTo(acc.what.id, names),
+          en: dict('en').forwardedTo(acc.what.en, names),
         },
-        body: row?.summary ?? {
-          id: dict('id').openIn(name),
-          en: dict('en').openIn(name),
-        },
-        focus: refId(row?.entityRefs[0]),
+        body: acc.body,
+        focus: acc.focus,
       }
     },
     /** forget everything (world reset) */
     clear() {
       recent.clear()
       seen.clear()
+      byRoot.clear()
     },
   }
 }

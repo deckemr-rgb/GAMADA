@@ -18,6 +18,8 @@ const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
   'mention.created': [['id', 'mentions']],
   'flood.alert': [['id', 'alerts']],
   'eligibility.opened': [['id', 'programs']],
+  'citizen.notified': [['id', 'messages']],
+  'supply.signal': [['id', 'supplySignals']],
   'procurement.created': [['id', 'procurements', true]],
   'sale.created': [['id', 'sales', true]],
   'po.sent': [['id', 'purchaseOrders', true]],
@@ -48,4 +50,12 @@ export function createEvent<K extends EventType>(
   s: WorldState, seq: Seq, type: K, payload: EventMap[K], source: EventSource, at: Minutes, depth = 0, causeId: string | null = null,
 ): WorldEvent<K> {
   return { id: nextEventId(seq), type, at: Math.round(at), source, payload: prepare(s, seq, type, payload), depth, causeId }
+}
+
+/**
+ * Type guard for a processed event: `if (isEvent(e, 'complaint.created')) e.payload.channel` (Mission.done, onEvent('*')).
+ * WorldEvent's payload is the union of all payloads until the type is narrowed this way.
+ */
+export function isEvent<K extends EventType>(e: WorldEvent, type: K): e is WorldEvent<K> {
+  return e.type === type
 }

@@ -7,7 +7,7 @@ import type { LngLat, Minutes, Table, TableKey } from './types'
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
   /** bump when the generated shape changes → persisted worlds are regenerated */
-  version: 1,
+  version: 2,
   /** max entities per table (oldest dropped) */
   maxPerTable: 5000,
   /** max reaction chain depth (0 = emitted directly) */
@@ -23,6 +23,15 @@ export const WORLD = {
   floodDemandFactor: 4.4,
   /** debounce for IndexedDB saves */
   persistDebounceMs: 800,
+  /** hoax burst rule (Radar Isu): this many mentions of one rumor within `hoaxWindowMin` ⇒ hoax.detected */
+  hoaxBurstMin: 6,
+  hoaxWindowMin: 90,
+  /** the false narrative fires at 10:00 when natural events run (spec P4 step 2) */
+  hoaxAt: 10 * 60,
+  /** scenario key of that narrative (Mention.rumor / HoaxAlert.rumor) */
+  hoaxRumor: 'waduk-jebol',
+  /** post-flood harvest drop on flooded kecamatan (Siaga Wilayah "Pertanian", spec P5 step 5) */
+  harvestFloodDropPct: 28,
 } as const
 
 export const DAY_MIN = 1440
@@ -103,7 +112,7 @@ export const get = <T extends { id: string }>(t: Table<T>, id: string | null | u
 
 export const TABLE_KEYS: TableKey[] = [
   'citizens', 'complaints', 'tickets', 'clusters', 'bookings', 'briefings', 'instructions', 'letters', 'meetings', 'actionItems',
-  'mentions', 'hoaxAlerts', 'alerts', 'rainCells', 'programs', 'procurements', 'bidders', 'documents', 'verifications',
+  'mentions', 'hoaxAlerts', 'alerts', 'rainCells', 'programs', 'messages', 'facilities', 'harvests', 'supplySignals', 'gauges', 'procurements', 'bidders', 'documents', 'verifications',
   'businesses', 'outlets', 'products', 'sales', 'salesDaily', 'stock', 'purchaseOrders', 'suppliers', 'ledger', 'taxItems',
   'calls', 'chats', 'agentsSales', 'coachings', 'candidates', 'brandMentions', 'tenders', 'bids', 'catalogNeeds', 'matches',
   'orders', 'bizScores', 'loanApps', 'econIndex', 'prices', 'markets', 'marketOps', 'auditLog',

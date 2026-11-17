@@ -15,7 +15,7 @@ import { useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
-import { WORLD, clock, getSession, loadWorld, naturalEventsOn, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalEvents, setSession, subscribeSession, useSession, world } from '../world'
+import { WORLD, clock, emit, getSession, loadWorld, naturalEventsOn, onEvent, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
 import { switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
 import { ShellContext, type ShellApi } from './context'
@@ -206,6 +206,13 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
     }
   }, [interim])
 
+  /* ---------------------------------------------------------------- test hook */
+  // ?e2e=1 exposes the running world to Playwright (cross-product chain tests drive events without product UI)
+  useEffect(() => {
+    if (interim || typeof window === 'undefined' || new URLSearchParams(window.location.search).get('e2e') !== '1') return
+    ;(window as unknown as { __gamada?: unknown }).__gamada = { world, emit, settled, onEvent, clock }
+  }, [interim])
+
   /* ---------------------------------------------------------------- presenter */
   useIdleCursor(session.present)
   useEffect(() => {
@@ -261,6 +268,14 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
     },
     [slug],
   )
+  // missions can arrive after mount (routes/Demo.tsx reads them from the lazily loaded product module):
+  // apply the same first-open rule then
+  const hadGuide = useRef(hasGuide)
+  useEffect(() => {
+    if (!hasGuide || hadGuide.current) return
+    hadGuide.current = true
+    setGuideOpenState(!query.present && readFlag(`guide:${slug}`, typeof window !== 'undefined' && window.innerWidth >= SHELL.guideAutoOpenMin))
+  }, [hasGuide, query.present, slug])
   const [moreOpen, setMoreOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   // the palette chunk is fetched the first time it opens, then stays mounted (keeps its query between opens)

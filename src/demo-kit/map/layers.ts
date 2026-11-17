@@ -97,3 +97,23 @@ export function pointMarkers<T extends Located>(items: T[], f: (x: T) => { label
     return { id: x.id, coord: x.coord, icon: m.icon ?? 'pin', label: m.label, detail: m.detail, tone: m.tone ?? 'neutral' }
   })
 }
+
+/* ------------------------------------------------------------------ tahap 2 helpers */
+
+/** Facilities from the world (world/types Facility) as markers; simulated shelters say so in their tooltip. */
+export function facilityMarkers(
+  items: { id: string; name: string; kind: LandmarkKind; coord: LngLat; capacity: number; occupied: number; origin: 'pack' | 'simulasi' }[],
+  lang: Lang,
+): MarkerItem[] {
+  return items.map((f) => {
+    const st = LANDMARK_STYLE[f.kind]
+    const sim = f.origin === 'simulasi' ? (lang === 'id' ? ' · lokasi simulasi' : ' · simulated location') : ''
+    const cap = f.kind === 'pengungsian' && f.capacity ? ` · ${f.occupied}/${f.capacity} ${lang === 'id' ? 'jiwa' : 'people'}` : ''
+    return { id: f.id, coord: f.coord, icon: st.icon, label: f.name, detail: `${st.label[lang]}${cap}${sim}`, tone: f.kind === 'pengungsian' && f.occupied > 0 ? 'warn' : st.tone }
+  })
+}
+
+/** Active alerts (world/types Alert) as zones: level 1–2 warn, 3–4 danger; with desa ids when the alert has them. */
+export function alertZones(alerts: { kecamatanIds: string[]; desaIds: string[]; level: number; status: string }[]): { kecamatanIds: string[]; desaIds: string[]; tone: MapTone }[] {
+  return alerts.filter((a) => a.status === 'aktif').map((a) => ({ kecamatanIds: a.desaIds.length ? [] : a.kecamatanIds, desaIds: a.desaIds, tone: a.level >= 3 ? 'danger' : 'warn' }))
+}

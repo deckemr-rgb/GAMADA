@@ -20,3 +20,18 @@ export function fmt(n: number, lang: Lang, digits = 0): string {
   }
   return f.format(n)
 }
+
+/**
+ * Satellite imagery for the `imagery` layer: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (contains modified
+ * Copernicus Sentinel data 2016), CC BY 4.0, free, no API key. The 2016 mosaic is the CC BY edition (later years are
+ * CC BY-NC-SA). Owner confirmation pending (docs/build/tahap2-plan.md, owner questions). Lives here (not basemap.ts)
+ * so MapView can list it in the Sumber panel without pulling the engine-side basemap code.
+ */
+export const IMAGERY = {
+  tiles: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
+  maxzoom: 14,
+  name: 'Sentinel-2 cloudless 2016 · EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016)',
+  url: 'https://s2maps.eu',
+  license: 'CC BY 4.0',
+  attribution: '<a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless 2016</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)',
+} as const

@@ -1,0 +1,821 @@
+/* Naskah Pintar (P3) — page, Rapat tab, minutes, lanes, assistant. Prefix dk-np-. Tokens --dk-* only. */
+
+.dk-np {
+  display: grid;
+  gap: 12px;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+.dk-np-muted {
+  margin: 0;
+  color: var(--dk-muted);
+  font: 400 var(--dk-t13) var(--dk-font);
+}
+.dk-np-lead {
+  margin: 0;
+  color: var(--dk-muted);
+  font: 400 var(--dk-t14) var(--dk-font);
+}
+.dk-np-tablead {
+  margin-bottom: 12px;
+}
+.dk-np-empty {
+  margin: 0;
+  padding: 20px 4px;
+  color: var(--dk-faint);
+  font: 400 var(--dk-t13) var(--dk-font);
+}
+.dk-np-skel {
+  display: grid;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+/* instruction banner */
+.dk-np-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dk-line-act);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s1);
+  box-shadow: var(--dk-e2);
+}
+.dk-np-banner-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--dk-accent-16);
+  color: var(--dk-accent);
+}
+.dk-np-banner-txt {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font: 400 var(--dk-t13) var(--dk-font);
+}
+.dk-np-banner-txt b {
+  font: 600 var(--dk-t14) var(--dk-font);
+}
+.dk-np-banner-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* frame */
+.dk-np-frame .dk-bframe-body {
+  padding: 0;
+}
+.dk-np-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dk-np-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-tabs .dk-tablist {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--dk-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dk-np-tabs .dk-tabpanel {
+  padding: 16px 20px 24px;
+}
+.dk-np-tabs .dk-tabpanel:focus-visible {
+  outline: none;
+  box-shadow: inset var(--dk-focus);
+}
+.dk-np-rolenote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+
+/* ------------------------------------------------------------------ Rapat */
+.dk-np-meeting {
+  position: relative;
+  display: grid;
+  gap: 12px;
+}
+.dk-np-mhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dk-np-mtitle {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.dk-np-mtitle h2 {
+  margin: 0;
+  font: 400 clamp(22px, 2.4vw, 30px) / 1.15 var(--dk-font-display);
+  letter-spacing: -0.01em;
+}
+.dk-np-eyebrow {
+  color: var(--dk-accent);
+  font: 600 var(--dk-t12) var(--dk-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dk-np-mmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.dk-np-sim {
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.dk-np-time {
+  color: var(--dk-muted);
+  font: 600 var(--dk-t13) var(--dk-font);
+}
+.dk-np-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-rec {
+  margin-left: auto;
+}
+.dk-np-wave {
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+}
+.dk-np-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--dk-pos);
+  font: 600 var(--dk-t13) var(--dk-font);
+}
+
+.dk-np-mgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  grid-template-areas: 'tr min' 'lanes min';
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.dk-np-transcript {
+  grid-area: tr;
+}
+.dk-np-minutes {
+  grid-area: min;
+}
+.dk-np-lanescard {
+  grid-area: lanes;
+}
+.dk-np-mbody {
+  max-height: clamp(340px, calc(100vh - 430px), 760px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.dk-np-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s1);
+  box-shadow: var(--dk-e1);
+}
+.dk-np-card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+.dk-np-card-h h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 600 var(--dk-t14) var(--dk-font);
+}
+.dk-np-collapse {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dk-r-chip);
+  background: transparent;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) var(--dk-font);
+  cursor: pointer;
+}
+.dk-np-collapse:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+
+/* transcript */
+.dk-np-lines {
+  display: grid;
+  gap: 2px;
+  max-height: clamp(220px, calc(100vh - 640px), 520px);
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.dk-np-lines li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+/* the whole line (speaker + what was said) seeks the recording, not just the small time stamp: a big target */
+.dk-np-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.dk-np-lines li:hover {
+  background: var(--dk-s2);
+}
+.dk-np-lines li.is-cur:hover {
+  background: var(--dk-accent-12);
+}
+.dk-np-lines li.is-cur {
+  background: var(--dk-accent-12);
+}
+.dk-np-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dk-np-line:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+  border-radius: 4px;
+}
+.dk-np-line:hover .dk-np-ts {
+  color: var(--dk-accent);
+}
+.dk-np-ts {
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-who {
+  font: 700 var(--dk-t12) var(--dk-font);
+  letter-spacing: 0.02em;
+}
+.dk-np-said {
+  margin: 0;
+  font: 400 var(--dk-t14) var(--dk-font);
+}
+.dk-np-tr {
+  margin: 0;
+  color: var(--dk-muted);
+  font: 400 italic var(--dk-t13) var(--dk-font);
+}
+
+/* minutes */
+.dk-np-writing {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dk-accent);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-np-writing i,
+.dk-np-dots i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dk-np-dot 1.2s infinite ease-in-out;
+}
+.dk-np-writing i:nth-child(2),
+.dk-np-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dk-np-writing i:nth-child(3),
+.dk-np-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+  margin-right: 4px;
+}
+.dk-np-dots {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--dk-muted);
+}
+@keyframes dk-np-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.dk-np-mbody {
+  display: grid;
+  gap: 14px;
+}
+.dk-np-msec {
+  display: grid;
+  gap: 6px;
+}
+.dk-np-msec h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--dk-faint);
+  font: 700 var(--dk-t12) var(--dk-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dk-np-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-np-people li {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  overflow: hidden;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-pill);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-people i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dk-np-mline,
+.dk-np-bullets li,
+.dk-np-decisions li {
+  position: relative;
+  isolation: isolate;
+  margin: 0;
+  font: 400 var(--dk-t14) var(--dk-font);
+  border-radius: 6px;
+}
+.dk-np-bullets,
+.dk-np-decisions {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+.dk-np-decisions li::marker {
+  color: var(--dk-accent);
+  font-weight: 700;
+}
+.dk-np-acts {
+  display: grid;
+  font: 400 var(--dk-t13) var(--dk-font);
+}
+.dk-np-acts-r {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--dk-line);
+  border-radius: 6px;
+}
+.dk-np-acts-r.is-head {
+  padding-block: 4px 6px;
+  border-bottom-color: var(--dk-line-2);
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-np-acts-r.is-mine {
+  box-shadow: inset 2px 0 0 var(--dk-accent);
+}
+.dk-np-acts-task .dk-badge {
+  margin-left: 6px;
+}
+.dk-np-summary {
+  margin: 0;
+  font: 400 var(--dk-t14) / 1.55 var(--dk-font);
+  white-space: pre-line;
+}
+.dk-np-summary.is-streaming::after {
+  content: '▍';
+  margin-left: 2px;
+  color: var(--dk-accent);
+  animation: dk-np-caret 1s steps(2) infinite;
+}
+@keyframes dk-np-caret {
+  50% {
+    opacity: 0;
+  }
+}
+.dk-np-livecheck {
+  margin: 0;
+  color: var(--dk-accent);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+
+/* lanes */
+.dk-np-lanes {
+  display: grid;
+  gap: 8px;
+}
+.dk-np-lanes-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font: 400 var(--dk-t12) var(--dk-font);
+  color: var(--dk-faint);
+}
+.dk-np-lanes-h b {
+  color: var(--dk-text);
+  font: 600 var(--dk-t13) var(--dk-font);
+}
+.dk-np-lanes-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.dk-np-lane {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 92px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px dashed var(--dk-line-2);
+  border-radius: 10px;
+  background: var(--dk-bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dk-np-lane:hover {
+  border-color: var(--dk-line-act);
+  background: var(--dk-s2);
+}
+.dk-np-lane:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+.dk-np-lane.is-mine {
+  border-style: solid;
+  border-color: var(--dk-line-act);
+}
+.dk-np-lane-h {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-np-lane-h b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-np-lane-h span {
+  color: var(--dk-accent);
+}
+.dk-np-lane-list {
+  display: grid;
+  gap: 4px;
+}
+.dk-np-lchip {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  padding: 4px 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--dk-s2);
+  color: var(--dk-muted);
+  font: 500 11px/15px var(--dk-font);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.dk-np-ghost {
+  position: absolute;
+  z-index: 5;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-line-act);
+  border-radius: 10px;
+  background: var(--dk-s2);
+  box-shadow: var(--dk-e3);
+  color: var(--dk-text);
+  font: 600 var(--dk-t13) var(--dk-font);
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+
+/* recorder */
+.dk-np-recrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.dk-np-field {
+  display: grid;
+  gap: 4px;
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-np-field.is-block {
+  width: 100%;
+}
+.dk-np-textarea,
+.dk-np-input,
+.dk-np-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-bg);
+  color: var(--dk-text);
+  font: 400 var(--dk-t14) var(--dk-font);
+  resize: vertical;
+}
+.dk-np-select {
+  min-height: 36px;
+}
+.dk-np-textarea:focus-visible,
+.dk-np-input:focus-visible,
+.dk-np-select:focus-visible {
+  outline: none;
+  border-color: var(--dk-line-act);
+  box-shadow: var(--dk-focus);
+}
+.dk-np-listening {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--dk-accent);
+  font: 600 var(--dk-t13) var(--dk-font);
+}
+.dk-np-listening i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dk-danger);
+  animation: dk-np-caret 1s steps(2) infinite;
+}
+.dk-np-err {
+  margin: 0;
+  color: var(--dk-danger-ink);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-np-recout {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dk-line);
+}
+.dk-np-recacts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-np-recacts li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: 10px;
+  font: 400 var(--dk-t13) var(--dk-font);
+}
+.dk-np-recacts span {
+  color: var(--dk-muted);
+  font-size: 12px;
+}
+
+/* assistant */
+.dk-np-ask {
+  display: grid;
+  gap: 12px;
+}
+.dk-np-msgs {
+  display: grid;
+  gap: 10px;
+  max-height: 52vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.dk-np-msg {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--dk-s2);
+}
+.dk-np-msg.is-user {
+  justify-self: end;
+  max-width: 85%;
+  background: var(--dk-accent-16);
+}
+.dk-np-msg-who {
+  color: var(--dk-faint);
+  font: 700 11px/14px var(--dk-font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dk-np-msg-t {
+  margin: 0;
+  font: 400 var(--dk-t14) / 1.5 var(--dk-font);
+  white-space: pre-line;
+}
+.dk-np-msg-tr {
+  margin: 0;
+  color: var(--dk-muted);
+  font: 400 italic var(--dk-t12) var(--dk-font);
+}
+.dk-np-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+}
+.dk-np-steps code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--dk-bg);
+  color: var(--dk-muted);
+  font: 500 11px/16px ui-monospace, monospace;
+}
+.dk-np-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dk-np-askform {
+  display: flex;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ responsive */
+@media (max-width: 1100px) {
+  .dk-np-lanes-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 899px) {
+  .dk-np-mgrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'tr' 'min' 'lanes';
+    grid-template-rows: auto;
+  }
+  .dk-np-mbody {
+    max-height: 60vh;
+  }
+  .dk-np-collapse {
+    display: inline-flex;
+  }
+  .dk-np-lines {
+    max-height: 38vh;
+  }
+  .dk-np-rec {
+    margin-left: 0;
+  }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-np-collapse,
+  .dk-np-select,
+  .dk-np-input {
+    min-height: var(--dk-target);
+  }
+  .dk-np-lane {
+    min-height: var(--dk-target);
+  }
+}
+@media (max-width: 639px) {
+  .dk-np-tabs .dk-tablist {
+    padding: 0 8px;
+  }
+  .dk-np-tabs .dk-tabpanel {
+    padding: 12px 12px 20px;
+  }
+  .dk-np-banner {
+    flex-wrap: wrap;
+  }
+  .dk-np-unit > span {
+    display: none;
+  }
+  .dk-np-acts-r.is-head {
+    display: none;
+  }
+  .dk-np-acts-r {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+  .dk-np-acts-task {
+    grid-column: 1 / -1;
+    font-weight: 600;
+  }
+  .dk-np-acts-r [data-label]:not(:last-child)::before {
+    content: attr(data-label) ': ';
+    color: var(--dk-faint);
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-np-writing i,
+  .dk-np-dots i,
+  .dk-np-summary.is-streaming::after,
+  .dk-np-listening i {
+    animation: none;
+  }
+}
+html[data-dk-calm] .dk-np-writing i,
+html[data-dk-calm] .dk-np-dots i,
+html[data-dk-calm] .dk-np-summary.is-streaming::after {
+  animation: none;
+}
+
+/* first-action hotspot anchor inside the play button (see Meeting.tsx) */
+.dk-np-playbtn {
+  position: relative;
+}
+/* room for the hotspot ring on the right edge before the first play */
+.dk-np-playbtn.is-idle {
+  padding-right: 24px;
+}
+.dk-np-hs {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 14px;
+  pointer-events: none;
+}

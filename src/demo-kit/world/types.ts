@@ -167,6 +167,8 @@ export interface ActionItem {
   status: 'baru' | 'proses' | 'selesai'
   source: { kind: 'meeting' | 'instruction' | 'letter' | 'manual'; id: string | null }
   createdAt: Minutes
+  /** last "Kirim pengingat" (Naskah Pintar) */
+  remindedAt?: Minutes | null
 }
 
 export type Sentiment = 'negatif' | 'netral' | 'positif'
@@ -184,6 +186,8 @@ export interface Mention {
   topic: string
   reach: number
   hoaxId?: string
+  /** scenario key of a false narrative (e.g. 'waduk-jebol'); the hoax-burst reaction counts these */
+  rumor?: string
 }
 
 export interface HoaxAlert {
@@ -196,6 +200,8 @@ export interface HoaxAlert {
   accounts: string[]
   evidence: Bi | null
   topic: string
+  /** scenario key of the narrative (Mention.rumor) when it came from a burst */
+  rumor?: string
   status: 'aktif' | 'diklarifikasi'
   clarification: { at: Minutes; tone: 'tegas' | 'menenangkan' | 'informatif'; channels: string[] } | null
 }
@@ -211,7 +217,9 @@ export interface Alert {
   riverId: string | null
   expectedAt: Minutes | null
   status: 'aktif' | 'selesai'
-  broadcast: { at: Minutes; recipients: number; channels: string[] } | null
+  broadcast: { at: Minutes; recipients: number; channels: string[]; desaIds?: string[] } | null
+  /** citizen complaints (Sapa Warga) that confirm this alert on the ground ("Terkonfirmasi warga") */
+  confirmedBy?: string[]
 }
 
 export interface RainCell {
@@ -236,6 +244,87 @@ export interface Program {
   open: boolean
   openedAt: Minutes
   alertId: string | null
+}
+
+/** A message on a citizen's phone (Sapa Warga "HP Warga"): early warnings, ticket updates, queue tickets. */
+export interface CitizenMessage {
+  id: string
+  at: Minutes
+  kind: 'peringatan' | 'tiket' | 'antrean' | 'info'
+  /** recipients (citizen ids) — one row per broadcast, not per person */
+  to: string[]
+  text: Bi
+  refs: EntityRef[]
+  /** channel label shown on the phone */
+  channel: 'wa' | 'sms'
+}
+
+/** Important places: real ones from the pack (rs, puskesmas, sekolah, kantor, bendungan) + SIMULATED shelters. */
+export interface Facility {
+  id: string
+  name: string
+  kind: 'rs' | 'puskesmas' | 'sekolah' | 'kantor' | 'bendungan' | 'pengungsian' | 'mpp' | 'pasar' | 'pelabuhan'
+  coord: LngLat
+  kecamatanId: string | null
+  desaId: string | null
+  /** people (shelters) / beds (hospitals); simulated */
+  capacity: number
+  /** currently used (shelters fill after a flood alert); simulated */
+  occupied: number
+  /** 'pack' = real place from the region pack (name/location real); 'simulasi' = generated for the demo */
+  origin: 'pack' | 'simulasi'
+}
+
+/** Simulated harvest estimate per kecamatan × crop (Siaga Wilayah "Pertanian"). id = `${kecamatanId}:${crop}` */
+export interface Harvest {
+  id: string
+  kecamatanId: string
+  crop: 'padi' | 'jagung' | 'cabai' | 'bawang-merah'
+  /** commodity id in region.commodities this crop feeds (null when none) */
+  commodityId: string | null
+  areaHa: number
+  /** normal-season estimate (ton) */
+  baselineTon: number
+  /** current estimate (ton) */
+  estimateTon: number
+  /** 0..1 simulated vegetation health index (now) */
+  ndvi: number
+  /** 0..1 simulated vegetation health index of a normal season */
+  ndviBase: number
+  scenario: 'normal' | 'pasca-banjir'
+  updatedAt: Minutes
+}
+
+/** Supply signal for Sinyal Pasar (e.g. post-flood harvest drop → rice / chilli supply down). */
+export interface SupplySignal {
+  id: string
+  at: Minutes
+  commodityId: string
+  kecamatanIds: string[]
+  direction: 'turun' | 'naik'
+  /** expected supply change in % (negative = less supply) */
+  pct: number
+  horizonDays: number
+  reason: Bi
+  cause: EntityRef | null
+}
+
+/** Simulated water gauge (dam / river) — evidence for Radar Isu, context for Siaga Wilayah. */
+export interface WaterGauge {
+  id: string
+  /** real place name (dam / river from the pack); the readings are SIMULATED */
+  name: string
+  kind: 'waduk' | 'sungai'
+  coord: LngLat
+  kecamatanId: string | null
+  /** metres (simulated) */
+  level: number
+  normal: number
+  siaga: number
+  awas: number
+  /** hourly readings, oldest → newest, last 24 h (simulated) */
+  history: number[]
+  updatedAt: Minutes
 }
 
 /* ------------------------------------------------------------------ procurement */
@@ -273,6 +362,16 @@ export interface Procurement {
   /** stable scenario key (e.g. 'pompa-darurat') so reactions stay idempotent */
   key?: string
   alertId?: string | null
+  /** submitted prices (fictional) — 'harga-seragam' detector input */
+  bids?: { bidderId: string; price: number; at: Minutes }[]
+  /** winner of a finished package (history for the 'pemenang-berulang' detector) */
+  winnerId?: string | null
+  /** schedule: announcement → bid deadline in days ('jadwal-singkat' detector) */
+  scheduleDays?: number
+  /** technical spec text (may lock a brand — 'spesifikasi-merek' detector) */
+  spec?: Bi
+  /** Awas Belanja "Rekomendasikan" */
+  recommendation?: { at: Minutes; hpsCorrected: number; note: Bi; inviteLocal: boolean } | null
 }
 
 export interface Bidder {
@@ -719,6 +818,26 @@ export interface WorldMeta {
   competitors: string[]
   /** events processed since generation */
   processed: number
+  /** Sapa Warga personas → citizen ids (fictional characters of the script) */
+  personas: { siti: string; raka: string; darmo: string }
+  /** seeded facts the demos and tests can rely on (spec "cek lulus") */
+  facts: SeedFacts
+}
+
+/** Known numbers of the seeded world (Cek Berkas duplicate count, hoax scenario …). */
+export interface SeedFacts {
+  /** bansos-banjir applicant documents (KTP) */
+  bansosApplicants: number
+  /** pairs of applicants sharing one NIK */
+  bansosDuplicatePairs: number
+  /** applicants whose address lies outside the flood kecamatan of the scenario */
+  bansosOutsideZone: number
+  /** the specimen document that was digitally edited (tamper demo) */
+  tamperedDocumentId: string
+  /** the false narrative Radar Isu detects (rumor key, dam landmark name, gauge with the evidence) */
+  hoax: { rumor: string; damName: string; gaugeId: string }
+  /** bidders of the affiliated ring that bids on the emergency pump package */
+  pumpRingBidderIds: string[]
 }
 
 export interface WorldState {
@@ -743,6 +862,11 @@ export interface WorldState {
   alerts: Table<Alert>
   rainCells: Table<RainCell>
   programs: Table<Program>
+  messages: Table<CitizenMessage>
+  facilities: Table<Facility>
+  harvests: Table<Harvest>
+  supplySignals: Table<SupplySignal>
+  gauges: Table<WaterGauge>
   procurements: Table<Procurement>
   bidders: Table<Bidder>
   documents: Table<DocumentRec>
@@ -809,6 +933,8 @@ export interface EventMap {
   }
   'complaint.clustered': { clusterId?: string; category: ComplaintCategory; kecamatanId: string; desaId: string; center: LngLat; radiusKm: number; complaintIds: string[] }
   'ticket.statusChanged': { ticketId: string; status: TicketStatus; note?: string; rating?: number; opdId?: string }
+  /** a message reaches citizens' phones (alerts, ticket updates, queue tickets) */
+  'citizen.notified': { id?: string; to: string[]; kind: CitizenMessage['kind']; text: Bi; refs?: EntityRef[]; channel?: CitizenMessage['channel'] }
   'service.booked': { id?: string; code?: string; serviceId: string; citizenId?: string | null; slotAt: Minutes; channel?: Booking['channel'] }
   /* Meja Pimpinan */
   'briefing.generated': { id?: string; items: Briefing['items'] }
@@ -816,19 +942,28 @@ export interface EventMap {
   /* Naskah Pintar */
   'meeting.transcribed': { meetingId: string; summary?: Bi; durationMin?: number }
   'actionItem.created': { id?: string; title: Bi; opdId: string; pic?: string; dueAt: Minutes; source?: ActionItem['source'] }
+  'actionItem.statusChanged': { actionItemId: string; status: ActionItem['status'] }
+  /** "Kirim pengingat" to the person in charge (preview of a WA message) */
+  'actionItem.reminded': { actionItemId: string; channel: 'wa'; text?: Bi }
   'letter.dispositioned': { letterId?: string; subject?: Bi; to: string[]; note: Bi; by?: string; instructionId?: string }
   /* Radar Isu */
-  'hoax.detected': { id?: string; claim: Bi; score: number; spreadPerHour: number; accounts: string[]; evidence?: Bi | null; topic: string }
+  'hoax.detected': { id?: string; claim: Bi; score: number; spreadPerHour: number; accounts: string[]; evidence?: Bi | null; topic: string; rumor?: string }
   'clarification.published': { hoaxId: string; tone: 'tegas' | 'menenangkan' | 'informatif'; channels: string[] }
   'mention.created': Opt<Mention, 'id' | 'at'>
   /* Siaga Wilayah */
   'rain.forecast': { cells: Omit<RainCell, 'id' | 'at'>[]; horizonH: number; peakMmH: number; kecamatanIds: string[] }
   'flood.alert': { id?: string; level: Alert['level']; kecamatanIds: string[]; desaIds?: string[]; riverId?: string | null; title?: Bi; expectedAt?: Minutes | null }
-  'alert.broadcast': { alertId: string; channels: string[]; recipients?: number }
+  'alert.broadcast': { alertId: string; channels: string[]; recipients?: number; desaIds?: string[]; message?: Bi }
+  /** citizen flood complaints confirm a prediction / alert on the ground (Siaga Wilayah "Terkonfirmasi warga") */
+  'flood.confirmed': { alertId: string | null; clusterId: string; kecamatanId: string; complaintIds: string[] }
+  /** Dinas Pertanian scenario switch: harvest estimates for the given kecamatan */
+  'harvest.updated': { scenario: Harvest['scenario']; kecamatanIds: string[]; dropPct?: number; cause?: EntityRef | null }
   'eligibility.opened': { id?: string; kind: Program['kind']; kecamatanIds: string[]; quota: number; alertId: string | null }
   /* Awas Belanja · Cek Berkas */
   'procurement.created': Opt<Omit<Procurement, 'createdAt' | 'riskScore' | 'flagged' | 'findings'>, 'id' | 'code' | 'status'>
   'procurement.flagged': { procurementId: string; riskScore: number; findings: ProcurementFinding[] }
+  /** Awas Belanja "Rekomendasikan": corrected HPS (+ optionally invite local UMKM through Katalog Lokal) */
+  'procurement.recommended': { procurementId: string; hpsCorrected: number; note: Bi; inviteLocal: boolean }
   'document.verified': { documentId: string; status: DocumentRec['status']; notes?: Bi }
   /* Toko Autopilot */
   'sale.created': { id?: string; code?: string; outletId: string; items: SaleItem[]; payment: Sale['payment'] }
@@ -860,6 +995,7 @@ export interface EventMap {
   'econ.updated': { kecamatanId: string; month: string; index: number; delta: number; reason: Bi }
   'price.updated': { marketId: string; commodityId: string; price: number }
   'price.anomaly': { marketId: string; commodityId: string; price: number; expected: number; deltaPct: number }
+  'supply.signal': { id?: string; commodityId: string; kecamatanIds: string[]; direction: SupplySignal['direction']; pct: number; horizonDays: number; reason: Bi; cause?: EntityRef | null }
   'market.operation': { id?: string; stage: MarketOperation['stage']; commodityId: string; marketIds: string[]; reason?: Bi; effectPct?: number; forRole?: RoleId; cause?: EntityRef | null }
 }
 

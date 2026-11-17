@@ -23,7 +23,7 @@ import type { RegionPack } from '../region/types'
 import { Icon, ICON_NAMES } from '../ui/icons'
 import { IconButton } from '../ui/Button'
 import type { MapEngine } from './engine'
-import { BASEMAP_ATTRIBUTION_TEXT } from './strings'
+import { BASEMAP_ATTRIBUTION_TEXT, IMAGERY } from './strings'
 import type { LngLat, MapViewHandle, MapViewProps } from './types'
 import './map.css'
 
@@ -37,6 +37,7 @@ const S = {
   sources: { id: 'Sumber', en: 'Sources' },
   sourcesTitle: { id: 'Sumber data peta', en: 'Map data sources' },
   basemap: { id: 'Peta dasar', en: 'Basemap' },
+  imagery: { id: 'Citra satelit', en: 'Satellite imagery' },
   close: { id: 'Tutup', en: 'Close' },
   fullscreen: { id: 'Layar penuh', en: 'Full screen' },
   exitFullscreen: { id: 'Keluar layar penuh', en: 'Exit full screen' },
@@ -353,6 +354,15 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
                   <span className="dk-map-src-layer">{ms('basemap', lang)}</span>
                   {notice === 'noTiles' ? <span>{ms('noTiles', lang)}</span> : <span>{BASEMAP_ATTRIBUTION_TEXT}</span>}
                 </li>
+                {layers.some((l) => l.kind === 'imagery' && l.visible !== false) && (
+                  <li>
+                    <span className="dk-map-src-layer">{ms('imagery', lang)}</span>
+                    <a href={IMAGERY.url} target="_blank" rel="noopener noreferrer">
+                      {IMAGERY.name}
+                    </a>
+                    <span className="dk-map-src-lic">{IMAGERY.license}</span>
+                  </li>
+                )}
                 {pack.sources
                   .filter((s) => /^(kecamatan|desa|rivers|roads|landmarks|hazards|stats)/.test(s.layer))
                   .map((s) => (

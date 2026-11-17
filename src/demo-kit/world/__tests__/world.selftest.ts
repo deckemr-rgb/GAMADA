@@ -13,6 +13,11 @@ import { _onNaturalMinute, setNaturalEvents } from '../natural'
 import { clock } from '../clock'
 import { emit, loadWorld, onEvent, settled, world, exportWorld, importWorld, resetWorld } from '../store'
 import { complaintKpi, slaOnTimePct, tableCounts, auditFor, overdueActions, instructionSuggestions } from '../selectors'
+import {
+  actionBoard, affiliationEdges, alertRecipients, analyzeProcurement, bansosBatch, bansosCsv, briefingItems, citizenInbox, consoleTickets, floodScenarioAlert,
+  harvestValues, hoaxBurst, hpsVsMarket, instructionIdeas, kpiStrip, letterInbox, mentionsByHour, opdLeaderboard, opdScorecard, personas, sentimentSeries,
+  topicClusters, zoneCitizens,
+} from '../satu-daerah'
 import type { AnyFollowUp, EventSource, WorldEvent, WorldState } from '../types'
 import { makeRng } from '../rng'
 import { TABLE_KEYS, WORLD, distanceKm, offsetKm, rows } from '../util'
@@ -80,7 +85,7 @@ for (const { label, pack } of packs) {
   console.log(`  generated in ${ms.toFixed(0)} ms, ${(ja.length / 1024).toFixed(0)} KB`)
   checkTables(a, label)
   const c = tableCounts(a)
-  ok(c.citizens === 300, `≈300 citizens (${c.citizens})`)
+  ok(c.citizens === 303, `300 citizens + 3 personas (${c.citizens})`)
   ok(c.complaints === 140 && c.tickets === 140, `140 complaints + tickets (${c.complaints}/${c.tickets})`)
   ok(c.businesses === 120, `120 businesses (${c.businesses})`)
   ok(c.products >= 350 && c.products <= 450, `~400 SKUs (${c.products})`)
@@ -251,6 +256,191 @@ section('reactions')
   ok(complaintKpi(s, 720) === complaintKpi(s, 720), 'param selector memoised')
 }
 
+/* ------------------------------------------------------------------ 2b. tahap-2 chains (Satu Daerah) */
+for (const { label, pack } of packs) {
+  section(`tahap-2 cross-product chains — ${label}`)
+  let s = generateWorld(pack, 2026)
+  const seq: Seq = { ...s.meta.seq }
+  const flood = pack.scenario.floodKecamatanIds
+  const f = s.meta.facts
+  // seed facts
+  const P = personas(s)
+  ok(P.siti && P.raka && P.darmo, 'personas Ibu Siti / Raka / Pak Darmo exist')
+  ok(P.siti && flood.includes(P.siti.kecamatanId), 'Ibu Siti lives in a flood kecamatan')
+  ok(P.siti?.lang !== 'id' || pack.languages.regional.length === 0, 'Ibu Siti speaks the regional language')
+  ok(f.bansosApplicants === 50 && f.bansosDuplicatePairs === 3 && f.bansosOutsideZone > 0, `bansos facts: 50 applicants, 3 NIK pairs, ${f.bansosOutsideZone} outside the zone`)
+  ok(!!s.documents.byId[f.tamperedDocumentId]?.tampered, 'tampered specimen document known')
+  ok(rows(s.letters).some((l) => l.status === 'masuk' && l.scanned), 'an incoming letter looks like a crooked scan')
+  ok(rows(s.facilities).some((x) => x.kind === 'pengungsian' && x.origin === 'simulasi'), 'simulated shelters seeded')
+  ok(rows(s.harvests).length >= pack.kecamatan.length, `harvest estimate per kecamatan (${rows(s.harvests).length})`)
+  ok(f.pumpRingBidderIds.length >= 3, 'pump ring bidders known')
+  if (label !== 'mini fixture') {
+    ok(rows(s.facilities).some((x) => x.kind === 'rs' && x.origin === 'pack'), 'hospitals from the pack')
+    ok(!!f.hoax.damName && !!s.gauges.byId[f.hoax.gaugeId], `hoax dam gauge: ${f.hoax.damName}`)
+  }
+  ok(briefingItems(s, 420).length >= 6, `briefing at 07:00 has ≥ 6 items (${briefingItems(s, 420).length})`)
+
+  // C1 · 5 flood complaints within 1 km ⇒ cluster ⇒ Siaga Wilayah confirmation + Radar Isu topic
+  const desa = s.region.kecamatan.find((k) => k.id === flood[0])!.desa[2] ?? s.region.kecamatan.find((k) => k.id === flood[0])!.desa[0]!
+  let r: ReturnType<typeof run> | null = null
+  const all: WorldEvent[] = []
+  for (let i = 0; i < 5; i++) {
+    r = run(s, seq, 'complaint.created', { category: 'banjir', channel: 'wa', text: 'Banjir', kecamatanId: flood[0]!, desaId: desa.id, coord: offsetKm(desa.centroid, i * 0.08, 0.04), citizenId: s.meta.personas.siti }, 'sapa-warga', 430 + i)
+    s = r.state
+    all.push(...r.processed)
+  }
+  const t1 = all.map((e) => e.type)
+  ok(t1.includes('complaint.clustered'), 'C1 complaint.created ×5 ⇒ complaint.clustered')
+  ok(t1.includes('flood.confirmed'), 'C1 complaint.clustered ⇒ flood.confirmed (Siaga Wilayah)')
+  ok(all.some((e) => e.type === 'mention.created' && e.source === 'radar-isu'), 'C1 complaint.clustered ⇒ mention.created (Radar Isu topic)')
+  ok(all.filter((e) => e.type === 'complaint.clustered').every((e) => e.depth === 1), 'C1 cluster is a depth-1 follow-up of the 5th complaint')
+
+  // C2 · ticket status ⇒ citizen phone
+  const sitiComplaint = rows(s.complaints).find((c) => c.citizenId === s.meta.personas.siti)!
+  r = run(s, seq, 'ticket.statusChanged', { ticketId: sitiComplaint.ticketId, status: 'diteruskan', opdId: s.region.categoryOpd.banjir }, 'sapa-warga', 440)
+  s = r.state
+  ok(r.processed.some((e) => e.type === 'citizen.notified'), 'C2 ticket.statusChanged ⇒ citizen.notified')
+  ok(citizenInbox(s, s.meta.personas.siti).messages.some((m) => m.kind === 'tiket' && m.text.id.includes(sitiComplaint.code)), 'C2 the message is on Ibu Siti’s phone with the ticket number')
+
+  // C3–C5 · flood.alert ⇒ pump package (Awas Belanja) + bansos quota (Cek Berkas) + topic (Radar Isu) + stock + need
+  r = run(s, seq, 'flood.alert', floodScenarioAlert(s, 450), 'siaga-wilayah', 450)
+  s = r.state
+  const t3 = r.processed.map((e) => e.type)
+  for (const t of ['procurement.created', 'eligibility.opened', 'mention.created', 'stock.forecastChanged', 'need.created'] as const) ok(t3.includes(t), `C3–C5 flood.alert ⇒ ${t}`)
+  const pump = rows(s.procurements).find((p) => p.key === 'pompa-darurat')!
+  ok(pump && (pump.bids?.length ?? 0) === pump.bidderIds.length && !!pump.spec, 'C3 pump package carries bids + spec')
+  const an = analyzeProcurement(s, pump.id)
+  const lv = (d: string) => an.findings.find((x) => x.detector === d)?.level
+  ok(an.findings.length === 7 && an.findings.every((x) => x.note.id && x.note.en), 'C3 seven detectors, each with an explanation (ID + EN)')
+  ok(lv('harga-seragam') === 'tinggi' && lv('afiliasi') === 'tinggi' && lv('pemenang-berulang') === 'tinggi' && lv('spesifikasi-merek') === 'tinggi' && lv('hps-kemahalan') === 'tinggi', `C3 pump package findings: ${an.findings.map((x) => `${x.detector}=${x.level}`).join(' ')}`)
+  ok(lv('pemecahan-paket') === 'waspada', 'C3 split packages detected (waspada)')
+  ok(affiliationEdges(s, pump.id).some((e) => e.kinds.includes('direktur')) && affiliationEdges(s, pump.id).some((e) => e.kinds.includes('ip')), 'C3 affiliation edges: same director + same IP')
+  const hv = hpsVsMarket(s, pump.id)
+  ok(hv.hps === pump.hps && hv.devPct > 20 && an.findings.find((x) => x.detector === 'hps-kemahalan')!.note.id.includes(hv.devPct.toLocaleString('id-ID', { maximumFractionDigits: 1, minimumFractionDigits: 1 })), 'C3 memo number = table number (HPS deviation)')
+  r = run(s, seq, 'procurement.flagged', { procurementId: pump.id, ...an }, 'awas-belanja', 455)
+  s = r.state
+  ok(s.procurements.byId[pump.id]!.flagged, 'C3 procurement.flagged stored')
+  const batch = bansosBatch(s)
+  ok(batch.summary.total === 50 && batch.summary.gandaPairs === f.bansosDuplicatePairs && batch.duplicateGroups.every((g) => g.length === 2), `C4 bansos batch: ${batch.summary.gandaPairs} NIK pairs = seed`)
+  ok(batch.summary.luarZona === f.bansosOutsideZone, `C4 outside-zone check against the alert = seed (${batch.summary.luarZona})`)
+  ok(bansosCsv(batch, 'id').split('\n').length === 51, 'C4 CSV export: header + 50 rows')
+  ok(rows(s.facilities).some((x) => x.kind === 'pengungsian' && x.occupied > 0), 'flood.alert fills the shelters in the zone')
+
+  // C6 · alert.broadcast ⇒ citizen phones in the zone (Ibu Siti among them)
+  const alert = rows(s.alerts).find((a) => a.status === 'aktif' && a.kind === 'banjir')!
+  const rc = alertRecipients(s, alert.kecamatanIds)
+  ok(rc.filter((x) => x.kind === 'camat').length === alert.kecamatanIds.length && rc.some((x) => x.kind === 'kades' || x.kind === 'lurah'), `C6 recipients: camat + kades per desa (${rc.length})`)
+  r = run(s, seq, 'alert.broadcast', { alertId: alert.id, channels: ['wa', 'sms'] }, 'siaga-wilayah', 460)
+  s = r.state
+  const note = r.processed.find((e) => e.type === 'citizen.notified')
+  ok(!!note, 'C6 alert.broadcast ⇒ citizen.notified')
+  ok(citizenInbox(s, s.meta.personas.siti).messages.some((m) => m.kind === 'peringatan'), 'C6 Ibu Siti’s phone shows the warning')
+  ok(!citizenInbox(s, s.meta.personas.darmo).messages.some((m) => m.kind === 'peringatan') || flood.includes(P.darmo!.kecamatanId), 'C6 Pak Darmo (outside the zone) gets no warning')
+  ok(s.alerts.byId[alert.id]!.broadcast!.recipients === zoneCitizens(s, alert.kecamatanIds).length, 'C6 recipient count = citizens in the zone')
+
+  // C7 · instruction ⇒ Naskah Pintar disposition + OPD task
+  const idea = instructionIdeas(s, 470)[0]!
+  ok(!!idea, 'C7 instruction ideas from the briefing')
+  r = run(s, seq, 'instruction.issued', { text: idea.text, opdIds: idea.opdIds, refs: idea.refs }, 'meja-pimpinan', 470)
+  s = r.state
+  ok(r.processed.some((e) => e.type === 'letter.dispositioned') && r.processed.filter((e) => e.type === 'actionItem.created').length === idea.opdIds.length, 'C7 instruction.issued ⇒ letter.dispositioned + actionItem.created per OPD')
+  const ai = rows(s.actionItems)[0]!
+  r = run(s, seq, 'actionItem.reminded', { actionItemId: ai.id, channel: 'wa' }, 'naskah-pintar', 475)
+  s = r.state
+  ok(s.actionItems.byId[ai.id]!.remindedAt === 475, 'actionItem.reminded stored')
+
+  // C8 · hoax burst ⇒ hoax.detected (→ Meja Pimpinan toast) with Siaga Wilayah evidence
+  const burst = hoaxBurst(s, 600)
+  ok(burst.length === 8, 'C8 hoax burst = 8 posts')
+  let hoaxEvents: WorldEvent[] = []
+  for (const p of burst) {
+    r = run(s, seq, 'mention.created', p, 'radar-isu', 600)
+    s = r.state
+    hoaxEvents = hoaxEvents.concat(r.processed.filter((e) => e.type === 'hoax.detected'))
+  }
+  ok(hoaxEvents.length === 1 && hoaxEvents[0]!.source === 'radar-isu', 'C8 exactly one hoax.detected (source radar-isu)')
+  const hoax = rows(s.hoaxAlerts)[0]!
+  ok(hoax.rumor === f.hoax.rumor && !!hoax.evidence && (label === 'mini fixture' || hoax.evidence.id.includes(f.hoax.damName)), 'C8 evidence quotes the dam gauge')
+  ok(rows(s.mentions).filter((m) => m.rumor === f.hoax.rumor).every((m) => m.hoaxId === hoax.id || m.at > hoax.at), 'C8 rumor mentions linked to the hoax')
+  ok(hoaxBurst(s, 700).length === 0, 'C8 burst fires once')
+  ok(briefingItems(s, 630).some((b) => b.source === 'radar-isu' && b.refs[0] === `hoaxAlerts:${hoax.id}`), 'C8 the briefing carries the hoax')
+
+  // C9 · clarification ⇒ sentiment recovers within 30 world minutes
+  const before = sentimentSeries(s, 630, 6)
+  r = run(s, seq, 'clarification.published', { hoaxId: hoax.id, tone: 'menenangkan', channels: ['web', 'instagram', 'wa'] }, 'radar-isu', 630)
+  s = r.state
+  ok(r.processed.filter((e) => e.type === 'mention.created').length === 5, 'C9 clarification.published ⇒ 5 recovery mentions')
+  const after = sentimentSeries(s, 690, 6)
+  ok((after[after.length - 1]?.value ?? 0) > (before[before.length - 1]?.value ?? 0), `C9 sentiment line recovers (${before[before.length - 1]?.value} → ${after[after.length - 1]?.value})`)
+  ok(s.hoaxAlerts.byId[hoax.id]!.status === 'diklarifikasi', 'C9 hoax marked clarified')
+
+  // C10 · harvest drop ⇒ econ.updated (Indeks Ekonomi) + supply.signal (Sinyal Pasar)
+  const econBefore = s.econIndex.byId[`${flood[0]}:${s.day.slice(0, 7)}`]?.index
+  r = run(s, seq, 'harvest.updated', { scenario: 'pasca-banjir', kecamatanIds: flood, cause: `alerts:${alert.id}` }, 'siaga-wilayah', 700)
+  s = r.state
+  ok(r.processed.some((e) => e.type === 'econ.updated' && e.source === 'indeks-ekonomi'), 'C10 harvest.updated ⇒ econ.updated')
+  ok(r.processed.some((e) => e.type === 'supply.signal' && e.source === 'sinyal-pasar'), 'C10 harvest.updated ⇒ supply.signal')
+  ok(rows(s.supplySignals).some((x) => /beras/.test(x.commodityId) && x.pct < 0), 'C10 rice supply signal is negative')
+  ok(econBefore === undefined || s.econIndex.byId[`${flood[0]}:${s.day.slice(0, 7)}`]!.index < econBefore, 'C10 economic index of the flooded kecamatan drops')
+  ok(Object.values(harvestValues(s, 'change')).some((v) => v < 0), 'C10 harvest change choropleth has drops')
+
+  // C11 · Awas Belanja recommendation ⇒ Katalog Lokal need
+  r = run(s, seq, 'procurement.recommended', { procurementId: pump.id, hpsCorrected: hv.market, note: { id: 'Koreksi HPS ke median pasar', en: 'Correct HPS to the market median' }, inviteLocal: true }, 'awas-belanja', 710)
+  s = r.state
+  ok(r.processed.some((e) => e.type === 'need.created' && e.source === 'katalog-lokal'), 'C11 procurement.recommended ⇒ need.created (Katalog Lokal)')
+  ok(s.procurements.byId[pump.id]!.recommendation?.hpsCorrected === hv.market, 'C11 recommendation stored on the package')
+
+  // C12 · MPP booking ⇒ queue ticket on the phone
+  r = run(s, seq, 'service.booked', { serviceId: s.region.services[0]!.id, citizenId: s.meta.personas.raka, slotAt: 600 }, 'sapa-warga', 720)
+  s = r.state
+  ok(citizenInbox(s, s.meta.personas.raka).messages.some((m) => m.kind === 'antrean'), 'C12 service.booked ⇒ queue ticket on Raka’s phone')
+
+  // C13 · price anomaly ⇒ market operation (existing chain, still green)
+  const pp = rows(s.prices)[0]!
+  r = run(s, seq, 'price.anomaly', { marketId: pp.marketId, commodityId: pp.commodityId, price: Math.round(pp.price * 1.3), expected: pp.price, deltaPct: 30 }, 'sinyal-pasar', 730)
+  s = r.state
+  ok(r.processed.some((e) => e.type === 'market.operation'), 'C13 price.anomaly ⇒ market.operation')
+
+  // selectors for Meja Pimpinan / Radar Isu / Naskah Pintar
+  const k = kpiStrip(s, 740)
+  ok(k.alerts >= 1 && k.complaints.today >= 5 && k.serviceIndex > 0 && k.serviceIndex <= 100, 'kpiStrip: six numbers')
+  const lb = opdLeaderboard(s, 740)
+  ok(lb.length >= 5 && lb.every((x, i) => i === 0 || lb[i - 1]!.score >= x.score), `opdLeaderboard sorted (${lb.length} OPD)`)
+  ok(opdScorecard(s, lb[0]!.opdId, 740).trend.length === 30, 'opdScorecard: 30-day trend')
+  const items = briefingItems(s, 740)
+  ok(items.length >= 6 && new Set(items.map((x) => x.source)).size >= 6, `briefing: ${items.length} items from ${new Set(items.map((x) => x.source)).size} products`)
+  ok(items.every((x) => x.refs.every((rf) => { const [t, id] = rf.split(':'); return !!(s as unknown as Record<string, { byId: Record<string, unknown> }>)[t!]?.byId[id!] })), 'briefing: every ref points at a world entity')
+  ok(mentionsByHour(s, 740).length === 24 && topicClusters(s, 740).length > 0, 'mentionsByHour + topicClusters')
+  ok(kpiStrip(s, 740) === kpiStrip(s, 740) && mentionsByHour(s, 740) === mentionsByHour(s, 740) && sentimentSeries(s, 740) === sentimentSeries(s, 740) && bansosBatch(s) === bansosBatch(s) && harvestValues(s, 'change') === harvestValues(s, 'change'), 'time-keyed selectors are memoised (safe in useWorld)')
+  ok(actionBoard(s, 740).length > 0 && letterInbox(s)[0]?.status === 'masuk', 'actionBoard + letterInbox')
+  ok(consoleTickets(s, 740).length === s.tickets.ids.length, 'consoleTickets joins every ticket')
+  checkTables(s, `${label} after chains`)
+}
+
+/* ------------------------------------------------------------------ 2c. natural 10:00 hoax */
+section('natural events: the 10:00 hoax burst')
+{
+  let s = generateWorld(MINI_PACK, 2026)
+  const seq: Seq = { ...s.meta.seq }
+  const got: WorldEvent[] = []
+  for (let m = WORLD.hoaxAt - 1; m <= WORLD.hoaxAt + 30; m++) {
+    const fus = naturalEventsAt(s, m).filter((x) => x.type === 'mention.created' && (x.payload as { rumor?: string }).rumor)
+    for (const fu of fus) {
+      const r = run(s, seq, fu.type, fu.payload, fu.source, m)
+      s = r.state
+      got.push(...r.processed)
+    }
+  }
+  ok(got.filter((e) => e.type === 'mention.created').length === 8, 'clock emits the 8 posts from 10:00')
+  ok(got.filter((e) => e.type === 'hoax.detected').length === 1, 'clock burst ⇒ one hoax.detected')
+  // the whole burst in ONE batch ("Picu skenario" emits 8 mentions at once) still raises exactly one hoax
+  const s2 = generateWorld(MINI_PACK, 2026)
+  const seq2: Seq = { ...s2.meta.seq }
+  const evs = hoaxBurst(s2, 600).map((p) => createEvent(s2, seq2, 'mention.created', p, 'radar-isu', 600) as WorldEvent)
+  const r2 = processEvents(s2, seq2, evs)
+  ok(r2.processed.filter((e) => e.type === 'hoax.detected').length === 1, 'one batch of 8 burst posts ⇒ exactly one hoax.detected')
+}
+
 /* ------------------------------------------------------------------ 3. 1000 random events */
 section('1000 random events — invariants + determinism')
 function randomRun(seed: number) {
@@ -341,7 +531,7 @@ section('natural events')
 section('store')
 await (async () => {
   await loadWorld(MINI_PACK, 2026)
-  ok(world.status() === 'ready' && world.get().citizens.ids.length === 300, 'loadWorld (no IndexedDB in Node ⇒ generated)')
+  ok(world.status() === 'ready' && world.get().citizens.ids.length === 303, 'loadWorld (no IndexedDB in Node ⇒ generated)')
   let notifies = 0
   const unsub = world.subscribe(() => notifies++)
   const seen: string[] = []

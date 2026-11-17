@@ -1,0 +1,157 @@
+/* Naskah Pintar · official minutes on paper (lazy chunk). Paper theme tokens come from PaperFrame. */
+.dk-np-offwrap {
+  max-height: min(70vh, 900px);
+  overflow-y: auto;
+}
+.dk-np-off .dk-paper-sheet {
+  display: grid;
+  gap: 10px;
+  font: 400 13.5px/1.55 Georgia, 'Times New Roman', serif;
+  color: var(--dk-paper-ink);
+}
+.dk-np-off h3 {
+  margin: 10px 0 0;
+  font: 700 13.5px/1.4 Georgia, serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dk-np-kop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 3px double var(--dk-paper-ink);
+}
+.dk-np-kop > div {
+  flex: 1;
+  text-align: center;
+}
+.dk-np-kop p {
+  margin: 0;
+}
+.dk-np-emblem {
+  flex: none;
+  color: var(--dk-accent-paper);
+}
+.dk-np-kop1 {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.dk-np-kop2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.dk-np-kop3 {
+  color: var(--dk-paper-muted);
+  font-size: 12px;
+}
+.dk-np-offh {
+  margin: 6px 0 0;
+  font: 700 16px/1.3 Georgia, serif;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-decoration: underline;
+}
+.dk-np-offno {
+  margin: 0;
+  text-align: center;
+}
+.dk-np-offmeta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 6px 0 0;
+}
+.dk-np-offmeta > div {
+  display: contents;
+}
+.dk-np-offmeta dt::after {
+  content: ' :';
+}
+.dk-np-offmeta dd {
+  margin: 0;
+}
+.dk-np-offlist {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 22px;
+}
+.dk-np-offtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.dk-np-offtable th,
+.dk-np-offtable td {
+  padding: 5px 6px;
+  border: 1px solid rgba(31, 29, 43, 0.35);
+  text-align: left;
+  vertical-align: top;
+}
+.dk-np-offtable th {
+  background: rgba(31, 29, 43, 0.06);
+}
+.dk-np-offsum {
+  margin: 0;
+  text-align: justify;
+}
+.dk-np-signs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 18px;
+  text-align: center;
+}
+.dk-np-sign {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.dk-np-sign p {
+  margin: 0;
+}
+.dk-np-qr {
+  color: var(--dk-paper-ink);
+}
+.dk-np-esign {
+  color: var(--dk-paper-muted);
+  font: italic 11px/1.3 var(--dk-font);
+}
+.dk-np-signt {
+  font-weight: 700;
+  text-decoration: underline;
+}
+.dk-np-offfoot {
+  margin: 16px 0 0;
+  color: var(--dk-paper-muted);
+  font: 400 10px/1.4 var(--dk-font);
+  text-align: center;
+}
+@media (max-width: 639px) {
+  .dk-np-off .dk-paper-sheet {
+    font-size: 12.5px;
+  }
+  .dk-np-offmeta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dk-np-offmeta dt::after {
+    content: '';
+  }
+  .dk-np-offmeta dt {
+    font-weight: 700;
+  }
+  .dk-np-kop {
+    gap: 8px;
+  }
+  .dk-np-kop2 {
+    font-size: 15px;
+  }
+}
+@media print {
+  .dk-np-offwrap {
+    max-height: none;
+    overflow: visible;
+  }
+}

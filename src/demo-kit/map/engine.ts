@@ -24,8 +24,8 @@ import { labelPoint } from './labelPoint'
 import { HEAT_RAMP, labelInk, MAPC, TONE_BADGE } from './palette'
 import { defaultRainField } from './rain'
 import { RainLayer } from './rainLayer'
-import { fmt } from './strings'
-import type { ChoroplethLayer, FloodImpact, LngLat, MapLayer, MapTone, MarkerItem, RainCellInput } from './types'
+import { IMAGERY, fmt } from './strings'
+import type { ChoroplethLayer, FloodImpact, LngLat, MapLayer, MapTone, MarkerItem, RainCellInput, Zone } from './types'
 
 /** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
 const S = {
@@ -701,6 +701,14 @@ export class MapEngine {
           seen.add(s.id)
           this.applyRain(s.id, s.cells ?? defaultRainField(this.pack, s.seed ?? 1), on, s.animate !== false)
           break
+        case 'zones':
+          seen.add(s.id)
+          this.applyZones(s.id, s.zones, on)
+          break
+        case 'imagery':
+          seen.add(s.id)
+          this.applyImagery(s.id, s.opacity ?? 0.9, on)
+          break
       }
     }
     // a desa layer switched on by the user (not one that is on from the start) wants desa right away
@@ -746,6 +754,67 @@ export class MapEngine {
       const c = hid ? -2 : (r.classOf[k.id] ?? -9)
       this.map.setFeatureState({ source: IDS.kec, id: k.id }, { c, hid })
     }
+  }
+
+  /** warning / alert zones: fill + outline layers over the shared kecamatan / desa sources (filtered by id) */
+  private applyZones(id: string, zones: Zone[], on: boolean): void {
+    const base = `dk-zone-${id}`
+    const ids = { kec: [] as string[], desa: [] as string[] }
+    const colour = (key: 'kecamatanIds' | 'desaIds'): ExpressionSpecification | string => {
+      const m: unknown[] = ['match', ['get', 'id']]
+      const done = new Set<string>()
+      for (const z of zones)
+        for (const x of z[key] ?? []) {
+          if (done.has(x)) continue
+          done.add(x)
+          m.push(x, TONE_BADGE[z.tone][0])
+        }
+      ;(key === 'kecamatanIds' ? ids.kec : ids.desa).push(...done)
+      m.push('rgba(0,0,0,0)')
+      return done.size ? (m as ExpressionSpecification) : 'rgba(0,0,0,0)'
+    }
+    const kc = colour('kecamatanIds')
+    const dc = colour('desaIds')
+    const kf = ['in', ['get', 'id'], ['literal', ids.kec]] as ExpressionSpecification
+    const df = ['in', ['get', 'id'], ['literal', ids.desa]] as ExpressionSpecification
+    const layers = [`${base}-kf`, `${base}-kl`, `${base}-df`, `${base}-dl`]
+    if (!this.dynamic.has(id)) {
+      // no `source` in the entry: the kecamatan / desa sources are shared and must survive the layer's removal
+      this.dynamic.set(id, { kind: 'zones', layers })
+      this.addDynamicLayer(id, { id: layers[0]!, type: 'fill', source: IDS.kec, filter: kf, paint: { 'fill-color': kc, 'fill-opacity': 0.2 } })
+      this.addDynamicLayer(id, { id: layers[1]!, type: 'line', source: IDS.kec, filter: kf, paint: { 'line-color': kc, 'line-opacity': 0.9, 'line-width': 2 }, layout: { 'line-join': 'round' } })
+      this.addDynamicLayer(id, { id: layers[2]!, type: 'fill', source: IDS.desa, filter: df, paint: { 'fill-color': dc, 'fill-opacity': 0.24 } })
+      this.addDynamicLayer(id, { id: layers[3]!, type: 'line', source: IDS.desa, filter: df, paint: { 'line-color': dc, 'line-opacity': 0.85, 'line-width': 1.4 }, layout: { 'line-join': 'round' } })
+    } else {
+      const d = this.dynamic.get(id)!
+      if (d.data !== zones) {
+        this.map.setFilter(layers[0]!, kf)
+        this.map.setFilter(layers[1]!, kf)
+        this.map.setFilter(layers[2]!, df)
+        this.map.setFilter(layers[3]!, df)
+        this.map.setPaintProperty(layers[0]!, 'fill-color', kc)
+        this.map.setPaintProperty(layers[1]!, 'line-color', kc)
+        this.map.setPaintProperty(layers[2]!, 'fill-color', dc)
+        this.map.setPaintProperty(layers[3]!, 'line-color', dc)
+      }
+    }
+    this.dynamic.get(id)!.data = zones
+    this.setVis(layers, on)
+    if (on && ids.desa.length) this.requestDesa()
+  }
+
+  /** satellite imagery below the boundaries; the raster source is added the first time the layer is visible */
+  private applyImagery(id: string, opacity: number, on: boolean): void {
+    const src = `dk-img-src-${id}`
+    const lid = `dk-img-${id}`
+    if (!this.dynamic.has(id)) {
+      if (!on) return
+      this.map.addSource(src, { type: 'raster', tiles: [IMAGERY.tiles], tileSize: 256, maxzoom: IMAGERY.maxzoom, attribution: IMAGERY.attribution })
+      this.map.addLayer({ id: lid, type: 'raster', source: src, paint: { 'raster-opacity': opacity, 'raster-fade-duration': 0 } }, this.map.getLayer('dk-mask-fill') ? 'dk-mask-fill' : undefined)
+      this.dynamic.set(id, { kind: 'imagery', layers: [lid], source: src })
+    }
+    this.map.setPaintProperty(lid, 'raster-opacity', opacity)
+    this.setVis([lid], on)
   }
 
   private addDynamicLayer(id: string, layer: Parameters<MLMap['addLayer']>[0]): void {

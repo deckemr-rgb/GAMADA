@@ -21,7 +21,7 @@ import type { Config } from './config.js'
 import type { Budget } from './budget.js'
 import { billableTokens } from './budget.js'
 import { PROMPTS, EXTRACT_SYSTEM } from '../prompts/index.js'
-import type { ChatRequest, ExtractKind, Extracted, ProxyEvent, ToolName, AcceptedFileType } from './schemas.js'
+import type { ChatRequest, ExtractKind, Extracted, ProxyEvent, AcceptedFileType, ToolDef } from './schemas.js'
 import { ExtractionToolSchema, TOOLS, splitContext, toExtracted, toInputSchema, toolEvents } from './schemas.js'
 import type { ProductSlug } from './products.js'
 
@@ -55,18 +55,23 @@ export function stableStringify(v: unknown): string {
 }
 
 const toolCache = new Map<string, Anthropic.Tool>()
-function toolFor(name: ToolName): Anthropic.Tool {
-  let t = toolCache.get(name)
+function toolFor(def: ToolDef): Anthropic.Tool {
+  let t = toolCache.get(def.name)
   if (!t) {
-    const def = TOOLS[name]
     t = { name: def.name, description: def.description, input_schema: toInputSchema(def.schema) }
-    toolCache.set(name, t)
+    toolCache.set(def.name, t)
   }
   return t
 }
 
-export function toolNamesFor(product: ProductSlug): ToolName[] {
-  return [...PROMPTS[product].tools, 'suggest_followups']
+/** shared tools named in the product's prompt + its own custom tools (prompts/<slug>.ts) + suggest_followups */
+export function toolDefsFor(product: ProductSlug): ToolDef[] {
+  const p = PROMPTS[product]
+  return [...p.tools.map((n) => TOOLS[n]), ...p.customTools, TOOLS.suggest_followups]
+}
+
+export function toolNamesFor(product: ProductSlug): string[] {
+  return toolDefsFor(product).map((d) => d.name)
 }
 
 export function modelFor(cfg: Config, product: ProductSlug): { model: string; effort: Config['effortFast'] } {
@@ -116,7 +121,7 @@ export function buildChatParams(cfg: Config, req: ChatRequest) {
     model,
     max_tokens: cfg.maxOutputTokens,
     system,
-    tools: toolNamesFor(req.product).map(toolFor),
+    tools: toolDefsFor(req.product).map(toolFor),
     tool_choice: { type: 'auto' as const },
     messages,
     output_config: { effort },
@@ -155,7 +160,7 @@ export async function* runChat(
 ): AsyncGenerator<ProxyEvent, void> {
   const params = buildChatParams(cfg, req)
   run.model = params.model
-  const allowed = new Set<string>(toolNamesFor(req.product))
+  const allowed = new Map<string, ToolDef>(toolDefsFor(req.product).map((d) => [d.name, d]))
   let convo = params.messages
   let lastStop: string | null = null
 
@@ -183,7 +188,7 @@ export async function* runChat(
     let invalid = 0
     let onlyFollowups = true
     for (const tu of toolUses) {
-      const def = allowed.has(tu.name) ? TOOLS[tu.name as ToolName] : undefined
+      const def = allowed.get(tu.name)
       if (!def) {
         invalid++
         results.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: `Alat ${tu.name} tidak tersedia.` })

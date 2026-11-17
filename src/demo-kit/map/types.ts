@@ -107,8 +107,32 @@ export interface RainLayer extends LayerBase {
   animate?: boolean
 }
 
+/** One highlighted zone: kecamatan and/or desa ids painted in a tone (warnings, alert areas, selections). */
+export interface Zone {
+  kecamatanIds?: string[]
+  /** desa ids need the lazy desa polygons: a visible desa zone asks for them (or await handle.loadDesa()) */
+  desaIds?: string[]
+  tone: MapTone
+}
+/** Warning / alert zones over the real boundaries (fill 20 % + 2 px outline in the zone's tone). */
+export interface ZonesLayer extends LayerBase {
+  kind: 'zones'
+  zones: Zone[]
+}
+/**
+ * Satellite imagery under the boundaries (Siaga Wilayah "citra satelit"). Tiles are fetched only once the layer is
+ * visible. Source and licence: IMAGERY in map/basemap.ts (shown in the Sumber panel while visible).
+ */
+export interface ImageryLayer extends LayerBase {
+  kind: 'imagery'
+  /** 0..1, default 0.9 */
+  opacity?: number
+}
+
 export type MapLayer =
   | KecamatanLayer
+  | ZonesLayer
+  | ImageryLayer
   | DesaLayer
   | RiversLayer
   | RoadsLayer

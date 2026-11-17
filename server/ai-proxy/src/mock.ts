@@ -83,6 +83,27 @@ export const MOCK_STRUCTURED: Record<ToolName, Record<string, unknown>> = {
   econ_insight: { indicator: 'Indeks aktivitas usaha', trend: 'turun', explanation: 'Penurunan berkaitan dengan genangan di kecamatan pertanian bulan ini.', kecamatan: ['Kecamatan Contoh'] },
   price_alert: { commodity: 'Cabai rawit', market: 'Pasar Contoh', changePct: 23.5, horizonDays: 5, cause: 'Pasokan turun setelah banjir.', recommendation: 'Siapkan operasi pasar dan koordinasi pasokan dari daerah tetangga.' },
   plan_agents: { steps: [{ product: 'sapa-warga', action: 'Kumpulkan aduan banjir' }, { product: 'siaga-wilayah', action: 'Kirim peringatan dini' }, { product: 'katalog-lokal', action: 'Pesan karung pasir dari UMKM lokal' }] },
+  lookup_service: { serviceId: 'nib-oss', service: 'Nomor Induk Berusaha (NIB)', slaDays: 1, channel: 'online', office: 'Mal Pelayanan Publik', fee: 'Gratis', steps: ['Daftar akun OSS', 'Isi data usaha dan KBLI', 'Unduh NIB'] },
+  book_queue: { serviceId: 'nib-oss', service: 'Nomor Induk Berusaha (NIB)', slot: '09.30', date: 'Hari ini', office: 'Mal Pelayanan Publik' },
+  ticket_status: { ticketCode: 'SW-2026-0142', status: 'diteruskan', opd: 'BPBD', eta: 'Hari ini', note: 'Petugas sedang menuju lokasi.' },
+  compose_briefing: {
+    items: [
+      { title: '14 aduan masuk, terbanyak banjir', source: 'sapa-warga', detail: 'Klaster di satu desa.' },
+      { title: 'Hujan lebat siang ini', source: 'siaga-wilayah' },
+    ],
+    closing: 'Prioritas hari ini: penanganan genangan.',
+  },
+  analyze_topic: {
+    keywords: ['banjir', 'bendungan'],
+    periodDays: 7,
+    volumeTrend: 'naik',
+    sentiment: { negatif: 0.52, netral: 0.31, positif: 0.17 },
+    topics: [{ label: 'Kesiapsiagaan banjir', share: 0.46 }, { label: 'Kabar bendungan', share: 0.28 }],
+    quotes: ['Air mulai masuk rumah sejak subuh.'],
+    surveyQuestions: ['Dari mana Anda pertama kali mendengar kabar bendungan?'],
+  },
+  draft_audit_memo: { title: 'Memo audit paket pompa darurat', findings: ['HPS 52% di atas median pasar.', 'Tiga peserta berbagi direktur dan IP.'], hpsCorrected: 562000000, recommendations: ['Koreksi HPS ke median pasar.', 'Undang UMKM lokal sebagai pembanding.'], inviteLocal: true },
+  draft_reminder: { to: 'Kepala BPBD', message: 'Pengingat: tindak lanjut pengerahan pompa jatuh tempo hari ini pukul 14.00. Mohon kabari progresnya.', dueText: 'Hari ini 14.00' },
   suggest_followups: { chips: ['Lacak tiket', 'Syarat lain?'] },
 }
 

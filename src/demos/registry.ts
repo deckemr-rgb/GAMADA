@@ -1,32 +1,47 @@
 /**
- * demos/registry.ts — slug → lazy sandbox canvas (src/demos/<slug>/index.tsx, default export).
+ * demos/registry.ts — slug → lazy sandbox module (src/demos/<slug>/index.tsx).
  *
- * Tahap 1: every slug maps to src/demos/_placeholder (an honest "being built" panel). When a product lands in
- * tahap 2–4, replace its line with `() => import('./<slug>')` — nothing else changes: /demo/:slug, the tour
- * ("Ambil alih") and /lab all read this map.
+ * Product-module contract (tahap 2):
+ *   export default function Canvas(props: DemoCanvasProps)   // the sandbox, rendered inside <DemoShell>
+ *   export const missions: readonly Mission[]                 // optional: "Coba ini" guide (3–6)
+ *   export const hotspot: DemoShellProps['hotspot']           // optional: the one element to ring first
+ *   export const splitTabs: SplitStageProps                   // optional: split products (canvas is then ignored)
+ * routes/Demo.tsx loads the module once and hands the named exports to DemoShell (useDemoModule below).
+ *
+ * A product is shown to visitors only once DEMO_READY[slug] is set (the integrator flips it); until then /demo/:slug
+ * keeps the honest tahap-1 placeholder and the interim shell. `?controls=all` (dev server, or a build with
+ * VITE_DEMO_CONTROLS=1) opens the real module with the full live shell before the flip.
  */
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import { lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react'
 import type { EcoOrInti, ProductSlug } from '../content/products'
+import type { Mission } from '../demo-kit/shell/missions'
+import type { DemoShellProps } from '../demo-kit/shell/DemoShell'
+import type { SplitStageProps } from '../demo-kit/shell/SplitStage'
 
 /** Props every demo canvas receives from /demo/:slug (the shell supplies world, session, clock …). */
 export interface DemoCanvasProps {
   product: ProductSlug
 }
 
-export type DemoModule = { default: ComponentType<DemoCanvasProps> }
+export interface DemoModule {
+  default: ComponentType<DemoCanvasProps>
+  missions?: readonly Mission[]
+  hotspot?: DemoShellProps['hotspot']
+  splitTabs?: SplitStageProps
+}
 type DemoLoader = () => Promise<DemoModule>
 
 const placeholder: DemoLoader = () => import('./_placeholder')
 
 export const DEMOS: Record<ProductSlug, DemoLoader> = {
   inti: placeholder,
-  'sapa-warga': placeholder,
-  'meja-pimpinan': placeholder,
-  'naskah-pintar': placeholder,
-  'radar-isu': placeholder,
-  'siaga-wilayah': placeholder,
-  'awas-belanja': placeholder,
-  'cek-berkas': placeholder,
+  'sapa-warga': () => import('./sapa-warga'),
+  'meja-pimpinan': () => import('./meja-pimpinan'),
+  'naskah-pintar': () => import('./naskah-pintar'),
+  'radar-isu': () => import('./radar-isu'),
+  'siaga-wilayah': () => import('./siaga-wilayah'),
+  'awas-belanja': () => import('./awas-belanja'),
+  'cek-berkas': () => import('./cek-berkas'),
   'toko-autopilot': placeholder,
   'pajak-beres': placeholder,
   'juara-jualan': placeholder,
@@ -62,7 +77,40 @@ export function demoComponent(slug: ProductSlug): LazyExoticComponent<ComponentT
   return c
 }
 
+/** The tahap-1 placeholder canvas (shown for every product that is not DEMO_READY). */
+export const PlaceholderCanvas: LazyExoticComponent<ComponentType<DemoCanvasProps>> = lazy(placeholder)
+
 /** Start downloading a sandbox chunk (hover / focus on a "Coba demo" link); never rejects. */
 export function preloadDemo(slug: ProductSlug): void {
-  DEMOS[slug]().catch(() => undefined)
+  ;(DEMO_READY[slug] ? DEMOS[slug] : placeholder)().catch(() => undefined)
+}
+
+const loaded = new Map<ProductSlug, DemoModule>()
+/**
+ * The product module's named exports (missions, hotspot, splitTabs) for DemoShell. null while loading or when
+ * `slug` is null (placeholder). Shares the chunk with demoComponent (same import()).
+ */
+export function useDemoModule(slug: ProductSlug | null): DemoModule | null {
+  const [state, setState] = useState<{ slug: ProductSlug; mod: DemoModule } | null>(() => {
+    const m = slug ? loaded.get(slug) : undefined
+    return slug && m ? { slug, mod: m } : null
+  })
+  useEffect(() => {
+    if (!slug || loaded.has(slug)) {
+      if (slug && loaded.has(slug)) setState((s) => (s?.slug === slug ? s : { slug, mod: loaded.get(slug)! }))
+      return
+    }
+    let alive = true
+    DEMOS[slug]().then(
+      (m) => {
+        loaded.set(slug, m)
+        if (alive) setState({ slug, mod: m })
+      },
+      () => undefined, // the lazy canvas surfaces the error
+    )
+    return () => {
+      alive = false
+    }
+  }, [slug])
+  return slug && state?.slug === slug ? state.mod : null
 }

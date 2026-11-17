@@ -12,11 +12,13 @@ import type {
   Citizen, Coaching, Complaint, ComplaintCategory, DocumentRec, EconIndex, LedgerEntry, Letter, LngLat, LoanApp, Market, Match,
   Meeting, Mention, Minutes, Order, Outlet, PricePoint, Procurement, Product, PurchaseOrder, RegionRef, Sale, SaleItem, SalesAgent,
   SalesDay, ScoreFactor, StockLevel, Supplier, TableKey, TaxItem, Tender, Ticket, TicketStatus, Verification, WorldState,
+  Facility, Harvest, WaterGauge, SeedFacts,
 } from './types'
 import {
   ACTION_TPL, AGENT_TEAMS, BIZ_KINDS, BIZ_WORDS, BRAND_TEXT, CALL_CUSTOMERS, CANDIDATE_ROLES, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
   CATEGORY_SLA_DAYS, COMPANY_WORDS, COMPETITOR_BRANDS, COMPLAINT_TEXT, COMPLAINT_WEIGHTS, LENDERS, LETTER_TPL, MEDIA_OUTLETS,
   MEETING_PARTICIPANTS, MEETING_TPL, MENTION_TEXT, PROCUREMENT_TPL, SHOP_NAMES, SKILLS, SKUS, SOCIAL_HANDLES, TENDER_TPL,
+  PUMP_HISTORY, SPLIT_PACKAGES, PERSONAS,
   type SkuRow,
 } from './catalog'
 import { makeNamer, makeRng, mulberry32, hashString, streamRng, groupWeights, personName, type Rng } from './rng'
@@ -362,12 +364,45 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
       const status: Procurement['status'] = age > 40 ? 'selesai' : age > 25 ? 'kontrak' : age > 12 ? 'evaluasi' : 'pengumuman'
       const analysed = rp.chance(0.4)
       return {
-        id: nid('procurements'), code: `${year}-${pad(rp.int(1000, 9999), 4)}`, name: t.n, opdId: opdByHint(t.hint), hps,
+        id: '', code: `${year}-${pad(rp.int(1000, 9999), 4)}`, name: t.n, opdId: opdByHint(t.hint), hps,
         method: hps > 1_000_000_000 ? 'tender' : hps > 200_000_000 ? 'tender-cepat' : 'pengadaan-langsung', status,
         riskScore: analysed ? rp.int(8, 45) : null, flagged: false, findings: [], items, bidderIds: ids, createdAt: at,
         deadlineAt: at + rp.int(14, 30) * DAY_MIN, emergency: false,
+        winnerId: status === 'selesai' || status === 'kontrak' ? rp.pick(ids) : null,
+        bids: ids.map((b) => ({ bidderId: b, price: Math.round(hps * rp.float(0.86, 0.99) / 1000) * 1000, at: at + rp.int(3, 9) * DAY_MIN })),
       } satisfies Procurement
     })
+  for (const p of procurements) p.scheduleDays = Math.round((p.deadlineAt - p.createdAt) / DAY_MIN)
+  // history of the affiliated "pompa" ring: past emergency-equipment packages won in rotation (pemenang-berulang)
+  const pumpRing = bidders.filter((b) => b.ring === 'pompa')
+  const bpbdId = opdByHint(['bpbd'])
+  PUMP_HISTORY.forEach((h, i) => {
+    const at = -h.daysAgo * DAY_MIN + 9 * 60
+    const items = h.items.map(([nid_, nen, qty, unit, price]) => ({ name: { id: nid_, en: nen }, qty, unit, hpsPrice: price, marketPrice: Math.round(price * 0.74 / 1000) * 1000 }))
+    const hpsH = items.reduce((a, it) => a + it.hpsPrice * it.qty, 0)
+    const extra = bidders.filter((b) => !b.ring)[i]
+    const ids = [...pumpRing.map((b) => b.id), ...(extra ? [extra.id] : [])]
+    const winner = pumpRing[i % Math.max(1, pumpRing.length)]
+    procurements.push({
+      id: '', code: `${Number(year) - (h.daysAgo > 300 ? 1 : 0)}-${pad(rp.int(1000, 9999), 4)}`, name: h.n, opdId: bpbdId, hps: hpsH, method: 'darurat', status: 'selesai',
+      riskScore: null, flagged: false, findings: [], items, bidderIds: ids, createdAt: at, deadlineAt: at + 3 * DAY_MIN, emergency: true, scheduleDays: 3,
+      winnerId: winner?.id ?? null,
+      bids: ids.map((b, k) => ({ bidderId: b, price: Math.round(hpsH * (k < pumpRing.length ? 0.968 + k * 0.0012 : 0.9) / 1000) * 1000, at: at + 2 * DAY_MIN })),
+    })
+  })
+  // two small packages just under the direct-procurement ceiling, days apart (pemecahan-paket)
+  for (const sp of SPLIT_PACKAGES) {
+    const at = -sp.daysAgo * DAY_MIN + 10 * 60
+    const items = [{ name: sp.item, qty: sp.qty, unit: 'unit', hpsPrice: sp.unitPrice, marketPrice: Math.round(sp.unitPrice * 0.8 / 1000) * 1000 }]
+    const ids = bidders.filter((b) => !b.ring).slice(2, 4).map((b) => b.id)
+    procurements.push({
+      id: '', code: `${year}-${pad(rp.int(1000, 9999), 4)}`, name: sp.n, opdId: bpbdId, hps: sp.qty * sp.unitPrice, method: 'pengadaan-langsung', status: 'kontrak',
+      riskScore: null, flagged: false, findings: [], items, bidderIds: ids, createdAt: at, deadlineAt: at + 5 * DAY_MIN, emergency: false, scheduleDays: 5,
+      winnerId: ids[0] ?? null, bids: ids.map((b, k) => ({ bidderId: b, price: Math.round(sp.qty * sp.unitPrice * (0.97 + k * 0.01) / 1000) * 1000, at: at + 2 * DAY_MIN })),
+    })
+  }
+  procurements.sort((a, b) => a.createdAt - b.createdAt)
+  for (const p of procurements) p.id = nid('procurements')
 
   /* ---------------------------------------------------------------- businesses */
   const rz = S('businesses')
@@ -859,6 +894,98 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     return { ...a, id: nid('auditLog'), eventId: `E${pad(n, 6)}` }
   })
 
+  /* ---------------------------------------------------------------- tahap 2: personas, facilities, harvests, gauges */
+  // Sapa Warga personas (fictional script characters). Appended last so no other stream changes.
+  const rpe = S('personas')
+  const regional = pack.languages.regional[0] ?? null
+  const byPop = [...pack.kecamatan].sort((a, b) => b.population - a.population)
+  const town = byPop.find((k) => /dagang|jasa/i.test(k.mainSector)) ?? byPop[0]
+  const quiet = pack.kecamatan.find((k) => !floodSet.has(k.id) && k.id !== town?.id) ?? pack.kecamatan[0]
+  const personaAt = (kecId: string | undefined, desaId?: string) => {
+    const k = kecById.get(kecId ?? '') ?? region.kecamatan[0]!
+    const d = (desaId ? k.desa.find((x) => x.id === desaId) : undefined) ?? (k.desa.length ? rpe.pick(k.desa) : { id: k.id, name: k.name, centroid: k.centroid })
+    const kind = pack.kecamatan.find((x) => x.id === k.id)?.desa.find((x) => x.id === d.id)?.kind === 'kelurahan' ? 'Kel.' : 'Desa'
+    return { kecamatanId: k.id, desaId: d.id, address: `${kind} ${d.name}, Kec. ${k.name}`, coord: offsetKm(d.centroid, rpe.float(-0.15, 0.15), rpe.float(-0.15, 0.15)) }
+  }
+  const personaIds = { siti: '', raka: '', darmo: '' }
+  for (const def of PERSONAS) {
+    const pl = def.key === 'siti' ? personaAt(firstFlood.id, hotDesa?.id) : personaAt(def.key === 'raka' ? town?.id : quiet?.id)
+    const id = nid('citizens')
+    personaIds[def.key] = id
+    citizens.push({
+      id, name: def.name, gender: def.gender, age: def.age, group: 'jawa', ...pl, phone: `08${rpe.int(11, 99)}-xxxx-${pad(rpe.int(0, 9999), 4)}`,
+      lang: def.regional && regional ? (regional as Citizen['lang']) : 'id',
+    })
+  }
+
+  // facilities: real places from the pack + SIMULATED shelters in the flood kecamatan
+  const rfa = S('facilities')
+  const facilities: Facility[] = []
+  for (const l of pack.landmarks) {
+    if (l.kind === 'pasar') continue
+    const cap = l.kind === 'rs' ? rfa.int(8, 30) * 10 : l.kind === 'puskesmas' ? rfa.int(10, 30) : l.kind === 'sekolah' ? rfa.int(15, 40) * 10 : 0
+    facilities.push({ id: nid('facilities'), name: l.name, kind: l.kind, coord: roundCoord(l.coord), kecamatanId: l.kecamatanId ?? null, desaId: null, capacity: cap, occupied: l.kind === 'rs' ? Math.round(cap * rfa.float(0.55, 0.8)) : 0, origin: 'pack' })
+  }
+  for (const kid of floodKec) {
+    const k = kecById.get(kid)
+    if (!k) continue
+    const picks = k.desa.length > 2 ? [k.desa[1]!, k.desa[k.desa.length - 1]!] : k.desa.slice(0, 1)
+    for (const d of picks) {
+      facilities.push({ id: nid('facilities'), name: `Posko pengungsian Balai Desa ${d.name}`, kind: 'pengungsian', coord: offsetKm(d.centroid, 0.05, 0.05), kecamatanId: k.id, desaId: d.id, capacity: rfa.int(12, 30) * 10, occupied: 0, origin: 'simulasi' })
+    }
+  }
+
+  // harvest estimates per kecamatan (SIMULATED): rice everywhere, maize in upland, chilli / shallot in some
+  const rh = S('harvests')
+  const commodityLike = (re: RegExp) => region.commodities.find((c) => re.test(c.id))?.id ?? null
+  const crops: { crop: Harvest['crop']; commodity: string | null; tPerHa: [number, number] }[] = [
+    { crop: 'padi', commodity: commodityLike(/beras/), tPerHa: [5.2, 6.4] },
+    { crop: 'jagung', commodity: null, tPerHa: [5.0, 6.8] },
+    { crop: 'cabai', commodity: commodityLike(/^cabai-merah/) ?? commodityLike(/cabai/), tPerHa: [7, 11] },
+    { crop: 'bawang-merah', commodity: commodityLike(/bawang-merah/), tPerHa: [8, 11] },
+  ]
+  const harvests: Harvest[] = []
+  for (const k of pack.kecamatan) {
+    const farm = /tani|pertanian/i.test(k.mainSector) ? 1 : 0.35
+    const upland = /hutan/i.test(k.mainSector)
+    for (const c of crops) {
+      if (c.crop === 'jagung' && !upland && !rh.chance(0.35)) continue
+      if (c.crop === 'cabai' && !rh.chance(0.4)) continue
+      if (c.crop === 'bawang-merah' && !rh.chance(0.15)) continue
+      const share = c.crop === 'padi' ? 1 : c.crop === 'jagung' ? 0.5 : 0.04
+      const areaHa = roundTo(k.population * 0.06 * farm * share * rh.float(0.7, 1.3), 10)
+      if (areaHa <= 0) continue
+      const baselineTon = roundTo(areaHa * rh.float(c.tPerHa[0], c.tPerHa[1]), 10)
+      const ndviBase = round(rh.float(0.62, 0.84), 2)
+      harvests.push({ id: `${k.id}:${c.crop}`, kecamatanId: k.id, crop: c.crop, commodityId: c.commodity, areaHa, baselineTon, estimateTon: baselineTon, ndvi: ndviBase, ndviBase, scenario: 'normal', updatedAt: -DAY_MIN })
+    }
+  }
+
+  // water gauges (SIMULATED readings at real places): the scenario dam (hoax evidence) + the flood river
+  const rw = S('gauges')
+  const gauges: WaterGauge[] = []
+  const dam = pack.landmarks.find((l) => l.id === pack.scenario.damLandmarkId) ?? pack.landmarks.find((l) => l.kind === 'bendungan')
+  const hist = (base: number, drift: number, noise: number) => Array.from({ length: 24 }, (_, i) => round(base + drift * (i / 23) + rw.normal(0, noise), 2))
+  if (dam) {
+    const h = hist(8.4, 0.25, 0.03)
+    gauges.push({ id: nid('gauges'), name: dam.name, kind: 'waduk', coord: roundCoord(dam.coord), kecamatanId: dam.kecamatanId ?? null, level: h[h.length - 1]!, normal: 9, siaga: 11.5, awas: 13, history: h, updatedAt: 6 * 60 })
+  }
+  const river = pack.rivers.find((r) => r.id === pack.scenario.floodRiverId) ?? pack.rivers[0]
+  if (river) {
+    const at = kecById.get(floodKec[0]!)?.centroid ?? region.kecamatan[0]!.centroid
+    const h = hist(11.6, 2.1, 0.05)
+    gauges.push({ id: nid('gauges'), name: `${river.name} · pos ${region.shortName}`, kind: 'sungai', coord: at, kecamatanId: floodKec[0] ?? null, level: h[h.length - 1]!, normal: 12, siaga: 14, awas: 15.5, history: h, updatedAt: 6 * 60 })
+  }
+
+  const facts: SeedFacts = {
+    bansosApplicants: registrants.length,
+    bansosDuplicatePairs: 3,
+    bansosOutsideZone: registrants.filter((c) => !floodSet.has(c.kecamatanId)).length,
+    tamperedDocumentId: documents.find((d) => d.tampered)?.id ?? '',
+    hoax: { rumor: WORLD.hoaxRumor, damName: dam?.name ?? '', gaugeId: gauges.find((g) => g.kind === 'waduk')?.id ?? '' },
+    pumpRingBidderIds: pumpRing.map((b) => b.id),
+  }
+
   /* ---------------------------------------------------------------- assemble */
   const byAt = <T extends { at: number }>(r: T) => r.at
   const rev = <T>(a: T[]) => [...a].reverse()
@@ -867,7 +994,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     seed,
     day,
     region,
-    meta: { version: WORLD.version, seq, shopId: shop.id, competitors: [...COMPETITOR_BRANDS], processed: 0 },
+    meta: { version: WORLD.version, seq, shopId: shop.id, competitors: [...COMPETITOR_BRANDS], processed: 0, personas: personaIds, facts },
     citizens: tableFrom(rev(citizens)),
     complaints: tableFrom(complaints, byAt),
     tickets: tableFrom(tickets, (t) => t.createdAt),
@@ -883,6 +1010,11 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     alerts: tableFrom(alerts, byAt),
     rainCells: emptyTable(),
     programs: emptyTable(),
+    messages: emptyTable(),
+    facilities: tableFrom(rev(facilities)),
+    harvests: tableFrom(rev(harvests)),
+    supplySignals: emptyTable(),
+    gauges: tableFrom(rev(gauges)),
     procurements: tableFrom(procurements, (p) => p.createdAt),
     bidders: tableFrom(rev(bidders)),
     documents: tableFrom(documents, byAt),

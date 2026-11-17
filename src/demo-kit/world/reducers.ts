@@ -5,7 +5,7 @@
  */
 import type { Alert, EventType, Instruction, LngLat, MarketOperation, Program, Sale, SalesDay, Ticket, WorldEvent, WorldState } from './types'
 import { CATEGORY_SLA_DAYS, CATEGORY_LABEL } from './texts'
-import { DAY_MIN, centroid, get, monthOf, patch, patchMany, upsert } from './util'
+import { DAY_MIN, WORLD, centroid, get, monthOf, patch, patchMany, upsert } from './util'
 
 export type Reducer<K extends EventType> = (s: WorldState, e: WorldEvent<K>) => WorldState
 export type ReducerMap = { [K in EventType]?: Reducer<K> }
@@ -57,6 +57,11 @@ export const REDUCERS: ReducerMap = {
       })),
     }
   },
+  'citizen.notified': (s, e) => {
+    const p = e.payload
+    if (!p.to.length) return s
+    return { ...s, messages: upsert(s.messages, { id: must(p.id, 'message id'), at: e.at, kind: p.kind, to: p.to, text: p.text, refs: p.refs ?? [], channel: p.channel ?? 'wa' }) }
+  },
   'service.booked': (s, e) => {
     const p = e.payload
     const id = must(p.id, 'booking id')
@@ -96,6 +101,11 @@ export const REDUCERS: ReducerMap = {
     if (source.kind === 'instruction' && source.id) next = { ...next, instructions: patch(next.instructions, source.id, (m) => ({ ...m, actionItemIds: [...m.actionItemIds, id] })) }
     return next
   },
+  'actionItem.statusChanged': (s, e) => ({
+    ...s,
+    actionItems: patch(s.actionItems, e.payload.actionItemId, (a) => (a.status === e.payload.status ? a : { ...a, status: e.payload.status })),
+  }),
+  'actionItem.reminded': (s, e) => ({ ...s, actionItems: patch(s.actionItems, e.payload.actionItemId, (a) => ({ ...a, remindedAt: e.at })) }),
   'letter.dispositioned': (s, e) => {
     const p = e.payload
     const id = must(p.letterId, 'letter id')
@@ -119,8 +129,9 @@ export const REDUCERS: ReducerMap = {
       ...s,
       hoaxAlerts: upsert(s.hoaxAlerts, {
         id: must(p.id, 'hoax id'), at: e.at, claim: p.claim, score: p.score, spreadPerHour: p.spreadPerHour, accounts: p.accounts, evidence: p.evidence ?? null,
-        topic: p.topic, status: 'aktif', clarification: null,
+        topic: p.topic, status: 'aktif', clarification: null, ...(p.rumor ? { rumor: p.rumor } : {}),
       }),
+      mentions: p.rumor ? patchMany(s.mentions, s.mentions.ids.filter((id) => s.mentions.byId[id]?.rumor === p.rumor && !s.mentions.byId[id]?.hoaxId), (m) => ({ ...m, hoaxId: p.id })) : s.mentions,
     }
   },
   'clarification.published': (s, e) => ({
@@ -145,14 +156,46 @@ export const REDUCERS: ReducerMap = {
       expectedAt: p.expectedAt ?? null, status: 'aktif', broadcast: null,
       title: p.title ?? { id: `Peringatan banjir level ${p.level} — Kec. ${names}`, en: `Flood warning level ${p.level} — ${names}` },
     }
-    return { ...s, alerts: upsert(s.alerts, alert) }
+    const zone = new Set(p.kecamatanIds)
+    const shelters = s.facilities.ids.filter((id) => {
+      const f = s.facilities.byId[id]
+      return !!f && f.kind === 'pengungsian' && zone.has(f.kecamatanId ?? '') && f.occupied === 0
+    })
+    return {
+      ...s,
+      alerts: upsert(s.alerts, alert),
+      facilities: patchMany(s.facilities, shelters, (f) => ({ ...f, occupied: Math.round(f.capacity * (0.15 + 0.1 * p.level)) })),
+    }
   },
   'alert.broadcast': (s, e) => {
     const a = s.alerts.byId[e.payload.alertId]
     if (!a) return s
     const zone = new Set(a.kecamatanIds)
     const recipients = e.payload.recipients ?? s.citizens.ids.reduce((n, id) => (zone.has(s.citizens.byId[id]?.kecamatanId ?? '') ? n + 1 : n), 0)
-    return { ...s, alerts: patch(s.alerts, a.id, (x) => ({ ...x, broadcast: { at: e.at, recipients, channels: e.payload.channels } })) }
+    const desaIds = e.payload.desaIds ?? a.desaIds
+    return { ...s, alerts: patch(s.alerts, a.id, (x) => ({ ...x, broadcast: { at: e.at, recipients, channels: e.payload.channels, ...(desaIds.length ? { desaIds } : {}) } })) }
+  },
+  'flood.confirmed': (s, e) => {
+    const p = e.payload
+    const ids = p.alertId ? [p.alertId] : s.alerts.ids.filter((id) => {
+      const a = s.alerts.byId[id]
+      return !!a && a.status === 'aktif' && a.kind === 'banjir' && a.kecamatanIds.includes(p.kecamatanId)
+    })
+    return { ...s, alerts: patchMany(s.alerts, ids, (a) => ({ ...a, confirmedBy: [...new Set([...(a.confirmedBy ?? []), ...p.complaintIds])] })) }
+  },
+  'harvest.updated': (s, e) => {
+    const p = e.payload
+    const kec = new Set(p.kecamatanIds)
+    const drop = p.scenario === 'pasca-banjir' ? (p.dropPct ?? WORLD.harvestFloodDropPct) / 100 : 0
+    const ids = s.harvests.ids.filter((id) => kec.has(s.harvests.byId[id]?.kecamatanId ?? ''))
+    return {
+      ...s,
+      harvests: patchMany(s.harvests, ids, (h) => ({
+        ...h, scenario: p.scenario, updatedAt: e.at,
+        estimateTon: Math.round(h.baselineTon * (1 - drop * (h.crop === 'cabai' || h.crop === 'bawang-merah' ? 1.2 : 1))),
+        ndvi: p.scenario === 'pasca-banjir' ? Math.round(Math.max(0.12, h.ndviBase * (1 - drop * 1.3)) * 100) / 100 : h.ndviBase,
+      })),
+    }
   },
   'eligibility.opened': (s, e) => {
     const p = e.payload
@@ -177,6 +220,10 @@ export const REDUCERS: ReducerMap = {
   'procurement.flagged': (s, e) => ({
     ...s,
     procurements: patch(s.procurements, e.payload.procurementId, (p) => ({ ...p, riskScore: e.payload.riskScore, flagged: true, findings: e.payload.findings })),
+  }),
+  'procurement.recommended': (s, e) => ({
+    ...s,
+    procurements: patch(s.procurements, e.payload.procurementId, (p) => ({ ...p, recommendation: { at: e.at, hpsCorrected: e.payload.hpsCorrected, note: e.payload.note, inviteLocal: e.payload.inviteLocal } })),
   }),
   'document.verified': (s, e) => {
     const d = s.documents.byId[e.payload.documentId]
@@ -331,6 +378,13 @@ export const REDUCERS: ReducerMap = {
   },
   'price.updated': (s, e) => ({ ...s, prices: patch(s.prices, `${e.payload.marketId}:${e.payload.commodityId}`, (x) => ({ ...x, price: e.payload.price, updatedAt: e.at })) }),
   'price.anomaly': (s, e) => ({ ...s, prices: patch(s.prices, `${e.payload.marketId}:${e.payload.commodityId}`, (x) => ({ ...x, price: e.payload.price, anomaly: true, updatedAt: e.at })) }),
+  'supply.signal': (s, e) => {
+    const p = e.payload
+    return {
+      ...s,
+      supplySignals: upsert(s.supplySignals, { id: must(p.id, 'supply signal id'), at: e.at, commodityId: p.commodityId, kecamatanIds: p.kecamatanIds, direction: p.direction, pct: p.pct, horizonDays: p.horizonDays, reason: p.reason, cause: p.cause ?? null }),
+    }
+  },
   'market.operation': (s, e) => {
     const p = e.payload
     const id = must(p.id, 'market op id')

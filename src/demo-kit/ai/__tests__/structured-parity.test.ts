@@ -64,7 +64,7 @@ async function main() {
   const serverKinds = [...server.STRUCTURED_KINDS].sort()
   const siteKinds = [...STRUCTURED_KINDS].sort()
   assert(JSON.stringify(serverKinds) === JSON.stringify(siteKinds), `kinds differ:\n server ${serverKinds}\n site   ${siteKinds}`)
-  assert(siteKinds.length === 24, `24 kinds (${siteKinds.length})`)
+  assert(siteKinds.length === 31, `31 kinds (${siteKinds.length})`)
   console.log(`kinds: ${siteKinds.length} on both sides OK`)
 
   // 2. same shape per kind

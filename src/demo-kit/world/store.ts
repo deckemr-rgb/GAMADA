@@ -29,7 +29,10 @@ export function emptyWorld(): WorldState {
       id: '', name: '', shortName: '', opd: [], kecamatan: [], commodities: [], services: [], floodKecamatanIds: [], floodRiverId: '', shopMarketId: '',
       categoryOpd: { banjir: '', 'jalan-rusak': '', sampah: '', pju: '', 'air-bersih': '', 'pohon-tumbang': '', pungli: '', kesehatan: '', sekolah: '', adminduk: '', bansos: '', lainnya: '' },
     },
-    meta: { version: WORLD.version, seq: {}, shopId: '', competitors: [], processed: 0 },
+    meta: {
+      version: WORLD.version, seq: {}, shopId: '', competitors: [], processed: 0, personas: { siti: '', raka: '', darmo: '' },
+      facts: { bansosApplicants: 0, bansosDuplicatePairs: 0, bansosOutsideZone: 0, tamperedDocumentId: '', hoax: { rumor: '', damName: '', gaugeId: '' }, pumpRingBidderIds: [] },
+    },
     ...tables,
   }
 }

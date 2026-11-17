@@ -94,4 +94,14 @@ export const PUMP_PACKAGE = {
     { name: { id: 'Genset 10 kVA', en: '10 kVA generator' }, qty: 4, unit: 'unit', hpsPrice: 62_000_000, marketPrice: 47_500_000 },
     { name: { id: 'Bahan bakar solar (7 hari)', en: 'Diesel fuel (7 days)' }, qty: 3000, unit: 'liter', hpsPrice: 13_900, marketPrice: 12_900 },
   ],
+  /** announcement → deadline (days): short for its size (jadwal-singkat) */
+  scheduleDays: 3,
+  /** brand-locked spec without "atau setara" (spesifikasi-merek); "Hidroflo" is a FICTIONAL brand */
+  spec: {
+    id: 'Pompa wajib merek Hidroflo seri HX-600 (tidak menerima merek lain), mesin diesel 4 tak, debit minimal 3.000 liter/menit, garansi 1 tahun.',
+    en: 'Pumps must be Hidroflo HX-600 series (no other brand accepted), 4-stroke diesel engine, at least 3,000 litres/minute, 1-year warranty.',
+  },
+  /** bid price as a share of HPS: ring members nearly identical (harga-seragam), independents spread */
+  ringBid: [0.9641, 0.9652, 0.9660, 0.9671],
+  independentBid: [0.874, 1.012],
 }

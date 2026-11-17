@@ -291,3 +291,65 @@ which leaves a product ≈ 35–60 KB of its own.
 - `vite.config.ts` `codeSplitting.groups` keep the always-loaded home core in two files (`vendor`: react,
   react-dom, scheduler, react-router, preload-helper; `motion`: gsap core and plugins except Draggable/Inertia,
   lenis, lib/motion, lib/perf, lib/smoothScroll). Home JS budget: ≤ 253.6 KB gzip.
+
+## Tahap 2 (2026-11-17): what the kit adds for the Satu Daerah products
+
+Full briefs, the chain list and the do-not-touch list: `docs/build/tahap2-plan.md`. Summary of the API changes:
+
+### Product-module contract (`src/demos/registry.ts`, `src/routes/Demo.tsx`)
+- `src/demos/<slug>/index.tsx` default-exports the canvas (`DemoCanvasProps`) and MAY export `missions`
+  (`readonly Mission[]`), `hotspot` (`DemoShellProps['hotspot']`) and `splitTabs` (`SplitStageProps`; the canvas is then
+  ignored). `useDemoModule(slug)` loads the module once and Demo.tsx hands the named exports to `DemoShell`.
+- Visitors see a product only once `DEMO_READY[slug]` is set (integrator). Before that `/demo/<slug>` keeps the
+  placeholder + interim shell; `?controls=all` opens the real module with the full live shell on the dev server, or in
+  a build made with `VITE_DEMO_CONTROLS=1`.
+- `DemoShell` now applies the guide's first-open rule when missions arrive after mount.
+- `?e2e=1` on a live shell exposes `window.__gamada = { world, emit, settled, onEvent, clock }` (tests/e2e/chains.spec.ts).
+
+### world/
+- New tables: `messages` (CitizenMessage: phone messages, one row per broadcast with `to: citizenId[]`), `facilities`
+  (pack places + SIMULATED shelters, `origin: 'pack' | 'simulasi'`), `harvests` (simulated estimate per kecamatan ×
+  crop), `supplySignals`, `gauges` (simulated water levels at real places). `WORLD.version` = 2 (saved worlds regenerate).
+- New fields: `Mention.rumor`, `HoaxAlert.rumor`, `Alert.confirmedBy`, `Alert.broadcast.desaIds`, `ActionItem.remindedAt`,
+  `Procurement.{bids, winnerId, scheduleDays, spec, recommendation}`, `Harvest.ndviBase`,
+  `WorldMeta.personas { siti, raka, darmo }` and `WorldMeta.facts` (SeedFacts: bansos counts, tampered doc, hoax dam +
+  gauge, pump ring).
+- New events: `citizen.notified`, `actionItem.statusChanged`, `actionItem.reminded`, `flood.confirmed`,
+  `harvest.updated`, `procurement.recommended`, `supply.signal` (+ `hoax.detected.rumor`, `alert.broadcast.{desaIds,
+  message}`).
+- New reactions (reactions.ts, ids in quotes): 'cluster→flood-confirmed', 'cluster→radar-topic',
+  'ticket-status→citizen-phone', 'broadcast→citizen-phones', 'flood→radar-topic', 'rumor-burst→hoax' (fires once,
+  on the crossing of `WORLD.hoaxBurstMin` posts within `WORLD.hoaxWindowMin`), 'clarification→sentiment-recovery'
+  (future-dated positive mentions over 30 min), 'harvest→econ', 'harvest→supply-signal',
+  'procurement-recommendation→catalog-need', 'booking→citizen-phone'. The flood pump package now carries bids,
+  a brand-locked spec and a 3-day schedule.
+- Natural events: the rumor burst starts by itself at 10:00 (`WORLD.hoaxAt`) unless a product already fired it.
+- `world/satu-daerah.ts` (NOT in the barrel; import it directly): personas, citizenInbox, consoleTickets,
+  duplicateCandidates, kpiStrip, opdLeaderboard, opdScorecard, complaintsByKecamatan, briefingItems, instructionIdeas,
+  letterInbox, actionBoard, mentionsByHour, sentimentSeries, topicClusters, mentionStream, hoaxBurst, rumorSpread,
+  floodScenarioAlert, rainScenario, alertRecipients, zoneCitizens, confirmedComplaints, facilitiesOf, harvestValues,
+  packages, affiliationEdges, hpsVsMarket, analyzeProcurement, localBenchmarks, bansosBatch, bansosCsv, clusterDetail.
+  Time-keyed selectors are memoised (safe inside `useWorld`); `briefingItems`, `analyzeProcurement`, `affiliationEdges`
+  and `hpsVsMarket` are plain functions: call them on an action or inside `useMemo`.
+- `isEvent(e, type)` type guard (barrel) for `Mission.done` and `onEvent('*')`.
+- `createParamSelector` caches at most 64 keys per input generation.
+
+### shell/
+- One cross-product toast per root event: further products the same root reaches are added to it ("… diteruskan ke
+  Awas Belanja, Toko Autopilot +3"). A follow-up that is the news itself (`complaint.clustered`, `hoax.detected`)
+  names the toast. Background roots (source 'clock') are announced on the page of the product that reacted when the
+  follow-up has an `EFFECT_TARGET` (`hoax.detected` → Meja Pimpinan).
+
+### map/
+- Layer kinds `zones` (`{ zones: { kecamatanIds?, desaIds?, tone }[] }`, fill 20 % + outline over the real boundaries;
+  a visible desa zone asks for desa) and `imagery` (satellite raster under the boundaries, tiles fetched only once
+  visible; source `IMAGERY` in map/strings.ts, listed in the Sumber panel while visible).
+- Helpers `facilityMarkers(facilities, lang)` and `alertZones(alerts)`.
+
+### ai/ + server/ai-proxy/
+- New shared tools / structured kinds (mirrored in `STRUCTURED_SCHEMAS`, parity test green): `lookup_service` →
+  `service`, `book_queue` → `booking`, `ticket_status` → `ticket-status`, `compose_briefing` → `briefing`,
+  `analyze_topic` → `analysis`, `draft_audit_memo` → `audit-memo`, `draft_reminder` → `reminder` (31 kinds).
+- `prompts/<slug>.ts` may declare product-owned tools with `customTools: [productTool(slug, name, zodSchema, desc)]`
+  plus `customMocks`; the proxy serves them with the shared ones (kind `'<slug>/<name>'`). The site validates such a
+  kind with `registerStructuredSchema(kind, { safeParse })` from `demo-kit/ai/chat` (no zod in the demo bundle needed).

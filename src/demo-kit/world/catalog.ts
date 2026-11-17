@@ -249,3 +249,25 @@ export const BRAND_TEXT: { topic: 'pengiriman' | 'kualitas' | 'harga' | 'layanan
 
 export const CALL_CUSTOMERS = ['Bapak/Ibu pelanggan', 'Calon nasabah', 'Pemilik proyek rumah', 'Kontraktor kecil', 'Pengurus masjid', 'Kepala tukang']
 export const AGENT_TEAMS = ['Tim Mawar', 'Tim Melati', 'Tim Kenanga']
+
+/* ------------------------------------------------------------------ tahap 2 (generator only) */
+
+/** Sapa Warga personas (spec P1 step 1). Fictional script characters; `regional` = speaks the pack's regional language. */
+export const PERSONAS: { key: 'siti' | 'raka' | 'darmo'; name: string; gender: 'L' | 'P'; age: number; regional: boolean }[] = [
+  { key: 'siti', name: 'Siti Aminah', gender: 'P', age: 52, regional: true },
+  { key: 'raka', name: 'Raka Pratama', gender: 'L', age: 24, regional: false },
+  { key: 'darmo', name: 'Darmo Sutrisno', gender: 'L', age: 71, regional: true },
+]
+
+/** Past emergency-equipment packages the affiliated "pompa" ring won in rotation (Awas Belanja: pemenang-berulang). */
+export const PUMP_HISTORY: { n: Bi; daysAgo: number; items: [string, string, number, string, number][] }[] = [
+  { n: { id: 'Pengadaan pompa dan genset tanggap darurat banjir', en: 'Emergency flood pumps and generators' }, daysAgo: 340, items: [['Pompa air portabel 4 inci', '4-inch portable water pump', 8, 'unit', 38_500_000], ['Genset 5 kVA', '5 kVA generator', 4, 'unit', 41_000_000]] },
+  { n: { id: 'Pengadaan pompa celup dan selang darurat', en: 'Emergency submersible pumps and hoses' }, daysAgo: 210, items: [['Pompa celup 3 inci', '3-inch submersible pump', 10, 'unit', 21_500_000], ['Selang 3 inci', '3-inch hose', 20, 'rol', 4_900_000]] },
+  { n: { id: 'Pengadaan peralatan penanganan genangan', en: 'Inundation response equipment' }, daysAgo: 95, items: [['Pompa air portabel 6 inci', '6-inch portable water pump', 6, 'unit', 47_000_000], ['Perahu karet', 'Rubber boat', 2, 'unit', 68_000_000]] },
+]
+
+/** Two small packages just under the direct-procurement ceiling, days apart (Awas Belanja: pemecahan-paket). */
+export const SPLIT_PACKAGES: { n: Bi; item: Bi; qty: number; unitPrice: number; daysAgo: number }[] = [
+  { n: { id: 'Pengadaan pompa celup posko tahap 1', en: 'Shelter submersible pumps, phase 1' }, item: { id: 'Pompa celup 3 inci', en: '3-inch submersible pump' }, qty: 9, unitPrice: 21_600_000, daysAgo: 21 },
+  { n: { id: 'Pengadaan pompa celup posko tahap 2', en: 'Shelter submersible pumps, phase 2' }, item: { id: 'Pompa celup 3 inci', en: '3-inch submersible pump' }, qty: 9, unitPrice: 21_600_000, daysAgo: 16 },
+]

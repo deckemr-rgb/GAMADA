@@ -5,9 +5,10 @@
 import type { ProductSlug } from '../../content/products'
 import type { AnyFollowUp, ComplaintCategory, EventType, FollowUp, Product, WorldState } from './types'
 import { COMPLAINT_TEXT, COMPLAINT_WEIGHTS, MEDIA_OUTLETS, MENTION_TEXT, SOCIAL_HANDLES } from './texts'
+import { HOAX_OFFSETS, hoaxPost } from './scenario-texts'
 import { hashString, makeRng, type Rng } from './prng'
 import { NATURAL } from './natural'
-import { DAY_MIN, HOUR_RHYTHM, clamp, offsetKm, round, rows } from './util'
+import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, offsetKm, round, rows } from './util'
 
 /**
  * Natural events are background noise: nobody pressed anything, so they are emitted with source 'clock' (the shell
@@ -88,6 +89,20 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
       text: { id: fill(tpl.t.id), en: fill(tpl.t.en) }, sentiment: score < -0.2 ? 'negatif' : score > 0.2 ? 'positif' : 'netral', score, topic: tpl.topic,
       reach: Math.round(Math.exp(r.normal(kind === 'berita' ? 8 : 6.5, 1))),
     }, 'radar-isu'))
+  }
+
+  // the false narrative of the day (Radar Isu, spec P4 step 2): one post per scheduled minute from 10:00, unless the
+  // scenario was already started by hand ("Picu skenario"); the spread stops once the hoax is clarified
+  const rumor = s.meta.facts?.hoax.rumor
+  const step = minute - WORLD.hoaxAt
+  const i = HOAX_OFFSETS.indexOf(step as (typeof HOAX_OFFSETS)[number])
+  if (rumor && i >= 0) {
+    const posts = rows(s.mentions).filter((m) => m.rumor === rumor)
+    const ours = posts.filter((m) => m.at >= WORLD.hoaxAt && m.at < WORLD.hoaxAt + 30).length
+    if (posts.length === ours && ours === i && !rows(s.hoaxAlerts).some((h) => h.rumor === rumor && h.status === 'diklarifikasi')) {
+      const k = s.region.kecamatan.find((x) => x.id === s.region.floodKecamatanIds[0])?.name ?? s.region.shortName
+      out.push(fu('mention.created', hoaxPost(i, WORLD.hoaxAt, s.meta.facts.hoax.damName || 'Bendungan', k, rumor), 'radar-isu'))
+    }
   }
 
   // price moves (small; chilli drifts up while a flood alert is active)
