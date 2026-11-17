@@ -6,9 +6,9 @@
  * Products register it with their scenario:  registerScenario({ product: 'cek-berkas', …, extract: docsExtract })
  */
 import type { ExtractRequest, Extracted, ExtractedField } from '../ai/types'
-import { hashString } from '../world/rng'
+import { hashString } from '../world/prng'
 import { pct } from './measure'
-import { dmy, longDate, nikMatchesBirth, parseNik, SPECIMEN_KEC } from './nik'
+import { dmy, longDate, nikMatchesBirth, nikRegionName, parseNik, SPECIMEN_KEC } from './nik'
 import { getSample, idr } from './samples'
 import type { Bi, Box, SampleDoc } from './types'
 
@@ -125,9 +125,10 @@ function sigCheck(doc: SampleDoc, lang: Lang): Check {
 
 function nikCheck(nik: string, lang: Lang): Check {
   const p = parseNik(nik)
-  const kec = Object.values(SPECIMEN_KEC).find((k) => k.code === nik.slice(4, 6))
+  const name = nikRegionName(nik) ?? '?'
+  const area = `${nik.slice(0, 2)}.${nik.slice(2, 4)}.${nik.slice(4, 6)}`
   return p.ok
-    ? check('nik-format', { id: 'Format NIK', en: 'NIK format' }, 'ok', { id: `16 digit · kode wilayah 35.22.${nik.slice(4, 6)} (${kec?.name ?? '?'})`, en: `16 digits · area code 35.22.${nik.slice(4, 6)} (${kec?.name ?? '?'})` }, lang)
+    ? check('nik-format', { id: 'Format NIK', en: 'NIK format' }, 'ok', { id: `16 digit · kode wilayah Kemendagri ${area} (${name})`, en: `16 digits · Kemendagri area code ${area} (${name})` }, lang)
     : check('nik-format', { id: 'Format NIK', en: 'NIK format' }, 'fail', { id: `NIK tidak valid (${p.problem})`, en: `Invalid NIK (${p.problem})` }, lang)
 }
 

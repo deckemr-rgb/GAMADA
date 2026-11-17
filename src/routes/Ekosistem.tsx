@@ -3,7 +3,7 @@
  * 3 ecosystems + Inti (jump links), one section per ecosystem listing its products, tour CTA and WhatsApp CTA.
  * The constellation hero arrives in tahap 6.
  */
-import { useI18n } from '../lib/i18n'
+import { useEcoI18n } from '../content/i18n/useEco'
 import { ECOSYSTEMS, ECOSYSTEM_STATS, productsOf } from '../content/products'
 import { TOUR, TOUR_CHAPTERS } from '../content/tour'
 import PageShell from '../components/PageShell'
@@ -13,21 +13,27 @@ import { Icon } from '../demo-kit/ui/icons'
 import { BodyHead, ContactButton, CtaBand, CtaRow, ECO_ORDER, ProductCard, fill } from './EcoParts'
 
 export default function Ekosistem() {
-  const { lang, t } = useI18n()
-  const h = t.eco.hub
-  const c = t.eco.common
+  const { lang, eco: copy } = useEcoI18n()
+  const h = copy.hub
+  const c = copy.common
   const title = fill(h.title, { n: ECOSYSTEM_STATS.products })
 
   return (
-    <PageShell eyebrow={h.eyebrow} title={title} lead={h.lead} docTitle={h.docTitle}>
-      <div className="eco-page">
+    <PageShell
+      eyebrow={h.eyebrow}
+      title={title}
+      lead={h.lead}
+      docTitle={h.docTitle}
+      actions={
         <CtaRow>
           <ButtonLink to="/tur" icon={<Icon name="play" size={18} />}>
             {c.startTour}
           </ButtonLink>
           <ContactButton text={h.waPrefill} />
         </CtaRow>
-
+      }
+    >
+      <div className="eco-page">
         <nav className="eco-overview" aria-label={h.overviewLabel}>
           <ul>
             {ECO_ORDER.map((id) => {

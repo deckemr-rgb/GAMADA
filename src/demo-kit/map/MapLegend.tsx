@@ -4,13 +4,21 @@
  * hidden; `items` add swatches for markers, heat, flood, rain …
  */
 import type { ReactNode } from 'react'
-import { useI18n } from '../../lib/i18n'
+import { useI18n, type Lang } from '../../lib/i18n'
 import { Icon, type IconName } from '../ui/icons'
 import { resolveChoropleth } from './choro'
 import { toneColor } from './palette'
-import { ms } from './strings'
 import type { ChoroplethLayer, MapTone } from './types'
 import './map.css'
+import './legend.css'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  hidden: { id: 'Data agregat disembunyikan untuk menjaga anonimitas', en: 'Aggregate hidden to protect anonymity' },
+  hiddenShort: { id: 'Disembunyikan (ambang anonimitas)', en: 'Hidden (anonymity threshold)' },
+  legend: { id: 'Legenda', en: 'Legend' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 export interface LegendItem {
   id: string

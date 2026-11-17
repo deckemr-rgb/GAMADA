@@ -4,12 +4,13 @@
  * simulated world (with the anonymity hatch), markets + landmarks, the rain radar + growing flood driven by the
  * time scrubber, the legend and the accessible kecamatan list that flies the map.
  * ?static=1 renders the scrubber at +4 h without animation.
+ * Desa polygons are lazy: the impact list asks the map (handle.loadDesa / floodImpact) once the scrubber leaves +0 h.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useI18n, type Lang } from '../../lib/i18n'
-import { DEFAULT_REGION_ID, loadRegion, loadRegionGeo } from '../region/loader'
-import type { RegionGeo, RegionPack } from '../region/types'
+import { DEFAULT_REGION_ID, loadRegion } from '../region/loader'
+import type { RegionPack } from '../region/types'
 import { DEFAULT_SEED, loadWorld, rows, useWorld, world, type Complaint } from '../world'
 import {
   KecamatanList,
@@ -18,10 +19,8 @@ import {
   MapView,
   TimeScrubber,
   belowThreshold,
-  buildFloodModel,
   choropleth,
   countByKecamatan,
-  floodImpact,
   heatPoints,
   landmarkMarkers,
   marketMarkers,
@@ -75,6 +74,7 @@ const T = {
   dry: { id: 'Belum ada genangan pada waktu ini. Putar waktu ke depan.', en: 'No inundation at this time yet. Play time forward.' },
   floodNote: { id: 'Prediksi turunan (jarak ke Bengawan Solo × zona risiko), simulasi — bukan peta resmi BNPB.', en: 'Derived prediction (distance to the Bengawan Solo × risk zones), simulated — not an official BNPB map.' },
   loading: { id: 'Memuat region dan dunia simulasi…', en: 'Loading region and simulated world…' },
+  loadingDesa: { id: 'Memuat batas desa…', en: 'Loading village boundaries…' },
   complaintsWord: { id: 'aduan', en: 'complaints' },
 } satisfies Record<string, Bi>
 
@@ -89,7 +89,7 @@ export default function Section() {
   const isStatic = params.get('static') === '1'
   const mapRef = useRef<MapViewHandle>(null)
   const [pack, setPack] = useState<RegionPack | null>(null)
-  const [geo, setGeo] = useState<RegionGeo | null>(null)
+  const [desaReady, setDesaReady] = useState(false)
   const [hour, setHour] = useState(isStatic ? SC.staticHour : 0)
   const [selected, setSelected] = useState<string | null>(null)
   const [on, setOn] = useState<Record<ToggleId, boolean>>({
@@ -108,10 +108,9 @@ export default function Section() {
 
   useEffect(() => {
     let alive = true
-    void Promise.all([loadRegion(DEFAULT_REGION_ID), loadRegionGeo(DEFAULT_REGION_ID)]).then(async ([p, g]) => {
+    void loadRegion(DEFAULT_REGION_ID).then(async (p) => {
       if (!alive) return
       setPack(p)
-      setGeo(g)
       const s = world.get()
       if (world.status() !== 'ready' || s.regionId !== p.id) await loadWorld(p, DEFAULT_SEED)
     })
@@ -152,8 +151,21 @@ export default function Section() {
     [on, choroSpec, heat, landmarks, markets, points, isStatic],
   )
 
-  const model = useMemo(() => (pack && geo ? buildFloodModel(pack, geo, 1) : null), [pack, geo])
-  const impact = useMemo(() => (model ? floodImpact(model, hour) : null), [model, hour])
+  // the impact list needs desa polygons: ask the map for them once the scrubber leaves +0 h (same model it paints)
+  const wantImpact = !!pack && hour > 0
+  useEffect(() => {
+    if (!wantImpact || desaReady) return
+    let alive = true
+    mapRef.current?.loadDesa().then(
+      () => alive && setDesaReady(true),
+      () => {},
+    )
+    return () => {
+      alive = false
+    }
+  }, [wantImpact, desaReady])
+  const impact = useMemo(() => (desaReady && hour > 0 ? (mapRef.current?.floodImpact(hour) ?? null) : null), [desaReady, hour])
+  const impactLoading = wantImpact && !desaReady
 
   const toggles: { id: ToggleId; label: string; hint?: string; icon?: import('../ui').IconName; swatch?: string }[] = [
     { id: 'choro', label: t('choro', lang), icon: 'chart', swatch: '#35a597' },
@@ -230,6 +242,10 @@ export default function Section() {
                     ))}
                   </ol>
                 </>
+              ) : impactLoading ? (
+                <p className="dk-scm-dry" aria-busy="true">
+                  {t('loadingDesa', lang)}
+                </p>
               ) : (
                 <p className="dk-scm-dry">{t('dry', lang)}</p>
               )}

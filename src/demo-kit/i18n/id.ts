@@ -50,6 +50,7 @@ export const id = {
   cancel: 'Batal',
   rewinding: 'Memutar balik jam…',
   resetDone: 'Dunia demo kembali ke awal',
+  resetFailed: 'Reset gagal: periksa koneksi lalu coba lagi',
   /* fullscreen */
   fullscreen: 'Layar penuh',
   exitFullscreen: 'Keluar layar penuh',

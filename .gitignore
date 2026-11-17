@@ -1,6 +1,7 @@
 # dependencies + build output (recreate with `npm install` / `npm run build`)
 node_modules/
 dist/
+*.tsbuildinfo
 
 # local scratch screenshots from development (docs/shots holds the curated ones)
 .shots/
@@ -18,3 +19,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Playwright e2e (npm run test:e2e): its own build + reports
+.e2e/
+test-results/
+playwright-report/

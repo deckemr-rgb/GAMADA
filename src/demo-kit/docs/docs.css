@@ -44,11 +44,6 @@
   font: var(--dk-t12) var(--dk-font);
   color: var(--dk-faint);
 }
-@media (hover: none), (pointer: coarse) {
-  .dk-doc-hint {
-    display: none;
-  }
-}
 .dk-doc-tools {
   display: flex;
   flex-wrap: wrap;

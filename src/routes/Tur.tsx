@@ -4,24 +4,26 @@
  * an unknown chapter redirects to /tur.
  */
 import { Navigate, useLocation, useParams } from 'react-router'
-import { useI18n } from '../lib/i18n'
+import { useEcoI18n } from '../content/i18n/useEco'
 import { ECOSYSTEM_STATS, PRODUCT_BY_SLUG } from '../content/products'
 import { TOUR, TOUR_CHAPTERS, chapterByNumber, parseChapter, type TourChapter } from '../content/tour'
 import PageShell from '../components/PageShell'
 import AppLink from '../components/AppLink'
 import { ButtonLink } from '../components/ui/Button'
 import { Icon } from '../demo-kit/ui/icons'
+import { DEMO_READY } from '../demos/registry'
 import { ContactButton, CtaRow, fill } from './EcoParts'
+import Arrow from '../components/ui/Arrow'
 
 export default function Tur() {
-  const { lang, t } = useI18n()
+  const { lang, eco: copy } = useEcoI18n()
   const { bab } = useParams()
   const { search } = useLocation()
   const selected = parseChapter(bab)
   if (bab !== undefined && !selected) return <Navigate to={`/tur${search}`} replace />
 
-  const s = t.eco.tour
-  const c = t.eco.common
+  const s = copy.tour
+  const c = copy.common
   const title = fill(s.title, { region: TOUR.regionName })
   const lead = fill(s.lead, { n: TOUR_CHAPTERS.length, m: TOUR.minutes, start: TOUR.start, p: ECOSYSTEM_STATS.products })
   const day = new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(
@@ -100,9 +102,9 @@ export default function Tur() {
 }
 
 function Selected({ ch }: { ch: TourChapter }) {
-  const { lang, t } = useI18n()
-  const s = t.eco.tour
-  const c = t.eco.common
+  const { lang, eco: copy } = useEcoI18n()
+  const s = copy.tour
+  const c = copy.common
   const prev = chapterByNumber(ch.n - 1)
   const next = chapterByNumber(ch.n + 1)
   return (
@@ -117,7 +119,7 @@ function Selected({ ch }: { ch: TourChapter }) {
         <CtaRow>
           {ch.products.map((slug) => (
             <ButtonLink key={slug} to={`/demo/${slug}`} variant="ghost" icon={<Icon name={PRODUCT_BY_SLUG[slug].icon} size={18} />}>
-              {c.openDemo} {PRODUCT_BY_SLUG[slug].name}
+              {DEMO_READY[slug] ? `${c.openDemo} ${PRODUCT_BY_SLUG[slug].name}` : fill(c.demoPlanOf, { name: PRODUCT_BY_SLUG[slug].name })}
             </ButtonLink>
           ))}
         </CtaRow>
@@ -131,7 +133,7 @@ function Selected({ ch }: { ch: TourChapter }) {
       <nav className="eco-pager" aria-label={s.listTitle}>
         {prev ? (
           <AppLink to={`/tur/${prev.n}`} rel="prev">
-            <span aria-hidden="true">← </span>
+            <Arrow dir="back" />
             {s.prev}
           </AppLink>
         ) : (
@@ -141,7 +143,7 @@ function Selected({ ch }: { ch: TourChapter }) {
         {next ? (
           <AppLink to={`/tur/${next.n}`} rel="next">
             {s.next}
-            <span aria-hidden="true"> →</span>
+            <Arrow />
           </AppLink>
         ) : (
           <span />

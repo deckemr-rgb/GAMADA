@@ -11,7 +11,8 @@ import { ROLES } from '../../content/products'
 import { BrowserFrame } from '../frames'
 import { Button, Inbox, Kpi, Panel, StatusChip, EmptyState, type InboxItem } from '../ui'
 import { clock, emit, formatTime, shallowEqual, useClock, useSession, useWorld, type Complaint, type WorldState } from '../world'
-import { DemoShell, CoachMark, useShell, type Mission } from '../shell'
+import { DemoShell, useShell, type Mission } from '../shell'
+import { CoachMark } from '../shell/CoachMark'
 import { regionalLanguageLabel } from '../i18n'
 import './shell.css'
 
@@ -82,6 +83,10 @@ const MISSIONS: Mission[] = [
     hint: {
       id: 'Pemilih peran di bilah atas',
       en: 'The role picker in the top bar',
+    },
+    hintSm: {
+      id: 'Menu ⋯ di kanan atas → Peran',
+      en: 'The ⋯ menu at the top right → Role',
     },
   },
   {

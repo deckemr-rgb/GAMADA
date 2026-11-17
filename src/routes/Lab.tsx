@@ -1,11 +1,13 @@
 /**
  * /lab — replaces /tools: grid of the 17 product demos + GAMADA Inti + the earlier portfolio tools (PhoneFarm
- * panel, ScrapPulse → Radar Isu), with working filters by ecosystem and by try-time (2 / 5 / 10 minutes).
- * Filters start from ?eco= / ?menit= and are written back to the URL (replaceState, no navigation) so a filtered
- * view can be shared. Mini-demo previews on hover arrive with the mini demos (tahap 2–4 / 6).
+ * panel, ScrapPulse → Radar Isu), with working filters by ecosystem, status (spec §13: "Bisa dicoba" / "Sedang
+ * dibangun", from DEMO_READY in demos/registry.ts) and try-time (2 / 5 / 10 minutes). Filters start from ?eco= /
+ * ?status= / ?menit= and are written back to the URL (replaceState, no navigation) so a filtered view can be shared.
+ * Honesty: a demo that is not built yet shows its try-time as an estimate ("Perkiraan") and its CTA reads
+ * "Lihat rencana demo" (it opens the tahap-1 plan panel), never "Buka demo". Mini-demo previews on hover arrive with the mini demos (tahap 2–4 / 6).
  */
 import { useState } from 'react'
-import { useI18n } from '../lib/i18n'
+import { useEcoI18n } from '../content/i18n/useEco'
 import { ECOSYSTEMS, PRODUCTS, ECOSYSTEM_STATS, fullName, type EcoOrInti, type ProductSlug } from '../content/products'
 import { DEMO_READY, DEMO_STAGE } from '../demos/registry'
 import PageShell from '../components/PageShell'
@@ -13,6 +15,7 @@ import AppLink from '../components/AppLink'
 import Card from '../components/ui/Card'
 import { Icon } from '../demo-kit/ui/icons'
 import { ECO_ORDER, EcoBadge, fill } from './EcoParts'
+import Arrow from '../components/ui/Arrow'
 
 /** Typical time a visitor needs to see the product's "wow" moment in its sandbox (minutes). */
 const TRY_MINUTES: Record<ProductSlug | 'phonefarm' | 'scrappulse', TryMin> = {
@@ -41,9 +44,18 @@ const TRY_MINUTES: Record<ProductSlug | 'phonefarm' | 'scrappulse', TryMin> = {
 type TryMin = 2 | 5 | 10
 type EcoFilter = 'all' | EcoOrInti | 'portfolio'
 type TimeFilter = 'all' | TryMin
+type StatusFilter = 'all' | 'siap' | 'dibangun'
 
 const TIMES: readonly TryMin[] = [2, 5, 10]
 const ECO_FILTERS: readonly EcoFilter[] = ['all', ...ECO_ORDER, 'portfolio']
+const STATUS_FILTERS: readonly StatusFilter[] = ['all', 'siap', 'dibangun']
+
+interface Filters {
+  eco: EcoFilter
+  status: StatusFilter
+  time: TimeFilter
+}
+const NO_FILTERS: Filters = { eco: 'all', status: 'all', time: 'all' }
 
 interface LabItem {
   key: string
@@ -60,22 +72,26 @@ interface LabItem {
   more?: { to: string; label: string }
 }
 
-function readInitial(): { eco: EcoFilter; time: TimeFilter } {
-  if (typeof window === 'undefined') return { eco: 'all', time: 'all' }
+function readInitial(): Filters {
+  if (typeof window === 'undefined') return NO_FILTERS
   const q = new URLSearchParams(window.location.search)
   const e = q.get('eco')
+  const st = q.get('status')
   const m = Number(q.get('menit'))
   return {
     eco: ECO_FILTERS.includes(e as EcoFilter) ? (e as EcoFilter) : 'all',
+    status: STATUS_FILTERS.includes(st as StatusFilter) ? (st as StatusFilter) : 'all',
     time: TIMES.includes(m as TryMin) ? (m as TryMin) : 'all',
   }
 }
 
-function writeUrl(eco: EcoFilter, time: TimeFilter) {
+function writeUrl({ eco, status, time }: Filters) {
   try {
     const url = new URL(window.location.href)
     if (eco === 'all') url.searchParams.delete('eco')
     else url.searchParams.set('eco', eco)
+    if (status === 'all') url.searchParams.delete('status')
+    else url.searchParams.set('status', status)
     if (time === 'all') url.searchParams.delete('menit')
     else url.searchParams.set('menit', String(time))
     // replaceState keeps react-router's history state (no route change, focus stays on the filter)
@@ -86,15 +102,16 @@ function writeUrl(eco: EcoFilter, time: TimeFilter) {
 }
 
 export default function Lab() {
-  const { lang, t } = useI18n()
-  const s = t.eco.lab
-  const c = t.eco.common
-  const [{ eco, time }, setFilters] = useState(readInitial)
+  const { lang, eco: copy } = useEcoI18n()
+  const s = copy.lab
+  const c = copy.common
+  const [filters, setFilters] = useState(readInitial)
+  const { eco, status, time } = filters
 
-  const set = (next: { eco?: EcoFilter; time?: TimeFilter }) => {
-    const v = { eco: next.eco ?? eco, time: next.time ?? time }
+  const set = (next: Partial<Filters>) => {
+    const v = { ...filters, ...next }
     setFilters(v)
-    writeUrl(v.eco, v.time)
+    writeUrl(v)
   }
 
   const items: LabItem[] = [
@@ -108,7 +125,7 @@ export default function Lab() {
         desc: p.descriptor[lang],
         tagline: p.tagline[lang],
         to: `/demo/${p.slug}`,
-        cta: c.openDemo,
+        cta: DEMO_READY[p.slug] ? c.openDemo : c.demoPlan,
         stage: DEMO_READY[p.slug] ? null : DEMO_STAGE[p.eco],
         more: { to: `/produk/${p.slug}`, label: `${c.productPage}: ${fullName(p, lang)}` },
       })),
@@ -131,16 +148,21 @@ export default function Lab() {
       minutes: TRY_MINUTES.scrappulse,
       icon: 'pulse',
       name: s.tools.scrappulse.name,
-      desc: fill(t.eco.karya.mergedInto, { name: 'Radar Isu' }),
+      desc: fill(copy.karya.mergedInto, { name: 'Radar Isu' }),
       tagline: s.tools.scrappulse.desc,
       to: '/demo/radar-isu?tab=analisis',
-      cta: s.tools.scrappulse.cta,
+      cta: DEMO_READY['radar-isu'] ? s.tools.scrappulse.cta : c.demoPlan,
       stage: DEMO_READY['radar-isu'] ? null : DEMO_STAGE['satu-daerah'],
       more: { to: '/produk/radar-isu#analisis', label: `${c.productPage}: Radar Isu` },
     },
   ]
 
-  const shown = items.filter((it) => (eco === 'all' || it.group === eco) && (time === 'all' || it.minutes === time))
+  const shown = items.filter(
+    (it) =>
+      (eco === 'all' || it.group === eco) &&
+      (status === 'all' || (status === 'siap') === (it.stage === null)) &&
+      (time === 'all' || it.minutes === time),
+  )
   const demoCount = ECOSYSTEM_STATS.products
 
   return (
@@ -157,6 +179,12 @@ export default function Lab() {
             }))}
             value={eco}
             onChange={(v) => set({ eco: v })}
+          />
+          <FilterGroup
+            label={s.filterStatus}
+            options={STATUS_FILTERS.map((f) => ({ value: f, label: f === 'all' ? s.all : f === 'siap' ? s.statusLive : s.statusBuildingShort }))}
+            value={status}
+            onChange={(v) => set({ status: v })}
           />
           <FilterGroup
             label={s.filterTime}
@@ -180,10 +208,18 @@ export default function Lab() {
                     <span className="eco-pcard-icon">
                       <Icon name={it.icon} size={22} />
                     </span>
-                    <span className="eco-lab-time">
-                      <Icon name="clock" size={14} />
-                      {fill(s.tryTime, { n: it.minutes })}
-                    </span>
+                    {it.stage === null ? (
+                      <span className="eco-lab-time">
+                        <Icon name="clock" size={14} />
+                        {fill(s.tryTime, { n: it.minutes })}
+                      </span>
+                    ) : (
+                      <span className="eco-lab-time is-estimate" title={fill(s.tryTimeEstimateLabel, { n: it.minutes })}>
+                        <Icon name="clock" size={14} />
+                        <span aria-hidden="true">{fill(s.tryTimeEstimate, { n: it.minutes })}</span>
+                        <span className="sr-only">{fill(s.tryTimeEstimateLabel, { n: it.minutes })}</span>
+                      </span>
+                    )}
                   </div>
                   <h2 className="eco-lab-name">{it.name}</h2>
                   <p className="eco-pcard-desc">{it.desc}</p>
@@ -195,7 +231,7 @@ export default function Lab() {
                   <div className="eco-lab-actions">
                     <AppLink to={it.to} className="eco-lab-cta" aria-label={`${it.cta}: ${it.name}`}>
                       {it.cta}
-                      <span aria-hidden="true"> →</span>
+                      <Arrow />
                     </AppLink>
                     {it.more ? (
                       <AppLink to={it.more.to} className="eco-lab-more" aria-label={it.more.label}>
@@ -210,7 +246,7 @@ export default function Lab() {
         ) : (
           <div className="eco-empty">
             <p>{s.empty}</p>
-            <button type="button" className="btn btn--ghost" onClick={() => set({ eco: 'all', time: 'all' })}>
+            <button type="button" className="btn btn--ghost" onClick={() => set(NO_FILTERS)}>
               <span className="btn-label">{s.reset}</span>
             </button>
           </div>

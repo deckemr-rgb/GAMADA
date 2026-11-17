@@ -1,0 +1,614 @@
+Tahap 1 · A/B beranda · 2026-11-17 · 1440×900 @1.25x · RTX 4060 Laptop (ANGLE D3D11) · layar 144 Hz
+base = commit aa30cac (sebelum ekosistem, baseline tahap 0), dibangun dari git worktree dengan node_modules yang sama
+now  = working tree di atas 22f8e22 (tahap 1 + gelombang perbaikan yang belum di-commit)
+Build: `vite build --outDir <sendiri>` untuk keduanya; disajikan dengan `vite preview` (base :4181, now :4182, gzip on).
+Semua run dalam satu sesi, bergantian per ronde dengan urutan dibalik tiap ronde (base/now, now/base, ...).
+
+Metode
+- Scroll: tools/perf.mjs (sama seperti tahap 0: wheel input nyata, HUD ?debug=fps, ?off=preloader), CPU 1× dan 2×, 4 ronde per varian.
+- Muat: skrip CDP (.shots/close-perf/load.mjs; Chrome headless + flag GPU sama dengan perf.mjs, cache HTTP off) membuka
+  /?off=preloader dan membaca: JS yang di-fetch (gzip -9 dari berkas dist yang dilayani), FCP, LCP (PerformanceObserver),
+  long task (>50 ms) dari FCP s.d. 10 s, TBT = Σ(durasi−50). Dua kondisi:
+  DINGIN = profil Chrome baru (cache shader GPU kosong, seperti tools/perf.mjs) · CPU 1× 20 pasang, CPU 2× 10 pasang;
+  HANGAT = muat kedua di profil yang sama (cache shader GPU terisi, seperti pengunjung yang kembali) · 8 pasang per CPU.
+
+Ringkasan (median)
+                               base        now        catatan
+JS awal gz (/?off=preloader)   256.2 KB    253.6 KB   3 berkas → 8 berkas (modulepreload), −2.6 KB
+CSS awal gz                    13.5 KB     12.9 KB    index + SectionHeader.css → satu index.css
+LCP dingin CPU 1×              5422 ms     5706 ms    selisih berpasangan +224 ms, now lebih lambat di 16/20 pasangan
+LCP dingin CPU 2×              6754 ms     6662 ms    selisih berpasangan −168 ms (4/10)
+LCP hangat CPU 1×              1654 ms     1580 ms    −64 ms (3/8)
+LCP hangat CPU 2×              2672 ms     2646 ms    +10 ms (4/8)
+TBT dingin CPU 1× / 2×         1203 / 2597 1251 / 2611 +90 / +215 ms berpasangan, dalam noise (tugas 3–4 s shader identik di keduanya)
+TBT hangat CPU 1× / 2×         474 / 1612  462 / 1658 −0.5 / +47 ms berpasangan
+Scroll CPU 1× p95 (5 skenario) 7.5 13.3 13.6 12.8 12.2 · now 7.3 12.3 13.7 12.7 12.8 · frame >50 ms total 47 vs 46
+Scroll CPU 2× p95 (5 skenario) 16.7 37.2 31.9 25.6 28.1 · now 17.4 35.1 33.4 24.3 27.6 · frame >50 ms total 98 vs 110
+  (CPU 2× per run: base 35/26/15/22, now 20/49/22/19 → median 24 vs 21; total now tertarik oleh satu run 49)
+
+Kesimpulan: TIDAK MEMBURUK. JS awal turun 2.6 KB gz, frame scroll setara di CPU 1× dan 2×, LCP/TBT dengan cache
+shader hangat setara (now sedikit lebih baik di CPU 1×).
+Satu sinyal yang tidak dibuang: LCP DINGIN CPU 1× +224 ms (16/20 pasangan). Ditelusuri dengan trace + CPU profile
+(.shots/close-perf/trc, probe.mjs):
+- Di kedua build, muat dingin didominasi satu FunctionCall 3.8–4.1 s tepat setelah evaluasi modul: `setShaders` (ogl Program,
+  compileShader + getShaderInfoLog = kompilasi shader sinkron ANGLE/D3D11 tanpa cache) ~3.1 s self time, lalu callback
+  resize kanvas WebGL (`y` → gl clear) yang menunggu GPU 190–920 ms. FCP/LCP menunggu presentasi frame GPU setelahnya.
+- Waktu main-thread JS lain sama (gsap ~0.5 s, React ~0.2 s di kedua build). Dengan tracing aktif (6 pasang) median LCP
+  base 5288 / now 5320 ms. Sinyal hilang di CPU 2× (−168 ms) dan dengan cache shader hangat (−64 ms). Regresi kode akan
+  membesar di CPU 2×, bukan hilang; jadi selisih ini dibaca sebagai variasi waktu GPU (kompilasi shader + raster pertama),
+  bukan kode beranda.
+- Diff chunk beranda: isi modul sama, hanya dipecah ulang karena rute lazy baru berbagi dependensi:
+  base  index 171.0 + SectionHeader 51.2 (gsap/ScrollTrigger/perf) + HomeSections 34.0
+  now   index 121.2 + chunk-6KYCQHYJ 30.4 (react-router) + motion 32.5 (gsap/ScrollTrigger) + smoothScroll 22.3 (Lenis)
+        + i18n 11.5 (kamus ID; kamus EN kini lazy) + perf 1.2 + HomeSections 33.4 + Card 0.9
+  Perubahan kode di jalur beranda: i18n.tsx (EN lazy), RootLayout (useMatches untuk chrome 'none'), konstanta motion.ts,
+  ReadingProgress (bukan di beranda). Tidak ada efek/komponen beranda yang berubah.
+Temuan lama (bukan regresi, ada di base juga): pada profil dingin, kompilasi shader WebGL sinkron memblok main thread
+~3–4 s sebelum first paint (FCP ~5 s di lab ini vs ~1.5 s dengan cache shader hangat).
+
+==================================================================== angka mentah
+
+== Muat beranda /?off=preloader · CPU 1× · profil Chrome DINGIN (cache shader GPU kosong) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 5284 | 5412 | IMG.layer-art | 3 | 784 | 1275 | 4514+784,5318+80,5505+561 |
+| now r1 | 8 | 253.6 | 257.1 | 5340 | 6272 | IMG.layer-art | 4 | 1065 | 1728 | 4536+1065,5611+173,5890+636,6527+54 |
+| now r2 | 8 | 253.6 | 257.1 | 5160 | 5676 | IMG.layer-art | 3 | 780 | 1169 | 4402+780,5194+99,5378+440 |
+| base r2 | 3 | 256.2 | 258 | 4976 | 5292 | IMG.layer-art | 3 | 821 | 1262 | 4185+821,5020+83,5233+508 |
+| base r3 | 3 | 256.2 | 258 | 5304 | 5728 | IMG.layer-art | 3 | 812 | 1216 | 4509+812,5333+81,5516+473 |
+| now r3 | 8 | 253.6 | 257.1 | 5156 | 5504 | IMG.layer-art | 3 | 980 | 1381 | 4372+980,5369+97,5551+454 |
+| now r4 | 8 | 253.6 | 257.1 | 5392 | 5956 | IMG.layer-art | 3 | 818 | 1281 | 4615+818,5445+77,5645+536 |
+| base r4 | 3 | 256.2 | 258 | 5084 | 5188 | IMG.layer-art | 3 | 757 | 1186 | 4343+757,5120+104,5313+475 |
+| base r5 | 3 | 256.2 | 258 | 5048 | 5480 | IMG.layer-art | 3 | 932 | 1316 | 4262+932,5204+88,5383+446 |
+| now r5 | 8 | 253.6 | 257.1 | 5208 | 5716 | IMG.layer-art | 3 | 799 | 1146 | 4445+799,5257+77,5457+420 |
+| now r6 | 8 | 253.6 | 257.1 | 5148 | 5412 | IMG.layer-art | 3 | 1078 | 1567 | 4230+1078,5331+95,5544+544 |
+| base r6 | 3 | 256.2 | 258 | 5296 | 5740 | IMG.layer-art | 3 | 931 | 1309 | 4515+931,5458+94,5636+434 |
+| base r7 | 3 | 256.2 | 258 | 4980 | 5100 | IMG.layer-art | 3 | 755 | 1139 | 4237+755,5007+75,5159+459 |
+| now r7 | 8 | 253.6 | 257.1 | 5176 | 5728 | IMG.layer-art | 4 | 850 | 1258 | 4371+850,5235+80,5367+53,5456+475 |
+| now r8 | 8 | 253.6 | 257.1 | 5080 | 5352 | IMG.layer-art | 3 | 1007 | 1448 | 4225+1007,5247+96,5452+495 |
+| base r8 | 3 | 256.2 | 258 | 5408 | 5592 | IMG.layer-art | 1 | 49 | 0 | 5409+49 |
+| base r9 | 3 | 256.2 | 258 | 4844 | 5176 | IMG.layer-art | 4 | 806 | 1155 | 4075+806,4896+72,5025+425,5450+52 |
+| now r9 | 8 | 253.6 | 257.1 | 5052 | 5496 | IMG.layer-art | 3 | 820 | 1217 | 4269+820,5105+77,5260+470 |
+| now r10 | 8 | 253.6 | 257.1 | 5428 | 5872 | IMG.layer-art | 3 | 866 | 1299 | 4580+866,5467+93,5642+490 |
+| base r10 | 3 | 256.2 | 258 | 5056 | 5404 | IMG.layer-art | 3 | 810 | 1190 | 4272+810,5098+75,5246+455 |
+| base r11 | 3 | 256.2 | 258 | 4964 | 5408 | IMG.layer-art | 3 | 951 | 1373 | 4167+951,5130+101,5320+471 |
+| now r11 | 8 | 253.6 | 257.1 | 5152 | 5464 | IMG.layer-art | 1 | 55 | 5 | 5151+55 |
+| now r12 | 8 | 253.6 | 257.1 | 5244 | 5696 | IMG.layer-art | 5 | 823 | 1277 | 4440+823,5274+90,5444+501,5945+54,6001+59 |
+| base r12 | 3 | 256.2 | 258 | 5236 | 5576 | IMG.layer-art | 3 | 768 | 1164 | 4483+768,5270+82,5445+464 |
+| base r13 | 3 | 256.2 | 258 | 5184 | 5428 | IMG.layer-art | 3 | 770 | 1175 | 4421+770,5204+98,5411+457 |
+| now r13 | 8 | 253.6 | 257.1 | 5208 | 5640 | IMG.layer-art | 3 | 839 | 1244 | 4384+839,5235+94,5438+461 |
+| now r14 | 8 | 253.6 | 257.1 | 5424 | 5924 | IMG.layer-art | 4 | 1017 | 1503 | 4557+1017,5588+101,5791+533,6324+52 |
+| base r14 | 3 | 256.2 | 258 | 5444 | 5788 | IMG.layer-art | 3 | 768 | 1215 | 4680+768,5457+102,5664+495 |
+| base r15 | 3 | 256.2 | 258 | 5152 | 5704 | IMG.layer-art | 4 | 788 | 1248 | 4401+788,5198+86,5347+504,5851+70 |
+| now r15 | 8 | 253.6 | 257.1 | 5324 | 5836 | IMG.layer-art | 3 | 804 | 1175 | 4543+804,5363+73,5556+448 |
+| now r16 | 8 | 253.6 | 257.1 | 5216 | 5404 | IMG.layer-art | 2 | 593 | 563 | 4684+593,5277+70 |
+| base r16 | 3 | 256.2 | 258 | 5580 | 5696 | IMG.layer-art | 3 | 775 | 1156 | 4810+775,5597+74,5757+457 |
+| base r17 | 3 | 256.2 | 258 | 5180 | 5492 | IMG.layer-art | 4 | 817 | 1243 | 4397+817,5232+80,5374+492,5866+54 |
+| now r17 | 8 | 253.6 | 257.1 | 5516 | 6072 | IMG.layer-art | 3 | 854 | 1243 | 4705+854,5573+64,5764+475 |
+| now r18 | 8 | 253.6 | 257.1 | 5636 | 6076 | IMG.layer-art | 3 | 907 | 1306 | 4752+907,5680+79,5844+470 |
+| base r18 | 3 | 256.2 | 258 | 4988 | 5416 | IMG.layer-art | 4 | 816 | 1244 | 4194+816,5026+94,5201+484,5686+50 |
+| base r19 | 3 | 256.2 | 258 | 4972 | 5388 | IMG.layer-art | 3 | 776 | 1139 | 4227+776,5017+79,5147+434 |
+| now r19 | 8 | 253.6 | 257.1 | 4940 | 5472 | IMG.layer-art | 3 | 820 | 1225 | 4160+820,4990+90,5208+465 |
+| now r20 | 8 | 253.6 | 257.1 | 5644 | 5880 | IMG.layer-art | 3 | 701 | 1183 | 4952+701,5667+124,5901+508 |
+| base r20 | 3 | 256.2 | 258 | 4880 | 5184 | IMG.layer-art | 3 | 603 | 1052 | 4289+603,4911+120,5137+479 |
+median base (n=20): JS gz 256.2 KB · FCP 5118 · LCP 5422 · long tasks 3 · max LT 786 · TBT 1202.5
+median now (n=20): JS gz 253.6 KB · FCP 5212 · LCP 5706 · long tasks 3 · max LT 831 · TBT 1251
+selisih berpasangan now−base fcp: median 166 ms · now lebih buruk di 14/20 pasangan
+selisih berpasangan now−base lcp: median 224 ms · now lebih buruk di 16/20 pasangan
+selisih berpasangan now−base tbt: median 90.5 ms · now lebih buruk di 14/20 pasangan
+
+== Muat beranda /?off=preloader · CPU 2× · profil Chrome DINGIN (cache shader GPU kosong) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 6492 | 6828 | IMG.layer-art | 6 | 2099 | 3202 | 5821+708,6558+377,7125+65,7545+2099,9646+136,9786+117 |
+| now r1 | 8 | 253.6 | 257.1 | 6688 | 6688 | IMG.layer-art | 7 | 1480 | 1921 | 6366+400,6767+73,6973+83,7167+78,7449+1480,8931+67,9002+90 |
+| now r2 | 8 | 253.6 | 257.1 | 6228 | 6636 | IMG.layer-art | 7 | 1561 | 2914 | 5486+947,6467+458,7089+75,7665+1561,9227+60,9289+108,9398+55 |
+| base r2 | 3 | 256.2 | 258 | 7012 | 7012 | IMG.layer-art | 5 | 1435 | 2831 | 5990+1092,7111+286,7742+1435,9178+150,9330+118 |
+| base r3 | 3 | 256.2 | 258 | 7088 | 7748 | IMG.layer-art | 6 | 1531 | 2754 | 6245+914,7228+340,7569+94,7783+105,8013+70,8571+1531 |
+| now r3 | 8 | 253.6 | 257.1 | 6552 | 6804 | IMG.layer-art | 6 | 1399 | 2348 | 5846+762,6637+301,7074+59,7656+1399,9057+61,9120+66 |
+| now r4 | 8 | 253.6 | 257.1 | 6312 | 6312 | IMG.layer-art | 6 | 1479 | 2852 | 5236+1133,6397+307,6832+62,7235+1479,8716+81,8800+90 |
+| base r4 | 3 | 256.2 | 258 | 6272 | 6508 | IMG.layer-art | 6 | 1546 | 2506 | 5569+751,6353+299,6654+59,7453+1546,9000+66,9068+85 |
+| base r5 | 3 | 256.2 | 258 | 6004 | 6004 | IMG.layer-art | 3 | 1480 | 1557 | 5732+1480,7213+146,7362+81 |
+| now r5 | 8 | 253.6 | 257.1 | 5808 | 6204 | IMG.layer-art | 6 | 1342 | 2242 | 5098+748,5862+229,6213+62,6607+1342,7951+85,8038+76 |
+| now r6 | 8 | 253.6 | 257.1 | 6316 | 7012 | IMG.layer-art | 8 | 1390 | 3219 | 5499+1313,6838+441,7281+52,7381+50,7455+110,8409+1390,9799+125,9928+138 |
+| base r6 | 3 | 256.2 | 258 | 6208 | 6680 | IMG.layer-art | 6 | 1366 | 2388 | 5451+795,6274+268,6683+55,6965+1366,8332+104,8437+100 |
+| base r7 | 3 | 256.2 | 258 | 6184 | 6184 | IMG.layer-art | 3 | 1390 | 1482 | 5920+1390,7310+164,7476+78 |
+| now r7 | 8 | 253.6 | 257.1 | 5968 | 6264 | IMG.layer-art | 5 | 1280 | 2422 | 5092+975,6089+265,6796+1280,8077+76,8154+76 |
+| now r8 | 8 | 253.6 | 257.1 | 6428 | 6944 | IMG.layer-art | 10 | 1423 | 2616 | 5651+829,6528+383,6914+88,7173+97,7326+50,7471+63,7541+56,8349+1423,9772+53,9828+74 |
+| base r8 | 3 | 256.2 | 258 | 6012 | 6012 | IMG.layer-art | 3 | 1441 | 1519 | 5653+1441,7094+149,7246+79 |
+| base r9 | 3 | 256.2 | 258 | 7024 | 7024 | IMG.layer-art | 7 | 1302 | 2688 | 5993+1107,7157+328,7487+51,7618+74,8298+1302,9601+83,9687+93 |
+| now r9 | 8 | 253.6 | 257.1 | 6220 | 6700 | IMG.layer-art | 7 | 1508 | 2605 | 5504+912,6449+241,6692+63,6868+71,7458+1508,8967+71,9040+89 |
+| now r10 | 8 | 253.6 | 257.1 | 5732 | 6212 | IMG.layer-art | 7 | 1575 | 3134 | 4946+1178,6163+409,6574+63,6757+89,7547+1575,9122+87,9216+83 |
+| base r10 | 3 | 256.2 | 258 | 6252 | 6984 | IMG.layer-art | 6 | 1675 | 3331 | 5403+1393,6829+365,7203+73,7388+55,7454+70,8430+1675 |
+median base (n=10): JS gz 256.2 KB · FCP 6262 · LCP 6754 · long tasks 6 · max LT 1460.5 · TBT 2597
+median now (n=10): JS gz 253.6 KB · FCP 6270 · LCP 6662 · long tasks 7 · max LT 1451 · TBT 2610.5
+selisih berpasangan now−base fcp: median -206 ms · now lebih buruk di 4/10 pasangan
+selisih berpasangan now−base lcp: median -168 ms · now lebih buruk di 4/10 pasangan
+selisih berpasangan now−base tbt: median 214.5 ms · now lebih buruk di 6/10 pasangan
+
+== Muat beranda /?off=preloader · CPU 1× · cache shader GPU HANGAT (muat kedua di profil yang sama) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 1520 | 1708 | IMG.layer-art | 2 | 531 | 481 | 1527+531,2114+50 |
+| now r1 | 8 | 253.6 | 257.1 | 1432 | 1640 | IMG.layer-art | 2 | 507 | 523 | 1372+116,1522+507 |
+| now r2 | 8 | 253.6 | 257.1 | 1428 | 1472 | IMG.layer-art | 3 | 467 | 458 | 1364+87,1539+467,2053+54 |
+| base r2 | 3 | 256.2 | 258 | 1644 | 1832 | IMG.layer-art | 1 | 553 | 503 | 1645+553 |
+| base r3 | 3 | 256.2 | 258 | 1456 | 1644 | IMG.layer-art | 2 | 435 | 426 | 1388+91,1508+435 |
+| now r3 | 8 | 253.6 | 257.1 | 1440 | 1504 | IMG.layer-art | 3 | 471 | 461 | 1374+87,1494+471,2008+53 |
+| now r4 | 8 | 253.6 | 257.1 | 1460 | 1516 | IMG.layer-art | 3 | 426 | 418 | 1395+81,1554+426,2029+61 |
+| base r4 | 3 | 256.2 | 258 | 1528 | 1664 | IMG.layer-art | 2 | 448 | 399 | 1545+448,2035+51 |
+| base r5 | 3 | 256.2 | 258 | 1560 | 1628 | IMG.layer-art | 3 | 518 | 574 | 1509+100,1647+518,2216+106 |
+| now r5 | 8 | 253.6 | 257.1 | 1520 | 1568 | IMG.layer-art | 3 | 456 | 491 | 1444+79,1602+456,2102+106 |
+| now r6 | 8 | 253.6 | 257.1 | 1536 | 1792 | IMG.layer-art | 2 | 443 | 433 | 1554+90,1740+443 |
+| base r6 | 3 | 256.2 | 258 | 1460 | 1700 | IMG.layer-art | 3 | 466 | 468 | 1471+87,1579+466,2092+65 |
+| base r7 | 3 | 256.2 | 258 | 1448 | 1580 | IMG.layer-art | 3 | 497 | 479 | 1382+82,1492+497,2034+50 |
+| now r7 | 8 | 253.6 | 257.1 | 1612 | 1660 | IMG.layer-art | 3 | 479 | 466 | 1533+86,1729+479,2208+51 |
+| now r8 | 8 | 253.6 | 257.1 | 1420 | 1592 | IMG.layer-art | 3 | 459 | 463 | 1343+101,1470+459,1969+53 |
+| base r8 | 3 | 256.2 | 258 | 1416 | 1476 | IMG.layer-art | 1 | 501 | 451 | 1436+501 |
+median base (n=8): JS gz 256.2 KB · FCP 1490 · LCP 1654 · long tasks 2 · max LT 499 · TBT 473.5
+median now (n=8): JS gz 253.6 KB · FCP 1450 · LCP 1580 · long tasks 3 · max LT 463 · TBT 462
+selisih berpasangan now−base fcp: median -28 ms · now lebih buruk di 3/8 pasangan
+selisih berpasangan now−base lcp: median -64 ms · now lebih buruk di 3/8 pasangan
+selisih berpasangan now−base tbt: median -0.5 ms · now lebih buruk di 4/8 pasangan
+
+== Muat beranda /?off=preloader · CPU 2× · cache shader GPU HANGAT (muat kedua di profil yang sama) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 2472 | 2668 | IMG.layer-art | 6 | 1397 | 1671 | 2488+85,2612+275,3013+54,3435+1397,4833+83,4918+77 |
+| now r1 | 8 | 253.6 | 257.1 | 2384 | 2612 | IMG.layer-art | 6 | 1646 | 1927 | 2404+82,2516+271,2927+54,3341+1646,4988+89,5080+85 |
+| now r2 | 8 | 253.6 | 257.1 | 2492 | 2728 | IMG.layer-art | 6 | 1251 | 1495 | 2517+81,2637+293,3082+50,3702+1251,4954+59,5015+61 |
+| base r2 | 3 | 256.2 | 258 | 2444 | 2648 | IMG.layer-art | 5 | 1305 | 1535 | 2468+89,2611+256,3661+1305,4967+61,5030+74 |
+| base r3 | 3 | 256.2 | 258 | 2628 | 2800 | IMG.layer-art | 6 | 1158 | 1361 | 2636+72,2757+259,3157+52,3841+1158,4999+58,5077+62 |
+| now r3 | 8 | 253.6 | 257.1 | 2404 | 2568 | IMG.layer-art | 6 | 1301 | 1496 | 2422+68,2526+248,2901+54,3431+1301,4733+63,4798+62 |
+| now r4 | 8 | 253.6 | 257.1 | 2376 | 2532 | IMG.layer-art | 6 | 1480 | 1808 | 2279+154,2455+260,2843+50,3505+1480,4986+78,5067+86 |
+| base r4 | 3 | 256.2 | 258 | 2588 | 2872 | IMG.layer-art | 5 | 1322 | 1588 | 2617+98,2760+289,3564+1322,4886+66,4956+63 |
+| base r5 | 3 | 256.2 | 258 | 2460 | 2648 | IMG.layer-art | 7 | 1388 | 1636 | 2482+86,2623+248,2873+50,3022+61,3536+1388,4925+76,5003+77 |
+| now r5 | 8 | 253.6 | 257.1 | 2452 | 2716 | IMG.layer-art | 7 | 1282 | 1725 | 2469+152,2808+386,3195+52,3351+65,4080+1282,5363+65,5429+73 |
+| now r6 | 8 | 253.6 | 257.1 | 2360 | 2664 | IMG.layer-art | 5 | 1302 | 1623 | 2376+144,2577+276,3341+1302,4643+80,4725+71 |
+| base r6 | 3 | 256.2 | 258 | 2312 | 2524 | IMG.layer-art | 5 | 1541 | 1837 | 2346+71,2464+305,3367+1541,4908+82,4992+88 |
+| base r7 | 3 | 256.2 | 258 | 2452 | 2676 | IMG.layer-art | 5 | 1264 | 1495 | 2477+84,2610+264,3554+1264,4819+63,4884+70 |
+| now r7 | 8 | 253.6 | 257.1 | 2416 | 2628 | IMG.layer-art | 6 | 1231 | 1499 | 2439+78,2552+281,2975+67,3458+1231,4689+76,4767+66 |
+| now r8 | 8 | 253.6 | 257.1 | 2668 | 2876 | IMG.layer-art | 6 | 1409 | 1693 | 2693+73,2802+293,3239+54,3665+1409,5074+70,5146+94 |
+| base r8 | 3 | 256.2 | 258 | 2756 | 2756 | IMG.layer-art | 5 | 1345 | 1691 | 2640+154,2829+293,3717+1345,5063+80,5145+69 |
+median base (n=8): JS gz 256.2 KB · FCP 2466 · LCP 2672 · long tasks 5 · max LT 1333.5 · TBT 1612
+median now (n=8): JS gz 253.6 KB · FCP 2410 · LCP 2646 · long tasks 6 · max LT 1301.5 · TBT 1658
+selisih berpasangan now−base fcp: median -62 ms · now lebih buruk di 2/8 pasangan
+selisih berpasangan now−base lcp: median 10 ms · now lebih buruk di 4/8 pasangan
+selisih berpasangan now−base tbt: median 46.5 ms · now lebih buruk di 6/8 pasangan
+
+== Scroll beranda (tools/perf.mjs) · CPU 1× · kolom: frames | fps | p50 | p95 | p99 | max | frames >50ms
+-- base r1
+| idle hero (4s) | 576 | 143.8 | 7 | 7.5 | 8.3 | 22.2 | 0 |
+| scroll hero→tranquility | 703 | 114.2 | 7.4 | 13.8 | 25.2 | 115.4 | 3 |
+| scroll tranquility→biodiversity | 672 | 113.8 | 7.9 | 13.7 | 16.8 | 41.9 | 0 |
+| scroll content sections | 1580 | 114.7 | 7.3 | 13.7 | 23.9 | 544.6 | 5 |
+| scroll back to hero | 1478 | 125 | 7.2 | 12.3 | 17.2 | 101.6 | 3 |
+-- now r1
+| idle hero (4s) | 579 | 144.3 | 6.9 | 7.3 | 7.7 | 8.8 | 0 |
+| scroll hero→tranquility | 746 | 116.9 | 7.5 | 12.9 | 22.5 | 106.3 | 2 |
+| scroll tranquility→biodiversity | 740 | 115.6 | 7.7 | 13.3 | 17 | 38.2 | 0 |
+| scroll content sections | 1730 | 121.9 | 7.1 | 12.8 | 20.5 | 307 | 6 |
+| scroll back to hero | 1570 | 124.7 | 7.2 | 12.9 | 18.2 | 90.7 | 3 |
+-- base r2
+| idle hero (4s) | 576 | 143.8 | 7 | 7.5 | 8 | 10.4 | 0 |
+| scroll hero→tranquility | 736 | 109.3 | 7.9 | 14.3 | 21.8 | 109 | 4 |
+| scroll tranquility→biodiversity | 717 | 118.8 | 7.6 | 12.7 | 17.4 | 38.9 | 0 |
+| scroll content sections | 1660 | 118.6 | 7.2 | 13.2 | 18.2 | 469 | 5 |
+| scroll back to hero | 1575 | 126 | 7.1 | 12 | 15.3 | 88.2 | 3 |
+-- now r2
+| idle hero (4s) | 575 | 143.8 | 7 | 7.4 | 9.2 | 16.2 | 0 |
+| scroll hero→tranquility | 747 | 122.2 | 7.3 | 12 | 19.4 | 95.8 | 3 |
+| scroll tranquility→biodiversity | 715 | 110.5 | 8 | 14.1 | 19.2 | 40.1 | 0 |
+| scroll content sections | 1622 | 117.3 | 7.2 | 12.9 | 21 | 488.7 | 6 |
+| scroll back to hero | 1664 | 120.7 | 7.2 | 12.7 | 17.7 | 411.9 | 4 |
+-- base r3
+| idle hero (4s) | 576 | 143.8 | 6.9 | 7.6 | 8.9 | 14.4 | 0 |
+| scroll hero→tranquility | 762 | 118.3 | 7.3 | 12.7 | 22.8 | 99.1 | 3 |
+| scroll tranquility→biodiversity | 767 | 115.7 | 7.6 | 13.6 | 19.1 | 54.1 | 1 |
+| scroll content sections | 1713 | 119.4 | 7.2 | 12.3 | 21.3 | 293 | 6 |
+| scroll back to hero | 1556 | 122.5 | 7.3 | 12.9 | 18.2 | 90 | 3 |
+-- now r3
+| idle hero (4s) | 579 | 144.2 | 6.9 | 7.3 | 7.6 | 7.9 | 0 |
+| scroll hero→tranquility | 711 | 119.2 | 7.3 | 12.6 | 20.8 | 111 | 2 |
+| scroll tranquility→biodiversity | 699 | 119 | 7.6 | 13.2 | 17.9 | 34.6 | 0 |
+| scroll content sections | 1630 | 121.4 | 7.1 | 12.6 | 20.2 | 302.2 | 6 |
+| scroll back to hero | 1476 | 128 | 7.1 | 11.5 | 17.3 | 115 | 2 |
+-- base r4
+| idle hero (4s) | 577 | 144.1 | 6.9 | 7.7 | 8.5 | 9.7 | 0 |
+| scroll hero→tranquility | 728 | 120.1 | 7.3 | 12.4 | 25.8 | 112.9 | 3 |
+| scroll tranquility→biodiversity | 715 | 113 | 7.7 | 14.5 | 19.9 | 41 | 0 |
+| scroll content sections | 1616 | 119.6 | 7.2 | 12.5 | 21.6 | 288.2 | 6 |
+| scroll back to hero | 1583 | 128.2 | 7.1 | 11.7 | 15.7 | 129.2 | 2 |
+-- now r4
+| idle hero (4s) | 578 | 144.1 | 7 | 7.3 | 8 | 13.5 | 0 |
+| scroll hero→tranquility | 737 | 123.6 | 7.1 | 11.6 | 24.4 | 110.4 | 3 |
+| scroll tranquility→biodiversity | 690 | 114.9 | 7.8 | 14.3 | 20.1 | 34 | 0 |
+| scroll content sections | 1622 | 121.3 | 7.2 | 12.2 | 20.2 | 503.9 | 6 |
+| scroll back to hero | 1426 | 120.5 | 7.3 | 13 | 17.2 | 112.2 | 3 |
+-- median per skenario (CPU 1×): base p95 / now p95 · base >50ms / now >50ms · base fps / now fps
+| idle hero (4s) | p95 7.5 / 7.3 | >50ms 0 / 0 | fps 143.8 / 144.1 | max 12.4 / 11.2 |
+| scroll hero→tranquility | p95 13.3 / 12.3 | >50ms 3 / 2.5 | fps 116.3 / 120.7 | max 111 / 108.3 |
+| scroll tranquility→biodiversity | p95 13.6 / 13.7 | >50ms 0 / 0 | fps 114.8 / 115.3 | max 41.5 / 36.4 |
+| scroll content sections | p95 12.8 / 12.7 | >50ms 5.5 / 6 | fps 119 / 121.3 | max 381 / 397.9 |
+| scroll back to hero | p95 12.2 / 12.8 | >50ms 3 / 3 | fps 125.5 / 122.7 | max 95.8 / 113.6 |
+total frames >50ms over all runs: base 47 (n=4) / now 46 (n=4)
+
+== Scroll beranda (tools/perf.mjs) · CPU 2× · kolom: frames | fps | p50 | p95 | p99 | max | frames >50ms
+-- base r1
+| idle hero (4s) | 285 | 71.1 | 12.6 | 25.7 | 34.7 | 38.8 | 0 |
+| scroll hero→tranquility | 392 | 39.9 | 23 | 43.3 | 56.6 | 137.9 | 13 |
+| scroll tranquility→biodiversity | 381 | 43.4 | 21.8 | 36.3 | 43 | 49.1 | 0 |
+| scroll content sections | 1229 | 67 | 13.4 | 28.1 | 42.9 | 501 | 7 |
+| scroll back to hero | 1123 | 65.8 | 12.6 | 34.8 | 52.7 | 178.2 | 15 |
+-- now r1
+| idle hero (4s) | 318 | 79.2 | 11.4 | 21.5 | 29.3 | 39 | 0 |
+| scroll hero→tranquility | 382 | 42.5 | 21.2 | 37.9 | 61.6 | 137 | 8 |
+| scroll tranquility→biodiversity | 401 | 46.4 | 19.3 | 38.2 | 48.9 | 74.1 | 3 |
+| scroll content sections | 1258 | 74.5 | 12.2 | 23.9 | 31.9 | 515 | 5 |
+| scroll back to hero | 1148 | 78.7 | 12.1 | 23.6 | 30.1 | 84.7 | 4 |
+-- base r2
+| idle hero (4s) | 385 | 96.2 | 10 | 13.8 | 19.5 | 40.5 | 0 |
+| scroll hero→tranquility | 425 | 45.2 | 20.1 | 34.7 | 63.5 | 104.3 | 8 |
+| scroll tranquility→biodiversity | 443 | 46.6 | 19.9 | 36.2 | 49.3 | 68.5 | 5 |
+| scroll content sections | 1250 | 65.8 | 13.6 | 29 | 41.2 | 525.3 | 8 |
+| scroll back to hero | 1104 | 73.1 | 12.8 | 25.8 | 39.8 | 73.5 | 5 |
+-- now r2
+| idle hero (4s) | 406 | 101.4 | 9.5 | 13.7 | 18.3 | 32.5 | 0 |
+| scroll hero→tranquility | 410 | 45.4 | 19.6 | 35.8 | 59.2 | 96.7 | 11 |
+| scroll tranquility→biodiversity | 417 | 43.7 | 20.6 | 37.1 | 55.3 | 108.1 | 9 |
+| scroll content sections | 1270 | 60.5 | 14.1 | 33.7 | 59.7 | 506.5 | 21 |
+| scroll back to hero | 1124 | 73.9 | 11.8 | 26.8 | 39.4 | 215.4 | 8 |
+-- base r3
+| idle hero (4s) | 369 | 92 | 10.4 | 16.5 | 23.1 | 41.5 | 0 |
+| scroll hero→tranquility | 404 | 45.3 | 20.2 | 36.7 | 54.3 | 109 | 7 |
+| scroll tranquility→biodiversity | 439 | 56.8 | 17.4 | 27.1 | 31.7 | 38.1 | 0 |
+| scroll content sections | 1277 | 75.3 | 12.5 | 21.7 | 30 | 496.2 | 5 |
+| scroll back to hero | 1107 | 76.8 | 11.7 | 24.3 | 32.7 | 74.3 | 3 |
+-- now r3
+| idle hero (4s) | 348 | 87 | 11.2 | 15.3 | 17.9 | 23.8 | 0 |
+| scroll hero→tranquility | 406 | 44.1 | 21 | 34.5 | 64.9 | 106.1 | 7 |
+| scroll tranquility→biodiversity | 449 | 53.2 | 18.3 | 29.7 | 39.4 | 47.7 | 0 |
+| scroll content sections | 1277 | 73.2 | 12.7 | 24 | 32.3 | 491.6 | 5 |
+| scroll back to hero | 1104 | 72.5 | 12 | 28.3 | 47.1 | 123.3 | 10 |
+-- base r4
+| idle hero (4s) | 349 | 87.2 | 10.7 | 16.9 | 20.9 | 33.2 | 0 |
+| scroll hero→tranquility | 407 | 44.2 | 20.4 | 37.6 | 55.4 | 123.8 | 9 |
+| scroll tranquility→biodiversity | 431 | 52.6 | 18.4 | 27.6 | 36.3 | 60 | 1 |
+| scroll content sections | 1309 | 76.3 | 12 | 23.2 | 30.1 | 523.8 | 6 |
+| scroll back to hero | 1114 | 71.2 | 12.9 | 30.4 | 41 | 142.4 | 6 |
+-- now r4
+| idle hero (4s) | 318 | 79.4 | 12 | 19.4 | 24 | 30.5 | 0 |
+| scroll hero→tranquility | 415 | 46.2 | 20.3 | 32.7 | 58.3 | 109.4 | 8 |
+| scroll tranquility→biodiversity | 440 | 55.1 | 17.4 | 26.7 | 32 | 38.9 | 0 |
+| scroll content sections | 1258 | 73.3 | 12.4 | 24.5 | 36.7 | 537.2 | 6 |
+| scroll back to hero | 1079 | 70.3 | 12.8 | 29.8 | 41.1 | 101.6 | 5 |
+-- median per skenario (CPU 2×): base p95 / now p95 · base >50ms / now >50ms · base fps / now fps
+| idle hero (4s) | p95 16.7 / 17.4 | >50ms 0 / 0 | fps 89.6 / 83.2 | max 39.6 / 31.5 |
+| scroll hero→tranquility | p95 37.2 / 35.1 | >50ms 8.5 / 8 | fps 44.7 / 44.8 | max 116.4 / 107.8 |
+| scroll tranquility→biodiversity | p95 31.9 / 33.4 | >50ms 0.5 / 1.5 | fps 49.6 / 49.8 | max 54.5 / 60.9 |
+| scroll content sections | p95 25.6 / 24.3 | >50ms 6.5 / 5.5 | fps 71.2 / 73.3 | max 512.4 / 510.8 |
+| scroll back to hero | p95 28.1 / 27.6 | >50ms 5.5 / 6.5 | fps 72.2 / 73.2 | max 108.3 / 112.4 |
+total frames >50ms over all runs: base 98 (n=4) / now 110 (n=4)
+
+-- trace (6 pasang dingin CPU 1×, tracing aktif): awal+durasi tugas besar main thread, FCP, kandidat LCP (ms)
+base-1.json  modEvalEnd 162,5412 | big tasks 166+4005 4366+901 5470+528 | FCP 5227 | LCP cands 5227,5519
+base-2.json  modEvalEnd 227,5229 | big tasks 109+118 244+4022 4509+575 5302+514 | FCP 5081 | LCP cands 5081,5352
+base-3.json  modEvalEnd 173,4938 | big tasks 71+102 178+3774 5001+486 | FCP 4765 | LCP cands 4765,4890
+base-4.json  modEvalEnd 180,4936 | big tasks 74+106 192+3781 4220+572 5007+507 | FCP 4791 | LCP cands 4791,5048
+base-5.json  modEvalEnd 180,5043 | big tasks 186+3846 4232+657 5143+554 | FCP 4882 | LCP cands 4882,5146
+base-6.json  modEvalEnd 167,5514 | big tasks 171+3992 4420+922 5588+527 | FCP 5300 | LCP cands 5300,5494
+now-1.json   modEvalEnd 151,5215 | big tasks 158+3781 4829+194 5253+450 | FCP 4794 | LCP cands 4794,5149
+now-2.json   modEvalEnd 158,5158 | big tasks 167+3941 4404+586 5203+489 | FCP 4987 | LCP cands 4987,5251
+now-3.json   modEvalEnd 198,5346 | big tasks 207+3796 4961+215 5402+438 | FCP 4921 | LCP cands 4921,5289
+now-4.json   modEvalEnd 224,5336 | big tasks 95+129 230+3864 4973+184 5390+469 | FCP 4950 | LCP cands 4950,5297
+now-5.json   modEvalEnd 195,5483 | big tasks 202+3930 5097+196 5535+444 | FCP 5065 | LCP cands 5065,5441
+now-6.json   modEvalEnd 161,5209 | big tasks 169+3801 4837+189 5250+493 | FCP 4813 | LCP cands 4813,5160
+
+####################################################################################################################
+polish / codeSplitting · A/B beranda · 2026-11-17 · mesin, layar, flag, viewport sama dengan blok di atas
+base = commit aa30cac (worktree baru .shots/gate-perf/wt-base, node_modules sama lewat junction)
+now  = working tree di atas 22f8e22 (tahap 1 + gelombang fix + polish), kini dengan vite.config.ts
+       build.rolldownOptions.output.codeSplitting.groups 'vendor' (react, react-dom, scheduler, react-router,
+       preload-helper) dan 'motion' (lenis, gsap kecuali Draggable/InertiaPlugin, src/lib/motion|perf|smoothScroll).
+Build: `npx vite build --outDir ../dist-base` (worktree) dan `npx vite build --outDir .shots/gate-perf/dist-now`;
+`vite preview` base :4181, now :4182. Skrip sama persis (load.mjs dan sum.mjs disalin dari .shots/close-perf,
+tools/perf.mjs tanpa perubahan). Satu sesi, bergantian per ronde, urutan dibalik tiap ronde (.shots/gate-perf/run.sh):
+muat dingin CPU 1× 20 pasang, CPU 2× 10 pasang; hangat 8 pasang per CPU; scroll 4 ronde per varian per CPU.
+Tidak ada exception runtime di semua muat (errors 0).
+
+Isi set JS beranda (gzip -9 dari berkas yang dilayani)
+                                   base (aa30cac)        tahap 1 (sebelum polish)   now (codeSplitting)
+jalur kritis (entry+modulepreload) 222.2 KB, 2 berkas    219.3 KB, 6 berkas         220.9 KB, 5 berkas
+  rincian                          index 171.0           index 121.2 · i18n 11.5    index 55.2 · vendor 96.5
+                                   SectionHeader 51.2    react-router 30.4          motion 61.1 · i18n 7.8
+                                                         motion 32.5 · perf 1.2     rolldown-runtime 0.4
+                                                         smoothScroll 22.3
+lazy beranda (HomeSections, Card)  34.0                  33.4 + 0.9                 31.0 + 0.9
+total JS yang di-fetch (muat)      256.2 KB, 3 berkas    253.6 KB, 8 berkas         252.8 KB, 7 berkas
+=> dibanding base: −3.4 KB total, −1.3 KB di jalur kritis. Dibanding tahap 1 sebelum polish: total −0.8 KB, tetapi jalur
+   kritis +1.6 KB (gsap/utils/matrix + VelocityTracker pindah dari HomeSections ke motion, lihat di bawah).
+
+Modul di chunk motion (build dengan --sourcemap, .shots/gate-perf/now-sm; ukuran raw yang dipetakan · gz jika sendiri)
+  gsap/gsap-core 50.4 · 19.3     gsap/ScrollTrigger 33.3 · 13.8   gsap/CSSPlugin 18.3 · 7.7    lenis 18.2 · 5.2
+  gsap/Observer 8.6 · 3.8        gsap/SplitText 7.2 · 3.3         src/lib/motion.ts 5.8 · 2.9
+  gsap/utils/matrix 4.7 · 2.1    gsap/CustomEase 3.2 · 1.7        gsap/utils/paths 3.1 · 1.7
+  gsap/utils/VelocityTracker 2.1 · 1.0                            src/lib/perf.ts 1.8 · 0.9
+  src/lib/smoothScroll.ts 1.1 · 0.5   src/lib/store.ts 0.7 · 0.4   gsap/index 0.0
+Pembanding base (aa30cac): index memuat ScrollTrigger, Observer, SplitText, lenis; SectionHeader memuat gsap-core,
+CSSPlugin, CustomEase, utils/paths, motion.ts, perf.ts, store.ts. Jadi semuanya sudah di jalur kritis base, KECUALI:
+  - gsap/utils/matrix.js (4.7 KB raw, ~2.1 KB gz sendiri) — hanya diimpor Draggable/Flip/MotionPathPlugin
+  - gsap/utils/VelocityTracker.js (2.1 KB raw, ~1.0 KB gz sendiri) — hanya diimpor InertiaPlugin
+  Di base keduanya ada di HomeSections (lazy) bersama Draggable/InertiaPlugin (dipakai Testimonials saja). Regex grup
+  'motion' mengecualikan `gsap/Draggable|InertiaPlugin` tetapi tidak `gsap/utils/*`, jadi dependensi keduanya ikut
+  ditarik ke jalur kritis (~6.8 KB raw, ~2–3 KB gz). Flip, MotionPathPlugin, ScrollToPlugin, dll. TIDAK ada di motion
+  (tidak diimpor src). Saran (tidak diterapkan, laporan saja): tambah `utils[\/](matrix|VelocityTracker)` ke
+  pengecualian, mis. `gsap[\/](?!Draggable|InertiaPlugin|utils[\/](matrix|VelocityTracker))`.
+  Kontrol baca: tidak ada plugin gsap di jalur kritis yang tidak dipakai beranda selain dua util itu.
+
+Ringkasan (median) · pita noise = IQR base (±setengah IQR) dan IQR / bootstrap-90% median selisih berpasangan
+                               base        now         selisih berpasangan (now−base)      pita noise
+JS awal gz (total di-fetch)    256.2 KB    252.8 KB    −3.4 KB (deterministik)             0
+LCP dingin CPU 1× (20 psg)     5584 ms     5678 ms     +100 ms, 12/20 lebih buruk          IQR base ±136 · boot90 −12..+186
+LCP dingin CPU 2× (10 psg)     6498 ms     6564 ms     +24 ms, 5/10                        IQR base ±108 · boot90 −220..+152
+LCP hangat CPU 1× (8 psg)      1702 ms     1678 ms     −60 ms, 3/8                         IQR base ±37 · boot90 −102..+36
+LCP hangat CPU 2× (8 psg)      2716 ms     2710 ms     −26 ms, 3/8                         IQR base ±53 · boot90 −102..+158
+FCP dingin CPU 1× / 2×         5220 / 6094 5214 / 6120 −8 (10/20) / +38 (6/10)             IQR base ±101 / ±214
+FCP hangat CPU 1× / 2×         1540 / 2550 1472 / 2516 −84 (2/8) / −38 (4/8)               IQR base ±30 / ±50
+TBT dingin CPU 1× / 2×         1223 / 2480 1238 / 2517 +5 (10/20) / +68 (6/10)             boot90 −45..+39 / −165..+430
+TBT hangat CPU 1× / 2×         525 / 1762  527 / 1674  +9 (6/8) / −95 (1/8)                boot90 −16..+34 / −169..−49
+Scroll CPU 1× p95 (5 skenario) base 7.3 12.8 13.3 13.4 12.1 · now 7.3 12.7 14.0 13.1 12.1
+  frame >50 ms total 4 run     base 46 (12/9/12/13) · now 45 (12/11/11/11)
+Scroll CPU 2× p95 (5 skenario) base 14.6 30.6 27.3 23.9 23.8 · now 14.1 31.9 28.0 23.1 23.3
+  frame >50 ms total 4 run     base 57 (16/16/13/12) · now 58 (17/15/12/14)
+  p95 per run (ms): tranq→bio CPU 1× base 13.0/13.2/13.3/13.7 · now 12.9/13.9/14.1/14.2;
+                    hero→tranq CPU 2× base 29.2/30.5/30.8/32.7 · now 30.7/31.5/32.4/33.5.
+  Dua skenario adegan ini condong +0.7 / +1.3 ms p95 untuk now (Mann-Whitney n=4/4, U=4, p≈0.34, tidak signifikan),
+  frame >50 ms identik (0/0 dan 5/5.5), dan arah yang sama sudah ada di tahap 1 sebelum codeSplitting (tranq→bio CPU 2×
+  31.9→33.4). Chunking tidak mengubah kode yang dieksekusi saat scroll (modul gsap/Lenis/beranda identik, hanya
+  berpindah berkas), jadi ini dicatat sebagai noise, bukan regresi. Skenario konten dan kembali ke hero condong
+  sebaliknya (now lebih baik 0.3–0.8 ms).
+
+Kesimpulan: TIDAK MEMBURUK (pass). Semua selisih berada di dalam pita noise; tidak ada metrik dengan interval
+bootstrap-90% seluruhnya di sisi "lebih buruk". Satu-satunya selisih yang konsisten di luar noise justru membaik:
+TBT hangat CPU 2× −95 ms (7/8 pasangan lebih baik) dan FCP hangat CPU 1× −84 ms (6/8).
+LCP dingin CPU 1× +100 ms (12/20, interval memuat 0) adalah pola yang sama dengan tahap 1 (+224 ms, 16/20) dan kini
+lebih kecil; tetap dibaca sebagai variasi waktu GPU (kompilasi shader ogl sinkron ~3–4 s di kedua build), sebab tidak
+membesar di CPU 2× (+24 ms) dan hilang dengan cache shader hangat (−60 ms).
+Catatan untuk pemilik grup 'motion': ~2–3 KB gz util Draggable/Inertia kini di jalur kritis (lihat atas). Tidak
+terlihat di metrik (jauh di bawah noise), tetapi bisa dikembalikan ke HomeSections lewat regex.
+
+==================================================================== angka mentah (polish / codeSplitting)
+
+== Muat beranda /?off=preloader · CPU 1× · profil Chrome DINGIN (cache shader GPU kosong) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 5092 | 5188 | IMG.layer-art | 3 | 761 | 1142 | 4337+761,5112+89,5297+442 |
+| now r1 | 7 | 252.8 | 256.2 | 5104 | 5352 | IMG.layer-art | 3 | 588 | 999 | 4524+588,5124+94,5302+467 |
+| now r2 | 7 | 252.8 | 256.2 | 5296 | 5644 | IMG.layer-art | 3 | 807 | 1246 | 4527+807,5351+76,5542+513 |
+| base r2 | 3 | 256.2 | 258 | 5060 | 5400 | IMG.layer-art | 3 | 816 | 1224 | 4274+816,5106+77,5306+481 |
+| base r3 | 3 | 256.2 | 258 | 7068 | 7444 | IMG.layer-art | 3 | 665 | 1157 | 6413+665,7095+130,7317+512 |
+| now r3 | 7 | 252.8 | 256.2 | 5192 | 5552 | IMG.layer-art | 4 | 794 | 1239 | 4431+794,5238+80,5387+508,5896+57 |
+| now r4 | 7 | 252.8 | 256.2 | 5384 | 5732 | IMG.layer-art | 3 | 448 | 622 | 5387+248,5647+76,5816+448 |
+| base r4 | 3 | 256.2 | 258 | 5376 | 5736 | IMG.layer-art | 4 | 828 | 1199 | 4583+828,5423+71,5559+448,6007+52 |
+| base r5 | 3 | 256.2 | 258 | 7112 | 7444 | IMG.layer-art | 3 | 607 | 1038 | 6516+607,7135+104,7356+477 |
+| now r5 | 7 | 252.8 | 256.2 | 5272 | 5620 | IMG.layer-art | 3 | 813 | 1275 | 4498+813,5326+82,5538+530 |
+| now r6 | 7 | 252.8 | 256.2 | 5336 | 5884 | IMG.layer-art | 3 | 862 | 1324 | 4529+862,5408+97,5626+515 |
+| base r6 | 3 | 256.2 | 258 | 5216 | 5572 | IMG.layer-art | 3 | 963 | 1389 | 4428+963,5405+98,5608+478 |
+| base r7 | 3 | 256.2 | 258 | 5140 | 5484 | IMG.layer-art | 3 | 826 | 1225 | 4357+826,5202+81,5406+468 |
+| now r7 | 7 | 252.8 | 256.2 | 5320 | 5752 | IMG.layer-art | 3 | 824 | 1219 | 4531+824,5372+78,5560+467 |
+| now r8 | 7 | 252.8 | 256.2 | 5244 | 5492 | IMG.layer-art | 3 | 807 | 1177 | 4447+807,5276+74,5421+446 |
+| base r8 | 3 | 256.2 | 258 | 5028 | 5348 | IMG.layer-art | 3 | 782 | 1222 | 4262+782,5061+78,5229+512 |
+| base r9 | 3 | 256.2 | 258 | 5324 | 5836 | IMG.layer-art | 3 | 845 | 1248 | 4515+845,5371+78,5580+475 |
+| now r9 | 7 | 252.8 | 256.2 | 5208 | 5736 | IMG.layer-art | 3 | 868 | 1277 | 4380+868,5264+81,5472+478 |
+| now r10 | 7 | 252.8 | 256.2 | 5096 | 5520 | IMG.layer-art | 3 | 924 | 1288 | 4320+924,5254+77,5422+437 |
+| base r10 | 3 | 256.2 | 258 | 5040 | 5304 | IMG.layer-art | 3 | 807 | 1234 | 4248+807,5078+82,5256+495 |
+| base r11 | 3 | 256.2 | 258 | 5360 | 5688 | IMG.layer-art | 2 | 501 | 457 | 4861+501,5362+56 |
+| now r11 | 7 | 252.8 | 256.2 | 5220 | 5728 | IMG.layer-art | 3 | 816 | 1237 | 4442+816,5268+81,5477+490 |
+| now r12 | 7 | 252.8 | 256.2 | 4928 | 5032 | IMG.layer-art | 3 | 460 | 475 | 4860+75,4954+90,5146+460 |
+| base r12 | 3 | 256.2 | 258 | 5204 | 5536 | IMG.layer-art | 3 | 971 | 1350 | 4412+971,5395+83,5597+446 |
+| base r13 | 3 | 256.2 | 258 | 5252 | 5596 | IMG.layer-art | 3 | 819 | 1216 | 4455+819,5293+78,5498+469 |
+| now r13 | 7 | 252.8 | 256.2 | 5260 | 5584 | IMG.layer-art | 3 | 795 | 1191 | 4477+795,5287+71,5451+475 |
+| now r14 | 7 | 252.8 | 256.2 | 5088 | 5620 | IMG.layer-art | 3 | 819 | 1227 | 4303+819,5132+75,5323+483 |
+| base r14 | 3 | 256.2 | 258 | 5116 | 5412 | IMG.layer-art | 3 | 766 | 1188 | 4366+766,5144+123,5394+449 |
+| base r15 | 3 | 256.2 | 258 | 5224 | 5656 | IMG.layer-art | 3 | 808 | 1215 | 4434+808,5256+80,5424+477 |
+| now r15 | 7 | 252.8 | 256.2 | 5176 | 5712 | IMG.layer-art | 3 | 823 | 1183 | 4387+823,5224+69,5421+441 |
+| now r16 | 7 | 252.8 | 256.2 | 5380 | 5920 | IMG.layer-art | 3 | 848 | 1263 | 4573+848,5436+81,5652+484 |
+| base r16 | 3 | 256.2 | 258 | 5372 | 5948 | IMG.layer-art | 4 | 874 | 1348 | 4549+874,5437+89,5588+60,5712+525 |
+| base r17 | 3 | 256.2 | 258 | 5264 | 5596 | IMG.layer-art | 3 | 821 | 1190 | 4472+821,5310+72,5503+447 |
+| now r17 | 7 | 252.8 | 256.2 | 5224 | 5752 | IMG.layer-art | 3 | 821 | 1255 | 4437+821,5271+76,5471+508 |
+| now r18 | 7 | 252.8 | 256.2 | 5180 | 5752 | IMG.layer-art | 3 | 867 | 1335 | 4355+867,5238+92,5511+526 |
+| base r18 | 3 | 256.2 | 258 | 5136 | 5496 | IMG.layer-art | 3 | 833 | 1290 | 4336+833,5187+85,5428+522 |
+| base r19 | 3 | 256.2 | 258 | 5200 | 5528 | IMG.layer-art | 3 | 816 | 1230 | 4415+816,5245+80,5444+484 |
+| now r19 | 7 | 252.8 | 256.2 | 5176 | 5716 | IMG.layer-art | 4 | 814 | 1246 | 4399+814,5223+79,5361+492,5853+61 |
+| now r20 | 7 | 252.8 | 256.2 | 5036 | 5480 | IMG.layer-art | 4 | 799 | 1220 | 4256+799,5075+78,5240+488,5728+55 |
+| base r20 | 3 | 256.2 | 258 | 5224 | 5740 | IMG.layer-art | 3 | 815 | 1286 | 4437+815,5265+87,5467+534 |
+median base (n=20): JS gz 256.2 KB · FCP 5220 · LCP 5584 · long tasks 3 · max LT 816 · TBT 1223
+median now (n=20): JS gz 252.8 KB · FCP 5214 · LCP 5678 · long tasks 3 · max LT 815 · TBT 1238
+selisih berpasangan now−base fcp: median -8 ms · now lebih buruk di 10/20 pasangan
+selisih berpasangan now−base lcp: median 100 ms · now lebih buruk di 12/20 pasangan
+selisih berpasangan now−base tbt: median 5 ms · now lebih buruk di 10/20 pasangan
+
+== Muat beranda /?off=preloader · CPU 2× · profil Chrome DINGIN (cache shader GPU kosong) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 6080 | 6588 | IMG.layer-art | 7 | 1400 | 2532 | 5324+822,6174+382,6558+60,6744+65,7401+1400,8802+67,8871+86 |
+| now r1 | 7 | 252.8 | 256.2 | 6120 | 6564 | IMG.layer-art | 6 | 1360 | 2505 | 5377+954,6360+297,6660+50,7465+1360,8825+71,8899+73 |
+| now r2 | 7 | 252.8 | 256.2 | 6396 | 6640 | IMG.layer-art | 7 | 1360 | 2336 | 5666+776,6469+272,6743+52,6897+77,7521+1360,8882+67,8950+82 |
+| base r2 | 3 | 256.2 | 258 | 5964 | 6416 | IMG.layer-art | 7 | 1508 | 2509 | 5252+776,6053+260,6525+53,6919+1508,8428+91,8521+118,9220+53 |
+| base r3 | 3 | 256.2 | 258 | 6036 | 6504 | IMG.layer-art | 6 | 1421 | 2539 | 5301+939,6295+276,6573+55,7413+1421,8835+73,8911+75 |
+| now r3 | 7 | 252.8 | 256.2 | 6284 | 6284 | IMG.layer-art | 5 | 1525 | 2685 | 5416+907,6348+251,6851+1525,8376+157,8535+95 |
+| now r4 | 7 | 252.8 | 256.2 | 6004 | 6004 | IMG.layer-art | 6 | 1518 | 2589 | 5179+866,6080+265,6501+58,6780+1518,8299+94,8395+88 |
+| base r4 | 3 | 256.2 | 258 | 6492 | 6492 | IMG.layer-art | 3 | 1494 | 1597 | 6171+1494,7666+172,7839+81 |
+| base r5 | 3 | 256.2 | 258 | 6712 | 6712 | IMG.layer-art | 5 | 1504 | 2796 | 5702+1067,6815+252,7299+1504,8804+153,8959+70 |
+| now r5 | 7 | 252.8 | 256.2 | 7192 | 7420 | IMG.layer-art | 7 | 1403 | 1774 | 7215+102,7394+358,7754+51,7907+70,8477+1403,9881+67,9950+73 |
+| now r6 | 7 | 252.8 | 256.2 | 6044 | 6536 | IMG.layer-art | 6 | 1506 | 2640 | 5302+934,6267+305,6729+57,7278+1506,8786+66,8853+72 |
+| base r6 | 3 | 256.2 | 258 | 6108 | 6664 | IMG.layer-art | 7 | 1606 | 2943 | 5132+1100,6271+298,6572+57,6802+56,7082+1606,8689+85,8778+91 |
+| base r7 | 3 | 256.2 | 258 | 5708 | 6300 | IMG.layer-art | 6 | 1344 | 2450 | 4910+848,5791+286,6304+73,6460+1344,7805+94,7900+105 |
+| now r7 | 7 | 252.8 | 256.2 | 5900 | 6372 | IMG.layer-art | 7 | 1429 | 2529 | 5167+931,6124+255,6381+53,6536+63,7309+1429,8738+62,8803+86 |
+| now r8 | 7 | 252.8 | 256.2 | 6700 | 6700 | IMG.layer-art | 6 | 1340 | 2334 | 5925+813,6784+278,7176+51,7564+1340,8905+80,8986+72 |
+| base r8 | 3 | 256.2 | 258 | 7036 | 7272 | IMG.layer-art | 6 | 1358 | 1620 | 7051+81,7179+260,7571+51,8308+1358,9667+72,9741+98 |
+| base r9 | 3 | 256.2 | 258 | 5984 | 6392 | IMG.layer-art | 7 | 1435 | 2427 | 5247+784,6069+301,6373+50,6556+67,7119+1435,8555+63,8621+77 |
+| now r9 | 7 | 252.8 | 256.2 | 6020 | 6564 | IMG.layer-art | 6 | 1540 | 3024 | 5268+1212,6517+345,7009+61,7709+1540,9250+73,9328+93 |
+| now r10 | 7 | 252.8 | 256.2 | 6120 | 6600 | IMG.layer-art | 6 | 1414 | 2402 | 5377+798,6200+239,6594+56,6908+1414,8322+92,8415+103 |
+| base r10 | 3 | 256.2 | 258 | 6220 | 6468 | IMG.layer-art | 5 | 1352 | 2346 | 5499+770,6295+329,7494+1352,8847+64,8915+81 |
+median base (n=10): JS gz 256.2 KB · FCP 6094 · LCP 6498 · long tasks 6 · max LT 1428 · TBT 2479.5
+median now (n=10): JS gz 252.8 KB · FCP 6120 · LCP 6564 · long tasks 6 · max LT 1421.5 · TBT 2517
+selisih berpasangan now−base fcp: median 38 ms · now lebih buruk di 6/10 pasangan
+selisih berpasangan now−base lcp: median 24 ms · now lebih buruk di 5/10 pasangan
+selisih berpasangan now−base tbt: median 67.5 ms · now lebih buruk di 6/10 pasangan
+
+== Muat beranda /?off=preloader · CPU 1× · cache shader GPU HANGAT (muat kedua di profil yang sama) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 1560 | 1712 | IMG.layer-art | 2 | 543 | 536 | 1505+93,1630+543 |
+| now r1 | 7 | 252.8 | 256.2 | 1456 | 1680 | IMG.layer-art | 3 | 475 | 605 | 1482+95,1613+185,1831+475 |
+| now r2 | 7 | 252.8 | 256.2 | 1516 | 1716 | IMG.layer-art | 2 | 513 | 498 | 1450+85,1571+513 |
+| base r2 | 3 | 256.2 | 258 | 1488 | 1536 | IMG.layer-art | 3 | 422 | 456 | 1413+82,1576+422,2039+102 |
+| base r3 | 3 | 256.2 | 258 | 1588 | 1776 | IMG.layer-art | 3 | 527 | 534 | 1539+98,1663+527,2240+59 |
+| now r3 | 7 | 252.8 | 256.2 | 1472 | 1676 | IMG.layer-art | 3 | 522 | 535 | 1415+90,1531+522,2096+73 |
+| now r4 | 7 | 252.8 | 256.2 | 1540 | 1604 | IMG.layer-art | 3 | 521 | 512 | 1497+89,1671+521,2240+52 |
+| base r4 | 3 | 256.2 | 258 | 1512 | 1692 | IMG.layer-art | 3 | 503 | 497 | 1445+89,1554+503,2098+55 |
+| base r5 | 3 | 256.2 | 258 | 1528 | 1728 | IMG.layer-art | 2 | 601 | 597 | 1440+96,1584+601 |
+| now r5 | 7 | 252.8 | 256.2 | 1472 | 1756 | IMG.layer-art | 3 | 545 | 547 | 1487+85,1628+545,2232+67 |
+| now r6 | 7 | 252.8 | 256.2 | 1536 | 1684 | IMG.layer-art | 3 | 542 | 542 | 1496+95,1624+542,2213+55 |
+| base r6 | 3 | 256.2 | 258 | 1636 | 1920 | IMG.layer-art | 3 | 518 | 516 | 1646+98,1765+518,2284+50 |
+| base r7 | 3 | 256.2 | 258 | 1552 | 1592 | IMG.layer-art | 3 | 492 | 509 | 1488+86,1598+492,2149+81 |
+| now r7 | 7 | 252.8 | 256.2 | 1460 | 1636 | IMG.layer-art | 3 | 520 | 512 | 1396+71,1493+520,2058+71 |
+| now r8 | 7 | 252.8 | 256.2 | 1420 | 1588 | IMG.layer-art | 2 | 532 | 518 | 1337+86,1470+532 |
+| base r8 | 3 | 256.2 | 258 | 1496 | 1692 | IMG.layer-art | 3 | 529 | 551 | 1418+88,1536+529,2110+84 |
+median base (n=8): JS gz 256.2 KB · FCP 1540 · LCP 1702 · long tasks 3 · max LT 522.5 · TBT 525
+median now (n=8): JS gz 252.8 KB · FCP 1472 · LCP 1678 · long tasks 3 · max LT 521.5 · TBT 526.5
+selisih berpasangan now−base fcp: median -84 ms · now lebih buruk di 2/8 pasangan
+selisih berpasangan now−base lcp: median -60 ms · now lebih buruk di 3/8 pasangan
+selisih berpasangan now−base tbt: median 9 ms · now lebih buruk di 6/8 pasangan
+
+== Muat beranda /?off=preloader · CPU 2× · cache shader GPU HANGAT (muat kedua di profil yang sama) · cache HTTP off · 1440×900 @1.25x
+| run | JS files | JS gz KB | wire KB | FCP ms | LCP ms | LCP el | long tasks | max LT ms | TBT ms | long tasks (start+dur) |
+| base r1 | 3 | 256.2 | 258 | 2504 | 2684 | IMG.layer-art | 5 | 1370 | 1590 | 2516+74,2646+259,3590+1370,4961+63,5025+74 |
+| now r1 | 7 | 252.8 | 256.2 | 2688 | 2888 | IMG.layer-art | 6 | 1543 | 1849 | 2706+97,2856+297,3283+58,3890+1543,5433+67,5502+87 |
+| now r2 | 7 | 252.8 | 256.2 | 2524 | 2712 | IMG.layer-art | 6 | 1482 | 1775 | 2537+85,2677+256,3731+1482,5215+83,5323+111,8621+58 |
+| base r2 | 3 | 256.2 | 258 | 2516 | 2716 | IMG.layer-art | 5 | 1544 | 1874 | 2520+100,2682+289,3643+1544,5188+84,5274+107 |
+| base r3 | 3 | 256.2 | 258 | 2700 | 2936 | IMG.layer-art | 6 | 1456 | 1770 | 2722+94,2846+298,3294+67,3976+1456,5433+68,5502+87 |
+| now r3 | 7 | 252.8 | 256.2 | 2508 | 2708 | IMG.layer-art | 5 | 1311 | 1546 | 2539+79,2652+257,3554+1311,4866+72,4940+77 |
+| now r4 | 7 | 252.8 | 256.2 | 2416 | 2632 | IMG.layer-art | 6 | 1452 | 1715 | 2431+87,2559+277,2836+53,3558+1452,5011+73,5086+73 |
+| base r4 | 3 | 256.2 | 258 | 2500 | 2680 | IMG.layer-art | 7 | 1466 | 1748 | 2512+93,2662+259,2922+55,3081+79,3687+1466,5153+66,5222+80 |
+| base r5 | 3 | 256.2 | 258 | 2620 | 2788 | IMG.layer-art | 5 | 1498 | 1754 | 2631+76,2759+267,3627+1498,5126+79,5207+84 |
+| now r5 | 7 | 252.8 | 256.2 | 2460 | 2688 | IMG.layer-art | 6 | 1333 | 1633 | 2484+106,2634+268,3042+80,3570+1333,4903+71,4977+75 |
+| now r6 | 7 | 252.8 | 256.2 | 2416 | 2612 | IMG.layer-art | 5 | 1340 | 1582 | 2429+97,2561+253,3522+1340,4862+72,4937+70 |
+| base r6 | 3 | 256.2 | 258 | 2500 | 2716 | IMG.layer-art | 7 | 1433 | 1800 | 2501+87,2620+323,2944+55,3080+64,3793+1433,5227+101,5329+87 |
+| base r7 | 3 | 256.2 | 258 | 2596 | 2596 | IMG.layer-art | 5 | 1537 | 1836 | 2488+130,2647+275,3543+1537,5081+72,5156+72 |
+| now r7 | 7 | 252.8 | 256.2 | 2620 | 2796 | IMG.layer-art | 6 | 1528 | 1746 | 2636+58,2734+254,3111+54,3647+1528,5175+76,5253+76 |
+| now r8 | 7 | 252.8 | 256.2 | 2652 | 2908 | IMG.layer-art | 6 | 1338 | 1612 | 2670+94,2815+262,3209+75,3968+1338,5306+66,5375+77 |
+| base r8 | 3 | 256.2 | 258 | 2584 | 2792 | IMG.layer-art | 6 | 1356 | 1677 | 2602+105,2769+318,3235+54,3966+1356,5323+67,5391+77 |
+median base (n=8): JS gz 256.2 KB · FCP 2550 · LCP 2716 · long tasks 5.5 · max LT 1461 · TBT 1762
+median now (n=8): JS gz 252.8 KB · FCP 2516 · LCP 2710 · long tasks 6 · max LT 1396 · TBT 1674
+selisih berpasangan now−base fcp: median -38 ms · now lebih buruk di 4/8 pasangan
+selisih berpasangan now−base lcp: median -26 ms · now lebih buruk di 3/8 pasangan
+selisih berpasangan now−base tbt: median -94.5 ms · now lebih buruk di 1/8 pasangan
+
+== Scroll beranda (tools/perf.mjs) · CPU 1× · kolom: frames | fps | p50 | p95 | p99 | max | frames >50ms
+-- base r1
+| idle hero (4s) | 578 | 144.3 | 7 | 7.3 | 7.6 | 8 | 0 |
+| scroll hero→tranquility | 709 | 119.6 | 7.3 | 12.3 | 23.5 | 107.4 | 2 |
+| scroll tranquility→biodiversity | 698 | 119 | 7.6 | 13.2 | 19.3 | 36 | 0 |
+| scroll content sections | 1527 | 113.7 | 7.4 | 13.4 | 21.3 | 303.9 | 7 |
+| scroll back to hero | 1468 | 124.8 | 7.2 | 12.2 | 15.4 | 98.3 | 3 |
+-- now r1
+| idle hero (4s) | 578 | 144.1 | 6.9 | 7.3 | 7.8 | 9.4 | 0 |
+| scroll hero→tranquility | 756 | 116.1 | 7.5 | 13.4 | 22.8 | 123.9 | 3 |
+| scroll tranquility→biodiversity | 695 | 108.9 | 8.3 | 14.1 | 19.7 | 37 | 0 |
+| scroll content sections | 1696 | 116.2 | 7.3 | 13.2 | 20.8 | 474.7 | 6 |
+| scroll back to hero | 1487 | 125.4 | 7.3 | 12.2 | 15.7 | 81.4 | 3 |
+-- base r2
+| idle hero (4s) | 578 | 144.1 | 6.9 | 7.4 | 8.1 | 13.6 | 0 |
+| scroll hero→tranquility | 733 | 113.8 | 7.6 | 13 | 26.1 | 104.3 | 2 |
+| scroll tranquility→biodiversity | 691 | 114.6 | 7.9 | 13.3 | 17.2 | 30.9 | 0 |
+| scroll content sections | 1626 | 117.2 | 7.2 | 13.4 | 19.2 | 482.3 | 5 |
+| scroll back to hero | 1548 | 126.6 | 7.2 | 12.1 | 17.4 | 138.9 | 2 |
+-- now r2
+| idle hero (4s) | 578 | 144.1 | 7 | 7.3 | 7.6 | 9.3 | 0 |
+| scroll hero→tranquility | 718 | 115.5 | 7.5 | 13 | 20.5 | 112.1 | 3 |
+| scroll tranquility→biodiversity | 716 | 117.5 | 7.7 | 12.9 | 16.6 | 36.8 | 0 |
+| scroll content sections | 1648 | 116.8 | 7.3 | 13.1 | 19 | 312.4 | 6 |
+| scroll back to hero | 1503 | 127.6 | 7.1 | 11.9 | 17 | 138.9 | 2 |
+-- base r3
+| idle hero (4s) | 578 | 144.2 | 6.9 | 7.3 | 7.6 | 9.7 | 0 |
+| scroll hero→tranquility | 699 | 115.5 | 7.5 | 13.3 | 22.2 | 122.9 | 4 |
+| scroll tranquility→biodiversity | 704 | 119.5 | 7.6 | 13 | 16.2 | 32.9 | 0 |
+| scroll content sections | 1512 | 114.8 | 7.3 | 13.3 | 20.1 | 534.8 | 5 |
+| scroll back to hero | 1466 | 125.5 | 7.2 | 12.4 | 16.7 | 112.6 | 3 |
+-- now r3
+| idle hero (4s) | 579 | 144.3 | 6.9 | 7.5 | 8.1 | 9.4 | 0 |
+| scroll hero→tranquility | 712 | 119 | 7.4 | 12.1 | 22.1 | 115.5 | 2 |
+| scroll tranquility→biodiversity | 680 | 112.2 | 7.8 | 13.9 | 20.2 | 33.4 | 0 |
+| scroll content sections | 1519 | 116.4 | 7.3 | 13.2 | 19.5 | 467.7 | 6 |
+| scroll back to hero | 1461 | 126.7 | 7.2 | 12.4 | 16.4 | 76 | 3 |
+-- base r4
+| idle hero (4s) | 578 | 144.1 | 6.9 | 7.3 | 7.8 | 8.5 | 0 |
+| scroll hero→tranquility | 735 | 121.7 | 7.2 | 12.5 | 21.4 | 110.8 | 4 |
+| scroll tranquility→biodiversity | 731 | 114.7 | 7.8 | 13.7 | 17.3 | 42.6 | 0 |
+| scroll content sections | 1553 | 117 | 7.3 | 12.9 | 20.7 | 296.2 | 6 |
+| scroll back to hero | 1487 | 127.2 | 7.2 | 11.9 | 14.6 | 77.2 | 3 |
+-- now r4
+| idle hero (4s) | 577 | 144.2 | 7 | 7.3 | 7.7 | 9.1 | 0 |
+| scroll hero→tranquility | 703 | 117.1 | 7.5 | 12.4 | 24.1 | 90.8 | 3 |
+| scroll tranquility→biodiversity | 673 | 111.7 | 7.8 | 14.2 | 20.9 | 42.3 | 0 |
+| scroll content sections | 1481 | 115.1 | 7.4 | 12.7 | 21.1 | 497.8 | 5 |
+| scroll back to hero | 1475 | 127.7 | 7.2 | 11.7 | 15.7 | 94.1 | 3 |
+-- median per skenario (CPU 1×): base p95 / now p95 · base >50ms / now >50ms · base fps / now fps
+| idle hero (4s) | p95 7.3 / 7.3 | >50ms 0 / 0 | fps 144.1 / 144.1 | max 9.1 / 9.4 |
+| scroll hero→tranquility | p95 12.8 / 12.7 | >50ms 3 / 3 | fps 117.5 / 116.6 | max 109.1 / 113.8 |
+| scroll tranquility→biodiversity | p95 13.3 / 14 | >50ms 0 / 0 | fps 116.8 / 112 | max 34.5 / 36.9 |
+| scroll content sections | p95 13.4 / 13.1 | >50ms 5.5 / 6 | fps 115.9 / 116.3 | max 393.1 / 471.2 |
+| scroll back to hero | p95 12.1 / 12.1 | >50ms 3 / 3 | fps 126 / 127.2 | max 105.4 / 87.8 |
+total frames >50ms over all runs: base 46 (n=4) / now 45 (n=4)
+
+== Scroll beranda (tools/perf.mjs) · CPU 2× · kolom: frames | fps | p50 | p95 | p99 | max | frames >50ms
+-- base r1
+| idle hero (4s) | 369 | 91.9 | 10.7 | 15.4 | 18.2 | 24 | 0 |
+| scroll hero→tranquility | 403 | 45.3 | 20.2 | 32.7 | 56.1 | 93.9 | 8 |
+| scroll tranquility→biodiversity | 421 | 50.3 | 19.5 | 28.5 | 34.7 | 44.1 | 0 |
+| scroll content sections | 1260 | 70.2 | 13.1 | 24.7 | 32 | 543.3 | 5 |
+| scroll back to hero | 1106 | 74.7 | 12.7 | 25 | 31.6 | 106.7 | 3 |
+-- now r1
+| idle hero (4s) | 392 | 97.7 | 10.1 | 13.3 | 15.8 | 22.7 | 0 |
+| scroll hero→tranquility | 416 | 46.8 | 19.3 | 33.5 | 50.8 | 110.4 | 6 |
+| scroll tranquility→biodiversity | 447 | 52.8 | 18.6 | 27.6 | 34.7 | 61.4 | 1 |
+| scroll content sections | 1266 | 72.3 | 12.9 | 23.8 | 30.7 | 494.5 | 6 |
+| scroll back to hero | 1133 | 75.9 | 12.3 | 24.8 | 32.7 | 93.3 | 4 |
+-- base r2
+| idle hero (4s) | 387 | 96.5 | 10.2 | 13.9 | 16.3 | 17.3 | 0 |
+| scroll hero→tranquility | 405 | 46.6 | 20 | 29.2 | 50.4 | 110.1 | 6 |
+| scroll tranquility→biodiversity | 437 | 53.9 | 18.8 | 26.3 | 31.1 | 37.3 | 0 |
+| scroll content sections | 1252 | 72.8 | 12.7 | 23.8 | 32.3 | 507.1 | 5 |
+| scroll back to hero | 1046 | 71.2 | 13.1 | 27 | 40.3 | 107.2 | 5 |
+-- now r2
+| idle hero (4s) | 367 | 91.5 | 10.5 | 14.4 | 18.1 | 36.5 | 0 |
+| scroll hero→tranquility | 422 | 49.3 | 19.1 | 30.7 | 42.9 | 101.3 | 5 |
+| scroll tranquility→biodiversity | 442 | 54.5 | 17.7 | 29 | 37.9 | 43.3 | 0 |
+| scroll content sections | 1249 | 72.4 | 12.8 | 23 | 31.5 | 555.1 | 6 |
+| scroll back to hero | 1125 | 78 | 12 | 23.2 | 31.8 | 108.4 | 4 |
+-- base r3
+| idle hero (4s) | 376 | 93.6 | 10.2 | 15 | 18.1 | 35.3 | 0 |
+| scroll hero→tranquility | 409 | 47.5 | 19.6 | 30.8 | 49.5 | 93.6 | 4 |
+| scroll tranquility→biodiversity | 449 | 53.8 | 18.1 | 27.2 | 31.9 | 37.5 | 0 |
+| scroll content sections | 1260 | 72.3 | 12.9 | 23.6 | 31.2 | 499.1 | 6 |
+| scroll back to hero | 1089 | 76.7 | 12.7 | 22.6 | 30.2 | 109.3 | 3 |
+-- now r3
+| idle hero (4s) | 378 | 94.3 | 10.3 | 14.5 | 18 | 19.7 | 0 |
+| scroll hero→tranquility | 399 | 45.7 | 20.6 | 32.4 | 49.6 | 108.6 | 4 |
+| scroll tranquility→biodiversity | 421 | 51.4 | 18.5 | 28.4 | 32.6 | 43.9 | 0 |
+| scroll content sections | 1297 | 76 | 12.2 | 23.2 | 30.8 | 508.7 | 5 |
+| scroll back to hero | 1119 | 78.7 | 12.2 | 23.4 | 31.9 | 78.7 | 3 |
+-- base r4
+| idle hero (4s) | 387 | 96.5 | 10.2 | 14.2 | 16.1 | 17.4 | 0 |
+| scroll hero→tranquility | 410 | 48.1 | 19.8 | 30.5 | 45.1 | 108.4 | 3 |
+| scroll tranquility→biodiversity | 452 | 54 | 18.3 | 27.3 | 32.7 | 39.3 | 0 |
+| scroll content sections | 1267 | 71 | 13.1 | 24 | 35.4 | 525.7 | 6 |
+| scroll back to hero | 1106 | 77.5 | 12.6 | 22.6 | 29.8 | 104.1 | 3 |
+-- now r4
+| idle hero (4s) | 411 | 102.4 | 9.6 | 13.7 | 14.8 | 21.4 | 0 |
+| scroll hero→tranquility | 398 | 46.8 | 19.9 | 31.5 | 53.7 | 124.4 | 6 |
+| scroll tranquility→biodiversity | 457 | 57.3 | 16.9 | 27.4 | 34.2 | 47.4 | 0 |
+| scroll content sections | 1260 | 77 | 11.9 | 22.4 | 28.5 | 504.4 | 5 |
+| scroll back to hero | 1133 | 82.9 | 11.2 | 22.1 | 27.5 | 77.2 | 3 |
+-- median per skenario (CPU 2×): base p95 / now p95 · base >50ms / now >50ms · base fps / now fps
+| idle hero (4s) | p95 14.6 / 14.1 | >50ms 0 / 0 | fps 95 / 96 | max 20.7 / 22 |
+| scroll hero→tranquility | p95 30.6 / 31.9 | >50ms 5 / 5.5 | fps 47 / 46.8 | max 101.2 / 109.5 |
+| scroll tranquility→biodiversity | p95 27.3 / 28 | >50ms 0 / 0 | fps 53.8 / 53.6 | max 38.4 / 45.6 |
+| scroll content sections | p95 23.9 / 23.1 | >50ms 5.5 / 5.5 | fps 71.7 / 74.2 | max 516.4 / 506.5 |
+| scroll back to hero | p95 23.8 / 23.3 | >50ms 3 / 3.5 | fps 75.7 / 78.3 | max 107 / 86 |
+total frames >50ms over all runs: base 57 (n=4) / now 58 (n=4)

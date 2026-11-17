@@ -3,7 +3,7 @@
  * SectionHeader, Panel. Colour discipline (ARAH-VISUAL §4): status chips are neutral; gold = attention,
  * red = danger, "done" = check icon. Accent only for selection / primary action / the ecosystem dot.
  */
-import { useLayoutEffect, useRef, type ComponentPropsWithRef, type ReactNode } from 'react'
+import { memo, useLayoutEffect, useRef, type ComponentPropsWithRef, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { DEMO, EASE } from '../../lib/motion'
 import { useI18n } from '../../lib/i18n'
@@ -67,19 +67,19 @@ export function Chip({ children, icon, tone = 'neutral', selected, onToggle, onR
 export type StatusTone = 'neutral' | 'new' | 'warn' | 'danger' | 'done'
 
 /** Neutral by default. 'new' = brighter text + hollow dot; 'done' = check; warn/danger = semantic colour. */
-export function StatusChip({ label, tone = 'neutral', className }: { label: string; tone?: StatusTone; className?: string }) {
+export const StatusChip = memo(function StatusChip({ label, tone = 'neutral', className }: { label: string; tone?: StatusTone; className?: string }) {
   return (
     <span className={cx('dk-status', `dk-status--${tone}`, className)}>
       {tone === 'done' ? <Icon name="check" size={13} strokeWidth={1.8} /> : <i aria-hidden="true" />}
       <span>{label}</span>
     </span>
   )
-}
+})
 
 /* ------------------------------------------------------------------ SlaLabel */
 
 /** "20 j lagi" / "Lewat 2 j" / "Tuntas" with tone colour. `minutesLeft` negative = overdue. */
-export function SlaLabel({ minutesLeft, done, className }: { minutesLeft: number; done?: boolean; className?: string }) {
+export const SlaLabel = memo(function SlaLabel({ minutesLeft, done, className }: { minutesLeft: number; done?: boolean; className?: string }) {
   const { lang } = useI18n()
   const s = formatSla(minutesLeft, lang, done)
   return (
@@ -89,7 +89,7 @@ export function SlaLabel({ minutesLeft, done, className }: { minutesLeft: number
       {s.text}
     </span>
   )
-}
+})
 
 /* ------------------------------------------------------------------ LiveBadge */
 

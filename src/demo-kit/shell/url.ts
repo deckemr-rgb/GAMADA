@@ -81,12 +81,13 @@ export function replaceQuery(patch: Record<string, string | null | undefined>): 
   return true
 }
 
-/** Link to another product's sandbox, carrying region / seed / language (and an optional focus entity). */
-export function demoHref(slug: ProductSlug, s: Pick<DemoSession, 'regionId' | 'seed' | 'lang' | 'present'>, focus?: string | null): string {
+/** Link to another product's sandbox, carrying region / seed / language / Live AI (and an optional focus entity). */
+export function demoHref(slug: ProductSlug, s: Pick<DemoSession, 'regionId' | 'seed' | 'lang' | 'present'> & Partial<Pick<DemoSession, 'aiMode'>>, focus?: string | null): string {
   const p = new URLSearchParams()
   p.set('region', s.regionId)
   if (s.seed !== DEFAULT_SEED) p.set('seed', String(s.seed))
   p.set('lang', s.lang)
+  if (s.aiMode === 'live') p.set('ai', 'live')
   if (s.present) p.set('present', '1')
   if (focus) p.set('focus', focus)
   return `/demo/${slug}?${p.toString()}`

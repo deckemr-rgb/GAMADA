@@ -205,6 +205,19 @@
   font: var(--dk-t12) var(--dk-font);
   color: var(--dk-faint);
 }
+/* touch: markers keep their 22 px look but get a 44 px wide hit area (the button itself is ≥ 54 px tall) */
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-wave-mk::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: var(--dk-target, 44px);
+    min-height: var(--dk-target, 44px);
+    transform: translateX(-50%);
+  }
+}
 @media (max-width: 767px) {
   .dk-ap {
     padding: var(--dk-3);

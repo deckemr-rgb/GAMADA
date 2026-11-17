@@ -1,5 +1,8 @@
 /**
  * ai/live.ts — client for the AI proxy (spec §9.3, §10). Raw, no fallback: provider.ts wraps it.
+ * This is the ZOD half of the live client and is loaded ONLY on the live path (provider.ts → dynamic import()),
+ * so the simulation path and every demo route stay zod-free. The zod-free half — config, LiveError, health check,
+ * fallback bus, structured-validator registry — is ai/live-base.ts and is re-exported here for tests/tools.
  *
  * Base URL: import.meta.env.VITE_AI_PROXY_URL
  *   absent        ⇒ live is unavailable and nothing is fetched (production default: simulation only)
@@ -12,171 +15,12 @@
  * __tests__/structured-parity.test.ts. EventSource is not used because it cannot POST.
  */
 import { z } from 'zod'
-import type { AiChunk, ChatRequest, Extracted, ExtractRequest, Msg, ToolCall } from './types'
+import type { AiChunk, ChatRequest, Extracted, ExtractRequest, Msg, Structured, ToolCall } from './types'
 import { PRODUCTS, type ProductSlug } from '../../content/products'
 import { summarize, byteLength } from './context'
+import { LIVE, LiveError, asLiveError, cfg, customStructuredSchema, httpError } from './live-base'
 
-/* ------------------------------------------------------------------ constants (module-local, see report) */
-export const LIVE = {
-  healthTimeoutMs: 3000,
-  /** cache a healthy answer this long, an unhealthy one shorter */
-  healthTtlOkMs: 60_000,
-  healthTtlFailMs: 15_000,
-  /** max upload for /api/ai/extract (spec §10: ≤ 8 MB) */
-  extractMaxBytes: 8 * 1024 * 1024,
-  contextMaxBytes: 6000,
-  /** proxy limits (server LIMITS): ≤ 40 messages of ≤ 4000 chars, body ≤ 64 KB */
-  historyMaxMessages: 40,
-  messageMaxChars: 4000,
-  /** history budget, leaves room for the 6 KB context inside the proxy's 64 KB body limit */
-  historyMaxBytes: 48 * 1024,
-} as const
-
-/* ------------------------------------------------------------------ config */
-
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
-
-interface LiveConfig {
-  /** null = not configured; '' = same origin */
-  baseUrl: string | null
-  fetch: FetchLike
-}
-
-const normBase = (s: string): string => s.trim().replace(/\/+$/, '')
-
-function envBaseUrl(): string | null {
-  let raw: unknown
-  try {
-    raw = (import.meta as { env?: Record<string, unknown> }).env?.VITE_AI_PROXY_URL
-  } catch {
-    raw = undefined
-  }
-  return typeof raw === 'string' ? normBase(raw) : null
-}
-
-const cfg: LiveConfig = {
-  baseUrl: envBaseUrl(),
-  fetch: (input, init) => globalThis.fetch(input, init),
-}
-
-/** Override the proxy base URL ('' = same origin, null = off) and/or fetch (tests, integrator). Resets the health cache. */
-export function configureLive(patch: { baseUrl?: string | null; fetch?: FetchLike }): void {
-  if ('baseUrl' in patch) cfg.baseUrl = typeof patch.baseUrl === 'string' ? normBase(patch.baseUrl) : null
-  if (patch.fetch) cfg.fetch = patch.fetch
-  healthCache = null
-}
-
-export function liveBaseUrl(): string | null {
-  return cfg.baseUrl
-}
-export function isLiveConfigured(): boolean {
-  return cfg.baseUrl !== null
-}
-
-/* ------------------------------------------------------------------ errors */
-
-export type LiveErrorKind = 'unavailable' | 'timeout' | 'http' | 'network' | 'abort' | 'protocol' | 'upstream' | 'invalid'
-
-export class LiveError extends Error {
-  readonly kind: LiveErrorKind
-  readonly status?: number
-  /** proxy error code (`error.code` of a JSON error or an SSE `error` event), e.g. 'budget_exhausted' */
-  readonly code?: string
-  constructor(kind: LiveErrorKind, message?: string, status?: number, code?: string) {
-    super(message ?? kind)
-    this.name = 'LiveError'
-    this.kind = kind
-    if (status !== undefined) this.status = status
-    if (code !== undefined) this.code = code
-  }
-}
-
-function asLiveError(e: unknown, signal?: AbortSignal): LiveError {
-  if (e instanceof LiveError) return e
-  if (signal?.aborted || (e instanceof Error && e.name === 'AbortError')) return new LiveError('abort', 'aborted')
-  return new LiveError('network', e instanceof Error ? e.message : String(e))
-}
-
-/** HTTP ≥ 400 → LiveError('http') carrying the proxy's `{ error: { code, message } }` when present. */
-async function httpError(res: Response): Promise<LiveError> {
-  let code: string | undefined
-  let message = `HTTP ${res.status}`
-  try {
-    const j = (await res.json()) as { error?: { code?: unknown; message?: unknown } }
-    if (typeof j.error?.code === 'string') code = j.error.code
-    if (typeof j.error?.message === 'string') message = `HTTP ${res.status}: ${j.error.message}`
-  } catch {
-    /* not JSON (static host, gateway page) */
-  }
-  return new LiveError('http', message, res.status, code)
-}
-
-/* ------------------------------------------------------------------ health */
-
-/** GET /api/ai/health — same fields as the proxy (README "Protokol SSE" → health). */
-export interface Health {
-  /** the proxy answered */
-  ok: boolean
-  /** live answers are possible now (key present, budget left — or mock) */
-  live: boolean
-  /** the proxy runs AI_MOCK=1 (deterministic test answers) */
-  mock: boolean
-  models: { fast: string; smart: string; extract: string } | null
-  /** why live is false: 'no_api_key' | 'budget_exhausted' (proxy) | 'unreachable' | 'not_configured' (client) */
-  reason?: string
-}
-
-const HealthSchema = z.object({
-  ok: z.boolean(),
-  live: z.boolean(),
-  mock: z.boolean().optional(),
-  models: z.object({ fast: z.string(), smart: z.string(), extract: z.string() }).optional(),
-  reason: z.string().optional(),
-})
-
-let healthCache: { at: number; value: Health; pending?: Promise<Health> } | null = null
-const down = (reason: string): Health => ({ ok: false, live: false, mock: false, models: null, reason })
-
-/** Last known health (null when never checked or expired). */
-export function peekHealth(now: number = Date.now()): Health | null {
-  if (!healthCache || healthCache.pending) return null
-  const ttl = healthCache.value.live ? LIVE.healthTtlOkMs : LIVE.healthTtlFailMs
-  return now - healthCache.at <= ttl ? healthCache.value : null
-}
-
-/** GET {base}/api/ai/health with a 3 s timeout; cached (60 s when healthy, 15 s when not); deduplicated. */
-export function checkHealth(opts: { force?: boolean } = {}): Promise<Health> {
-  if (cfg.baseUrl === null) return Promise.resolve(down('not_configured'))
-  if (!opts.force) {
-    if (healthCache?.pending) return healthCache.pending
-    const known = peekHealth()
-    if (known) return Promise.resolve(known)
-  }
-  const url = `${cfg.baseUrl}/api/ai/health`
-  const pending = (async (): Promise<Health> => {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), LIVE.healthTimeoutMs)
-    try {
-      const res = await cfg.fetch(url, { method: 'GET', signal: ctrl.signal, headers: { accept: 'application/json' } })
-      if (!res.ok) return down('unreachable')
-      const parsed = HealthSchema.safeParse(await res.json())
-      if (!parsed.success) return down('unreachable')
-      const d = parsed.data
-      const h: Health = { ok: d.ok, live: d.ok && d.live, mock: d.mock ?? false, models: d.models ?? null }
-      if (d.reason) h.reason = d.reason
-      return h
-    } catch {
-      return down('unreachable')
-    } finally {
-      clearTimeout(timer)
-    }
-  })()
-  healthCache = { at: Date.now(), value: down('unreachable'), pending }
-  void pending.then((value) => {
-    if (healthCache?.pending === pending) healthCache = { at: Date.now(), value }
-  })
-  return pending
-}
+export * from './live-base'
 
 /* ------------------------------------------------------------------ SSE */
 
@@ -436,6 +280,22 @@ export const STRUCTURED_SCHEMAS = {
 
 export type StructuredKind = keyof typeof STRUCTURED_SCHEMAS
 export const STRUCTURED_KINDS = Object.keys(STRUCTURED_SCHEMAS) as StructuredKind[]
+
+const StructuredEnvelope = z.object({ kind: z.string().min(1), data: z.record(z.string(), z.unknown()) })
+const DEFAULT_SCHEMAS = new Map<string, z.ZodType<Record<string, unknown>>>(Object.entries(STRUCTURED_SCHEMAS))
+
+/**
+ * Validate a structured value: envelope + per-kind schema (a product's registerStructuredSchema() first, else the
+ * STRUCTURED_SCHEMAS default). Unknown kinds pass with the envelope only. null when invalid.
+ */
+export function validateStructured(value: unknown): Structured | null {
+  const env = StructuredEnvelope.safeParse(value)
+  if (!env.success) return null
+  const schema = customStructuredSchema(env.data.kind) ?? DEFAULT_SCHEMAS.get(env.data.kind)
+  if (!schema) return env.data
+  const p = schema.safeParse(env.data.data)
+  return p.success ? { kind: env.data.kind, data: p.data as Record<string, unknown> } : null
+}
 
 /** `followups` event data (mirror of the proxy's FollowupsSchema). */
 export const FOLLOWUPS_SCHEMA = z.object({

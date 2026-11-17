@@ -1,6 +1,6 @@
 /**
  * PageShell — shared hero + body frame for the inner pages (dusk hero, fireflies, eyebrow, h1,
- * lead), plus the per-route <title> / meta description (React 19 hoists them into <head>).
+ * lead, optional CTA row), plus the per-route <title> / meta description (React 19 hoists them into <head>).
  */
 import type { ReactNode } from 'react'
 import { useI18n } from '../lib/i18n'
@@ -16,9 +16,11 @@ interface Props {
   children?: ReactNode
   /** Extra content inside the hero above the eyebrow (back link …). */
   heroExtra?: ReactNode
+  /** The page's primary actions (CTA row), set right under the lead inside the hero. */
+  actions?: ReactNode
 }
 
-export default function PageShell({ eyebrow, title, lead, docTitle, children, heroExtra }: Props) {
+export default function PageShell({ eyebrow, title, lead, docTitle, children, heroExtra, actions }: Props) {
   const { t } = useI18n()
   return (
     <>
@@ -32,6 +34,7 @@ export default function PageShell({ eyebrow, title, lead, docTitle, children, he
           <Eyebrow>{eyebrow}</Eyebrow>
           <h1 className="page-title">{title}</h1>
           <p className="page-lead">{lead}</p>
+          {actions ? <div className="page-hero-actions">{actions}</div> : null}
         </div>
       </section>
       <div className="page-body">{children ?? <p className="page-building">{t.pages.building}</p>}</div>

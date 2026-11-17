@@ -3,11 +3,11 @@
  *
  * Boot: reads ?region ?role ?t ?ai ?lang ?present ?seed ?focus → session; loads the region pack and the world
  * (skipped when the same region + seed is already in memory, so cross-product jumps keep the clock and every
- * change); shows a skeleton meanwhile; then renders TopBar + canvas (or SplitStage) + GuidePanel + EventToast
+ * change, and skipped entirely for an `interim` placeholder canvas, which reads neither); shows a skeleton meanwhile; then renders TopBar + canvas (or SplitStage) + GuidePanel + EventToast
  * stack + CommandPalette (+ an optional Hotspot). Session / clock changes are written back to the URL with
  * replaceState (throttled while the clock runs) so the state can be shared.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { gsap } from 'gsap'
 import { PRODUCT_BY_SLUG, type Bi, type ProductDef, type ProductSlug } from '../../content/products'
@@ -15,17 +15,16 @@ import { useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
-import { WORLD, clock, getSession, loadWorld, naturalEventsOn, resetWorld, setNaturalEvents, setSession, subscribeSession, useSession, world } from '../world'
-import { useDemoStrings } from '../i18n'
+import { WORLD, clock, getSession, loadWorld, naturalEventsOn, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalEvents, setSession, subscribeSession, useSession, world } from '../world'
+import { switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
 import { ShellContext, type ShellApi } from './context'
 import { useAiHealth } from './controls'
-import { CommandPalette, type PaletteItem } from './CommandPalette'
+import type { PaletteItem } from './CommandPalette'
 import { EventToastStack } from './EventToasts'
-import { GuidePanel } from './GuidePanel'
-import { Hotspot } from './Hotspot'
 import { markMission, resetMissions, type Mission } from './missions'
-import { SplitStage, type SplitStageProps } from './SplitStage'
+import type { SplitStageProps } from './SplitStage'
+import { LazyCommandPalette as CommandPalette, LazyGuidePanel as GuidePanel, LazyHotspot as Hotspot, LazySplitStage as SplitStage } from './lazy'
 import { MoreSheet, TopBar } from './TopBar'
 import { readFlag, useFullscreen, useIdleCursor, useShellSize, writeFlag } from './hooks'
 import { demoHref, readDemoQuery, replaceQuery, sessionParams } from './url'
@@ -47,6 +46,11 @@ export interface DemoShellProps {
   layout?: 'page' | 'contained'
   /** write session + clock into the URL (default true) */
   syncUrl?: boolean
+  /**
+   * The canvas is the tahap-1 placeholder (routes/Demo.tsx: `!DEMO_READY[slug]`): nothing on it reacts to role,
+   * clock, AI mode or reset, so those controls are not shown and the clock is paused (spec §8.5: no dead controls).
+   */
+  interim?: boolean
   className?: string
 }
 
@@ -75,7 +79,21 @@ function rewindClock(to: number, seconds: number): { done: Promise<void>; kill: 
 
 const bi = (v: Bi | string | undefined, lang: 'id' | 'en') => (v === undefined ? undefined : typeof v === 'string' ? v : v[lang])
 
-export function DemoShell({ product: slug, canvas, children, missions, hotspot, splitTabs, layout = 'page', syncUrl = true, className }: DemoShellProps) {
+/**
+ * The shell behind its own Suspense boundary: useDemoStrings() suspends for the moment the lazy EN dictionary is
+ * still on its way (demo-kit/i18n), and the frame below stays up meanwhile (same box, same background, no text),
+ * so the page never shows Indonesian labels in an English session and nothing above the shell is blanked.
+ */
+export function DemoShell(props: DemoShellProps) {
+  const layout = props.layout ?? 'page'
+  return (
+    <Suspense fallback={<div className={`dk-root dk-shell is-${layout} is-waiting`} data-eco={PRODUCT_BY_SLUG[props.product].eco} aria-busy="true" />}>
+      <DemoShellFrame {...props} />
+    </Suspense>
+  )
+}
+
+function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, splitTabs, layout = 'page', syncUrl = true, interim = false, className }: DemoShellProps) {
   const product: ProductDef = PRODUCT_BY_SLUG[slug]
   const t = useDemoStrings()
   const { lang, setLang } = useI18n()
@@ -99,14 +117,20 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
 
   useLayoutEffect(() => {
     const s = getSession()
+    // ?lang wins over the app's current language (a client-side jump to a shared link keeps its language)
+    const want = query.lang ?? lang
+    if (want !== lang) switchLang(want, setLang, { persist: false })
     setSession({
       regionId: query.region ?? (s.regionId || DEFAULT_REGION_ID),
       seed: query.seed ?? s.seed,
       role: query.role ?? product.defaultRole,
       present: query.present ?? false,
-      aiMode: 'sim',
-      lang,
+      // Live survives cross-product jumps (demoHref carries ?ai=live); ?ai=sim forces Simulasi. Live is dropped only
+      // when the proxy is down (effect below).
+      aiMode: query.ai ?? s.aiMode,
+      lang: want,
     })
+    if (interim) clock.pause()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug])
 
@@ -114,14 +138,15 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
     setSession({ lang })
   }, [lang])
 
-  // ?ai=live is honoured only once the proxy says it is live
+  // Live needs a live proxy: ?ai=live / a carried-over Live is downgraded to Simulasi only when the proxy is down
   useEffect(() => {
-    if (health === 'live' && query.ai === 'live') setSession({ aiMode: 'live' })
     if (health === 'down' && getSession().aiMode === 'live') setSession({ aiMode: 'sim' })
-  }, [health, query.ai])
+  }, [health])
 
   /* ---------------------------------------------------------------- load region pack + world */
-  const [boot, setBoot] = useState<'loading' | 'ready' | 'error'>(() => (sameWorld() && world.pack() ? 'ready' : 'loading'))
+  // interim (placeholder canvas): nothing on the page reads the pack or the world (region names come from the static
+  // REGIONS registry, the clock and session work without a world), so neither is downloaded (budget, spec §14)
+  const [boot, setBoot] = useState<'loading' | 'ready' | 'error'>(() => (interim || (sameWorld() && world.pack()) ? 'ready' : 'loading'))
   const [pack, setPack] = useState<RegionPack | null>(() => (sameWorld() ? world.pack() : null))
   const [attempt, setAttempt] = useState(0)
   const appliedT = useRef(false)
@@ -129,17 +154,28 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
   useEffect(() => {
     let alive = true
     const { regionId, seed } = session
+    const applyT = () => {
+      if (appliedT.current) return
+      appliedT.current = true
+      if (query.t != null) clock.setTime(query.t)
+    }
+    if (interim) {
+      applyT()
+      setBoot('ready')
+      return
+    }
     const reuse = sameWorld()
-    if (!reuse) setBoot('loading')
+    if (!reuse) {
+      setBoot('loading')
+      // a first visit generates the world: start that chunk now instead of after pack.min.json arrives
+      preloadWorldGenerator()
+    }
     ;(async () => {
       try {
         const p = await loadRegion(regionId)
         if (!reuse) await loadWorld(p, seed)
         if (!alive) return
-        if (!appliedT.current) {
-          appliedT.current = true
-          if (query.t != null) clock.setTime(query.t)
-        }
+        applyT()
         setPack(p)
         setBoot('ready')
       } catch {
@@ -150,7 +186,25 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.regionId, session.seed, attempt])
+  }, [session.regionId, session.seed, attempt, interim])
+
+  // the event pipeline chunk is fetched on the first emit(); start it on the visitor's first interaction instead,
+  // so the first event a click raises does not wait for it (live canvases only)
+  useEffect(() => {
+    if (interim) return
+    const go = () => {
+      preloadWorldEngine()
+      window.removeEventListener('pointerdown', go, true)
+      window.removeEventListener('keydown', go, true)
+    }
+    window.addEventListener('pointerdown', go, true)
+    window.addEventListener('keydown', go, true)
+    // cleanup only detaches: unmounting must not start the download
+    return () => {
+      window.removeEventListener('pointerdown', go, true)
+      window.removeEventListener('keydown', go, true)
+    }
+  }, [interim])
 
   /* ---------------------------------------------------------------- presenter */
   useIdleCursor(session.present)
@@ -209,10 +263,17 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
   )
   const [moreOpen, setMoreOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // the palette chunk is fetched the first time it opens, then stays mounted (keeps its query between opens)
+  const [paletteMounted, setPaletteMounted] = useState(false)
+  if (paletteOpen && !paletteMounted) setPaletteMounted(true)
   const [resetOpen, setResetOpen] = useState(false)
   const [rewinding, setRewinding] = useState(false)
   const [epoch, setEpoch] = useState(0)
   const { toasts, push, dismiss } = useToastQueue()
+  const explainLive = useCallback(
+    () => push({ id: 'ai-live-off', title: health === 'checking' ? t.aiLiveChecking : t.aiLiveOff, tone: 'neutral', icon: 'info' }),
+    [push, health, t],
+  )
   const fullscreen = useFullscreen(() => root.current)
 
   // Ctrl/Cmd + K → palette; "?" (outside text fields) → guide
@@ -246,7 +307,14 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
     const r = rewindClock(WORLD.clockStart, SHELL.rewind)
     rewind.current = r
     await r.done
-    await resetWorld()
+    try {
+      // can reject when the generator chunk cannot be fetched (offline, or a redeploy removed it)
+      await resetWorld()
+    } catch {
+      setRewinding(false)
+      push({ id: 'reset', title: t.resetFailed, tone: 'danger', icon: 'replay' })
+      return
+    }
     resetMissions(slug)
     setEpoch((e) => e + 1)
     setRewinding(false)
@@ -273,30 +341,32 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
         icon: 'help',
         run: () => setGuideOpen(!guideOpen),
       })
-    a.push({
-      id: 'a:play',
-      group: '',
-      label: t.actPlay,
-      keywords: 'play pause jam clock jalankan jeda',
-      icon: 'play',
-      run: () => clock.toggle(),
-    })
+    if (!interim)
+      a.push({
+        id: 'a:play',
+        group: '',
+        label: t.actPlay,
+        keywords: 'play pause jam clock jalankan jeda',
+        icon: 'play',
+        run: () => clock.toggle(),
+      })
     a.push({
       id: 'a:lang',
       group: '',
       label: t.actLang,
       keywords: 'language bahasa english indonesia',
       icon: 'language',
-      run: () => setLang(lang === 'id' ? 'en' : 'id'),
+      run: () => switchLang(lang === 'id' ? 'en' : 'id', setLang, { persist: true }),
     })
-    a.push({
-      id: 'a:reset',
-      group: '',
-      label: t.actReset,
-      keywords: 'reset ulang seed',
-      icon: 'reset',
-      run: () => setResetOpen(true),
-    })
+    if (!interim)
+      a.push({
+        id: 'a:reset',
+        group: '',
+        label: t.actReset,
+        keywords: 'reset ulang seed',
+        icon: 'reset',
+        run: () => setResetOpen(true),
+      })
     if (fullscreen.supported)
       a.push({
         id: 'a:fs',
@@ -307,7 +377,7 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
         run: fullscreen.toggle,
       })
     return a
-  }, [t, hasGuide, guideOpen, setGuideOpen, lang, setLang, fullscreen.supported, fullscreen.toggle])
+  }, [t, hasGuide, guideOpen, setGuideOpen, lang, setLang, fullscreen.supported, fullscreen.toggle, interim])
 
   /* ---------------------------------------------------------------- context for the canvas */
   const api = useMemo<ShellApi>(
@@ -326,14 +396,18 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
       toast: (d: Omit<ToastData, 'id'> & { id?: string }) => void push(d),
       present: session.present,
       size,
+      link: query,
+      interim,
     }),
-    [product, pack, focus, slug, guideOpen, setGuideOpen, push, session.present, size],
+    [product, pack, focus, slug, guideOpen, setGuideOpen, push, session.present, size, query, interim],
   )
 
   const bar = {
     product,
     size,
     health,
+    interim,
+    onLiveUnavailable: explainLive,
     rewinding,
     onReset: () => setResetOpen(true),
     fullscreen,
@@ -363,12 +437,14 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
           } as CSSProperties
         }
       >
+        {/* the page heading only when the shell IS the page; a contained shell sits under its host page's h1 */}
+        {layout === 'page' && <h1 className="dk-sr">{`${product.name} — ${lang === 'id' ? 'demo interaktif' : 'interactive demo'}`}</h1>}
         <TopBar {...bar} onOpenMore={() => setMoreOpen(true)} />
         <div className="dk-shell-body">
           <section ref={canvasRef} className="dk-shell-canvas" aria-label={product.name} aria-busy={boot !== 'ready' || rewinding}>
             {boot === 'ready' ? (
               <div key={epoch} className="dk-shell-stage">
-                {body}
+                <Suspense fallback={<LoadingText>{t.loading}</LoadingText>}>{body}</Suspense>
               </div>
             ) : boot === 'error' ? (
               <EmptyState
@@ -401,13 +477,23 @@ export function DemoShell({ product: slug, canvas, children, missions, hotspot, 
               </div>
             )}
           </section>
-          {hasGuide && <GuidePanel product={slug} missions={missions!} open={guideOpen} onClose={() => setGuideOpen(false)} id={guideId} />}
+          {hasGuide && (
+            <Suspense fallback={null}>
+              <GuidePanel product={slug} missions={missions!} open={guideOpen} onClose={() => setGuideOpen(false)} id={guideId} size={size} />
+            </Suspense>
+          )}
         </div>
         {boot === 'ready' && hs && !rewinding && !(size === 'sm' && guideOpen) && (
-          <Hotspot key={`${hs.target}:${epoch}`} target={hs.target} id={hs.id ?? `${slug}:${hs.target}`} label={bi(hs.label, lang)} root={() => canvasRef.current} />
+          <Suspense fallback={null}>
+            <Hotspot key={`${hs.target}:${epoch}`} target={hs.target} id={hs.id ?? `${slug}:${hs.target}`} label={bi(hs.label, lang)} root={() => canvasRef.current} />
+          </Suspense>
         )}
         <EventToastStack product={slug} toasts={toasts} push={push} dismiss={dismiss} epoch={epoch} />
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} product={product} onOpenProduct={openProduct} actions={paletteActions} />
+        {paletteMounted && (
+          <Suspense fallback={null}>
+            <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} product={product} onOpenProduct={openProduct} actions={paletteActions} sessionItems={!interim} />
+          </Suspense>
+        )}
         {(size === 'sm' || size === 'md') && <MoreSheet {...bar} open={moreOpen} onClose={() => setMoreOpen(false)} />}
         <Modal
           open={resetOpen}

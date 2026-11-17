@@ -13,7 +13,6 @@ import { why } from './home/why'
 import { testimonials } from './home/testimonials'
 import { faqPreview } from './home/faqPreview'
 import { contact } from './home/contact'
-import { eco } from './eco'
 
 export const id = {
   langName: 'Bahasa Indonesia',
@@ -37,6 +36,7 @@ export const id = {
     soundOff: '(mati)',
     sceneNav: 'Navigasi adegan',
     goToScene: 'Ke adegan',
+    langFailed: 'Versi bahasa Inggris belum bisa dimuat. Periksa koneksi, lalu coba lagi.',
   },
   error: {
     title: 'Ups, halaman gagal dimuat.',
@@ -56,9 +56,9 @@ export const id = {
     faq: 'FAQ',
     cta: 'Konsultasi Gratis',
     workMenu: [
-      { hash: 'apk', title: '4 Demo Aplikasi Mobile', desc: 'Coba langsung dalam bingkai ponsel' },
-      { hash: 'web', title: '6 Demo Web Live', desc: 'POS, podcast, kantin, tiket, sewa kamera' },
-      { hash: 'proyek', title: 'Proyek Asli ML & Otomasi', desc: 'PhoneFarm, Sistem Automasi, ScrapPulse' },
+      { hash: 'apk', title: '{n} Demo Aplikasi Mobile', desc: 'Coba langsung dalam bingkai ponsel' },
+      { hash: 'web', title: '{n} Demo Web Live', desc: 'Podcast, kantin, kedai kopi, tiket, sewa kamera' },
+      { hash: 'proyek', title: 'Proyek Asli ML & Otomasi', desc: 'PhoneFarm, Sistem Automasi' },
     ],
     workAll: 'Lihat semua karya',
     menuNote: 'Indonesia · remote friendly',
@@ -80,6 +80,7 @@ export const id = {
     ],
     portfolioTitle: 'Portofolio',
     allWork: 'Semua Karya',
+    nowPartOf: 'kini bagian dari {name}',
     github: 'GitHub',
     contactTitle: 'Kontak',
     whatsapp: 'WhatsApp',
@@ -89,19 +90,18 @@ export const id = {
     sceneLabel: 'Ilustrasi malam: siluet bukit dan kunang-kunang',
   },
   home: {
-    scenes: scenes.id,
-    stats: stats.id,
-    about: about.id,
-    services: services.id,
-    portfolio: portfolio.id,
-    ecosystem: ecosystem.id,
-    security: security.id,
-    why: why.id,
-    testimonials: testimonials.id,
-    faqPreview: faqPreview.id,
-    contact: contact.id,
+    scenes,
+    stats,
+    about,
+    services,
+    portfolio,
+    ecosystem,
+    security,
+    why,
+    testimonials,
+    faqPreview,
+    contact,
   },
-  eco: eco.id,
   pages: {
     building: 'Halaman ini sedang dibangun. Isinya menyusul di fase berikutnya.',
     backHome: 'Kembali ke beranda',
@@ -125,16 +125,6 @@ export const id = {
       title: 'Pertanyaan yang sering ditanyakan',
       eyebrow: 'FAQ',
       lead: 'Biaya, durasi, keamanan data, dan apa yang terjadi setelah launching.',
-    },
-    tools: {
-      title: 'Alat GAMADA',
-      eyebrow: 'Tools',
-      lead: 'Otomasi untuk kreator dan bisnis: komentar, edit video, dan upload.',
-    },
-    scrappulse: {
-      title: 'ScrapPulse',
-      eyebrow: 'Tools · Riset kata kunci',
-      lead: 'Pantau percakapan publik soal kata kunci Anda: volume, sentimen, dan topik.',
     },
     phonefarm: {
       title: 'Panel PhoneFarm',

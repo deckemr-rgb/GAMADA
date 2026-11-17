@@ -12,7 +12,7 @@ import { useI18n } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
 import { goTo } from '../../components/AppLink'
 import { Toast, ToastRegion, type ToastData } from '../ui'
-import { LIVE_FALLBACK_NOTICE, onLiveFallback } from '../ai'
+import { LIVE_FALLBACK_NOTICE, onLiveFallback } from '../ai/live-base' // not the barrel: see controls.tsx
 import { getSession, onEvent, setSession, world } from '../world'
 import { useDemoStrings } from '../i18n'
 import { createEffectTracker } from './effects'

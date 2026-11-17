@@ -5,7 +5,7 @@
  */
 import { runBox } from '../measure'
 import { dmy, longDate } from '../nik'
-import { hashString, makeRng } from '../../world/rng'
+import { hashString, makeRng } from '../../world/prng'
 import type { LineItem, MutasiMeta, MutasiRow, ReceiptMeta, SampleDoc } from '../types'
 import { DocBuilder, INK, MUTED } from './builder'
 

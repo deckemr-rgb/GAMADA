@@ -1,10 +1,11 @@
 /**
  * /lab/_kit — TEMPORARY tahap-1 showcase of the Demo Kit. Each module builder owns one section file in
  * src/demo-kit/_showcase/<module>.tsx. ?only=<module> renders one section (screenshots / tests);
- * ?static=1 asks sections to render final states. Removed (or folded into /lab) after tahap 1.
+ * ?static=1 asks sections to render final states. With ?only set, the module nav switches ?only (other params kept)
+ * instead of jumping to #kit-<module>, which would not be rendered. Removed (or folded into /lab) after tahap 1.
  */
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useI18n } from '../lib/i18n'
 import '../demo-kit/_showcase/showcase.css'
 
@@ -41,7 +42,16 @@ export default function LabKit() {
   const { lang } = useI18n()
   const [params] = useSearchParams()
   const only = params.get('only') as ModuleId | null
-  const list = only && MODULES.includes(only) ? [only] : MODULES
+  const filtered = !!only && MODULES.includes(only)
+  const list = filtered ? [only] : MODULES
+  /** ?only=<m> (or no ?only for null), keeping ?static / ?lang … */
+  const onlySearch = (m: ModuleId | null) => {
+    const q = new URLSearchParams(params)
+    if (m) q.set('only', m)
+    else q.delete('only')
+    const str = q.toString()
+    return str ? `?${str}` : ''
+  }
   return (
     <>
       <title>Demo Kit — GAMADA</title>
@@ -51,9 +61,22 @@ export default function LabKit() {
           <p className="dk-sc-eyebrow">{lang === 'id' ? 'Tahap 1 · halaman sementara' : 'Stage 1 · temporary page'}</p>
           <h1 className="dk-sc-title">Demo Kit</h1>
           <nav aria-label={lang === 'id' ? 'Modul' : 'Modules'} className="dk-sc-nav">
-            {MODULES.map((m) => (
-              <a key={m} href={`#kit-${m}`}>{TITLES[m][lang]}</a>
-            ))}
+            {filtered ? (
+              <>
+                <Link to={{ search: onlySearch(null) }}>{lang === 'id' ? 'Semua modul' : 'All modules'}</Link>
+                {MODULES.map((m) => (
+                  <Link key={m} to={{ search: onlySearch(m) }} aria-current={m === only ? 'page' : undefined}>
+                    {TITLES[m][lang]}
+                  </Link>
+                ))}
+              </>
+            ) : (
+              MODULES.map((m) => (
+                <a key={m} href={`#kit-${m}`}>
+                  {TITLES[m][lang]}
+                </a>
+              ))
+            )}
           </nav>
         </header>
         {list.map((m) => (

@@ -48,9 +48,18 @@
 .dk-scu-counts .is-late {
   color: var(--dk-danger-ink);
 }
+/* wide enough for the whole placeholder in ID and EN ("Search tickets, districts, agencies…" ≈ 215 px + icon); the
+   toolbar wraps it to its own line before it would shrink and clip */
 .dk-scu-search {
-  width: 220px;
+  flex: 0 1 300px;
+  width: 300px;
+  min-width: 292px;
   height: 32px;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-scu-search {
+    height: var(--dk-target);
+  }
 }
 .dk-scu-chips {
   display: inline-flex;

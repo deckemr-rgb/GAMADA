@@ -2,7 +2,7 @@
  * Navbar — sticky site bar: logo, "Layanan & Produk", Karya dropdown, Proses, FAQ, ID/EN toggle and
  * the "Konsultasi Gratis" CTA (WhatsApp).
  *
- * - After SITE_MOTION.nav.solidAfterPx of scroll the bar gets a solid semi-opaque background and a
+ * - After SITE_MOTION.nav.solidAfterPx of scroll the bar gets an opaque background and a
  *   shadow (no backdrop-filter: it would re-blur moving content every frame).
  * - Dropdown (disclosure pattern): opens on mouse hover or click; closes on Escape (focus back to the
  *   button), a pointer down outside, focus leaving it, or a route change. aria-expanded / aria-controls.
@@ -19,6 +19,7 @@ import { DUR, EASE, SITE_MOTION, UI, prefersReducedMotion } from '../lib/motion'
 import { getLenis } from '../lib/smoothScroll'
 import { useI18n, type Lang } from '../lib/i18n'
 import { waLink } from '../content/site'
+import { workMenuTitle } from '../content/work'
 import AppLink from './AppLink'
 import '../styles/site.css'
 
@@ -56,12 +57,22 @@ export function Logo() {
   )
 }
 
+/** ID/EN toggle. A click is an explicit choice (persisted). If the EN chunk cannot load, the page stays in the current
+ * language and a short status note says so (no silent dead click); the next click clears it. */
 export function LangToggle({ className = '' }: { className?: string }) {
   const { lang, setLang, t } = useI18n()
+  const [failed, setFailed] = useState(false)
+  const req = useRef(0)
   const opts: Array<{ code: Lang; name: string }> = [
     { code: 'id', name: 'Bahasa Indonesia' },
     { code: 'en', name: 'English' },
   ]
+  const choose = (l: Lang) => {
+    const mine = ++req.current
+    setFailed(false)
+    // a newer click winning is not a failure: only the latest click of this toggle reports
+    void setLang(l, { persist: true }).then((ok) => setFailed(!ok && mine === req.current))
+  }
   return (
     <div className={`lang-toggle ${className}`} role="group" aria-label={t.a11y.language}>
       {opts.map((o) => (
@@ -72,11 +83,14 @@ export function LangToggle({ className = '' }: { className?: string }) {
           aria-pressed={lang === o.code}
           aria-label={`${o.code.toUpperCase()}, ${o.name}`}
           lang={o.code}
-          onClick={() => setLang(o.code)}
+          onClick={() => choose(o.code)}
         >
           {o.code.toUpperCase()}
         </button>
       ))}
+      <span className="lang-toggle-status" role="status">
+        {failed ? t.a11y.langFailed : ''}
+      </span>
     </div>
   )
 }
@@ -300,7 +314,7 @@ export default function Navbar() {
                 {t.nav.workMenu.map((m) => (
                   <li key={m.hash}>
                     <AppLink className="gnav-panel-link" to={`/karya#${m.hash}`} onClick={() => closeDrop()}>
-                      <span className="gnav-panel-title">{m.title}</span>
+                      <span className="gnav-panel-title">{workMenuTitle(m)}</span>
                       <span className="gnav-panel-desc">{m.desc}</span>
                     </AppLink>
                   </li>
@@ -380,7 +394,7 @@ export default function Navbar() {
                   {t.nav.workMenu.map((m) => (
                     <li key={m.hash}>
                       <AppLink to={`/karya#${m.hash}`} onClick={onMenuLink}>
-                        {m.title}
+                        {workMenuTitle(m)}
                       </AppLink>
                     </li>
                   ))}

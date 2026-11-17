@@ -1,17 +1,16 @@
 /** en.ts — English copy. Must satisfy the shape of id.ts (type-checked). */
 import type { Dict } from './id'
-import { scenes } from './home/scenes'
-import { stats } from './home/stats'
-import { about } from './home/about'
-import { services } from './home/services'
-import { portfolio } from './home/portfolio'
-import { ecosystem } from './home/ecosystem'
-import { security } from './home/security'
-import { why } from './home/why'
-import { testimonials } from './home/testimonials'
-import { faqPreview } from './home/faqPreview'
-import { contact } from './home/contact'
-import { eco } from './eco'
+import { scenes } from './home/scenes.en'
+import { stats } from './home/stats.en'
+import { about } from './home/about.en'
+import { services } from './home/services.en'
+import { portfolio } from './home/portfolio.en'
+import { ecosystem } from './home/ecosystem.en'
+import { security } from './home/security.en'
+import { why } from './home/why.en'
+import { testimonials } from './home/testimonials.en'
+import { faqPreview } from './home/faqPreview.en'
+import { contact } from './home/contact.en'
 
 export const en: Dict = {
   langName: 'English',
@@ -35,6 +34,7 @@ export const en: Dict = {
     soundOff: '(off)',
     sceneNav: 'Scene navigation',
     goToScene: 'Go to scene',
+    langFailed: 'That language could not be loaded. Check your connection and try again.',
   },
   error: {
     title: 'Oops, this page failed to load.',
@@ -54,9 +54,9 @@ export const en: Dict = {
     faq: 'FAQ',
     cta: 'Free Consultation',
     workMenu: [
-      { hash: 'apk', title: '4 Mobile App Demos', desc: 'Try them inside a phone frame' },
-      { hash: 'web', title: '6 Live Web Demos', desc: 'POS, podcast, canteen, tickets, camera rental' },
-      { hash: 'proyek', title: 'Real ML & Automation Projects', desc: 'PhoneFarm, Automation System, ScrapPulse' },
+      { hash: 'apk', title: '{n} Mobile App Demos', desc: 'Try them inside a phone frame' },
+      { hash: 'web', title: '{n} Live Web Demos', desc: 'Podcast, canteen, coffee shop, tickets, camera rental' },
+      { hash: 'proyek', title: 'Real ML & Automation Projects', desc: 'PhoneFarm, Automation System' },
     ],
     workAll: 'See all work',
     menuNote: 'Indonesia · remote friendly',
@@ -78,6 +78,7 @@ export const en: Dict = {
     ],
     portfolioTitle: 'Portfolio',
     allWork: 'All Work',
+    nowPartOf: 'now part of {name}',
     github: 'GitHub',
     contactTitle: 'Contact',
     whatsapp: 'WhatsApp',
@@ -87,19 +88,18 @@ export const en: Dict = {
     sceneLabel: 'Night illustration: hill silhouettes and fireflies',
   },
   home: {
-    scenes: scenes.en,
-    stats: stats.en,
-    about: about.en,
-    services: services.en,
-    portfolio: portfolio.en,
-    ecosystem: ecosystem.en,
-    security: security.en,
-    why: why.en,
-    testimonials: testimonials.en,
-    faqPreview: faqPreview.en,
-    contact: contact.en,
+    scenes,
+    stats,
+    about,
+    services,
+    portfolio,
+    ecosystem,
+    security,
+    why,
+    testimonials,
+    faqPreview,
+    contact,
   },
-  eco: eco.en,
   pages: {
     building: 'This page is being built. Its content arrives in a later phase.',
     backHome: 'Back to home',
@@ -123,16 +123,6 @@ export const en: Dict = {
       title: 'Frequently asked questions',
       eyebrow: 'FAQ',
       lead: 'Cost, timelines, data security and what happens after launch.',
-    },
-    tools: {
-      title: 'GAMADA Tools',
-      eyebrow: 'Tools',
-      lead: 'Automation for creators and businesses: comments, video editing and uploads.',
-    },
-    scrappulse: {
-      title: 'ScrapPulse',
-      eyebrow: 'Tools · Keyword research',
-      lead: 'Track public conversation about your keywords: volume, sentiment and topics.',
     },
     phonefarm: {
       title: 'PhoneFarm Panel',

@@ -8,13 +8,17 @@ import { MINI_PACK } from '../__fixtures__/mini-pack'
 import { generateWorld } from '../seed'
 import { createEvent, processEvents } from '../engine'
 import { REACTIONS } from '../reactions'
-import { naturalEventsAt } from '../natural'
+import { naturalEventsAt } from '../natural-gen'
+import { _onNaturalMinute, setNaturalEvents } from '../natural'
+import { clock } from '../clock'
 import { emit, loadWorld, onEvent, settled, world, exportWorld, importWorld, resetWorld } from '../store'
 import { complaintKpi, slaOnTimePct, tableCounts, auditFor, overdueActions, instructionSuggestions } from '../selectors'
 import type { AnyFollowUp, EventSource, WorldEvent, WorldState } from '../types'
 import { makeRng } from '../rng'
 import { TABLE_KEYS, WORLD, distanceKm, offsetKm, rows } from '../util'
 import type { Seq } from '../ids'
+import { nikRegion, nikRegions, parseNik } from '../../docs/nik'
+import { isProductSlug } from '../../../content/products'
 
 let failures = 0
 let passes = 0
@@ -56,6 +60,13 @@ function run(state: WorldState, seq: Seq, type: AnyFollowUp['type'], payload: un
   return processEvents(state, seq, [e as WorldEvent], (err) => console.error(err))
 }
 
+/* ------------------------------------------------------------------ 0. NIK generator (docs/nik.ts) */
+section('NIK generator')
+ok(nikRegion({ id: 'kalitidu', code: '3522200', kemendagri: '35.22.16' }) === '352216', 'pack kemendagri field wins over the BPS code')
+ok(nikRegion({ id: 'kalitidu', code: '3522200' }) === '352216', 'no kemendagri field: built-in Bojonegoro table (not BPS digits)')
+ok(nikRegion({ id: 'gayam', code: '3522191' }) !== nikRegion({ id: 'ngasem', code: '3522190' }), 'Gayam and Ngasem no longer share a prefix')
+ok(nikRegion({ id: 'somewhere', code: '3204123', kemendagri: '32.04.12' }) === '320412', 'other regions: kemendagri digits')
+
 /* ------------------------------------------------------------------ 1. determinism + size */
 for (const { label, pack } of packs) {
   section(`generateWorld — ${label}`)
@@ -91,7 +102,34 @@ for (const { label, pack } of packs) {
   ok(rows(a.products).every((p) => a.outlets.byId[p.outletId]), 'products reference outlets')
   const niks = rows(a.documents).filter((d) => d.program === 'bansos-banjir').map((d) => d.nik)
   ok(niks.length === 50 && niks.length - new Set(niks).size === 3, '50 bansos registrants with exactly 3 duplicate NIKs')
+  // one NIK rule (docs/nik.ts): every seeded document passes parseNik for this pack's kecamatan
+  const regions = nikRegions(pack.kecamatan)
+  ok(regions.size === pack.kecamatan.length, `every kecamatan has its own NIK region code (${regions.size}/${pack.kecamatan.length})`)
+  const docs = rows(a.documents).filter((d) => d.nik)
+  const badNik = docs.filter((d) => !parseNik(d.nik!, regions).ok)
+  ok(docs.length > 0 && badNik.length === 0, `every seeded document passes parseNik (${docs.length - badNik.length}/${docs.length}${badNik.length ? `; e.g. ${badNik[0]!.nik} ${parseNik(badNik[0]!.nik!, regions).problem}` : ''})`)
+  ok(docs.every((d) => parseNik(d.nik!).ok), 'every seeded NIK also passes the default (all-Bojonegoro) parseNik')
+  const byNik = new Map<string, typeof docs>()
+  for (const d of docs) byNik.set(d.nik!, [...(byNik.get(d.nik!) ?? []), d])
+  const dupes = [...byNik.values()].filter((g) => g.length > 1)
+  ok(dupes.length === 3 && dupes.every((g) => g.length === 2 && g.every((d) => d.program === 'bansos-banjir')), `only the 3 intended bansos pairs share a NIK (${dupes.map((g) => g.length).join(',') || 'none'})`)
+  const dupIds = new Set(dupes.flatMap((g) => g.map((d) => d.id)))
+  const kecById = new Map(pack.kecamatan.map((k) => [k.id, k]))
+  const regionMismatch = docs.filter((d) => !dupIds.has(d.id) && d.nik!.slice(0, 6) !== nikRegion(kecById.get(d.kecamatanId) ?? { id: d.kecamatanId }))
+  ok(regionMismatch.length === 0, `NIK region digits = the document's kecamatan (Kemendagri) (${regionMismatch.length} off)`)
+  const yearNum = Number(a.day.slice(0, 4))
+  const personOff = docs.filter((d) => {
+    if (dupIds.has(d.id) || !d.citizenId) return false
+    const c = a.citizens.byId[d.citizenId]
+    const p = parseNik(d.nik!, regions)
+    return !c || p.gender !== c.gender || p.yy !== (yearNum - c.age) % 100
+  })
+  ok(personOff.length === 0, `NIK gender + birth-year digits match the citizen (${personOff.length} off)`)
+  if (pack.kecamatan.some((k) => k.id === 'kalitidu')) {
+    ok(nikRegion(kecById.get('kalitidu')!) === '352216' && nikRegion(kecById.get('bojonegoro')!) === '352215' && nikRegion(kecById.get('trucuk')!) === '352223', 'Kemendagri codes: Kalitidu 35.22.16, Bojonegoro 35.22.15, Trucuk 35.22.23')
+  }
   ok(a.auditLog.ids.length > 0, `seeded audit rows for this morning (${a.auditLog.ids.length})`)
+  ok(rows(a.auditLog).every((x) => x.source === 'clock' && !!x.origin), 'seeded morning activity is background: source clock + origin product')
   const groups = new Set(rows(a.citizens).map((x) => x.group))
   ok(groups.size >= 5, `diverse name groups (${[...groups].join(', ')})`)
   const ledgerOk = rows(a.ledger).every((j) => j.lines.reduce((x, l) => x + l.debit - l.credit, 0) === 0)
@@ -291,6 +329,12 @@ section('natural events')
   const kinds = new Set<string>()
   for (let m = 420; m < 1020; m++) for (const e of naturalEventsAt(s, m)) kinds.add(e.type)
   ok(['complaint.created', 'sale.created', 'mention.created', 'price.updated'].every((k) => kinds.has(k)), `kinds: ${[...kinds].join(', ')}`)
+  // background events are nobody's action: source 'clock', owning product kept in `origin` (C3)
+  const all: AnyFollowUp[] = []
+  for (let m = 420; m < 1020; m++) all.push(...naturalEventsAt(s, m))
+  ok(all.length > 0 && all.every((e) => e.source === 'clock'), `every natural event has source 'clock' (${all.length})`)
+  ok(all.every((e) => !!e.origin && isProductSlug(e.origin)), 'every natural event names its owning product in origin')
+  ok(all.filter((e) => e.type === 'sale.created').every((e) => e.origin === 'toko-autopilot'), 'natural sale → origin toko-autopilot')
 }
 
 /* ------------------------------------------------------------------ 5. store: microtask batch + one notify */
@@ -313,6 +357,11 @@ await (async () => {
   ok(seen.length >= 8 && seen.includes('market.operation') && seen.includes('procurement.created'), `onEvent sees direct + reaction events (${seen.length})`)
   ok(world.get().complaints.byId[e1.payload.id!] !== undefined, 'complaint in the store')
   ok(world.get().citizens === before.citizens, 'untouched tables keep identity (structural sharing)')
+  // natural-style emit: source 'clock' + origin → audit row keeps both; its reactions are not product actions
+  const nat = emit('mention.created', { outlet: 'Forum Warga', kind: 'forum', author: 'Redaksi', text: { id: 'a', en: 'a' }, sentiment: 'netral', score: 0, topic: 'layanan', reach: 5 }, 'clock', { origin: 'radar-isu' })
+  await settled()
+  const natRow = rows(world.get().auditLog).find((x) => x.eventId === nat.id)
+  ok(natRow?.source === 'clock' && natRow.origin === 'radar-isu', `clock event audit row: source clock, origin radar-isu (${natRow?.source}/${natRow?.origin})`)
   const json = exportWorld()
   await resetWorld()
   ok(world.get().complaints.byId[e1.payload.id!] === undefined, 'resetWorld returns to the seed')
@@ -320,6 +369,30 @@ await (async () => {
   ok(world.get().complaints.byId[e1.payload.id!] !== undefined, 'importWorld restores an export')
   off()
   unsub()
+
+  // the running clock's natural events: the generator is loaded lazily; minutes crossed meanwhile are replayed in order
+  await resetWorld()
+  clock.setTime(600)
+  const s0 = world.get()
+  const want: string[] = []
+  for (let m = 540; m <= 600; m++) for (const o of naturalEventsAt(s0, m)) want.push(`${m}:${o.type}`)
+  const got: string[] = []
+  const off2 = onEvent('*', (e) => {
+    if (e.source === 'clock' && (e.depth ?? 0) === 0) got.push(`${e.at}:${e.type}`)
+  })
+  setNaturalEvents(true)
+  for (let m = 540; m <= 600; m++) _onNaturalMinute(m)
+  for (let i = 0; i < 50 && got.length < want.length; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+    await settled()
+  }
+  ok(want.length > 0 && JSON.stringify(got) === JSON.stringify(want), `clock minutes → natural events, in order, same as naturalEventsAt (${got.length}/${want.length})`)
+  setNaturalEvents(false)
+  _onNaturalMinute(601)
+  await settled()
+  ok(got.length === want.length, 'no natural events while switched off')
+  setNaturalEvents(true)
+  off2()
 })()
 
 console.log(`\n${failures ? '✗' : '✓'} ${passes} passed, ${failures} failed`)

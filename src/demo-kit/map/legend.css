@@ -1,0 +1,87 @@
+/* map/legend.css — MapLegend (direction C, dusk palette). Loaded only by the component that uses it.
+   No backdrop-filter, no animated filters; only transform/opacity transitions. */
+/* ------------------------------------------------------------------ MapLegend */
+.dk-mlg {
+  padding: 12px;
+  border: 1px solid var(--dk-line, rgba(185, 178, 255, 0.12));
+  border-radius: var(--dk-r-card, 14px);
+  background: var(--dk-s1, #231b48);
+  font-size: 12px;
+  line-height: 17px;
+}
+.dk-mlg-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dk-mlg-unit {
+  margin: 0 0 6px;
+  color: var(--dk-muted, #c9c3ea);
+}
+.dk-mlg ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-mlg li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dk-mlg-items {
+  margin-top: 10px !important;
+  padding-top: 10px !important;
+  border-top: 1px solid var(--dk-line, rgba(185, 178, 255, 0.12));
+}
+.dk-mlg-choro + .dk-mlg-items {
+  margin-top: 10px;
+}
+.dk-mlg-sw {
+  flex: none;
+  width: 18px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--sw);
+}
+.dk-mlg-sw--line {
+  height: 0;
+  border-top: 2px solid var(--sw);
+  border-radius: 0;
+  background: none;
+}
+.dk-mlg-sw--dash {
+  height: 0;
+  border-top: 2px dashed var(--sw);
+  border-radius: 0;
+  background: none;
+}
+.dk-mlg-sw--hatch {
+  background: repeating-linear-gradient(135deg, rgba(185, 178, 255, 0.75) 0 2px, #26214c 2px 6px);
+}
+.dk-mlg-sw--heat {
+  background: linear-gradient(90deg, rgba(93, 76, 170, 0.8), #b9b2ff, #f59a62, #ffd77e);
+}
+.dk-mlg-sw--water {
+  background: linear-gradient(90deg, rgba(79, 209, 255, 0.55), rgba(92, 132, 255, 0.8));
+}
+.dk-mlg-sw--rain {
+  background: radial-gradient(circle at 50% 50%, #ffd77e 0 18%, #b9b2ff 19% 45%, rgba(79, 209, 255, 0.6) 46% 72%, transparent 73%);
+}
+.dk-mlg-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #1a1638;
+  color: #1a1638;
+}
+.dk-mlg-note {
+  margin: 10px 0 0;
+  color: var(--dk-faint, #a29bcc);
+  font-size: 11px;
+  line-height: 15px;
+}

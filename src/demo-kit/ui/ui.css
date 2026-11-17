@@ -2168,13 +2168,15 @@ button.dk-toast-main:focus-visible {
     width: var(--dk-target);
     height: var(--dk-target);
   }
+  /* spec 6.3: every segmented option (density, dataset, clock speed, ID/EN, eco switcher) is a full 44 px */
   .dk-seg button,
   .dk-seg--sm button {
-    height: 40px;
-    min-width: 40px;
+    height: var(--dk-target);
+    min-width: var(--dk-target);
   }
-  .dk-input,
-  .dk-select,
+  /* doubled class: wins over page-level width/height tweaks such as a toolbar search field */
+  .dk-input.dk-input,
+  .dk-select.dk-select,
   .dk-table-sort .dk-select {
     height: var(--dk-target);
   }
@@ -2185,12 +2187,14 @@ button.dk-toast-main:focus-visible {
     height: var(--dk-target);
   }
   .dk-th-btn {
+    position: relative;
     height: 32px;
   }
   /* small controls keep their look but get a 44 px hit area */
   .dk-chip-x::after,
   .dk-kb-move::after,
-  button.dk-chip::after {
+  button.dk-chip::after,
+  .dk-th-btn::after {
     content: '';
     position: absolute;
     inset: 50% auto auto 50%;

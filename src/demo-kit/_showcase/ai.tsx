@@ -38,7 +38,8 @@ const C = {
   id: {
     lead: 'Mesin hybrid: simulasi bawaan (pencocok intent TF-IDF + n-gram karakter + sinonim ID/EN/Jawa, jawaban dialirkan 25–45 token/detik) dan mode Live lewat proxy dengan fallback otomatis. Panel ini memakai skenario uji',
     account: 'Sapa Warga · skenario uji',
-    sub: '8 intent · ID, EN, Basa Jawa',
+    title: 'Sapa Warga',
+    sub: 'Skenario uji · 8 intent · ID, EN, Basa Jawa',
     sim: 'Simulasi',
     live: 'Live',
     modeLabel: 'Mode AI',
@@ -80,7 +81,8 @@ const C = {
   en: {
     lead: 'Hybrid engine: built-in simulation (TF-IDF + character n-gram intent matcher with ID/EN/Javanese synonyms, answers streamed at 25–45 tokens/s) and a Live mode through the proxy with automatic fallback. This panel runs the test scenario',
     account: 'Sapa Warga · test scenario',
-    sub: '8 intents · ID, EN, Javanese',
+    title: 'Sapa Warga',
+    sub: 'Test scenario · 8 intents · ID, EN, Javanese',
     sim: 'Simulation',
     live: 'Live',
     modeLabel: 'AI mode',
@@ -337,9 +339,10 @@ function ChatPanel({ chat, lang, motion, aiMode, setAiMode, live, notice, onRese
         <span className="dk-ai-avatar" aria-hidden="true">
           SW
         </span>
-        <span className="dk-ai-who">
-          <b>{c.account}</b>
-          <small>{c.sub}</small>
+        {/* short name on one line, the rest may wrap: nothing in the header is ever cut off (ai.css ellipsis rules) */}
+        <span className="dk-ai-who" title={`${c.account} · ${c.sub}`}>
+          <b style={{ whiteSpace: 'normal', overflow: 'visible' }}>{c.title}</b>
+          <small style={{ whiteSpace: 'normal', overflow: 'visible' }}>{c.sub}</small>
         </span>
         <div className="dk-ai-mode" role="group" aria-label={c.modeLabel}>
           <button type="button" aria-pressed={aiMode === 'sim'} onClick={() => setAiMode('sim')}>
@@ -609,6 +612,18 @@ const SYN_CANON = new Set(Object.keys(DEFAULT_SYNONYMS).map((k) => k.replace(/\s
 
 /* ------------------------------------------------------------------ trace */
 
+/** a step's input as one short JSON line: an ellipsis when shortened, the full JSON in the tooltip */
+function TraceJson({ value }: { value: unknown }) {
+  const full = JSON.stringify(value) ?? ''
+  const max = 48
+  const short = full.length > max ? `${full.slice(0, max - 1)}…` : full
+  return (
+    <code style={{ color: 'var(--ai-faint)', overflowWrap: 'anywhere' }} title={full.length > max ? full : undefined}>
+      {short}
+    </code>
+  )
+}
+
 function Trace({ lang, last, world }: { lang: Lang; last: ChatMessage | null; world: FixtureWorld }) {
   const c = C[lang]
   const done = last && (last.status === 'done' || last.status === 'stopped') ? last : null
@@ -658,7 +673,7 @@ function Trace({ lang, last, world }: { lang: Lang; last: ChatMessage | null; wo
             <li key={s.id}>
               <span className="dk-ai-num">{s.ms ?? 0} ms</span>
               <span>
-                <code>{s.name}</code> <code style={{ color: 'var(--ai-faint)' }}>{JSON.stringify(s.input).slice(0, 48)}</code>
+                <code>{s.name}</code> <TraceJson value={s.input} />
               </span>
             </li>
           ))}

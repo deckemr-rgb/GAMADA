@@ -49,5 +49,19 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 900,
+    rolldownOptions: {
+      output: {
+        // Home JS budget (spec §14, ≤ 253.6 KB gzip): without these groups the lazy routes' shared imports split the
+        // home set into many small chunks (react, preload-helper, gsap, motion, perf, smoothScroll …), each with its
+        // own wrapper/gzip overhead. Two groups keep the always-loaded core in two files. Draggable / Inertia stay in
+        // their lazy home section (Testimonials), off the critical path.
+        codeSplitting: {
+          groups: [
+            { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]|preload-helper/, priority: 10 },
+            { name: 'motion', test: /node_modules[\\/](lenis[\\/]|gsap[\\/](?!Draggable|InertiaPlugin|utils[\\/](matrix|VelocityTracker)))|src[\\/]lib[\\/](motion|perf|smoothScroll)\.ts/, priority: 9 },
+          ],
+        },
+      },
+    },
   },
 })

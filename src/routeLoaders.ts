@@ -19,7 +19,6 @@ export const LOADERS = {
   tur: () => import('./routes/Tur'),
   lab: () => import('./routes/Lab'),
   phonefarm: () => import('./routes/PhoneFarmPanel'),
-  labDesign: () => import('./routes/LabDesign'),
   labKit: () => import('./routes/LabKit'),
   notFound: () => import('./routes/NotFound'),
 } satisfies Record<string, Loader>
@@ -43,7 +42,6 @@ function loaderFor(pathname: string): Loader | null {
   if (p === '/proses') return LOADERS.proses
   if (p === '/faq') return LOADERS.faq
   if (p === '/panel/phonefarm') return LOADERS.phonefarm
-  if (p === '/lab/_design') return LOADERS.labDesign
   if (p === '/lab/_kit') return LOADERS.labKit
   return LOADERS.notFound
 }

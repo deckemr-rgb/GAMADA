@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { gsap } from 'gsap'
 import { ChartFrame, useVizLang, type FrameProps, type LegendItem } from './ChartFrame'
-import { useReveal, useSize, useVisible, vizMode } from './core'
+import { useRevealDom, useSize, useVisible, vizMode } from './core'
 import { NET, hash01, idealLinkLength, makeLinks, settle, step, type Sim, type SimNode } from './force'
 import { TONE, seriesColor } from './palette'
 
@@ -78,6 +78,12 @@ interface VEdge {
   src?: NetEdge
 }
 
+/** Label face metrics (11 px Manrope; cluster labels are bold): a generous average advance per character. */
+const LBL = { fs: 11, cw: 0.62, cwBold: 0.68, gap: 5 }
+type LBox = { x0: number; y0: number; x1: number; y1: number }
+const lboxHit = (a: LBox, b: LBox) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
+const lboxCircle = (b: LBox, x: number, y: number, r: number) => Math.hypot(Math.max(b.x0, Math.min(x, b.x1)) - x, Math.max(b.y0, Math.min(y, b.y1)) - y) < r
+
 const edgeKey = (e: NetEdge, i: number) => e.id ?? `${e.source}->${e.target}#${i}`
 const CL = (id: string) => `cluster:${id}`
 
@@ -87,7 +93,7 @@ export function NetworkGraph(props: NetworkProps) {
   const mode = vizMode()
   const wrapRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(wrapRef)
-  const p = useReveal(wrapRef)
+  useRevealDom(wrapRef)
   const visible = useVisible(wrapRef)
   const H = props.height ?? (w < 520 ? 320 : 380)
 
@@ -153,7 +159,9 @@ export function NetworkGraph(props: NetworkProps) {
       if (lbl) {
         const left = n.x > simRef.current.w * 0.6
         lbl.setAttribute('x', String(left ? -(n.r + 5) : n.r + 5))
+        lbl.setAttribute('y', '4')
         lbl.setAttribute('text-anchor', left ? 'end' : 'start')
+        lbl.style.opacity = ''
       }
     }
     for (const l of simRef.current.links) {
@@ -168,13 +176,67 @@ export function NetworkGraph(props: NetworkProps) {
     }
   }, [])
 
+  /* label collision avoidance, run once the layout is at rest (and after renders): each label takes the first of
+     right / left / above / below that keeps clear of every node, every label placed before it and the frame;
+     priority: selected, its neighbours, clusters, then by degree. A label with no free spot hides (the node keeps
+     its aria-label, focus ring and readout) unless its node is selected or a neighbour of the selection. */
+  const labelMeta = useRef<{ byId: Map<string, VNode>; deg: Map<string, number>; keep: Set<string> }>({ byId: new Map(), deg: new Map(), keep: new Set() })
+  const resolveLabels = useCallback(() => {
+    const sim = simRef.current
+    const { byId, deg, keep } = labelMeta.current
+    const W = sim.w
+    const H = sim.h
+    const taken: LBox[] = []
+    const order = [...sim.nodes].sort((a, b) => {
+      const pa = keep.has(a.id) ? 2 : byId.get(a.id)?.count !== undefined ? 1 : 0
+      const pb = keep.has(b.id) ? 2 : byId.get(b.id)?.count !== undefined ? 1 : 0
+      return pb - pa || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || (a.id < b.id ? -1 : 1)
+    })
+    for (const n of order) {
+      const lbl = nodeEls.current.get(n.id)?.querySelector<SVGTextElement>('text[data-l]')
+      const meta = byId.get(n.id)
+      if (!lbl || !meta) continue
+      const tw = meta.label.length * LBL.fs * (meta.count !== undefined ? LBL.cwBold : LBL.cw)
+      const th = LBL.fs * 1.45
+      const g = n.r + LBL.gap
+      const prefLeft = n.x > W * 0.6
+      const sides: { x: number; y: number; a: 'start' | 'end' | 'middle'; box: LBox }[] = [
+        { x: g, y: 4, a: 'start', box: { x0: n.x + g, y0: n.y - th / 2, x1: n.x + g + tw, y1: n.y + th / 2 } },
+        { x: -g, y: 4, a: 'end', box: { x0: n.x - g - tw, y0: n.y - th / 2, x1: n.x - g, y1: n.y + th / 2 } },
+        { x: 0, y: -g - 2, a: 'middle', box: { x0: n.x - tw / 2, y0: n.y - g - th, x1: n.x + tw / 2, y1: n.y - g } },
+        { x: 0, y: g + th - 2, a: 'middle', box: { x0: n.x - tw / 2, y0: n.y + g, x1: n.x + tw / 2, y1: n.y + g + th } },
+      ]
+      if (prefLeft) sides.unshift(sides.splice(1, 1)[0]!)
+      const fit = sides.find(
+        (c) =>
+          c.box.x0 >= 2 &&
+          c.box.x1 <= W - 2 &&
+          c.box.y0 >= 2 &&
+          c.box.y1 <= H - 2 &&
+          taken.every((t) => !lboxHit(c.box, t)) &&
+          sim.nodes.every((o) => o === n || !lboxCircle(c.box, o.x, o.y, o.r + 2)),
+      )
+      const use = fit ?? (keep.has(n.id) || meta.count !== undefined ? sides[0]! : null)
+      if (use) {
+        taken.push(use.box)
+        lbl.setAttribute('x', String(use.x))
+        lbl.setAttribute('y', String(use.y))
+        lbl.setAttribute('text-anchor', use.a)
+        lbl.style.opacity = ''
+      } else lbl.style.opacity = '0'
+    }
+  }, [])
+
   const tick = useCallback(() => {
     const sim = simRef.current
     step(sim)
     paint()
-    if (sim.alpha < NET.alphaMin && sim.alphaTarget === 0) stop()
+    if (sim.alpha < NET.alphaMin && sim.alphaTarget === 0) {
+      stop()
+      resolveLabels()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paint])
+  }, [paint, resolveLabels])
 
   const stop = useCallback(() => {
     if (!runningRef.current) return
@@ -190,13 +252,14 @@ export function NetworkGraph(props: NetworkProps) {
         settle(sim)
         sim.alpha = 0
         paint()
+        resolveLabels()
         return
       }
       if (runningRef.current || !visibleRef.current) return
       runningRef.current = true
       gsap.ticker.add(tick)
     },
-    [mode, paint, tick],
+    [mode, paint, tick, resolveLabels],
   )
 
   /* rebuild sim nodes/links when the visible graph or size changes */
@@ -378,6 +441,15 @@ export function NetworkGraph(props: NetworkProps) {
     const nm = new Map<string, SVGGElement>()
     svg.querySelectorAll<SVGGElement>('g[data-n]').forEach((el) => nm.set(el.dataset.n ?? '', el))
     nodeEls.current = nm
+    const deg = new Map<string, number>()
+    neighbours.forEach((set, id) => deg.set(id, set.size))
+    const keep = new Set<string>(selNode ? [selNode, ...(near ?? [])] : [])
+    labelMeta.current = { byId: new Map(view.nodes.map((n) => [n.id, n])), deg, keep }
+    // at rest (static / reduced, or cooled): nodes born this render were not indexed when the rebuild effect painted
+    if (!runningRef.current) {
+      paint()
+      resolveLabels()
+    }
   })
   const labels = view.nodes.length <= 40
 
@@ -386,7 +458,7 @@ export function NetworkGraph(props: NetworkProps) {
       <div ref={wrapRef} className="dk-viz-plot" style={{ height: H }}>
         <svg
           ref={svgRef}
-          className={`dk-viz-svg dk-viz-net dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}${selNode ? ' has-focus' : ''}`}
+          className={`dk-viz-svg dk-viz-net dk-viz-fade${selNode ? ' has-focus' : ''}`}
           width={w}
           height={H}
           viewBox={`0 0 ${w} ${H}`}

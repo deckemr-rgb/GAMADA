@@ -45,6 +45,8 @@ export default function RootLayout() {
   const location = useLocation()
   const isHome = location.pathname === '/'
   const bare = useChrome() === 'none'
+  // sandboxes (demo shells, the kit showcase) own the bottom of the screen: no floating WhatsApp there
+  const sandbox = bare || location.pathname.startsWith('/demo/') || location.pathname.startsWith('/lab/_kit')
   const mainRef = useRef<HTMLElement>(null)
   const prevKey = useRef<string | null>(null)
 
@@ -109,7 +111,7 @@ export default function RootLayout() {
         <Outlet />
       </main>
       {bare ? null : <Footer />}
-      {bare ? null : <WhatsAppFloat />}
+      {sandbox ? null : <WhatsAppFloat />}
       {bare ? null : <PageCurtain />}
       <ScrollRestoration />
     </>

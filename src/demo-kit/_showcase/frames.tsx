@@ -35,6 +35,9 @@ const C = {
     total: 'Total',
     pay: 'Bayar',
     add: (n: string) => `Tambah ${n}`,
+    cats: { all: 'Semua', bangun: 'Bahan bangunan', pipa: 'Pipa & lem', cat: 'Cat' },
+    catsLabel: 'Kategori produk',
+    inCart: (n: number) => `${n} di keranjang`,
     clear: 'Kosongkan',
     items: 'item',
     wallTitle: 'Ringkasan pagi',
@@ -81,6 +84,9 @@ const C = {
     total: 'Total',
     pay: 'Pay',
     add: (n: string) => `Add ${n}`,
+    cats: { all: 'All', bangun: 'Building materials', pipa: 'Pipes & glue', cat: 'Paint' },
+    catsLabel: 'Product categories',
+    inCart: (n: number) => `${n} in cart`,
     clear: 'Clear',
     items: 'items',
     wallTitle: 'Morning brief',
@@ -106,14 +112,23 @@ const C = {
   },
 } as const
 
-const PRODUCTS_POS = [
-  { id: 'semen', name: 'Semen 40 kg', price: 62000 },
-  { id: 'paku', name: 'Paku 5 cm (1 kg)', price: 21000 },
-  { id: 'cat', name: 'Cat tembok 5 kg', price: 118000 },
-  { id: 'pipa', name: 'Pipa PVC 3/4"', price: 34500 },
-  { id: 'kawat', name: 'Kawat bendrat', price: 27000 },
-  { id: 'lem', name: 'Lem pipa', price: 12500 },
-] as const
+/* a fictional building-supply shop's shelf (sample prices) */
+type PosCat = 'bangun' | 'pipa' | 'cat'
+const PRODUCTS_POS: readonly { id: string; name: string; price: number; cat: PosCat }[] = [
+  { id: 'semen', name: 'Semen 40 kg', price: 62000, cat: 'bangun' },
+  { id: 'paku', name: 'Paku 5 cm (1 kg)', price: 21000, cat: 'bangun' },
+  { id: 'kawat', name: 'Kawat bendrat', price: 27000, cat: 'bangun' },
+  { id: 'pasir', name: 'Pasir (karung)', price: 18000, cat: 'bangun' },
+  { id: 'bata', name: 'Bata ringan (10 pcs)', price: 95000, cat: 'bangun' },
+  { id: 'pipa', name: 'Pipa PVC 3/4"', price: 34500, cat: 'pipa' },
+  { id: 'lem', name: 'Lem pipa', price: 12500, cat: 'pipa' },
+  { id: 'keni', name: 'Keni PVC 3/4"', price: 4500, cat: 'pipa' },
+  { id: 'kran', name: 'Kran air 1/2"', price: 23000, cat: 'pipa' },
+  { id: 'cat', name: 'Cat tembok 5 kg', price: 118000, cat: 'cat' },
+  { id: 'kuas', name: 'Kuas 3 inci', price: 9500, cat: 'cat' },
+  { id: 'roll', name: 'Roll cat 9 inci', price: 26000, cat: 'cat' },
+]
+const POS_CATS = ['all', 'bangun', 'pipa', 'cat'] as const
 
 const DISTRICTS: [string, number][] = [
   ['Kalitidu', 31],
@@ -141,6 +156,7 @@ export default function Section() {
   const cols = useCols(lang, c.cols)
   const reportCols = cols.filter((col) => col.id !== 'kec').map((col) => (col.id === 'id' ? { ...col, width: 104 } : col.id === 'cat' ? { ...col, min: 110 } : col.id === 'st' ? { ...col, width: 140 } : col.id === 'sla' ? { ...col, width: 96 } : col))
   const [cart, setCart] = useState<Record<string, number>>({ semen: 4, paku: 1 })
+  const [posCat, setPosCat] = useState<(typeof POS_CATS)[number]>('all')
   const chipsRef = useRef<HTMLDivElement>(null)
   const letterRef = useRef<HTMLDivElement>(null)
   const reportRef = useRef<HTMLDivElement>(null)
@@ -211,14 +227,25 @@ export default function Section() {
         <div data-eco="usaha-pintar">
           <TabletFrame label={c.tablet} time="10.15">
             <div className="dk-scf-pos">
-              <div className="dk-scf-pos-grid">
-                {PRODUCTS_POS.map((p) => (
-                  <button key={p.id} type="button" className="dk-scf-pos-item" onClick={() => setCart((s) => ({ ...s, [p.id]: (s[p.id] ?? 0) + 1 }))} aria-label={c.add(p.name)}>
-                    <span className="dk-scf-pos-name">{p.name}</span>
-                    <span className="dk-num dk-faint">{rupiah(lang, p.price)}</span>
-                    {cart[p.id] ? <span className="dk-scf-pos-qty dk-num">{cart[p.id]}</span> : null}
-                  </button>
-                ))}
+              <div className="dk-scf-pos-main">
+                <div className="dk-scf-pos-cats" role="group" aria-label={c.catsLabel}>
+                  {POS_CATS.map((k) => (
+                    <Chip key={k} selected={posCat === k} onToggle={() => setPosCat(k)}>
+                      {c.cats[k]}
+                    </Chip>
+                  ))}
+                </div>
+                <div className="dk-scf-pos-grid">
+                  {PRODUCTS_POS.filter((p) => posCat === 'all' || p.cat === posCat).map((p) => (
+                    <button key={p.id} type="button" className="dk-scf-pos-item" onClick={() => setCart((s) => ({ ...s, [p.id]: (s[p.id] ?? 0) + 1 }))} aria-label={`${c.add(p.name)}${cart[p.id] ? `, ${c.inCart(cart[p.id]!)}` : ''}`}>
+                      <span className="dk-scf-pos-name">{p.name}</span>
+                      <span className="dk-scf-pos-foot">
+                        <span className="dk-num dk-faint">{rupiah(lang, p.price)}</span>
+                        {cart[p.id] ? <span className="dk-scf-pos-qty dk-num">{cart[p.id]}</span> : null}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <aside className="dk-scf-pos-cart" aria-label={c.cart}>
                 <header>

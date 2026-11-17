@@ -3,6 +3,7 @@
  * SOURCE OF TRUTH for names, slugs, accents, roles and relations (spec §3). Home stats, navbar,
  * /ekosistem, /produk, /lab, the tour and every demo read from here — never retype a name.
  */
+import { PRODUCT_SLUGS, type ProductSlug } from './productSlugs'
 
 export type Bi = { id: string; en: string }
 
@@ -10,27 +11,15 @@ export type EcoId = 'satu-daerah' | 'usaha-pintar' | 'pasar-daerah'
 /** 'inti' is the foundation; it is addressed like an ecosystem in /ekosistem/inti. */
 export type EcoOrInti = EcoId | 'inti'
 
-export type ProductSlug =
-  | 'inti'
-  | 'sapa-warga'
-  | 'meja-pimpinan'
-  | 'naskah-pintar'
-  | 'radar-isu'
-  | 'siaga-wilayah'
-  | 'awas-belanja'
-  | 'cek-berkas'
-  | 'toko-autopilot'
-  | 'pajak-beres'
-  | 'juara-jualan'
-  | 'kenal-mitra'
-  | 'pantau-merek'
-  | 'tenderpilot'
-  | 'katalog-lokal'
-  | 'rapor-usaha'
-  | 'indeks-ekonomi'
-  | 'sinyal-pasar'
+/** Slugs live in productSlugs.ts (tiny, eager-safe); re-exported here so callers keep one import. */
+export type { ProductSlug } from './productSlugs'
+export { PRODUCT_SLUGS, isProductSlug } from './productSlugs'
 
-/** Global roles (spec §6.5). One account, many roles = Inti ID. */
+/**
+ * Global roles (spec §6.5, split per the per-product lists in spec §11: UKPBJ and Inspektorat, Loket Perizinan and
+ * Dinsos are separate roles; Kepala OPD and Dinas Koperasi & UMKM come from §11 P2/P3 and P16). One account, many
+ * roles = Inti ID. Mirrored by ROLE_IDS in server/ai-proxy/src/products.ts (its selftest checks drift).
+ */
 export type RoleId =
   | 'warga'
   | 'petugas'
@@ -40,7 +29,11 @@ export type RoleId =
   | 'bpbd'
   | 'pertanian'
   | 'ukpbj'
+  | 'inspektorat'
   | 'perizinan'
+  | 'dinsos'
+  | 'kepala-opd'
+  | 'dinkop'
   | 'pemilik-toko'
   | 'kasir'
   | 'konsultan-pajak'
@@ -62,8 +55,12 @@ export const ROLES: Record<RoleId, { name: Bi; initials: string }> = {
   humas: { name: { id: 'Humas/Diskominfo', en: 'Public Relations / Comms Office' }, initials: 'HM' },
   bpbd: { name: { id: 'BPBD', en: 'Disaster Management Agency' }, initials: 'BP' },
   pertanian: { name: { id: 'Dinas Pertanian', en: 'Agriculture Office' }, initials: 'DP' },
-  ukpbj: { name: { id: 'UKPBJ/Inspektorat', en: 'Procurement Unit / Inspectorate' }, initials: 'UK' },
-  perizinan: { name: { id: 'Loket Perizinan/Dinsos', en: 'Licensing Desk / Social Affairs' }, initials: 'LP' },
+  ukpbj: { name: { id: 'UKPBJ', en: 'Procurement Unit (UKPBJ)' }, initials: 'UK' },
+  inspektorat: { name: { id: 'Inspektorat', en: 'Inspectorate' }, initials: 'IN' },
+  perizinan: { name: { id: 'Loket Perizinan', en: 'Licensing Desk' }, initials: 'LP' },
+  dinsos: { name: { id: 'Dinsos', en: 'Social Affairs Office' }, initials: 'DS' },
+  'kepala-opd': { name: { id: 'Kepala OPD', en: 'Head of Regional Agency' }, initials: 'KO' },
+  dinkop: { name: { id: 'Dinas Koperasi & UMKM', en: 'Cooperatives & SME Office' }, initials: 'DK' },
   'pemilik-toko': { name: { id: 'Pemilik Toko', en: 'Shop Owner' }, initials: 'PT' },
   kasir: { name: { id: 'Kasir', en: 'Cashier' }, initials: 'KS' },
   'konsultan-pajak': { name: { id: 'Konsultan Pajak', en: 'Tax Consultant' }, initials: 'KP' },
@@ -169,14 +166,14 @@ export const PRODUCTS: ProductDef[] = [
     code: 'P2', slug: 'meja-pimpinan', eco: 'satu-daerah', name: 'Meja Pimpinan',
     descriptor: { id: 'Command Center Kepala Daerah', en: "Regional Head's Command Center" },
     tagline: { id: 'Briefing pagi yang menyusun dirinya sendiri dari seluruh daerah, dan instruksi yang langsung menjadi tugas.', en: 'A morning briefing that assembles itself from the whole region, and instructions that become tasks at once.' },
-    icon: 'meja', frame: 'wall', roles: ['kepala-daerah', 'sekretariat'], defaultRole: 'kepala-daerah',
+    icon: 'meja', frame: 'wall', roles: ['kepala-daerah', 'sekretariat', 'kepala-opd'], defaultRole: 'kepala-daerah',
     related: ['sapa-warga', 'siaga-wilayah', 'radar-isu', 'awas-belanja', 'naskah-pintar', 'sinyal-pasar'], map: true, chat: true, chapters: [3, 19],
   },
   {
     code: 'P3', slug: 'naskah-pintar', eco: 'satu-daerah', name: 'Naskah Pintar',
     descriptor: { id: 'Notulen & Disposisi AI', en: 'AI Minutes & Dispositions' },
     tagline: { id: 'Notulen yang menulis dirinya sendiri, surat masuk yang langsung terdisposisi, dan tindak lanjut yang tidak terlupa.', en: 'Minutes that write themselves, incoming letters dispositioned at once, follow-ups that are never forgotten.' },
-    icon: 'naskah', frame: 'browser', roles: ['sekretariat', 'kepala-daerah'], defaultRole: 'sekretariat',
+    icon: 'naskah', frame: 'browser', roles: ['sekretariat', 'kepala-daerah', 'kepala-opd'], defaultRole: 'sekretariat',
     related: ['meja-pimpinan', 'awas-belanja'], map: false, chat: false, chapters: [5],
   },
   {
@@ -197,14 +194,14 @@ export const PRODUCTS: ProductDef[] = [
     code: 'P6', slug: 'awas-belanja', eco: 'satu-daerah', name: 'Awas Belanja',
     descriptor: { id: 'Pengawas Pengadaan AI', en: 'AI Procurement Watchdog' },
     tagline: { id: 'Harga yang kemahalan dan peserta tender yang terafiliasi terlihat sebelum kontrak ditandatangani.', en: 'Overpricing and affiliated bidders surface before the contract is signed.' },
-    icon: 'awas', frame: 'browser', roles: ['ukpbj'], defaultRole: 'ukpbj',
+    icon: 'awas', frame: 'browser', roles: ['ukpbj', 'inspektorat'], defaultRole: 'ukpbj',
     related: ['siaga-wilayah', 'katalog-lokal', 'tenderpilot', 'meja-pimpinan'], map: false, chat: false, chapters: [7],
   },
   {
     code: 'P7', slug: 'cek-berkas', eco: 'satu-daerah', name: 'Cek Berkas',
     descriptor: { id: 'Verifikasi Dokumen Otomatis', en: 'Automated Document Verification' },
     tagline: { id: 'Berkas warga diperiksa dalam hitungan detik: lengkap, kurang, ganda, atau diedit.', en: 'Citizen documents checked in seconds: complete, missing, duplicated or edited.' },
-    icon: 'cek', frame: 'browser', roles: ['perizinan'], defaultRole: 'perizinan',
+    icon: 'cek', frame: 'browser', roles: ['perizinan', 'dinsos'], defaultRole: 'perizinan',
     related: ['siaga-wilayah', 'kenal-mitra'], map: false, chat: false, chapters: [16],
   },
   {
@@ -267,7 +264,7 @@ export const PRODUCTS: ProductDef[] = [
     code: 'P16', slug: 'indeks-ekonomi', eco: 'pasar-daerah', name: 'Indeks Ekonomi Daerah',
     descriptor: { id: 'Dasbor Ekonomi Lokal', en: 'Local Economy Dashboard' },
     tagline: { id: 'Ekonomi setiap kecamatan terbaca bulan demi bulan, dan dampak kebijakan bisa diukur.', en: 'The economy of every district readable month by month, and policy impact measurable.' },
-    icon: 'indeks', frame: 'browser', roles: ['bappeda', 'kepala-daerah'], defaultRole: 'bappeda',
+    icon: 'indeks', frame: 'browser', roles: ['bappeda', 'dinkop', 'kepala-daerah'], defaultRole: 'bappeda',
     related: ['sinyal-pasar', 'siaga-wilayah', 'toko-autopilot', 'meja-pimpinan'], map: true, chat: false, chapters: [18],
   },
   {
@@ -280,7 +277,10 @@ export const PRODUCTS: ProductDef[] = [
 ]
 
 export const PRODUCT_BY_SLUG = Object.fromEntries(PRODUCTS.map((p) => [p.slug, p])) as Record<ProductSlug, ProductDef>
-export const isProductSlug = (s: string | undefined): s is ProductSlug => !!s && s in PRODUCT_BY_SLUG
+/* drift guard: every slug in productSlugs.ts has exactly one registry entry */
+if (PRODUCTS.length !== PRODUCT_SLUGS.length || PRODUCT_SLUGS.some((s) => !(s in PRODUCT_BY_SLUG))) {
+  throw new Error('products.ts: PRODUCTS and productSlugs.ts PRODUCT_SLUGS disagree')
+}
 export const productsOf = (eco: EcoOrInti): ProductDef[] => PRODUCTS.filter((p) => p.eco === eco)
 export const fullName = (p: ProductDef, lang: 'id' | 'en'): string => `${p.name}: ${p.descriptor[lang]}`
 

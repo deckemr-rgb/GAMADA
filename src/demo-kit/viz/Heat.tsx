@@ -1,11 +1,12 @@
 /**
  * Heat — grid heatmap (rows × columns, e.g. day × hour). Fill = accent at an opacity scaled to the value, so
- * it follows the ecosystem theme. Cells fade in row by row; values interpolate; arrow keys move in 2D.
+ * it follows the ecosystem theme. Rows fade in one by one (opacity on a row group); value changes glide via
+ * fill-opacity attribute tweens; arrow keys move in 2D. React renders the final cells once.
  */
 import { useMemo, useRef, type PointerEvent } from 'react'
 import { max as d3max, min as d3min } from 'd3-array'
 import { ChartFrame, ChartTip, useVizLang, type FrameProps } from './ChartFrame'
-import { flatten, localPoint, stagger, useIndexNav, useReveal, useSize, useTweened } from './core'
+import { flatten, localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 
 export interface HeatProps extends FrameProps {
   rows: string[]
@@ -28,11 +29,12 @@ export function Heat(props: HeatProps) {
   const fmt = props.format ?? ((v: number) => f.num(v))
   const plotRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(plotRef)
-  const p = useReveal(plotRef)
+  const vis = useRevealDom(plotRef)
   const nr = rows.length
   const nc = cols.length
   const flatT = useMemo(() => flatten(values), [values])
-  const flat = useTweened(flatT)
+  useAttrTween(plotRef, values, vis)
+  const flat = flatT
   const lo = props.domain?.[0] ?? d3min(flatT) ?? 0
   const hiV = props.domain?.[1] ?? d3max(flatT) ?? 1
   const labelW = Math.min(110, Math.ceil(Math.max(...rows.map((r) => r.length), 2) * 6.6) + 12)
@@ -70,7 +72,7 @@ export function Heat(props: HeatProps) {
   return (
     <ChartFrame {...props} autoSummary={summary} announce={nav.kbd ? readout : ''} hint={s.hintGrid}>
       <div ref={plotRef} className="dk-viz-plot" tabIndex={0} role="group" aria-label={`${props.title}. ${s.hintGrid}.`} onKeyDown={nav.onKeyDown} onBlur={nav.onBlur}>
-        <svg className={`dk-viz-svg dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
+        <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
           {rows.map((r, ri) => (
             <text key={r} x={labelW - 8} y={ri * ch + ch / 2 + 4} className={`t-end${ri === ar ? ' t-strong' : ' t-muted'}`}>
               {r}
@@ -83,14 +85,15 @@ export function Heat(props: HeatProps) {
               </text>
             ) : null,
           )}
-          {rows.map((r, ri) =>
-            cols.map((c, ci) => {
-              const v = flat[ri * nc + ci] ?? 0
-              const k = stagger(p, ri, nr, 0.5)
-              const on = ri === ar && ci === ac
-              return <rect key={`${r}-${c}`} className={`dk-viz-cell${on ? ' is-on' : ''}`} x={labelW + ci * cw} y={ri * ch} width={cw} height={ch} rx={Math.min(4, cw / 4)} style={{ fill: 'var(--dk-viz-acc)', fillOpacity: op(v) * k }} />
-            }),
-          )}
+          {rows.map((r, ri) => (
+            <g key={r} {...rv('fade', { i: ri, n: nr, spread: 0.5 })}>
+              {cols.map((c, ci) => {
+                const v = flat[ri * nc + ci] ?? 0
+                const on = ri === ar && ci === ac
+                return <rect key={`${r}-${c}`} className={`dk-viz-cell${on ? ' is-on' : ''}`} data-tw="fill-opacity" x={labelW + ci * cw} y={ri * ch} width={cw} height={ch} rx={Math.min(4, cw / 4)} fillOpacity={op(v).toFixed(3)} style={{ fill: 'var(--dk-viz-acc)' }} />
+              })}
+            </g>
+          ))}
         </svg>
         {act !== null && (
           <ChartTip x={labelW + ac * cw + cw / 2} y={ar * ch} width={w}>

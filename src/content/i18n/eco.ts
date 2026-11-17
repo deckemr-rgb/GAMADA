@@ -8,6 +8,8 @@ const id = {
   common: {
     tryDemo: 'Coba demo penuh',
     openDemo: 'Buka demo',
+    demoPlan: 'Lihat rencana demo',
+    demoPlanOf: 'Rencana demo {name}',
     allDemos: 'Semua demo',
     seeInTour: 'Lihat di tur',
     contact: 'Hubungi kami',
@@ -119,10 +121,11 @@ const id = {
   lab: {
     eyebrow: 'Lab',
     title: 'Semua demo di satu tempat',
-    lead: '{n} demo produk ekosistem, GAMADA Inti, dan alat dari portofolio lama. Saring berdasarkan ekosistem atau waktu yang Anda punya.',
+    lead: '{n} demo produk ekosistem, GAMADA Inti, dan alat dari portofolio lama. Saring berdasarkan ekosistem, status, atau waktu yang Anda punya.',
     docTitle: 'Lab demo — GAMADA',
     filtersLabel: 'Saring demo',
     filterEco: 'Ekosistem',
+    filterStatus: 'Status',
     filterTime: 'Waktu coba',
     all: 'Semua',
     portfolio: 'Portofolio',
@@ -131,8 +134,11 @@ const id = {
     empty: 'Tidak ada demo yang cocok dengan kombinasi filter ini.',
     reset: 'Atur ulang filter',
     tryTime: 'Sekitar {n} menit',
+    tryTimeEstimate: 'Perkiraan {n} menit',
+    tryTimeEstimateLabel: 'Perkiraan waktu coba setelah demo selesai dibangun: {n} menit',
     statusLive: 'Bisa dicoba',
     statusBuilding: 'Sedang dibangun · tahap {n}',
+    statusBuildingShort: 'Sedang dibangun',
     portfolioTag: 'Portofolio GAMADA',
     tools: {
       phonefarm: {
@@ -159,6 +165,8 @@ const en: typeof id = {
   common: {
     tryDemo: 'Try the full demo',
     openDemo: 'Open demo',
+    demoPlan: 'See the demo plan',
+    demoPlanOf: '{name} demo plan',
     allDemos: 'All demos',
     seeInTour: 'See it in the tour',
     contact: 'Contact us',
@@ -270,10 +278,11 @@ const en: typeof id = {
   lab: {
     eyebrow: 'Lab',
     title: 'Every demo in one place',
-    lead: '{n} ecosystem product demos, GAMADA Inti and tools from the earlier portfolio. Filter by ecosystem or by the time you have.',
+    lead: '{n} ecosystem product demos, GAMADA Inti and tools from the earlier portfolio. Filter by ecosystem, status or the time you have.',
     docTitle: 'Demo lab — GAMADA',
     filtersLabel: 'Filter demos',
     filterEco: 'Ecosystem',
+    filterStatus: 'Status',
     filterTime: 'Time to try',
     all: 'All',
     portfolio: 'Portfolio',
@@ -282,8 +291,11 @@ const en: typeof id = {
     empty: 'No demo matches this combination of filters.',
     reset: 'Reset filters',
     tryTime: 'About {n} min',
+    tryTimeEstimate: 'Estimated {n} min',
+    tryTimeEstimateLabel: 'Estimated time to try once the demo is built: {n} minutes',
     statusLive: 'Ready to try',
     statusBuilding: 'Being built · stage {n}',
+    statusBuildingShort: 'Being built',
     portfolioTag: 'GAMADA portfolio',
     tools: {
       phonefarm: {

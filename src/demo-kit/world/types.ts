@@ -688,6 +688,8 @@ export interface AuditEntry {
   depth: number
   /** event that caused this one (reactions) */
   causeId: string | null
+  /** source 'clock' (natural background events): the product whose domain the event belongs to */
+  origin?: ProductSlug
 }
 
 /* ================================================================== world state */
@@ -874,6 +876,11 @@ export interface WorldEvent<K extends EventType = EventType> {
   /** 0 = emitted directly; n = n-th reaction level */
   depth?: number
   causeId?: string | null
+  /**
+   * Natural background events (natural.ts) carry source 'clock' — nobody pressed anything — and name here the
+   * product whose domain they belong to (sale → toko-autopilot, complaint → sapa-warga …). Audit/labels only.
+   */
+  origin?: ProductSlug
 }
 
 /** distributive union — `e.type` narrows `e.payload` */
@@ -883,5 +890,7 @@ export interface FollowUp<K extends EventType = EventType> {
   type: K
   payload: EventMap[K]
   source: EventSource
+  /** see WorldEvent.origin */
+  origin?: ProductSlug
 }
 export type AnyFollowUp = { [K in EventType]: FollowUp<K> }[EventType]

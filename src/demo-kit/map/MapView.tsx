@@ -3,7 +3,10 @@
  *
  * maplibre-gl, its worker and its CSS are pulled with a dynamic import() when the first MapView mounts, so they
  * form their own chunk; importing this file (or the map barrel) costs only this component. Geometry comes from
- * loadRegionGeo(regionId) (its own chunk too). One map per screen: a second mounted MapView logs a dev warning.
+ * loadRegionGeo(regionId, { desa: false }); the heavy desa polygons (desa.min.json) are fetched lazily with
+ * loadRegionDesa() only when the engine asks for them (desa layer switched on or zoomed in, flood scrubbed past
+ * +0 h) or a caller does (handle.loadDesa() / handle.floodImpact()). One map per screen: a second mounted
+ * MapView logs a dev warning.
  *
  *   <MapView regionId="bojonegoro" layers={[{ id: 'kec', kind: 'kecamatan' }, …]} ref={mapRef} />
  *   mapRef.current.fitKecamatan('kalitidu')
@@ -12,17 +15,36 @@
  * Offline / blocked basemap: plain ink background + boundaries + a small notice — never a blank map.
  */
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
-import { useI18n } from '../../lib/i18n'
+import { useI18n, type Lang } from '../../lib/i18n'
 import { isEnabled } from '../../lib/motion'
 import { hasWebGL } from '../../lib/perf'
-import { loadRegion, loadRegionGeo } from '../region/loader'
+import { loadRegion, loadRegionDesa, loadRegionGeo } from '../region/loader'
 import type { RegionPack } from '../region/types'
 import { Icon, ICON_NAMES } from '../ui/icons'
 import { IconButton } from '../ui/Button'
 import type { MapEngine } from './engine'
-import { BASEMAP_ATTRIBUTION_TEXT, ms } from './strings'
+import { BASEMAP_ATTRIBUTION_TEXT } from './strings'
 import type { LngLat, MapViewHandle, MapViewProps } from './types'
 import './map.css'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  mapOf: { id: 'Peta', en: 'Map of' },
+  loading: { id: 'Memuat peta…', en: 'Loading map…' },
+  failed: { id: 'Peta gagal dimuat. Muat ulang halaman untuk mencoba lagi.', en: 'The map failed to load. Reload the page to try again.' },
+  noTiles: { id: 'Peta dasar tidak tersedia (offline atau diblokir) — batas wilayah tetap tampil.', en: 'Basemap unavailable (offline or blocked) — region boundaries still shown.' },
+  noWebgl: { id: 'Peramban ini tidak mendukung WebGL — gunakan daftar kecamatan.', en: 'This browser has no WebGL — use the district list.' },
+  sources: { id: 'Sumber', en: 'Sources' },
+  sourcesTitle: { id: 'Sumber data peta', en: 'Map data sources' },
+  basemap: { id: 'Peta dasar', en: 'Basemap' },
+  close: { id: 'Tutup', en: 'Close' },
+  fullscreen: { id: 'Layar penuh', en: 'Full screen' },
+  exitFullscreen: { id: 'Keluar layar penuh', en: 'Exit full screen' },
+  zoomIn: { id: 'Perbesar', en: 'Zoom in' },
+  zoomOut: { id: 'Perkecil', en: 'Zoom out' },
+  resetView: { id: 'Tampilkan seluruh wilayah', en: 'Show the whole region' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 let mounted = 0
 
@@ -70,6 +92,37 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   const cb = useRef({ onSelect, onMarker, onReady })
   cb.current = { onSelect, onMarker, onReady }
 
+  /* lazy desa: the engine (or a caller) asks, MapView fetches desa.min.json and hands it over */
+  const regionIdRef = useRef(regionId)
+  regionIdRef.current = regionId
+  const desaWanted = useRef(new Set<string>())
+  const desaWaiters = useRef<{ res: () => void; rej: (e: Error) => void }[]>([])
+  const flushDesa = useCallback(() => {
+    const e = engineRef.current
+    if (!e?.hasDesa || e.regionId !== regionIdRef.current) return
+    const w = desaWaiters.current.splice(0)
+    for (const x of w) x.res()
+  }, [])
+  const fetchDesa = useCallback(
+    (id: string) => {
+      desaWanted.current.add(id)
+      // cached in the loader: repeat calls share one request
+      loadRegionDesa(id)
+        .then((fc) => {
+          engineRef.current?.setDesa(fc, id)
+          flushDesa()
+        })
+        .catch((e: unknown) => {
+          desaWanted.current.delete(id)
+          engineRef.current?.desaFailed(id)
+          if (import.meta.env.DEV) console.warn('[map] desa failed', e)
+          const err = e instanceof Error ? e : new Error(String(e))
+          for (const x of desaWaiters.current.splice(0)) x.rej(err)
+        })
+    },
+    [flushDesa],
+  )
+
   const handle = useMemo<MapViewHandle>(
     () => ({
       flyTo: (c: LngLat, z?: number) => engineRef.current?.flyTo(c, z),
@@ -82,8 +135,24 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
         engineRef.current?.setTime(h)
       },
       raw: () => engineRef.current?.map ?? null,
+      loadDesa: () =>
+        new Promise<void>((res, rej) => {
+          const e = engineRef.current
+          if (e?.hasDesa && e.regionId === regionIdRef.current) return res()
+          desaWaiters.current.push({ res, rej })
+          fetchDesa(regionIdRef.current)
+        }),
+      floodImpact: (h: number) => {
+        const e = engineRef.current
+        // null while the engine is not ready, still on the previous region, or desa are loading (the call asks)
+        if (!e || e.regionId !== regionIdRef.current) {
+          fetchDesa(regionIdRef.current)
+          return null
+        }
+        return e.floodImpact(h)
+      },
     }),
-    [],
+    [fetchDesa],
   )
   useImperativeHandle(ref, () => handle, [handle])
 
@@ -128,6 +197,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
             onSelect: (id) => cb.current.onSelect?.(id),
             onMarker: (l, id) => cb.current.onMarker?.(l, id),
             onNotice: (k) => alive && setNotice(k),
+            onNeedDesa: (id) => alive && fetchDesa(id),
             onFps: (f) => {
               if (!alive) return
               setFps(f)
@@ -168,7 +238,8 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
     const engine = engineRef.current
     if (!engine) return
     let alive = true
-    void Promise.all([loadRegion(regionId), loadRegionGeo(regionId)])
+    // geometry WITHOUT desa first (desa.min.json is the heaviest file; fetched lazily, see fetchDesa)
+    void Promise.all([loadRegion(regionId), loadRegionGeo(regionId, { desa: false })])
       .then(async ([p, g]) => {
         if (!alive) return
         setPack(p)
@@ -178,6 +249,9 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
         if (first && initialView) engine.flyTo(initialView.center, initialView.zoom)
         regionLoaded.current = regionId
         if (pendingHour.current !== null) engine.setTime(pendingHour.current)
+        // desa asked for before the engine / this region was ready, or callers still waiting
+        if (desaWanted.current.has(regionId) || desaWaiters.current.length) fetchDesa(regionId)
+        flushDesa()
         setStatus('ready')
         if (first) cb.current.onReady?.(handle)
       })
@@ -251,38 +325,8 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
 
   return (
     <div ref={rootRef} className={`dk-map${full ? ' is-full' : ''}${className ? ` ${className}` : ''}`} role="region" aria-label={label} aria-busy={status === 'loading'}>
-      <div ref={canvasRef} className="dk-map-canvas" />
-      <div ref={labelsRef} className="dk-map-labels" aria-hidden="true" />
-      <div ref={tipRef} className="dk-map-tip" aria-hidden="true" hidden />
-      {/* hidden glyph sheet: ui/icons rendered once, serialised into marker badges */}
-      <div ref={spriteRef} className="dk-map-sprite" aria-hidden="true">
-        <IconSheet />
-      </div>
-
-      {status === 'loading' && (
-        <div className="dk-map-state" aria-live="polite">
-          <span className="dk-map-spin" aria-hidden="true" />
-          {ms('loading', lang)}
-        </div>
-      )}
-      {(status === 'error' || status === 'nowebgl') && (
-        <div className="dk-map-state is-error" role="alert">
-          <Icon name="alert" size={18} />
-          {ms(status === 'error' ? 'failed' : 'noWebgl', lang)}
-        </div>
-      )}
-      {notice === 'noTiles' && status === 'ready' && (
-        <p className="dk-map-notice" role="status">
-          <Icon name="wifi" size={16} />
-          {ms('noTiles', lang)}
-        </p>
-      )}
-      {debugFps && fps !== null && (
-        <output className="dk-map-fps" aria-label="fps">
-          {fps} fps
-        </output>
-      )}
-
+      {/* DOM order = tab order: corner controls → Sumber → map canvas → basemap attribution (all overlays are
+          absolutely positioned, so this does not change the picture) */}
       {interactive && status === 'ready' && (
         <div className="dk-map-ctrl">
           <IconButton icon="plus" label={ms('zoomIn', lang)} size="sm" variant="quiet" className="dk-map-zoom" onClick={() => zoomBy(1)} />
@@ -332,6 +376,37 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
             </div>
           )}
         </div>
+      )}
+      <div ref={canvasRef} className="dk-map-canvas" />
+      <div ref={labelsRef} className="dk-map-labels" aria-hidden="true" />
+      <div ref={tipRef} className="dk-map-tip" aria-hidden="true" hidden />
+      {/* hidden glyph sheet: ui/icons rendered once, serialised into marker badges */}
+      <div ref={spriteRef} className="dk-map-sprite" aria-hidden="true">
+        <IconSheet />
+      </div>
+
+      {status === 'loading' && (
+        <div className="dk-map-state" aria-live="polite">
+          <span className="dk-map-spin" aria-hidden="true" />
+          {ms('loading', lang)}
+        </div>
+      )}
+      {(status === 'error' || status === 'nowebgl') && (
+        <div className="dk-map-state is-error" role="alert">
+          <Icon name="alert" size={18} />
+          {ms(status === 'error' ? 'failed' : 'noWebgl', lang)}
+        </div>
+      )}
+      {notice === 'noTiles' && status === 'ready' && (
+        <p className="dk-map-notice" role="status">
+          <Icon name="wifi" size={16} />
+          {ms('noTiles', lang)}
+        </p>
+      )}
+      {debugFps && fps !== null && (
+        <output className="dk-map-fps" aria-label="fps">
+          {fps} fps
+        </output>
       )}
     </div>
   )

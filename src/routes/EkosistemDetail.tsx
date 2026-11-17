@@ -4,7 +4,7 @@
  * list of tour chapters, cross-ecosystem links, "Mulai tur dari bab X" and WhatsApp.
  */
 import { useParams } from 'react-router'
-import { useI18n } from '../lib/i18n'
+import { useEcoI18n } from '../content/i18n/useEco'
 import { ECOSYSTEMS, PRODUCTS, PRODUCT_BY_SLUG, productsOf, type EcoOrInti, type ProductSlug } from '../content/products'
 import { TOUR, chaptersOfEco } from '../content/tour'
 import PageShell from '../components/PageShell'
@@ -13,16 +13,17 @@ import { ButtonLink } from '../components/ui/Button'
 import { Icon } from '../demo-kit/ui/icons'
 import NotFound from './NotFound'
 import { BodyHead, ContactButton, CtaBand, CtaRow, ECO_ORDER, EcoBadge, ProductCard, fill } from './EcoParts'
+import Arrow from '../components/ui/Arrow'
 
 const isEco = (s: string | undefined): s is EcoOrInti => !!s && s in ECOSYSTEMS
 
 export default function EkosistemDetail() {
-  const { lang, t } = useI18n()
+  const { lang, eco: copy } = useEcoI18n()
   const { eco } = useParams()
   if (!isEco(eco)) return <NotFound />
 
-  const c = t.eco.common
-  const d = t.eco.detail
+  const c = copy.common
+  const d = copy.detail
   const e = ECOSYSTEMS[eco]
   // Inti has one product (itself): its page lists the products that share it instead
   const list = eco === 'inti' ? PRODUCTS.filter((p) => p.slug !== 'inti') : productsOf(eco)
@@ -41,13 +42,12 @@ export default function EkosistemDetail() {
       heroExtra={
         <nav className="eco-crumbs" aria-label={c.breadcrumb}>
           <AppLink to="/ekosistem">
-            <span aria-hidden="true">← </span>
+            <Arrow dir="back" />
             {c.allEcos}
           </AppLink>
         </nav>
       }
-    >
-      <div className="eco-page" data-eco={eco}>
+      actions={
         <CtaRow>
           {firstChapter ? (
             <ButtonLink to={`/tur/${firstChapter}`} icon={<Icon name="play" size={18} />}>
@@ -56,7 +56,9 @@ export default function EkosistemDetail() {
           ) : null}
           <ContactButton text={wa} />
         </CtaRow>
-
+      }
+    >
+      <div className="eco-page" data-eco={eco}>
         <section className="eco-sec" aria-labelledby="eco-products">
           <BodyHead id="eco-products" title={eco === 'inti' ? d.intiProductsTitle : d.productsTitle} />
           <ul className={`eco-grid${eco === 'inti' ? ' is-dense' : ''}`}>
@@ -92,7 +94,7 @@ export default function EkosistemDetail() {
                   </div>
                   <AppLink to={`/tur/${ch.n}`} className="eco-flow-open">
                     {fill(d.flowOpen, { n: ch.n })}
-                    <span aria-hidden="true"> →</span>
+                    <Arrow />
                   </AppLink>
                 </li>
               ))}
@@ -131,7 +133,7 @@ export default function EkosistemDetail() {
           </ul>
         </section>
 
-        <CtaBand id="eco-contact" title={fill(d.contactTitle, { name: e.name })} lead={t.eco.hub.contactLead}>
+        <CtaBand id="eco-contact" title={fill(d.contactTitle, { name: e.name })} lead={copy.hub.contactLead}>
           <ContactButton text={wa} />
           <ButtonLink to="/lab" variant="ghost">
             {c.allDemos}

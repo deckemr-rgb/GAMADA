@@ -26,7 +26,17 @@ export interface ExtractPanelProps {
   showVerdict?: boolean
   /** override the computed verdict */
   verdict?: VerdictResult
+  /**
+   * text while nothing is read yet (default "Pilih dokumen untuk mulai membaca."). When a document is already on
+   * screen, name the action instead, e.g. readPrompt('Baca surat', lang) → "Tekan “Baca surat” untuk mulai membaca."
+   */
+  emptyText?: string
   className?: string
+}
+
+/** "Press “<action>” to start reading." — the empty-state prompt once a document is shown but not read yet */
+export function readPrompt(action: string, lang: 'id' | 'en'): string {
+  return lang === 'id' ? `Tekan “${action}” untuk mulai membaca.` : `Press “${action}” to start reading.`
 }
 
 export const VERDICT_LABEL: Record<Verdict, { id: string; en: string }> = {
@@ -50,7 +60,7 @@ function showValue(v: string, lang: 'id' | 'en'): string {
 
 const STATUS_ICON = { ok: 'check', warn: 'alert', fail: 'close' } as const
 
-export function ExtractPanel({ extracted, revealed, loading, activeKey, onFieldFocus, title, showChecks = true, showVerdict = true, verdict, className }: ExtractPanelProps) {
+export function ExtractPanel({ extracted, revealed, loading, activeKey, onFieldFocus, title, showChecks = true, showVerdict = true, verdict, emptyText, className }: ExtractPanelProps) {
   const { lang } = useI18n()
   const s = S[lang]
   const fields = extracted?.fields ?? []
@@ -92,7 +102,7 @@ export function ExtractPanel({ extracted, revealed, loading, activeKey, onFieldF
         </span>
       </header>
 
-      {!extracted && !loading && <p className="dk-xp-empty">{s.empty}</p>}
+      {!extracted && !loading && <p className="dk-xp-empty">{emptyText ?? s.empty}</p>}
       {loading && (
         <div className="dk-xp-skel" aria-hidden="true">
           {[0, 1, 2, 3].map((i) => (

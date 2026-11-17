@@ -9,7 +9,7 @@ import { gsap } from 'gsap'
 import { DEMO, EASE } from '../../lib/motion'
 import { useI18n } from '../../lib/i18n'
 import { Icon } from './icons'
-import { motionMode, useCountUp, useGsapContext, useInView } from './motion'
+import { animatePose, motionMode, useCountUp, useInView, type PoseTween } from './motion'
 import { fmtNum, useUiStrings } from './strings'
 import './tokens.css'
 import './ui.css'
@@ -59,7 +59,8 @@ export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaForm
   const flashRef = useRef<HTMLSpanElement>(null)
   const barRef = useRef<HTMLSpanElement>(null)
   const prev = useRef(value)
-  const run = useGsapContext()
+  const flashTws = useRef<PoseTween[]>([])
+  useEffect(() => () => flashTws.current.forEach((tw) => tw.kill()), [])
   const meaning = delta === undefined ? 'flat' : deltaMeaning(delta, goodWhen)
 
   /* change tag "+n" beside the number + soft accent flash of the cell */
@@ -74,15 +75,15 @@ export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaForm
     tag.textContent = `${diff > 0 ? '+' : '−'}${fmt(Math.abs(diff))}`
     const mode = motionMode()
     if (mode === 'static') return
-    run(() => {
-      const tl = gsap.timeline()
-      const f = mode === 'reduced' ? DEMO.reducedFade : DEMO.press
-      tl.fromTo(fl, { opacity: 1 }, { opacity: 0, duration: mode === 'reduced' ? DEMO.reducedFade : DEMO.rowHighlightFade, delay: mode === 'reduced' ? DEMO.rowHighlightFade - DEMO.reducedFade : 0, ease: 'power1.in' }, 0)
-      tl.fromTo(tag, { opacity: 0, y: mode === 'reduced' ? 0 : 4 }, { opacity: 1, y: 0, duration: f, ease: EASE.out }, 0)
-      tl.to(tag, { opacity: 0, duration: DEMO.panel }, DEMO.rowHighlightFade)
-    })
+    // write-only pose tweens (a gsap fromTo reads computed style at start = a forced style recalc after commit)
+    const f = mode === 'reduced' ? DEMO.reducedFade : DEMO.press
+    flashTws.current.forEach((tw) => tw.kill())
+    flashTws.current = [
+      animatePose(fl, { opacity: 1 }, { opacity: 0 }, { duration: mode === 'reduced' ? DEMO.reducedFade : DEMO.rowHighlightFade, delay: mode === 'reduced' ? DEMO.rowHighlightFade - DEMO.reducedFade : 0, ease: 'power1.in', clear: false }),
+      animatePose(tag, { opacity: 0, y: mode === 'reduced' ? 0 : 4 }, { opacity: 1, y: 0 }, { duration: f, ease: EASE.out, clear: false, onComplete: () => flashTws.current.push(animatePose(tag, { opacity: 1 }, { opacity: 0 }, { duration: DEMO.panel, delay: DEMO.rowHighlightFade - f, clear: false })) }),
+    ]
     // fmt's identity changes per render; the diff text depends on the values only
-  }, [value, inView, run])
+  }, [value, inView])
 
   /* target bar */
   const frac = target ? Math.max(0, Math.min(1, value / target)) : null

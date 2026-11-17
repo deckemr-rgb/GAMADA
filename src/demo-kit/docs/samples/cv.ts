@@ -3,7 +3,8 @@
  * turns one CV into a SampleDoc. Names come from the world name generator (weighted by the region's languages);
  * employers are fictional; e-mail uses the reserved .test TLD; phone numbers are masked.
  */
-import { hashString, makeNamer, makeRng, type Rng } from '../../world/rng'
+import { hashString, makeRng, type Rng } from '../../world/prng'
+import { makeNamer } from '../../world/names'
 import { SPECIMEN_KEC } from '../nik'
 import type { Bi, CvRecord, SampleDoc } from '../types'
 import { DocBuilder, INK, MUTED } from './builder'

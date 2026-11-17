@@ -2,19 +2,26 @@
 /**
  * build-bojonegoro.mjs — turn the raw public data in tools/region/.cache/bojonegoro/ (see fetch-bojonegoro.mjs)
  * plus the hand-written content in tools/region/content/ into
- *   src/demo-kit/region/packs/bojonegoro/pack.json  (RegionPack)
- *   src/demo-kit/region/packs/bojonegoro/geo.json   (RegionGeo)
- * Deterministic: same cache in → byte-identical files out. Then run:  npx tsx tools/region/validate.mjs
+ *   src/demo-kit/region/packs/bojonegoro/pack.json      (RegionPack, canonical: tools, tests, lab)
+ *   src/demo-kit/region/packs/bojonegoro/pack.min.json  (same pack, compact desa columns: what the browser fetches)
+ *   src/demo-kit/region/packs/bojonegoro/geo.json       (RegionGeo without desa: kecamatan, rivers, roads, hazards)
+ *   src/demo-kit/region/packs/bojonegoro/desa.json      (desa/kelurahan FeatureCollection, loaded only when needed)
+ *   src/demo-kit/region/packs/bojonegoro/geo.min.json + desa.min.json  (compact shared-arc twins the browser
+ *                                                        fetches; tools/region/encode-geo.mjs, region/topo.ts)
+ * Deterministic: same cache in → byte-identical files out. Works offline from the cache. At the end it runs
+ * tools/region/validate.mjs (schema, content rules, wire round trip, gzip budgets) and fails on any error.
  *
  *   node tools/region/fetch-bojonegoro.mjs && node tools/region/build-bojonegoro.mjs
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  simplifyTopology, douglasPeucker, roundLine, roundPt, round, centroid, pointInGeom, areaKm2, distToLine, bboxOf, ringArea, projector,
+  simplifyTopology, douglasPeucker, roundLine, roundPt, round, centroid, pointInGeom, areaKm2, distToLine, bboxOf, ringArea, projector, quantizeFC,
 } from './lib/geo.mjs'
 import { DDA, KECAMATAN as BPS_KEC, TOTALS, PDRB_2025 } from './data/bps-bojonegoro-dda2026.mjs'
+import { encodePack } from './encode-geo.mjs'
 import { KELURAHAN, OPD, SERVICES, GREETINGS, COMPLAINTS } from './content/bojonegoro.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -29,7 +36,12 @@ const CFG = {
   tolRiver: 45,
   tolRoad: 60,
   tolHazard: 240,
+  /** working precision (simplification, pack centroids/coords) */
   decimals: 5,
+  /** shipping precision of geo.json / desa.json (4 decimals ≈ 11 m; applied after topology simplification) */
+  geoDecimals: 4,
+  /** markets closer than this (m) are one market (OSM often has a node + an area for the same pasar) */
+  marketMergeM: 150,
   /** hazard grid cell (degrees, ≈ 440 m) and distance decay (m) from the Bengawan Solo */
   gridDeg: 0.0025,
   floodDecayM: 2200,
@@ -78,6 +90,8 @@ const kecOf = (p) => {
 }
 
 /* ---------------------------------------------------------------- 2. cross-check BPS transcription vs Wikipedia */
+/** kecamatan name (BPS spelling) → Kemendagri code "35.22.xx", filled from the wiki table below */
+const KEMENDAGRI = {}
 {
   const wiki = readFileSync(join(CACHE, 'wiki-bojonegoro.txt'), 'utf8')
   // row: | 35.22.xx || [[X, Bojonegoro|X]] ||align="right"| area || pop2010 || pop2020 || pop2025 || seat || villages || post
@@ -86,11 +100,12 @@ const kecOf = (p) => {
     .split('\n')
     .filter((l) => /^\|\s*35\.22\.\d+\s*\|\|/.test(l))
     .map((l) => l.split('||'))
-    .map((c) => [null, (c[1].match(/\|([^\]]+)\]\]/) ?? [])[1], cell(c[2]), cell(c[5])])
+    .map((c) => [c[0].replace(/^\|/, '').trim(), (c[1].match(/\|([^\]]+)\]\]/) ?? [])[1], cell(c[2]), cell(c[5])])
   const W_ALIAS = { Kadewan: 'Kedewan' }
   let checked = 0
-  for (const [, n, area, pop] of rows) {
+  for (const [code, n, area, pop] of rows) {
     const name = W_ALIAS[n] ?? n
+    KEMENDAGRI[name] = code
     const b = BPS_KEC.find((r) => r[0] === name || (name === 'Sumberrejo' && r[0] === 'Sumberrejo'))
     if (!b) throw new Error(`wiki row ${n} not in transcription`)
     if (Math.abs(b[1] - Number(area)) > 0.005) throw new Error(`area mismatch ${name}: ${b[1]} vs wiki ${area}`)
@@ -99,6 +114,15 @@ const kecOf = (p) => {
   }
   if (checked !== 28) throw new Error(`wiki cross-check matched ${checked}/28 rows (table layout changed?)`)
   log('BPS transcription cross-checked against Wikipedia (28/28 rows) ✓')
+  // Kemendagri (Dukcapil) codes: the first column of the same table (Permendagri 72/2019). They differ from the
+  // BPS codes (Kalitidu = 35.22.16 vs BPS 3522200) and are what NIK / No. KK digits 1-6 use.
+  const codes = Object.values(KEMENDAGRI)
+  if (codes.length !== 28 || new Set(codes).size !== 28 || !codes.every((c) => /^35\.22\.\d{2}$/.test(c))) throw new Error(`kemendagri codes: expected 28 unique 35.22.xx, got ${codes.join(', ')}`)
+  // spot checks against the published list (Kalitidu, Bojonegoro, Trucuk, Kasiman, Malo)
+  for (const [n, c] of [['Kalitidu', '35.22.16'], ['Bojonegoro', '35.22.15'], ['Trucuk', '35.22.23'], ['Kasiman', '35.22.20'], ['Malo', '35.22.17']]) {
+    if (KEMENDAGRI[n] !== c) throw new Error(`kemendagri spot check ${n}: ${KEMENDAGRI[n]} ≠ ${c}`)
+  }
+  log('Kemendagri kecamatan codes: 28 unique 35.22.xx ✓')
 }
 
 /* ---------------------------------------------------------------- 3. topology-preserving simplification */
@@ -344,13 +368,25 @@ const distM = (a, b) => Math.hypot((a[0] - b[0]) * projector(lat0).kx, (a[1] - b
 /** "SMAN 1 GONDANG" → "SMAN 1 Gondang" (keeps school acronyms) */
 const fixCaps = (s) => s.split(' ').map((w) => (/^(SMA|SMK|SMP|SMAN|SMKN|SMPN|SD|SDN|MI|MTs|MA)$/.test(w) || !/^[A-Z]{3,}$/.test(w) ? w : w[0] + w.slice(1).toLowerCase())).join(' ')
 const titleCase = (s) => s.replace(/\s+/g, ' ').replace(/(^|\s)([a-z])/g, (_, a, b) => a + b.toUpperCase())
+/** "PASAR SUMBERREJO" → "Pasar Sumberrejo" (names typed in all caps in OSM) */
+const unCaps = (s) => (/[a-z]/.test(s) ? s : s.toLowerCase())
+/** more specific = more words, then longer ("Pasar Tradisional Gayam" over "Pasar Gayam") */
+const specificity = (n) => n.split(' ').length * 100 + n.length
 const markets = []
 const marketNames = new Set()
 for (const p of poiList) {
   if (p.tags.amenity !== 'marketplace' || !/^pasar\b/i.test(p.name)) continue
-  const name = titleCase(p.name.replace(/,.*$/, '').replace(/\s*Kabupaten Bojonegoro$/i, ''))
+  const name = titleCase(unCaps(p.name.replace(/,.*$/, '').replace(/\s*Kabupaten Bojonegoro$/i, '')))
   if (marketNames.has(name.toLowerCase())) continue
   marketNames.add(name.toLowerCase())
+  // one market mapped twice (node + area, or two editors) a few metres apart: keep the more specific name
+  const near = markets.find((m) => distM(m.coord, p.coord) < CFG.marketMergeM)
+  if (near) {
+    const keep = specificity(name) > specificity(near.name) ? { name, coord: p.coord } : null
+    log(`  market merge: "${near.name}" + "${name}" (${distM(near.coord, p.coord).toFixed(0)} m) → "${keep?.name ?? near.name}"`)
+    if (keep) Object.assign(near, { id: slug(keep.name), name: keep.name, coord: keep.coord, kecamatanId: kecOf(keep.coord) })
+    continue
+  }
   markets.push({ id: slug(name), name, coord: p.coord, kecamatanId: kecOf(p.coord) })
 }
 markets.sort((a, b) => a.name.localeCompare(b.name, 'id'))
@@ -573,6 +609,14 @@ for (const k of kecPack) {
 const center = [round(cx / ca, 4), round(cy / ca, 4)]
 
 const BPS_URL = DDA.url
+/**
+ * The publication's own notice (page 3 of the PDF): "Dilarang mereproduksi dan/atau menggandakan sebagian atau
+ * seluruh isi buku ini untuk tujuan komersial tanpa izin tertulis dari Badan Pusat Statistik Kabupaten Bojonegoro."
+ * GAMADA only cites individual figures (facts) with attribution and reproduces no table or page.
+ * OPEN QUESTION for the owner: ask BPS Bojonegoro for written permission, or keep citing single figures only.
+ */
+const BPS_LICENSE = 'Ketentuan BPS: boleh dikutip dengan menyebut sumber; dilarang mereproduksi/menggandakan untuk tujuan komersial tanpa izin tertulis BPS Kabupaten Bojonegoro'
+const BPS_USE = 'Dipakai sebagai kutipan angka individual, bukan reproduksi tabel; izin tertulis BPS menunggu keputusan pemilik.'
 const HDX = 'https://data.humdata.org/dataset/cod-ab-idn'
 const OSM = 'https://www.openstreetmap.org/copyright'
 const kecamatan = kecPack
@@ -582,6 +626,7 @@ const kecamatan = kecPack
       id: k.id,
       name: k.name,
       code: k.code,
+      kemendagri: KEMENDAGRI[k.name],
       population: Math.round(b[4] * 1000),
       centroid: k.centroid,
       riskFlood: riskFlood[k.id],
@@ -616,7 +661,7 @@ const pack = {
   economy: {
     sectors,
     commodities,
-    source: `Sektor: BPS, ${DDA.title} Tabel 12.3 (distribusi PDRB ADHB ${DDA.dataYear}, angka sangat sementara). Harga dasar: Panel Harga Badan Pangan, tingkat konsumen ${priceDate ?? ''} (Kab. Bojonegoro bila tersedia, selain itu rata-rata Jawa Timur).`,
+    source: `Sektor: BPS, ${DDA.title} Tabel 12.3 (distribusi PDRB ADHB ${DDA.dataYear}, angka sangat sementara). Harga dasar simulasi, mengacu ke Panel Harga Badan Pangan, tingkat konsumen ${priceDate ?? ''} (Kab. Bojonegoro bila tersedia, selain itu rata-rata Jawa Timur); acuan publik, lisensi menunggu konfirmasi pemilik.`,
   },
   opd: OPD,
   services: SERVICES,
@@ -635,11 +680,11 @@ const pack = {
     shopMarketId: markets.find((m) => m.id === 'pasar-kota-bojonegoro')?.id ?? markets.find((m) => m.kecamatanId === 'bojonegoro')?.id ?? markets[0].id,
   },
   sources: [
-    { layer: 'kecamatan', name: 'HDX COD-AB Indonesia — batas kecamatan (adm3)', url: HDX, license: 'CC BY-IGO', year: 2020, note: 'BPS / OCHA ROAP; disederhanakan (Douglas-Peucker topologis, 5 desimal) oleh tools/region/build-bojonegoro.mjs' },
+    { layer: 'kecamatan', name: 'HDX COD-AB Indonesia — batas kecamatan (adm3)', url: HDX, license: 'CC BY-IGO', year: 2020, note: 'BPS / OCHA ROAP; disederhanakan (Douglas-Peucker topologis, 4 desimal) oleh tools/region/build-bojonegoro.mjs. Kode Kemendagri per kecamatan: id.wikipedia.org/wiki/Kabupaten_Bojonegoro (Permendagri 72/2019)' },
     { layer: 'desa', name: 'HDX COD-AB Indonesia — batas desa/kelurahan (adm4)', url: HDX, license: 'CC BY-IGO', year: 2020, note: '430 desa/kelurahan + kawasan hutan; status kelurahan dari id.wikipedia.org/wiki/Bojonegoro,_Bojonegoro' },
-    { layer: 'stats', name: `BPS Kabupaten Bojonegoro — ${DDA.title}`, url: BPS_URL, license: 'Ketentuan BPS: bebas dipakai dengan menyebut sumber', year: DDA.year, note: 'Luas, penduduk per kecamatan (proyeksi 2025), pemilik KK, ketinggian wilayah, distribusi PDRB' },
-    { layer: 'economy', name: 'BPS — distribusi PDRB ADHB menurut lapangan usaha 2025', url: BPS_URL, license: 'Ketentuan BPS: bebas dipakai dengan menyebut sumber', year: DDA.dataYear, note: 'angka sangat sementara' },
-    { layer: 'prices', name: 'Panel Harga Pangan — Badan Pangan Nasional', url: 'https://panelharga.badanpangan.go.id/', license: 'Informasi publik (tanpa lisensi terbuka eksplisit)', year: 2026, note: `harga konsumen ${priceDate}; ${priceLevel.city} komoditas tingkat kabupaten, ${priceLevel.province} rata-rata Jawa Timur; dibulatkan ke Rp 50` },
+    { layer: 'stats', name: `BPS Kabupaten Bojonegoro — ${DDA.title}`, url: BPS_URL, license: BPS_LICENSE, year: DDA.year, note: `Luas, penduduk per kecamatan (proyeksi 2025), pemilik KK, ketinggian wilayah, distribusi PDRB. ${BPS_USE}` },
+    { layer: 'economy', name: 'BPS — distribusi PDRB ADHB menurut lapangan usaha 2025', url: BPS_URL, license: BPS_LICENSE, year: DDA.dataYear, note: `angka sangat sementara. ${BPS_USE}` },
+    { layer: 'prices', name: 'Harga dasar simulasi — acuan publik: Panel Harga Pangan, Badan Pangan Nasional', url: 'https://panelharga.badanpangan.go.id/', license: 'Acuan publik, lisensi menunggu konfirmasi pemilik', year: 2026, note: `harga dasar simulasi untuk demo, bukan harga resmi; acuan harga konsumen ${priceDate}; ${priceLevel.city} komoditas tingkat kabupaten, ${priceLevel.province} rata-rata Jawa Timur; dibulatkan ke Rp 50` },
     { layer: 'rivers', name: 'OpenStreetMap — sungai & waduk', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026 },
     { layer: 'roads', name: 'OpenStreetMap — jalan trunk/primary/secondary', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026 },
     { layer: 'landmarks', name: 'OpenStreetMap — pasar, kantor, RS, puskesmas, sekolah, bendungan', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026, note: 'sampel sekolah: satu SMP/SMA/SMK negeri per kecamatan' },
@@ -653,19 +698,57 @@ const pack = {
 }
 if (!pack.scenario.damLandmarkId) delete pack.scenario.damLandmarkId
 
+/* shipping precision: quantised AFTER the topology step, so shared borders stay identical (see quantizeGeom) */
+const Q = (features) => quantizeFC({ type: 'FeatureCollection', features }, CFG.geoDecimals)
 const geo = {
-  kecamatan: { type: 'FeatureCollection', features: kecGeoOut.sort((a, b) => a.id.localeCompare(b.id)) },
-  desa: { type: 'FeatureCollection', features: desaGeoOut.sort((a, b) => a.id.localeCompare(b.id)) },
-  rivers: { type: 'FeatureCollection', features: [...riverFeatures, ...waterBodyFeature, ...reservoirFeatures] },
-  roads: { type: 'FeatureCollection', features: roadFeatures },
-  hazards: { flood: { type: 'FeatureCollection', features: floodFeatures } },
+  kecamatan: Q(kecGeoOut.sort((a, b) => a.id.localeCompare(b.id))),
+  rivers: Q([...riverFeatures, ...waterBodyFeature, ...reservoirFeatures]),
+  roads: Q(roadFeatures),
+  hazards: { flood: Q(floodFeatures) },
+}
+const desaFC = Q(desaGeoOut.sort((a, b) => a.id.localeCompare(b.id)))
+
+/* compact wire form of the pack: mirrors compactPack() in src/demo-kit/region/wire.ts (the loader's expandPack
+   is the inverse); validate.mjs checks expandPack(pack.min.json) deep-equals pack.json */
+function compactPack(p) {
+  const step = (v) => Math.round(v * 1e4)
+  return {
+    wire: 1,
+    ...p,
+    kecamatan: p.kecamatan.map(({ desa, ...k }) => {
+      const ref = [step(k.centroid[0]), step(k.centroid[1])]
+      for (const d of desa) if (d.name.includes('|') || !d.centroid) throw new Error(`wire: desa ${d.id} cannot be packed`)
+      const out = { ...k, desa: desa.map((d) => d.name).join('|') }
+      if (desa.length) out.dc = desa.flatMap((d) => [step(d.centroid[0]) - ref[0], step(d.centroid[1]) - ref[1]])
+      const kel = desa.flatMap((d, i) => (d.kind === 'kelurahan' ? [i] : []))
+      if (kel.length) out.kel = kel
+      const ids = {}
+      desa.forEach((d, i) => { if (d.id !== `${k.id}-${slug(d.name)}`) ids[i] = d.id })
+      if (Object.keys(ids).length) out.ids = ids
+      return out
+    }),
+  }
 }
 
 mkdirSync(OUT, { recursive: true })
 const packStr = JSON.stringify(pack)
+const minStr = JSON.stringify(compactPack(pack))
 const geoStr = JSON.stringify(geo)
+const desaStr = JSON.stringify(desaFC)
 writeFileSync(join(OUT, 'pack.json'), packStr + '\n')
+writeFileSync(join(OUT, 'pack.min.json'), minStr + '\n')
 writeFileSync(join(OUT, 'geo.json'), geoStr + '\n')
+writeFileSync(join(OUT, 'desa.json'), desaStr + '\n')
 const kb = (s) => (Buffer.byteLength(s) / 1024).toFixed(1) + ' KB'
 const part = (o) => kb(JSON.stringify(o))
-log(`pack.json ${kb(packStr)} · geo.json ${kb(geoStr)} (kecamatan ${part(geo.kecamatan)}, desa ${part(geo.desa)}, rivers ${part(geo.rivers)}, roads ${part(geo.roads)}, flood ${part(geo.hazards)})`)
+for (const line of encodePack('bojonegoro')) log(line)
+log(`pack.json ${kb(packStr)} · pack.min.json ${kb(minStr)} · geo.json ${kb(geoStr)} (kecamatan ${part(geo.kecamatan)}, rivers ${part(geo.rivers)}, roads ${part(geo.roads)}, flood ${part(geo.hazards)}) · desa.json ${kb(desaStr)}`)
+
+/* build-time validation (schema + content rules + wire round trip + gzip budgets) */
+if (!process.env.SKIP_VALIDATE) {
+  const v = spawnSync('npx', ['tsx', join(HERE, 'validate.mjs'), 'bojonegoro'], { stdio: 'inherit', shell: process.platform === 'win32' })
+  if (v.status !== 0) {
+    console.error('[build] validate.mjs failed')
+    process.exit(1)
+  }
+}

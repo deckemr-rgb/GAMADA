@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node tools/region/validate.mjs && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "art:optimize": "node tools/optimize-svg.mjs",
@@ -15,7 +15,9 @@
     "ai:install": "npm --prefix server/ai-proxy install",
     "ai:mock": "npm --prefix server/ai-proxy run dev:mock",
     "ai:dev": "npm --prefix server/ai-proxy run dev",
-    "ai:test": "npm --prefix server/ai-proxy test && npx tsx src/demo-kit/ai/__tests__/matcher.test.ts && npx tsx src/demo-kit/ai/__tests__/stream.test.ts && npx tsx src/demo-kit/ai/__tests__/fallback.test.ts && npx tsx src/demo-kit/ai/__tests__/structured-parity.test.ts && npx tsx src/demo-kit/ai/__tests__/proxy.integration.test.ts"
+    "ai:test": "npm --prefix server/ai-proxy test && npx tsx src/demo-kit/ai/__tests__/matcher.test.ts && npx tsx src/demo-kit/ai/__tests__/stream.test.ts && npx tsx src/demo-kit/ai/__tests__/fallback.test.ts && npx tsx src/demo-kit/ai/__tests__/structured-parity.test.ts && npx tsx src/demo-kit/ai/__tests__/proxy.integration.test.ts",
+    "region:validate": "node tools/region/validate.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",
@@ -35,6 +37,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/d3-array": "^3.2.2",
     "@types/d3-scale": "^4.0.9",

@@ -1,13 +1,23 @@
 /**
- * region/loader.ts — lazy, validated, cached access to region packs (spec §7).
+ * region/loader.ts — lazy, cached access to region packs (spec §7).
  *
- * Each pack lives in packs/<id>/{pack.json, geo.json}; both are loaded with import.meta.glob so Vite emits
- * one chunk per file: a demo without a map never downloads geometry. Every file is zod-parsed exactly once
- * and the resulting promise is cached (a failed load is evicted so a retry can succeed).
+ * Each pack lives in packs/<id>/: pack.json (canonical, for tools/tests) + pack.min.json (same content, compact
+ * desa columns, see wire.ts), geo.json (kecamatan, rivers, roads, hazards) and desa.json (desa polygons, the
+ * heaviest layer), each geometry file with a compact twin geo.min.json / desa.min.json (shared-arc topology,
+ * see topo.ts; decodes to exactly the canonical GeoJSON). The browser FETCHES only the compact files, as static
+ * assets (import.meta.glob '?url' → hashed files in dist/assets), so no geometry is ever parsed as JavaScript and
+ * every file is downloaded only when asked for: a demo without a map never downloads geometry, and MapView loads
+ * geo.min.json alone ({ desa: false }), fetching desa.min.json (loadRegionDesa) only when the map needs desa
+ * (desa layer on / zoomed in, flood past +0 h, a caller).
+ * Packs are validated at build time (tools/region/validate.mjs). In dev every file is zod-parsed once more on
+ * load; production skips that, so zod is not part of any demo route through this module (type imports only).
+ * The resulting promise is cached (a failed load is evicted so a retry can succeed).
  * Packs are BUILT by tools/region/*.mjs from public sources — do not hand-edit the JSON.
  */
 import type { Lang } from '../../lib/i18n'
-import { RegionGeo, RegionPack, type ComplaintCategory } from './types'
+import type { ComplaintCategory, FeatureCollection, RegionGeo, RegionPack } from './types'
+import { expandPack } from './wire'
+import { decodeTopo } from './topo'
 
 export type { RegionPack, RegionGeo } from './types'
 
@@ -26,42 +36,93 @@ export function isRegionId(id: string): id is KnownRegionId {
   return REGIONS.some((r) => r.id === id)
 }
 
-type JsonModule = { default: unknown }
-const PACK_FILES = import.meta.glob<JsonModule>('./packs/*/pack.json')
-const GEO_FILES = import.meta.glob<JsonModule>('./packs/*/geo.json')
+/* Only the URL strings are bundled (a few bytes each); the JSON is fetched on demand. */
+const PACK_URLS = import.meta.glob<string>('./packs/*/pack.min.json', { query: '?url', import: 'default', eager: true })
+const GEO_URLS = import.meta.glob<string>('./packs/*/geo.min.json', { query: '?url', import: 'default', eager: true })
+const DESA_URLS = import.meta.glob<string>('./packs/*/desa.min.json', { query: '?url', import: 'default', eager: true })
 
+type BaseGeo = Omit<RegionGeo, 'desa'>
 const packCache = new Map<string, Promise<RegionPack>>()
+const baseGeoCache = new Map<string, Promise<BaseGeo>>()
+const desaCache = new Map<string, Promise<FeatureCollection>>()
 const geoCache = new Map<string, Promise<RegionGeo>>()
 
-function cachedLoad<T>(cache: Map<string, Promise<T>>, files: Record<string, () => Promise<JsonModule>>, id: string, file: string, parse: (v: unknown) => T): Promise<T> {
-  const hit = cache.get(id)
+function cached<T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key)
   if (hit) return hit
-  const importer = files[`./packs/${id}/${file}`]
-  if (!importer) return Promise.reject(new Error(`region pack "${id}" not found (known: ${REGIONS.map((r) => r.id).join(', ')})`))
-  const p = importer()
-    .then((m) => parse(m.default))
-    .catch((e: unknown) => {
-      cache.delete(id)
-      throw e instanceof Error ? e : new Error(String(e))
-    })
-  cache.set(id, p)
+  const p = make().catch((e: unknown) => {
+    cache.delete(key)
+    throw e instanceof Error ? e : new Error(String(e))
+  })
+  cache.set(key, p)
   return p
 }
 
-/** Load + validate a region pack (names, stats, kecamatan, services, language samples …). */
+async function fetchJson(urls: Record<string, string>, id: string, file: string): Promise<unknown> {
+  const url = urls[`./packs/${id}/${file}`]
+  if (!url) throw new Error(`region pack "${id}" has no ${file} (known: ${REGIONS.map((r) => r.id).join(', ')})`)
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`region pack "${id}": ${file} → HTTP ${res.status}`)
+  return res.json()
+}
+
+/** Dev-only schema check (the dynamic import and zod are dropped from production builds). */
+async function devCheck(kind: 'pack' | 'geo' | 'desa', v: unknown): Promise<void> {
+  if (!import.meta.env.DEV) return
+  const t = await import('./types')
+  if (kind === 'pack') t.RegionPack.parse(v)
+  else if (kind === 'geo') t.RegionGeo.parse(v)
+  else t.FeatureCollection.parse(v)
+}
+
+/** Load a region pack (names, stats, kecamatan, services, language samples …). */
 export function loadRegion(id: string = DEFAULT_REGION_ID): Promise<RegionPack> {
-  return cachedLoad(packCache, PACK_FILES, id, 'pack.json', (v) => RegionPack.parse(v))
+  return cached(packCache, id, async () => {
+    const pack = expandPack(await fetchJson(PACK_URLS, id, 'pack.min.json'))
+    await devCheck('pack', pack)
+    return pack
+  })
 }
 
-/** Load + validate the region's geometry (separate chunk, map demos only). */
-export function loadRegionGeo(id: string = DEFAULT_REGION_ID): Promise<RegionGeo> {
-  return cachedLoad(geoCache, GEO_FILES, id, 'geo.json', (v) => RegionGeo.parse(v))
+function loadBaseGeo(id: string): Promise<BaseGeo> {
+  return cached(baseGeoCache, id, async () => {
+    const geo = decodeTopo<BaseGeo>(await fetchJson(GEO_URLS, id, 'geo.min.json'))
+    await devCheck('geo', geo)
+    return geo
+  })
 }
 
-/** Start downloading both files (e.g. on hover of a region switcher) without awaiting them. */
-export function preloadRegion(id: string = DEFAULT_REGION_ID, withGeo = false): void {
+/** Load only the desa/kelurahan polygons (the heaviest layer), e.g. when the desa layer is switched on. */
+export function loadRegionDesa(id: string = DEFAULT_REGION_ID): Promise<FeatureCollection> {
+  return cached(desaCache, id, async () => {
+    const fc = decodeTopo<FeatureCollection>(await fetchJson(DESA_URLS, id, 'desa.min.json'))
+    await devCheck('desa', fc)
+    return fc
+  })
+}
+
+export type LoadGeoOptions = {
+  /** include desa polygons (default true, as before). Pass false when the map does not draw desa: saves ~22 KB gzip. */
+  desa?: boolean
+}
+
+/**
+ * Load the region's geometry (map demos only). Same object for the same (id, desa) pair, so callers can key
+ * caches on it. `{ desa: false }` returns geometry without `desa`; fetch it later with loadRegionDesa(id).
+ */
+export function loadRegionGeo(id: string = DEFAULT_REGION_ID, opts: LoadGeoOptions = {}): Promise<RegionGeo> {
+  const withDesa = opts.desa ?? true
+  if (!withDesa) return loadBaseGeo(id)
+  return cached(geoCache, id, async () => {
+    const [geo, desa] = await Promise.all([loadBaseGeo(id), loadRegionDesa(id)])
+    return { ...geo, desa }
+  })
+}
+
+/** Start downloading (e.g. on hover of a region switcher) without awaiting. */
+export function preloadRegion(id: string = DEFAULT_REGION_ID, withGeo = false, opts: LoadGeoOptions = {}): void {
   loadRegion(id).catch(() => {})
-  if (withGeo) loadRegionGeo(id).catch(() => {})
+  if (withGeo) loadRegionGeo(id, opts).catch(() => {})
 }
 
 /* ------------------------------------------------------------------ text helpers */

@@ -12,7 +12,7 @@ import type { Extracted, ExtractedField } from '../ai/types'
 import { DEMO, EASE } from '../../lib/motion'
 import { useI18n } from '../../lib/i18n'
 import { IconButton } from '../ui/Button'
-import { motionMode } from '../ui/motion'
+import { motionMode, useMedia } from '../ui/motion'
 import { DocArt } from './DocArt'
 import { pct } from './measure'
 import { noiseUrl } from './noise'
@@ -82,8 +82,8 @@ export interface DocViewerProps {
 }
 
 const S = {
-  id: { viewer: 'Penampil dokumen', zoomIn: 'Perbesar', zoomOut: 'Perkecil', fit: 'Pas layar', boxes: 'Kotak teks terbaca (OCR)', conf: 'keyakinan', hint: 'Ctrl + gulir untuk zoom · seret untuk geser' },
-  en: { viewer: 'Document viewer', zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit to screen', boxes: 'Recognised text boxes (OCR)', conf: 'confidence', hint: 'Ctrl + scroll to zoom · drag to pan' },
+  id: { viewer: 'Penampil dokumen', zoomIn: 'Perbesar', zoomOut: 'Perkecil', fit: 'Pas layar', boxes: 'Kotak teks terbaca (OCR)', conf: 'keyakinan', hint: 'Ctrl + gulir untuk zoom · seret untuk geser', hintTouch: 'Cubit untuk zoom · seret untuk geser' },
+  en: { viewer: 'Document viewer', zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit to screen', boxes: 'Recognised text boxes (OCR)', conf: 'confidence', hint: 'Ctrl + scroll to zoom · drag to pan', hintTouch: 'Pinch to zoom · drag to pan' },
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
@@ -91,6 +91,8 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, deskew = false, activeKey, onBoxFocus, label, children, toolbar, height, className }: DocViewerProps) {
   const { lang } = useI18n()
   const s = S[lang]
+  // touch screens have no Ctrl + wheel: the hint names the pinch instead
+  const touch = useMedia('(hover: none), (pointer: coarse)')
   const stageRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -367,7 +369,7 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
           </button>
           <IconButton icon="plus" label={s.zoomIn} size="sm" onClick={() => zoomAt(view.current.z * DOCS.zoomStep)} disabled={zoomPct >= DOCS.zoomMax * 100} />
         </div>
-        <span className="dk-doc-hint">{s.hint}</span>
+        <span className="dk-doc-hint">{touch ? s.hintTouch : s.hint}</span>
         {toolbar && <div className="dk-doc-tools">{toolbar}</div>}
       </div>
       <div

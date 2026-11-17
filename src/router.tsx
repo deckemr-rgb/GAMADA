@@ -8,7 +8,7 @@ import RootLayout, { type RouteHandle } from './routes/RootLayout'
 import Home from './routes/Home'
 import RouteError from './routes/RouteError'
 import { LOADERS } from './routeLoaders'
-import { isProductSlug } from './content/products'
+import { isProductSlug } from './content/productSlugs'
 
 const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({ Component: (await load()).default })
 
@@ -54,7 +54,6 @@ export const router = createBrowserRouter([
       { path: 'tur/:bab', lazy: page(LOADERS.tur) },
       { path: 'lab', lazy: page(LOADERS.lab) },
       { path: 'panel/phonefarm', lazy: page(LOADERS.phonefarm) },
-      { path: 'lab/_design', lazy: page(LOADERS.labDesign) },
       { path: 'lab/_kit', lazy: page(LOADERS.labKit) },
       { path: '*', lazy: page(LOADERS.notFound) },
     ],

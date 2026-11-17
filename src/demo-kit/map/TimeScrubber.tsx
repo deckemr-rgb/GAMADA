@@ -9,11 +9,21 @@
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import { gsap } from 'gsap'
-import { useI18n } from '../../lib/i18n'
+import { useI18n, type Lang } from '../../lib/i18n'
 import { isEnabled } from '../../lib/motion'
 import { Icon } from '../ui/icons'
-import { fmt, ms } from './strings'
+import { fmt } from './strings'
 import './map.css'
+import './time-scrubber.css'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  time: { id: 'Waktu prediksi', en: 'Forecast time' },
+  play: { id: 'Putar', en: 'Play' },
+  pause: { id: 'Jeda', en: 'Pause' },
+  now: { id: 'Sekarang', en: 'Now' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 export const SCRUB = {
   /** real seconds for a full 0 → max run */

@@ -2,10 +2,16 @@
  * LayerToggle — a panel of real switches (role="switch") for map layers. Every switch changes what the map
  * draws; layers out of scope are simply not listed (e.g. no satellite switch until a licensed provider exists).
  */
-import { useI18n } from '../../lib/i18n'
+import { useI18n, type Lang } from '../../lib/i18n'
 import { Icon, type IconName } from '../ui/icons'
-import { ms } from './strings'
 import './map.css'
+import './layer-toggle.css'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  layers: { id: 'Lapisan peta', en: 'Map layers' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 export interface LayerToggleItem {
   id: string

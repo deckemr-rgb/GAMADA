@@ -1,13 +1,14 @@
 /**
  * BarChart — vertical or horizontal bars, optional ghost "previous" bars (yesterday vs today), target line and
  * diverging/deviation mode around zero (positive = accent, negative = danger ink). Bars grow on first view
- * (staggered), value changes interpolate, pointer + keyboard readout.
+ * (one scaleX/scaleY on the bar layer from the zero line, written on the DOM node), value changes glide (attribute tweens),
+ * pointer + keyboard readout. React renders the final geometry once.
  */
 import { useMemo, useRef, type PointerEvent, type ReactNode } from 'react'
 import { scaleBand, scaleLinear } from 'd3-scale'
 import { max as d3max, min as d3min, sum as d3sum } from 'd3-array'
 import { ChartFrame, ChartTip, TipRow, useVizLang, type FrameProps, type LegendItem } from './ChartFrame'
-import { localPoint, stagger, useIndexNav, useReveal, useSize, useTweened } from './core'
+import { localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 import { TONE, type Tone } from './palette'
 
 export interface BarDatum {
@@ -51,7 +52,7 @@ export function BarChart(props: BarProps) {
   const hasPrev = data.some((d) => d.prev !== undefined)
   const plotRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(plotRef)
-  const p = useReveal(plotRef)
+  const vis = useRevealDom(plotRef)
   const n = data.length
 
   const domain = useMemo<[number, number]>(() => {
@@ -67,12 +68,10 @@ export function BarChart(props: BarProps) {
     return scaleLinear().domain([lo, hi]).nice(4).domain() as [number, number]
   }, [data, target, diverging])
 
-  const flat = useMemo(() => [...data.map((d) => d.value), ...data.map((d) => d.prev ?? 0), domain[0], domain[1]], [data, domain])
-  const tw = useTweened(flat)
-  const vals = tw.slice(0, n)
-  const prevs = tw.slice(n, 2 * n)
-  const d0 = tw[2 * n] ?? domain[0]
-  const d1 = tw[2 * n + 1] ?? domain[1]
+  useAttrTween(plotRef, data, vis)
+  const vals = data.map((d) => d.value)
+  const prevs = data.map((d) => d.prev ?? 0)
+  const [d0, d1] = domain
   const ticks = useMemo(() => scaleLinear().domain(domain).ticks(horizontal ? Math.max(2, Math.floor(w / 120)) : 4), [domain, horizontal, w])
 
   const nav = useIndexNav(n, { start: 0 })
@@ -122,7 +121,7 @@ export function BarChart(props: BarProps) {
       nav.point(i >= 0 && i < n ? i : null)
     }
     svg = (
-      <svg className={`dk-viz-svg dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={() => hi !== null && data[hi] && onSelect?.(data[hi]!, hi)} aria-hidden="true">
+      <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={() => hi !== null && data[hi] && onSelect?.(data[hi]!, hi)} aria-hidden="true">
         {ticks.map((t) => (
           <g key={t}>
             <line x1={sx(t)} x2={sx(t)} y1={0} y2={n * ROW} className={t === 0 ? 'dk-viz-base' : 'dk-viz-grid'} />
@@ -133,26 +132,42 @@ export function BarChart(props: BarProps) {
         ))}
         {data.map((d, i) => {
           const y = band(i) ?? 0
-          const k = stagger(p, i, n, 0.4)
-          const v = (vals[i] ?? 0) * k
-          const pv = (prevs[i] ?? 0) * k
-          const x1 = sx(v)
           return (
             <g key={d.id ?? d.label}>
               <rect className={`dk-viz-barhit${hi === i ? ' is-on' : ''}`} x={0} y={i * ROW} width={w} height={ROW} rx={6} />
               <text x={labelW - 10} y={y + bh / 2 + 4} className={`t-end${hi === i ? ' t-strong' : ' t-muted'}`}>
                 {d.label.length > maxLabel ? `${d.label.slice(0, maxLabel - 1)}…` : d.label}
               </text>
-              {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" x={Math.min(zx, sx(pv))} y={y - 2} width={Math.abs(sx(pv) - zx)} height={bh + 4} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
-              <rect className="dk-viz-bar" x={Math.min(zx, x1)} y={y} width={Math.max(0, Math.abs(x1 - zx))} height={bh} rx={3} style={{ fill: colorOf(d, d.value) }} />
-              {props.valueLabels !== false && (
-                <text x={d.value < 0 ? Math.min(zx, x1) - 6 : Math.max(zx, x1) + 6} y={y + bh / 2 + 4} className={`${d.value < 0 ? 't-end ' : ''}t-strong`} style={{ opacity: k }}>
-                  {fmt(d.value)}
-                </text>
-              )}
             </g>
           )
         })}
+        {/* one group grows from the zero line (one style recalc per frame instead of one per bar) */}
+        <g {...rv('sx', { origin: `svg:${zx} 0` })}>
+          {data.map((d, i) => {
+            const y = band(i) ?? 0
+            const x1 = sx(vals[i] ?? 0)
+            const px = sx(prevs[i] ?? 0)
+            return (
+              <g key={d.id ?? d.label}>
+                {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" data-tw="x y width height" x={Math.min(zx, px)} y={y - 2} width={Math.abs(px - zx)} height={bh + 4} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
+                <rect className="dk-viz-bar" data-tw="x y width height" x={Math.min(zx, x1)} y={y} width={Math.max(0, Math.abs(x1 - zx))} height={bh} rx={3} style={{ fill: colorOf(d, d.value) }} />
+              </g>
+            )
+          })}
+        </g>
+        {props.valueLabels !== false && (
+          <g {...rv('fade', { delay: 0.6, len: 0.4 })}>
+            {data.map((d, i) => {
+              const y = band(i) ?? 0
+              const x1 = sx(vals[i] ?? 0)
+              return (
+                <text key={d.id ?? d.label} data-tw="x y" x={d.value < 0 ? Math.min(zx, x1) - 6 : Math.max(zx, x1) + 6} y={y + bh / 2 + 4} className={`${d.value < 0 ? 't-end ' : ''}t-strong`}>
+                  {fmt(d.value)}
+                </text>
+              )
+            })}
+          </g>
+        )}
         {target && <line x1={sx(target.value)} x2={sx(target.value)} y1={-4} y2={n * ROW + 4} className="dk-viz-target" />}
       </svg>
     )
@@ -185,7 +200,7 @@ export function BarChart(props: BarProps) {
       nav.point(i >= 0 && i < n ? i : null)
     }
     svg = (
-      <svg className={`dk-viz-svg dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={() => hi !== null && data[hi] && onSelect?.(data[hi]!, hi)} aria-hidden="true">
+      <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={() => hi !== null && data[hi] && onSelect?.(data[hi]!, hi)} aria-hidden="true">
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PADL} x2={w - 8} y1={sy(t)} y2={sy(t)} className={t === 0 ? 'dk-viz-base' : 'dk-viz-grid'} />
@@ -196,28 +211,44 @@ export function BarChart(props: BarProps) {
         ))}
         {data.map((d, i) => {
           const x = band(i) ?? 0
-          const k = stagger(p, i, n, 0.4)
-          const v = (vals[i] ?? 0) * k
-          const pv = (prevs[i] ?? 0) * k
-          const y1 = sy(v)
           return (
             <g key={d.id ?? d.label}>
               <rect className={`dk-viz-barhit${hi === i ? ' is-on' : ''}`} x={x - (band.step() - bw) / 2} y={PADT} width={band.step()} height={h - PADB - PADT} rx={4} />
-              {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" x={x - 2} y={Math.min(zy, sy(pv))} width={bw + 4} height={Math.abs(sy(pv) - zy)} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
-              <rect className="dk-viz-bar" x={x} y={Math.min(zy, y1)} width={bw} height={Math.max(0, Math.abs(y1 - zy))} rx={Math.min(3, bw / 3)} style={{ fill: colorOf(d, d.value) }} />
               {i % every === 0 && (
                 <text x={x + bw / 2} y={h - 7} className={`t-mid${hi === i ? ' t-strong' : ''}`}>
                   {d.label}
                 </text>
               )}
-              {props.valueLabels && bw > 26 && (
-                <text x={x + bw / 2} y={d.value < 0 ? Math.max(zy, y1) + 14 : Math.min(zy, y1) - 6} className="t-mid t-strong" style={{ opacity: k }}>
-                  {fmt(d.value)}
-                </text>
-              )}
             </g>
           )
         })}
+        {/* one group grows from the zero line (one style recalc per frame instead of one per bar) */}
+        <g {...rv('sy', { origin: `svg:0 ${zy}` })}>
+          {data.map((d, i) => {
+            const x = band(i) ?? 0
+            const y1 = sy(vals[i] ?? 0)
+            const py = sy(prevs[i] ?? 0)
+            return (
+              <g key={d.id ?? d.label}>
+                {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" data-tw="x y width height" x={x - 2} y={Math.min(zy, py)} width={bw + 4} height={Math.abs(py - zy)} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
+                <rect className="dk-viz-bar" data-tw="x y width height" x={x} y={Math.min(zy, y1)} width={bw} height={Math.max(0, Math.abs(y1 - zy))} rx={Math.min(3, bw / 3)} style={{ fill: colorOf(d, d.value) }} />
+              </g>
+            )
+          })}
+        </g>
+        {props.valueLabels && bw > 26 && (
+          <g {...rv('fade', { delay: 0.6, len: 0.4 })}>
+            {data.map((d, i) => {
+              const x = band(i) ?? 0
+              const y1 = sy(vals[i] ?? 0)
+              return (
+                <text key={d.id ?? d.label} data-tw="x y" x={x + bw / 2} y={d.value < 0 ? Math.max(zy, y1) + 14 : Math.min(zy, y1) - 6} className="t-mid t-strong">
+                  {fmt(d.value)}
+                </text>
+              )
+            })}
+          </g>
+        )}
         {target && (
           <g>
             <line x1={PADL} x2={w - 8} y1={sy(target.value)} y2={sy(target.value)} className="dk-viz-target" />

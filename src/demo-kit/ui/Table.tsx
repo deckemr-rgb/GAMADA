@@ -7,17 +7,19 @@
  * - Container narrower than 640 px → each row becomes a card (same DOM, label + value per cell).
  * - > 200 rows (table mode) → simple windowing inside a fixed-height scroller (sticky header, no dependency);
  *   cards mode shows 50 at a time with "Show more".
- * - New rows (ids not seen before) slide in 8 px with a 12 % accent overlay fading over 1.5 s; rows that
- *   move (insert above, re-sort) glide to their new place (FLIP on offsetTop, transform only).
+ * - New rows (ids not seen before) slide in 8 px with a 12 % accent overlay fading over 1.5 s. Rows that
+ *   change ORDER (re-sort, status change) glide to their new place (FLIP on offsetTop, transform only); a pure
+ *   insert / append skips FLIP entirely (no layout reads), only the new row moves.
+ * - Rows and their cells are memoised (keyed by the row object): a new ticket or an opened drawer re-renders
+ *   the changed rows only, not every cell, icon and chip.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { createSortedRowModel, rowSortingFeature, sortFn_alphanumeric, sortFn_basic, tableFeatures, useTable, type ColumnDef, type RowData, type SortingState } from '@tanstack/react-table'
-import { gsap } from 'gsap'
 import { DEMO, EASE } from '../../lib/motion'
 import { IconButton } from './Button'
 import { Segmented, Select } from './Form'
 import { Icon } from './icons'
-import { flashNewRow, motionMode, useElementWidth } from './motion'
+import { animatePose, flashNewRow, motionMode, useElementWidth, type PoseTween } from './motion'
 import { fmtNum, useUiStrings } from './strings'
 import { useI18n } from '../../lib/i18n'
 import './tokens.css'
@@ -101,6 +103,62 @@ const features = tableFeatures({
 })
 type F = typeof features
 
+/* ---------------- memoised row + cells */
+
+interface CellsProps<T> {
+  row: T
+  columns: TableColumn<T>[]
+}
+function CellsImpl<T>({ row, columns }: CellsProps<T>) {
+  return (
+    <>
+      {columns.map((c) => (
+        <div key={c.id} role="gridcell" className={`dk-td dk-td--${c.card ?? 'field'}${c.align === 'end' || c.numeric ? ' is-end' : ''}${c.numeric ? ' dk-num' : ''}`}>
+          <span className="dk-td-label" aria-hidden="true">
+            {c.header}
+          </span>
+          <span className="dk-td-v">{c.cell ? c.cell(row) : (c.value(row) ?? '—')}</span>
+        </div>
+      ))}
+    </>
+  )
+}
+/** Cells re-render only when the row object or the column set changes (entity version = object identity). */
+const Cells = memo(CellsImpl) as typeof CellsImpl
+
+interface RowProps<T> {
+  row: T
+  id: string
+  index: number
+  columns: TableColumn<T>[]
+  open: boolean
+  selectable: boolean
+  tone?: 'warn' | 'danger'
+  tabbable: boolean
+  setRowEl: (id: string, el: HTMLDivElement | null) => void
+  openRow?: (row: T) => void
+  focusIdx: (i: number) => void
+}
+function RowImpl<T>({ row, id, index, columns, open, selectable, tone, tabbable, setRowEl, openRow, focusIdx }: RowProps<T>) {
+  const ref = useCallback((el: HTMLDivElement | null) => setRowEl(id, el), [id, setRowEl])
+  return (
+    <div
+      role="row"
+      aria-rowindex={index + 2}
+      aria-selected={selectable ? open : undefined}
+      tabIndex={tabbable ? 0 : -1}
+      ref={ref}
+      className={`dk-tr dk-row${open ? ' is-open' : ''}${tone ? ` is-${tone}` : ''}${openRow ? ' is-clickable' : ''}`}
+      onClick={openRow ? () => openRow(row) : undefined}
+      onFocus={() => focusIdx(index)}
+    >
+      <span className="dk-flash" aria-hidden="true" />
+      <Cells row={row} columns={columns} />
+    </div>
+  )
+}
+const Row = memo(RowImpl) as typeof RowImpl
+
 const track = <T,>(c: TableColumn<T>) => (c.width ? `${c.width}px` : `minmax(${c.min ?? 96}px, ${c.grow ?? 1}fr)`)
 
 export function Table<T extends RowData>(props: TableProps<T>) {
@@ -165,6 +223,14 @@ export function Table<T extends RowData>(props: TableProps<T>) {
   /* ---------------- roving focus */
   const [activeIdx, setActiveIdx] = useState(0)
   const rowEls = useRef(new Map<string, HTMLDivElement>())
+  const setRowEl = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) rowEls.current.set(id, el)
+    else rowEls.current.delete(id)
+  }, [])
+  const onOpenRef = useRef(onOpen)
+  onOpenRef.current = onOpen
+  const openRow = useCallback((r: T) => onOpenRef.current?.(r), [])
+  const focusRow = useCallback((i: number) => setActiveIdx(i), [])
   const pendingFocus = useRef<number | null>(null)
   const safeIdx = Math.min(activeIdx, Math.max(0, ordered.length - 1))
 
@@ -227,15 +293,36 @@ export function Table<T extends RowData>(props: TableProps<T>) {
 
   /* ---------------- new rows + FLIP */
   const known = useRef<Set<string> | null>(null)
-  const tops = useRef(new Map<string, number>())
+  const committedIds = useRef<string[] | null>(null)
+  const flipBefore = useRef<Map<string, number> | null>(null)
+  const liveRef = useRef<HTMLParagraphElement>(null)
   const layoutSig = `${density}|${cards ? 'c' : 't'}`
   const prevSig = useRef(layoutSig)
-  const [liveMsg, setLiveMsg] = useState('')
+  const ids = useMemo(() => ordered.map(rowId), [ordered]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* render phase, only when rows that already existed change ORDER: read their old offsetTop (DOM not yet
+     committed). Pure inserts / appends / removals never read layout. */
+  if (committedIds.current && committedIds.current !== ids && prevSig.current === layoutSig && motionMode() === 'full' && rowEls.current.size) {
+    const prev = committedIds.current
+    const cur = new Set(ids)
+    const was = new Set(prev)
+    const a1 = ids.filter((id) => was.has(id))
+    const b1 = prev.filter((id) => cur.has(id))
+    if (a1.some((id, i) => id !== b1[i])) {
+      const m = new Map<string, number>()
+      let n = 0
+      rowEls.current.forEach((el, id) => {
+        if (n++ <= TABLE.flipMax) m.set(id, el.offsetTop)
+      })
+      flipBefore.current = m
+    }
+  }
   useLayoutEffect(() => {
     const mode = motionMode()
-    const ids = ordered.map(rowId)
     const sameLayout = prevSig.current === layoutSig
     prevSig.current = layoutSig
+    committedIds.current = ids
+    const before = flipBefore.current
+    flipBefore.current = null
     const fresh: string[] = []
     if (known.current === null) known.current = new Set(ids)
     else
@@ -245,36 +332,33 @@ export function Table<T extends RowData>(props: TableProps<T>) {
           fresh.push(id)
         }
     const kills: (() => void)[] = []
-    if (sameLayout && mode === 'full') {
-      let n = 0
+    if (before && sameLayout && mode === 'full') {
+      const tws: PoseTween[] = []
       rowEls.current.forEach((el, id) => {
-        if (fresh.includes(id) || n > TABLE.flipMax) return
-        const before = tops.current.get(id)
-        if (before === undefined) return
-        const dy = before - el.offsetTop
+        const was = before.get(id)
+        if (was === undefined || fresh.includes(id)) return
+        const dy = was - el.offsetTop
         if (!dy || Math.abs(dy) > viewportH * 2) return
-        n++
-        const tw = gsap.fromTo(el, { y: dy }, { y: 0, duration: DEMO.panel, ease: EASE.out, clearProps: 'transform' })
-        kills.push(() => tw.kill())
+        tws.push(animatePose(el, { y: dy }, { y: 0 }, { duration: DEMO.panel, ease: EASE.out }))
       })
+      kills.push(() => tws.forEach((t) => t.kill()))
     }
     if (highlightNew)
       for (const id of fresh) {
         const el = rowEls.current.get(id)
         if (el) kills.push(flashNewRow(el))
       }
-    if (fresh.length) {
+    if (fresh.length && liveRef.current) {
       const first = rows.find((r) => rowId(r) === fresh[0])
       const c0 = columns[0]
-      if (first) setLiveMsg(t.newRow(props.announce ? props.announce(first) : String(c0?.value(first) ?? fresh[0])))
+      // written straight into the live region: a setState here would re-render the whole grid before paint
+      if (first) liveRef.current.textContent = t.newRow(props.announce ? props.announce(first) : String(c0?.value(first) ?? fresh[0]))
     }
-    tops.current.clear()
-    rowEls.current.forEach((el, id) => tops.current.set(id, el.offsetTop))
     return () => {
       for (const k of kills) k()
     }
-    // rows/ordered identity drives this effect
-  }, [ordered, layoutSig]) // eslint-disable-line react-hooks/exhaustive-deps
+    // ids (= ordered) identity drives this effect
+  }, [ids, layoutSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* keep cardLimit sane when data shrinks */
   useEffect(() => {
@@ -361,34 +445,22 @@ export function Table<T extends RowData>(props: TableProps<T>) {
               {virtual && start > 0 && <div aria-hidden="true" style={{ height: start * rowH }} />}
               {ordered.slice(start, end).map((r, j) => {
                 const i = start + j
-                const id = rowId(r)
-                const open = activeId === id
-                const tone = rowTone?.(r)
+                const id = ids[i] ?? rowId(r)
                 return (
-                  <div
+                  <Row
                     key={id}
-                    role="row"
-                    aria-rowindex={i + 2}
-                    aria-selected={onOpen ? open : undefined}
-                    tabIndex={i === safeIdx || (i === start && (safeIdx < start || safeIdx >= end)) ? 0 : -1}
-                    ref={(el) => {
-                      if (el) rowEls.current.set(id, el)
-                      else rowEls.current.delete(id)
-                    }}
-                    className={`dk-tr dk-row${open ? ' is-open' : ''}${tone ? ` is-${tone}` : ''}${onOpen ? ' is-clickable' : ''}`}
-                    onClick={onOpen ? () => onOpen(r) : undefined}
-                    onFocus={() => setActiveIdx(i)}
-                  >
-                    <span className="dk-flash" aria-hidden="true" />
-                    {columns.map((c) => (
-                      <div key={c.id} role="gridcell" className={`dk-td dk-td--${c.card ?? 'field'}${c.align === 'end' || c.numeric ? ' is-end' : ''}${c.numeric ? ' dk-num' : ''}`}>
-                        <span className="dk-td-label" aria-hidden="true">
-                          {c.header}
-                        </span>
-                        <span className="dk-td-v">{c.cell ? c.cell(r) : (c.value(r) ?? '—')}</span>
-                      </div>
-                    ))}
-                  </div>
+                    row={r}
+                    id={id}
+                    index={i}
+                    columns={columns}
+                    open={activeId === id}
+                    selectable={!!onOpen}
+                    tone={rowTone?.(r)}
+                    tabbable={i === safeIdx || (i === start && (safeIdx < start || safeIdx >= end))}
+                    setRowEl={setRowEl}
+                    openRow={onOpen ? openRow : undefined}
+                    focusIdx={focusRow}
+                  />
                 )
               })}
               {virtual && end < ordered.length && <div aria-hidden="true" style={{ height: (ordered.length - end) * rowH }} />}
@@ -421,9 +493,7 @@ export function Table<T extends RowData>(props: TableProps<T>) {
           )}
         </span>
       </div>
-      <p className="dk-sr" aria-live="polite">
-        {liveMsg}
-      </p>
+      <p ref={liveRef} className="dk-sr" aria-live="polite" />
     </div>
   )
 }

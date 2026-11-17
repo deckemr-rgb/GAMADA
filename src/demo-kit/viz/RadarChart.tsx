@@ -1,12 +1,12 @@
 /**
- * RadarChart — 3–10 axes, ≤ 6 series (polygon 2px + 16% fill). Grows from the centre on first view; values
- * interpolate. Arrow keys walk the axes and read every series at that axis.
+ * RadarChart — 3–10 axes, ≤ 6 series (polygon 2px + 16% fill). Grows from the centre on first view (scale
+ * on the series group); value changes glide via path attribute tweens. React renders the final shapes once. Arrow keys walk the axes and read every series at that axis.
  */
 import { useMemo, useRef, type PointerEvent } from 'react'
 import { lineRadial, curveLinearClosed } from 'd3-shape'
 import { max as d3max } from 'd3-array'
 import { ChartFrame, ChartTip, TipRow, useVizLang, type FrameProps, type LegendItem } from './ChartFrame'
-import { flatten, localPoint, unflatten, useIndexNav, useReveal, useSize, useTweened } from './core'
+import { localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 import { seriesColor } from './palette'
 
 export interface RadarSeries {
@@ -31,18 +31,18 @@ export function RadarChart(props: RadarProps) {
   const fmt = props.format ?? ((v: number) => f.num(v, { digits: Number.isInteger(v) ? 0 : 1 }))
   const plotRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(plotRef)
-  const p = useReveal(plotRef)
+  const vis = useRevealDom(plotRef)
   const n = axes.length
   const max = props.max ?? Math.ceil((d3max(series.flatMap((d) => d.values)) ?? 1) / 10) * 10
-  const shape = useMemo(() => series.map((d) => d.values), [series])
-  const vals = unflatten(useTweened(useMemo(() => flatten(shape), [shape])), shape)
+  useAttrTween(plotRef, series, vis)
+  const vals = series.map((d) => d.values)
   const size = Math.min(props.size ?? 300, Math.max(200, w - 20))
   const labelPad = w < 420 ? 52 : 70
   const r = size / 2 - labelPad / 2
   const W = Math.max(size + labelPad, Math.min(w, size + 2 * labelPad))
   const H = size + 20
   const angle = (i: number) => (i / n) * Math.PI * 2
-  const rr = (v: number) => (Math.max(0, v) / (max || 1)) * r * p
+  const rr = (v: number) => (Math.max(0, v) / (max || 1)) * r
   const radial = lineRadial<number>()
     .angle((_, i) => angle(i))
     .radius((v) => rr(v))
@@ -82,7 +82,7 @@ export function RadarChart(props: RadarProps) {
   return (
     <ChartFrame {...props} autoSummary={summary} legend={legend} announce={nav.kbd ? readout : ''} hint={s.hintList}>
       <div ref={plotRef} className="dk-viz-plot" tabIndex={0} role="group" aria-label={`${props.title}. ${s.hintList}.`} onKeyDown={nav.onKeyDown} onBlur={nav.onBlur} style={{ display: 'grid', justifyItems: 'center' }}>
-        <svg className={`dk-viz-svg dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}`} width={W} height={H} viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
+        <svg className={`dk-viz-svg dk-viz-fade`} width={W} height={H} viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
           {rings.map((k) => (
             <polygon key={k} points={axes.map((_, i) => `${pt(i, r * k).x},${pt(i, r * k).y}`).join(' ')} className="dk-viz-grid" fill="none" />
           ))}
@@ -99,9 +99,11 @@ export function RadarChart(props: RadarProps) {
               </g>
             )
           })}
-          {vals.map((v, si) => (
-            <path key={series[si]?.id} d={radial(v) ?? ''} className="dk-viz-line" style={{ stroke: colorOf(si), fill: colorOf(si), fillOpacity: 0.16 }} />
-          ))}
+          <g {...rv('s', { origin: 'svg:0 0' })}>
+            {vals.map((v, si) => (
+              <path key={series[si]?.id} data-tw="d" d={radial(v) ?? ''} className="dk-viz-line" style={{ stroke: colorOf(si), fill: colorOf(si), fillOpacity: 0.16 }} />
+            ))}
+          </g>
           {hi !== null &&
             vals.map((v, si) => {
               const o = pt(hi, rr(v[hi] ?? 0))

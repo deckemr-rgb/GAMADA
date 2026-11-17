@@ -5,10 +5,13 @@
 export * from './types'
 export { DocArt, type DocArtProps } from './DocArt'
 export { DocViewer, DOCS, type DocViewerProps, type DocViewerBox } from './DocViewer'
-export { ExtractPanel, VERDICT_LABEL, type ExtractPanelProps } from './ExtractPanel'
+export { ExtractPanel, VERDICT_LABEL, readPrompt, type ExtractPanelProps } from './ExtractPanel'
 export { TamperHeatmap, TamperToggle, HEAT, type TamperCell, type TamperHeatmapProps, type TamperToggleProps } from './TamperHeatmap'
 export { DispositionStamp, STAMP, type DispositionStampProps } from './Stamp'
 export { simulateExtract, docsExtract, verdictOf, tamperCells, fieldValue, EXTRACT, type Verdict, type VerdictResult, type SimulateOptions } from './extract'
 export { SAMPLES, getSample, samplesOf, LETTERS, IDENTITY, PERMITS, HOUSES, FINANCE, FICTIONAL_BANK, BUYER, generateCvs, cvDoc, CV, idr } from './samples'
-export { makeNik, makeNoKk, parseNik, nikMatchesBirth, dmy, longDate, NIK, SPECIMEN_KEC, type NikParts } from './nik'
+export {
+  makeNik, makeNoKk, parseNik, nikMatchesBirth, nikRegion, nikRegions, nikRegionName, dmy, longDate, NIK, SPECIMEN_KEC, BOJONEGORO_KEMENDAGRI, BOJONEGORO_NIK_REGIONS,
+  type NikParts, type NikKecamatan,
+} from './nik'
 export { textWidth, runBox, wrap } from './measure'

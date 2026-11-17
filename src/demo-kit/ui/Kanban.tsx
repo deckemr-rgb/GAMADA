@@ -1,20 +1,19 @@
 /**
- * Kanban — status columns; a card that changes column glides there with GSAP Flip (whether the move came
- * from this board or from the world store), then gets the 12 % accent flash.
+ * Kanban — status columns; a card that changes column glides there (FLIP: transform only, write-only ticker
+ * tween; the GSAP Flip plugin is not needed for translate-only moves, which keeps 7 KB out of the ui chunk),
+ * whether the move came from this board or from the world store, then gets the 12 % accent flash.
+ * Layout is read ONLY when a card changes column (in render, before commit, and once after); adding a card
+ * or any other re-render reads nothing. Cards are memoised by item object (+ renderCard identity).
  * Keyboard: one tab stop for the board; ↑/↓ between cards, ←/→ between columns, Shift+←/→ moves the
  * card, Enter opens. Every move is announced in a polite live region. Pointer: a "move to next" button.
  */
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { gsap } from 'gsap'
-import { Flip } from 'gsap/Flip'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { DEMO, EASE } from '../../lib/motion'
 import { Icon } from './icons'
-import { flashNewRow, motionMode } from './motion'
+import { animatePose, flashNewRow, motionMode, type PoseTween } from './motion'
 import { useUiStrings } from './strings'
 import './tokens.css'
 import './ui.css'
-
-gsap.registerPlugin(Flip)
 
 export interface KanbanColumn {
   id: string
@@ -30,6 +29,7 @@ export interface KanbanProps<T> {
   itemColumn: (item: T) => string
   /** short text for announcements ("SW-2026-0142") */
   itemLabel: (item: T) => string
+  /** pass a stable function (useCallback) so unchanged cards skip re-rendering */
   renderCard: (item: T) => ReactNode
   onMove?: (id: string, toColumn: string) => void
   onOpen?: (item: T) => void
@@ -39,16 +39,59 @@ export interface KanbanProps<T> {
   className?: string
 }
 
+interface CardProps<T> {
+  item: T
+  id: string
+  label: string
+  tabbable: boolean
+  clickable: boolean
+  helpId: string
+  nextId: string | undefined
+  showMove: boolean
+  moveLabel: string
+  moveTitle: string
+  renderCard: (item: T) => ReactNode
+  onKey: (e: KeyboardEvent<HTMLElement>, id: string) => void
+  onFocusCard: (id: string) => void
+  onOpenCard: (id: string) => void
+  onMoveCard: (id: string, to: string) => void
+}
+
+function CardImpl<T>({ item, id, label, tabbable, clickable, helpId, nextId, showMove, moveLabel, moveTitle, renderCard, onKey, onFocusCard, onOpenCard, onMoveCard }: CardProps<T>) {
+  return (
+    <li className="dk-kb-li">
+      <div
+        className={`dk-kb-card${clickable ? ' is-clickable' : ''}`}
+        data-flip-id={id}
+        tabIndex={tabbable ? 0 : -1}
+        aria-label={label}
+        aria-describedby={helpId}
+        onKeyDown={(e) => onKey(e, id)}
+        onFocus={() => onFocusCard(id)}
+        onClick={clickable ? (e) => !(e.target as HTMLElement).closest('button') && onOpenCard(id) : undefined}
+      >
+        <span className="dk-flash" aria-hidden="true" />
+        <div className="dk-kb-card-b">{renderCard(item)}</div>
+        {showMove && nextId && (
+          <button type="button" className="dk-kb-move" onClick={() => onMoveCard(id, nextId)} aria-label={moveLabel} title={moveTitle} tabIndex={-1}>
+            <Icon name="arrowRight" size={14} />
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
+const Card = memo(CardImpl) as typeof CardImpl
+
 export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, renderCard, onMove, onOpen, label, moveButton, className }: KanbanProps<T>) {
   const t = useUiStrings()
   const root = useRef<HTMLDivElement>(null)
   const helpId = useRef(`dk-kb-help-${Math.random().toString(36).slice(2, 8)}`).current
-  const flipState = useRef<Flip.FlipState | null>(null)
-  const flipScroll = useRef({ x: 0, y: 0 })
-  const colOf = useRef(new Map<string, string>())
+  const colOf = useRef<Map<string, string> | null>(null)
+  const rectsBefore = useRef<Map<string, DOMRect> | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
-  const [live, setLive] = useState('')
+  const liveRef = useRef<HTMLParagraphElement>(null)
 
   const byCol = useMemo(() => {
     const m = new Map<string, T[]>(columns.map((c) => [c.id, []]))
@@ -58,55 +101,84 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
 
   const tabId = focusId && items.some((i) => itemId(i) === focusId) ? focusId : items[0] ? itemId(items[0]) : null
 
-  const capture = () => {
-    const el = root.current
-    if (!el) return
-    flipState.current = Flip.getState(el.querySelectorAll('[data-flip-id]'))
-    flipScroll.current = { x: window.scrollX, y: window.scrollY }
+  /* render phase: a card changed column → remember where every card is NOW (DOM not yet committed) */
+  const committed = colOf.current
+  if (committed && root.current && motionMode() === 'full' && !rectsBefore.current) {
+    let moved = false
+    for (const it of items) {
+      const was = committed.get(itemId(it))
+      if (was !== undefined && was !== itemColumn(it)) {
+        moved = true
+        break
+      }
+    }
+    if (moved) {
+      const m = new Map<string, DOMRect>()
+      root.current.querySelectorAll<HTMLElement>('[data-flip-id]').forEach((el) => m.set(el.dataset.flipId ?? '', el.getBoundingClientRect()))
+      rectsBefore.current = m
+    }
   }
 
-  const move = (id: string, to: string) => {
-    if (!onMove) return
-    const it = items.find((i) => itemId(i) === id)
-    const col = columns.find((c) => c.id === to)
-    if (!it || !col || itemColumn(it) === to) return
-    capture()
-    onMove(id, to)
-  }
+  // latest props for the stable card callbacks
+  const latest = useRef({ items, itemId, itemColumn, onMove, onOpen, columns })
+  latest.current = { items, itemId, itemColumn, onMove, onOpen, columns }
+  const find = useCallback((id: string) => latest.current.items.find((i) => latest.current.itemId(i) === id), [])
 
-  /* after every render: animate column changes, then record the new layout */
+  const move = useCallback(
+    (id: string, to: string) => {
+      const { onMove: mv, columns: cols, itemColumn: colFn } = latest.current
+      if (!mv) return
+      const it = find(id)
+      const col = cols.find((c) => c.id === to)
+      if (!it || !col || colFn(it) === to) return
+      mv(id, to)
+    },
+    [find],
+  )
+
+  /* after every render: animate column changes (only when one happened), then record the columns */
   useLayoutEffect(() => {
     const el = root.current
     if (!el) return
     const moved: string[] = []
-    for (const it of items) {
-      const id = itemId(it)
-      const before = colOf.current.get(id)
-      if (before !== undefined && before !== itemColumn(it)) moved.push(id)
-    }
+    const prev = colOf.current
+    if (prev)
+      for (const it of items) {
+        const id = itemId(it)
+        const before = prev.get(id)
+        if (before !== undefined && before !== itemColumn(it)) moved.push(id)
+      }
     colOf.current = new Map(items.map((i) => [itemId(i), itemColumn(i)]))
+    const rects = rectsBefore.current
+    rectsBefore.current = null
     const kills: (() => void)[] = []
     if (moved.length) {
-      const mode = motionMode()
-      const st = flipState.current
-      const sameScroll = flipScroll.current.x === window.scrollX && flipScroll.current.y === window.scrollY
-      if (mode === 'full' && st && sameScroll) {
-        const tl = Flip.from(st, { targets: el.querySelectorAll('[data-flip-id]'), duration: DEMO.screen, ease: EASE.out, nested: true, prune: true })
-        kills.push(() => tl.kill())
+      if (rects && motionMode() === 'full') {
+        const tws: PoseTween[] = []
+        el.querySelectorAll<HTMLElement>('[data-flip-id]').forEach((card) => {
+          const r0 = rects.get(card.dataset.flipId ?? '')
+          if (!r0) return
+          const r1 = card.getBoundingClientRect()
+          const dx = r0.left - r1.left
+          const dy = r0.top - r1.top
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+          tws.push(animatePose(card, { x: dx, y: dy }, { x: 0, y: 0 }, { duration: DEMO.screen, ease: EASE.out }))
+        })
+        kills.push(() => tws.forEach((tw) => tw.kill()))
       }
       for (const id of moved) {
         const card = el.querySelector<HTMLElement>(`[data-flip-id="${CSS.escape(id)}"]`)
         if (card) kills.push(flashNewRow(card, { slide: false }))
         const it = items.find((i) => itemId(i) === id)
         const col = columns.find((c) => it && c.id === itemColumn(it))
-        if (it && col) setLive(t.moved(itemLabel(it), col.title))
+        // straight into the live region: no extra render
+        if (it && col && liveRef.current) liveRef.current.textContent = t.moved(itemLabel(it), col.title)
       }
     }
     if (pendingFocus.current) {
       el.querySelector<HTMLElement>(`[data-flip-id="${CSS.escape(pendingFocus.current)}"]`)?.focus({ preventScroll: true })
       pendingFocus.current = null
     }
-    capture()
     return () => {
       for (const k of kills) k()
     }
@@ -117,9 +189,11 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
     root.current?.querySelector<HTMLElement>(`[data-flip-id="${CSS.escape(id)}"]`)?.focus()
   }
 
-  const onKey = (e: KeyboardEvent<HTMLElement>, it: T) => {
+  const keyRef = useRef<(e: KeyboardEvent<HTMLElement>, id: string) => void>(() => {})
+  keyRef.current = (e, id) => {
     if (e.target !== e.currentTarget) return
-    const id = itemId(it)
+    const it = items.find((i) => itemId(i) === id)
+    if (!it) return
     const ci = columns.findIndex((c) => c.id === itemColumn(it))
     const list = byCol.get(itemColumn(it)) ?? []
     const ri = list.findIndex((x) => itemId(x) === id)
@@ -148,6 +222,15 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
     else return
     e.preventDefault()
   }
+  const onKey = useCallback((e: KeyboardEvent<HTMLElement>, id: string) => keyRef.current(e, id), [])
+  const onFocusCard = useCallback((id: string) => setFocusId(id), [])
+  const onOpenCard = useCallback(
+    (id: string) => {
+      const it = find(id)
+      if (it) latest.current.onOpen?.(it)
+    },
+    [find],
+  )
 
   const showMove = moveButton ?? !!onMove
 
@@ -175,36 +258,33 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
             <ul className="dk-kb-list">
               {list.map((it) => {
                 const id = itemId(it)
+                const name = itemLabel(it)
                 return (
-                  <li key={id} className="dk-kb-li">
-                    <div
-                      className={`dk-kb-card${onOpen ? ' is-clickable' : ''}`}
-                      data-flip-id={id}
-                      tabIndex={id === tabId ? 0 : -1}
-                      aria-label={itemLabel(it)}
-                      aria-describedby={helpId}
-                      onKeyDown={(e) => onKey(e, it)}
-                      onFocus={() => setFocusId(id)}
-                      onClick={onOpen ? (e) => !(e.target as HTMLElement).closest('button') && onOpen(it) : undefined}
-                    >
-                      <span className="dk-flash" aria-hidden="true" />
-                      <div className="dk-kb-card-b">{renderCard(it)}</div>
-                      {showMove && next && (
-                        <button type="button" className="dk-kb-move" onClick={() => move(id, next.id)} aria-label={`${itemLabel(it)}: ${t.moveTo(next.title)}`} title={t.moveTo(next.title)} tabIndex={-1}>
-                          <Icon name="arrowRight" size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </li>
+                  <Card
+                    key={id}
+                    item={it}
+                    id={id}
+                    label={name}
+                    tabbable={id === tabId}
+                    clickable={!!onOpen}
+                    helpId={helpId}
+                    nextId={next?.id}
+                    showMove={showMove}
+                    moveLabel={next ? `${name}: ${t.moveTo(next.title)}` : ''}
+                    moveTitle={next ? t.moveTo(next.title) : ''}
+                    renderCard={renderCard}
+                    onKey={onKey}
+                    onFocusCard={onFocusCard}
+                    onOpenCard={onOpenCard}
+                    onMoveCard={move}
+                  />
                 )
               })}
             </ul>
           </section>
         )
       })}
-      <p className="dk-sr" aria-live="polite">
-        {live}
-      </p>
+      <p ref={liveRef} className="dk-sr" aria-live="polite" />
     </div>
   )
 }

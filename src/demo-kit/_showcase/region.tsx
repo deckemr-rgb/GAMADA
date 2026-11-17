@@ -52,7 +52,7 @@ const T = {
   area: { id: 'Luas wilayah', en: 'Land area' },
   units: { id: 'Kecamatan · desa/kel.', en: 'Districts · villages' },
   economy: { id: 'Struktur ekonomi (PDRB 2025)', en: 'Economic structure (GRDP 2025)' },
-  prices: { id: 'Harga dasar pangan', en: 'Staple base prices' },
+  prices: { id: 'Harga dasar simulasi', en: 'Simulated base prices' },
   templates: { id: 'Template aduan bahasa daerah', en: 'Regional-language complaint templates' },
   all: { id: 'Semua', en: 'All' },
   readIn: { id: 'Baca dalam', en: 'Read in' },

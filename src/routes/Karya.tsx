@@ -1,12 +1,13 @@
 /** /karya — portfolio. Phase 1: grouped index with the #web / #apk / #proyek anchors (full page in phase 3).
  * Entries folded into an ecosystem product (KasirKu, ScrapPulse) render a "Kini bagian dari …" card instead. */
-import { useI18n } from '../lib/i18n'
-import { WORK, type WorkKind } from '../content/work'
+import { useEcoI18n } from '../content/i18n/useEco'
+import { WORK, workMenuTitle, type WorkKind } from '../content/work'
 import { PRODUCT_BY_SLUG } from '../content/products'
 import PageShell from '../components/PageShell'
 import AppLink from '../components/AppLink'
 import { Icon } from '../demo-kit/ui/icons'
 import { EcoBadge, fill } from './EcoParts'
+import Arrow from '../components/ui/Arrow'
 
 const GROUPS: Array<{ id: string; kind: WorkKind; menuIndex: number }> = [
   { id: 'web', kind: 'web', menuIndex: 1 },
@@ -15,18 +16,19 @@ const GROUPS: Array<{ id: string; kind: WorkKind; menuIndex: number }> = [
 ]
 
 export default function Karya() {
-  const { lang, t } = useI18n()
+  const { lang, t, eco: copy } = useEcoI18n()
   const p = t.pages.karya
-  const k = t.eco.karya
+  const k = copy.karya
   return (
     <PageShell eyebrow={p.eyebrow} title={p.title} lead={p.lead}>
       <p className="page-building">{t.pages.building}</p>
       {GROUPS.map((g) => {
         const list = WORK.filter((w) => w.kind === g.kind)
+        const menu = t.nav.workMenu[g.menuIndex]
         const merged = list.flatMap((w) => (w.merged ? [{ w, m: w.merged }] : []))
         return (
           <section key={g.id} id={g.id} className="stub-group" aria-labelledby={`grp-${g.id}`}>
-            <h2 id={`grp-${g.id}`}>{t.nav.workMenu[g.menuIndex]?.title}</h2>
+            <h2 id={`grp-${g.id}`}>{menu ? workMenuTitle(menu) : null}</h2>
             <ul className="stub-list">
               {list
                 .filter((w) => !w.merged)
@@ -51,7 +53,7 @@ export default function Karya() {
                           <span className="karya-merged-k">{fill(k.mergedInto, { name: prod.name })}</span>
                           <span className="karya-merged-name">
                             <s className="karya-merged-old">{w.name}</s>
-                            <span aria-hidden="true"> → </span>
+                            <Arrow dir="mid" />
                             {prod.name}
                           </span>
                           <span className="karya-merged-note">{note}</span>
@@ -59,7 +61,7 @@ export default function Karya() {
                         </span>
                         <span className="karya-merged-go">
                           {fill(k.see, { name: prod.name })}
-                          <span aria-hidden="true"> →</span>
+                          <Arrow />
                         </span>
                       </AppLink>
                     </li>

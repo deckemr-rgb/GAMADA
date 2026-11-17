@@ -721,11 +721,14 @@
   align-items: center;
   margin-top: 12px;
 }
+/* CTA block: primary link on the first line, "Halaman produk" on the second, on EVERY card (a one-row pair does not
+ * fit the 4-column grid, and a pair that wraps only on some cards breaks the row's baseline). Two fixed rows, so a
+ * card with one link (Panel PhoneFarm) keeps its CTA on the same line as its neighbours'. */
 .eco-lab-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  align-items: center;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(44px, auto));
+  justify-items: start;
+  align-content: end;
   margin-top: auto;
   padding-top: 14px;
 }

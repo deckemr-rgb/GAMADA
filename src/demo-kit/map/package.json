@@ -1,0 +1,6 @@
+{
+  "//": "Not a package: tells the bundler that only the CSS files in demo-kit/map have import side effects, so a demo that imports one part of the barrel does not pull the other parts (and their CSS). Owner: mapdocs.",
+  "private": true,
+  "type": "module",
+  "sideEffects": ["*.css"]
+}

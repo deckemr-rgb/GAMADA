@@ -1,5 +1,6 @@
 /**
- * region/types.ts — RegionPack schema (spec §7), zod-first so packs are validated at load time.
+ * region/types.ts — RegionPack schema (spec §7), zod-first. Packs are validated at BUILD time
+ * (tools/region/validate.mjs) and, in dev only, again at load time; production never loads zod for a pack.
  *
  * A pack is split in two so demos without a map stay light:
  *   - RegionPack  (meta.json-sized: names, stats, kecamatan, services, languages …)  → every demo
@@ -75,8 +76,10 @@ export const RegionPack = z.object({
     z.object({
       id: z.string(),
       name: z.string(),
-      /** BPS code when known */
+      /** BPS code when known (statistics only, e.g. "3522200") */
       code: z.string().optional(),
+      /** Kemendagri / Dukcapil area code (Permendagri 72/2019), e.g. "35.22.16". NIK and No. KK digits 1-6 use THIS, not `code`. */
+      kemendagri: z.string().regex(/^\d{2}\.\d{2}\.\d{2}$/).optional(),
       population: z.number(),
       centroid: LngLat,
       riskFlood: z.number().min(0).max(1),

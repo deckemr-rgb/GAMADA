@@ -1,6 +1,7 @@
 /**
  * samples/house.ts — "foto rumah" for the flood-aid (bansos) file: a simple original illustration with a camera
  * geotag strip. Coordinates are the real centroid of Desa Sranak (Trucuk) from the Bojonegoro region pack.
+ * Like every Cek Berkas sample (spec §P7) it carries the "SPESIMEN" watermark and the fictional-data footer.
  */
 import type { HouseMeta, SampleDoc } from '../types'
 import { DocBuilder } from './builder'
@@ -40,6 +41,10 @@ function makeHouse({ id, reused }: HouseOpts): SampleDoc {
     })
   }
 
+  /* specimen (spec: "foto rumah untuk bansos" is a SPESIMEN document too) */
+  b.over({ t: 'watermark', text: 'SPESIMEN', cx: W / 2, cy: 250, size: 128, angle: -22, opacity: 0.24, fill: '#b3261e' })
+  b.text(W / 2, H - 8, 'SPESIMEN · data fiktif untuk demo GAMADA · bukan dokumen resmi', { anchor: 'middle', size: 10, font: 'sans', fill: '#c9c4dc' })
+
   const meta: HouseMeta = { kind: 'house', lngLat: [lng, lat], kecamatanId: 'trucuk', desa: 'Sranak', takenAt: taken, floodCm: reused ? 0 : 40, reused: !!reused }
   return b.build({
     id,
@@ -48,7 +53,7 @@ function makeHouse({ id, reused }: HouseOpts): SampleDoc {
     title: reused ? { id: 'Foto rumah · foto lama', en: 'House photo · old photo' } : { id: 'Foto rumah terdampak', en: 'Affected house photo' },
     caption: reused ? { id: 'Waktu foto 2024 · bukan banjir kini', en: 'Taken in 2024 · not this flood' } : { id: 'Sranak, Trucuk · geotag kamera', en: 'Sranak, Trucuk · camera geotag' },
     bg: 'photo',
-    specimen: false,
+    specimen: true,
     meta,
   })
 }

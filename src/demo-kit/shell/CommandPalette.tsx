@@ -10,7 +10,10 @@ import { useI18n } from '../../lib/i18n'
 import { Avatar, Icon, Kbd, Modal, isIconName, type IconName } from '../ui'
 import { REGIONS } from '../region/loader'
 import { CLOCK, clock, formatTime, setSession, useClock, useSession } from '../world'
-import { useDemoStrings } from '../i18n'
+import { roleInitials, useDemoStrings } from '../i18n'
+import { filterItems } from './fuzzy'
+
+export { fuzzyScore, filterItems } from './fuzzy'
 
 export interface PaletteItem {
   id: string
@@ -25,40 +28,6 @@ export interface PaletteItem {
   run: () => void
 }
 
-/** Fuzzy score of `q` in `text` (higher is better), or -1 when not every query char appears in order. */
-export function fuzzyScore(q: string, text: string): number {
-  const query = q.toLowerCase().replace(/\s+/g, ' ').trim()
-  if (!query) return 0
-  const s = text.toLowerCase()
-  const direct = s.indexOf(query)
-  if (direct >= 0) return 1000 - direct + (direct === 0 || /[\s\-/:]/.test(s[direct - 1] ?? '') ? 200 : 0)
-  let score = 0
-  let si = 0
-  let run = 0
-  for (const ch of query) {
-    if (ch === ' ') continue
-    const at = s.indexOf(ch, si)
-    if (at < 0) return -1
-    run = at === si ? run + 1 : 0
-    score += 10 + run * 5 + (at === 0 || /[\s\-/:]/.test(s[at - 1] ?? '') ? 15 : 0) - Math.min(9, at - si)
-    si = at + 1
-  }
-  return score
-}
-
-export function filterItems(items: PaletteItem[], q: string): PaletteItem[] {
-  if (!q.trim()) return items
-  return items
-    .map((it, i) => ({
-      it,
-      i,
-      s: Math.max(fuzzyScore(q, it.label), fuzzyScore(q, it.keywords ?? '') - 50),
-    }))
-    .filter((x) => x.s >= 0)
-    .sort((a, b) => b.s - a.s || a.i - b.i)
-    .map((x) => x.it)
-}
-
 export interface CommandPaletteProps {
   open: boolean
   onClose: () => void
@@ -67,9 +36,11 @@ export interface CommandPaletteProps {
   onOpenProduct: (p: ProductDef) => void
   /** shell actions shown in the "Tindakan" group */
   actions?: PaletteItem[]
+  /** list the role and world-clock jumps (default true); false on an interim canvas that reacts to neither */
+  sessionItems?: boolean
 }
 
-export function CommandPalette({ open, onClose, product, onOpenProduct, actions = [] }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, product, onOpenProduct, actions = [], sessionItems = true }: CommandPaletteProps) {
   const t = useDemoStrings()
   const { lang } = useI18n()
   const session = useSession()
@@ -101,18 +72,18 @@ export function CommandPalette({ open, onClose, product, onOpenProduct, actions 
         run: () => onOpenProduct(p),
       })
     }
-    for (const r of product.roles) {
+    for (const r of sessionItems ? product.roles : []) {
       out.push({
         id: `r:${r}`,
         group: t.groupRoles,
         label: ROLES[r].name[lang],
         keywords: `${r} ${ROLES[r].name.id} ${ROLES[r].name.en} peran role`,
-        lead: <Avatar name={ROLES[r].name[lang]} initials={ROLES[r].initials} size={24} />,
+        lead: <Avatar name={ROLES[r].name[lang]} initials={roleInitials(r, lang)} size={24} />,
         current: r === session.role,
         run: () => setSession({ role: r }),
       })
     }
-    for (const j of CLOCK.jumps) {
+    for (const j of sessionItems ? CLOCK.jumps : []) {
       out.push({
         id: `t:${j}`,
         group: t.groupTimes,
@@ -136,7 +107,7 @@ export function CommandPalette({ open, onClose, product, onOpenProduct, actions 
       })
     }
     return [...out, ...actions.map((a) => ({ ...a, group: t.groupActions }))]
-  }, [t, lang, product, session.role, session.regionId, c.minutes, onOpenProduct, actions])
+  }, [t, lang, product, session.role, session.regionId, c.minutes, onOpenProduct, actions, sessionItems])
 
   const shown = useMemo(() => filterItems(items, q), [items, q])
   const sel = Math.min(active, Math.max(0, shown.length - 1))

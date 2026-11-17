@@ -1,6 +1,6 @@
 /**
  * samples/identity.ts — KTP and KK SPECIMENS. Fictional people, generic emblem (never a real coat of arms), a big
- * "SPESIMEN" watermark, NIK = real Bojonegoro kecamatan code + valid date + serial ≥ 9001 (see nik.ts).
+ * "SPESIMEN" watermark, NIK = Kemendagri kecamatan code (35.22.xx) + valid date + serial ≥ 9001 (see nik.ts).
  * The layout is a simplified, original card — not a copy of the official design.
  */
 import { runBox, unionBox } from '../measure'

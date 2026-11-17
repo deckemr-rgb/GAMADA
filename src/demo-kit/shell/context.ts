@@ -4,6 +4,7 @@ import type { ProductDef } from '../../content/products'
 import type { RegionPack } from '../region/types'
 import type { ToastData } from '../ui'
 import type { ShellSize } from './hooks'
+import type { DemoQuery } from './url'
 
 export interface ShellApi {
   product: ProductDef
@@ -23,6 +24,11 @@ export interface ShellApi {
   present: boolean
   /** layout size of the shell (from its own width): 'sm' = phone layout */
   size: ShellSize
+  /** the validated demo params the page was opened with (?role ?t ?ai …), before the shell rewrote the URL —
+   *  e.g. the time a shared link asked for. Empty for a shell opened without params. */
+  link: Readonly<DemoQuery>
+  /** the shell runs `interim` (tahap-1 placeholder canvas): no role / clock / AI / reset controls in the bar */
+  interim: boolean
 }
 
 export const ShellContext = createContext<ShellApi | null>(null)

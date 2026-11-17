@@ -10,8 +10,10 @@ export const SHELL = {
   mobileBp: 768,
   /** below this shell width the secondary controls (region, AI, language, badge …) move into "⋯" */
   compactBp: 1240,
-  /** from this shell width the full breadcrumb and the "Kembali ke produk" label are shown */
-  wideBp: 1440,
+  /** from this shell width the full breadcrumb and the "Kembali ke produk" label are shown. 1600, not 1440: at
+   *  1440 (the spec's screenshot width) the long names + roles (Indeks Ekonomi, Siaga Wilayah · Kepala Daerah)
+   *  did not fit next to the full crumbs. TopBar also measures itself and tightens (see TopBar `fitBar`). */
+  wideBp: 1600,
   /** guide drawer width (px) */
   guideW: 340,
   /** the guide opens by default on first visit at or above this width */

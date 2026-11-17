@@ -21,6 +21,7 @@ import {
   getSample,
   idr,
   longDate,
+  readPrompt,
   simulateExtract,
   type SampleDoc,
 } from '../docs'
@@ -222,7 +223,7 @@ function LetterDemo() {
           )}
         </DocViewer>
         <div className="dk-scd-side">
-          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} loading={false} showVerdict={false} />
+          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} loading={false} showVerdict={false} emptyText={readPrompt(c.read, lang)} />
           {meta && r.done && (
             <section className="dk-scd-card" aria-label={c.summary}>
               <h4 className="dk-scd-h4">{c.summary}</h4>
@@ -334,7 +335,7 @@ function IdentityDemo() {
           }
         />
         <div className="dk-scd-side">
-          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} />
+          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} emptyText={readPrompt(c.readDoc, lang)} />
           {r.reading && <p className="dk-scd-progress dk-num">{c.readingDoc(r.n, r.extracted.fields.length)}</p>}
         </div>
       </div>
@@ -378,7 +379,7 @@ function ReceiptDemo() {
           }
         />
         <div className="dk-scd-side">
-          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} />
+          <ExtractPanel extracted={r.reveal ? r.extracted : null} revealed={r.n} emptyText={readPrompt(doc.scan ? c.straightenRead : c.readDoc, lang)} />
           {r.done && (m.kind === 'nota' || m.kind === 'faktur') && (
             <section className="dk-scd-card" aria-label={c.journal}>
               <h4 className="dk-scd-h4">{c.journal}</h4>

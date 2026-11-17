@@ -18,13 +18,32 @@ import type { Lang } from '../../lib/i18n'
 import type { RegionGeo, RegionPack } from '../region/types'
 import { BASEMAP, BASEMAP_SOURCE, fallbackStyle, loadBasemapStyle } from './basemap'
 import { resolveChoropleth, type ResolvedChoropleth } from './choro'
-import { buildFloodModel, desaShares, paintFlood, type FloodModel } from './flood'
-import { bboxOfPolys, centroidOf, outerRings, polysOf, type BBox, type Poly, type Ring } from './geo'
+import { buildFloodModel, desaShares, FLOOD, floodImpact, paintFlood, type FloodModel } from './flood'
+import { bboxOfPolys, centroidOf, makeGrid, outerRings, pointInPolys, polysOf, type BBox, type Poly, type Ring } from './geo'
+import { labelPoint } from './labelPoint'
 import { HEAT_RAMP, labelInk, MAPC, TONE_BADGE } from './palette'
 import { defaultRainField } from './rain'
 import { RainLayer } from './rainLayer'
-import { fmt, ms } from './strings'
-import type { ChoroplethLayer, LngLat, MapLayer, MapTone, MarkerItem, RainCellInput } from './types'
+import { fmt } from './strings'
+import type { ChoroplethLayer, FloodImpact, LngLat, MapLayer, MapTone, MarkerItem, RainCellInput } from './types'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  mapOf: { id: 'Peta', en: 'Map of' },
+  attribution: { id: 'Atribusi peta dasar', en: 'Basemap attribution' },
+  coopTouch: { id: 'Gunakan dua jari untuk menggeser peta', en: 'Use two fingers to move the map' },
+  coopWheel: { id: 'Tahan Ctrl sambil menggulir untuk memperbesar peta', en: 'Hold Ctrl while scrolling to zoom the map' },
+  coopWheelMac: { id: 'Tahan ⌘ sambil menggulir untuk memperbesar peta', en: 'Hold ⌘ while scrolling to zoom the map' },
+  hidden: { id: 'Data agregat disembunyikan untuk menjaga anonimitas', en: 'Aggregate hidden to protect anonymity' },
+  noData: { id: 'Tidak ada data', en: 'No data' },
+  kecamatan: { id: 'Kecamatan', en: 'District' },
+  desa: { id: 'Desa', en: 'Village' },
+  flooded: { id: 'tergenang', en: 'flooded' },
+  markersHere: { id: 'titik berdekatan', en: 'places close together' },
+  clusterClick: { id: 'Klik untuk memperbesar', en: 'Click to zoom in' },
+  clusterTap: { id: 'Ketuk untuk memperbesar', en: 'Tap to zoom in' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 setWorkerUrl(workerUrl)
 
@@ -38,10 +57,15 @@ export const ENGINE = {
   kecMaxZoom: 11.6,
   /** desa labels replace kecamatan labels from this zoom */
   desaLabelZoom: 11.2,
+  /** desa geometry is lazy: with the desa layer on it is fetched once the zoom reaches desaLabelZoom − this
+   * (desa lines are near-invisible below ≈ 9.5, so a regency-scale map never downloads desa.min.json) */
+  desaPrefetchZoom: 1.5,
   /** below this container width labels show names only (value for the selected one) */
   compactWidth: 640,
   /** label collision padding (px) */
   labelPad: 4,
+  /** clearance kept between a label and a marker badge (px) */
+  labelMarkerPad: 3,
   /** rain repaint cap per tier (fps); high = every ticker frame */
   rainFps: { high: 0, mid: DEMO.rainFpsMid, low: 20 },
   /** flood raster/desa states are recomputed when the hour moves by this much */
@@ -51,7 +75,21 @@ export const ENGINE = {
   desaLit: 0.25,
   /** marker badge diameter (css px) */
   badge: { md: 24, sm: 18 },
+  /** badges closer than this × their drawn diameter merge into one count badge (screen space, per zoom bucket) */
+  clusterGap: 0.95,
+  /** from this zoom every marker is drawn on its own */
+  clusterMaxZoom: 12.5,
+  /** cluster badge canvas = this × the single badge (back badge + count pill fit inside) */
+  clusterScale: 1.6,
 } as const
+
+/** drawn badge scale at zoom z — same ramp as the marker symbol layer's icon-size (8 → 0.8, 11 → 1) */
+const badgeScale = (z: number): number => 0.8 + 0.2 * Math.max(0, Math.min(1, (z - 8) / 3))
+
+interface MarkerGroup {
+  coord: LngLat
+  items: MarkerItem[]
+}
 
 const IDS = {
   kec: 'dk-kec',
@@ -79,6 +117,8 @@ export interface EngineCallbacks {
   onMarker?: (layerId: string, itemId: string) => void
   onNotice?: (kind: 'noTiles' | null) => void
   onFps?: (fps: number) => void
+  /** the map now needs the desa polygons of the current region (asked once per region until setDesa) */
+  onNeedDesa?: (regionId: string) => void
 }
 
 export interface EngineOptions {
@@ -116,10 +156,25 @@ interface Label {
   name: HTMLSpanElement
   val: HTMLSpanElement
   at: LngLat
+  /** kecamatan polygons: the label must sit inside them (desa labels: none) */
+  polys?: Poly[]
   w: number
   h: number
   shown: boolean
+  /** cached placement for one zoom bucket: offset of the label centre from its anchor, and whether it spills */
+  fit?: { z: number; dx: number; dy: number; out: boolean; blocked: boolean }
 }
+
+/** Candidate label-centre offsets (in label heights / widths) tried in order when the anchor is blocked. */
+const LABEL_TRIES: [number, number][] = [
+  [0, 0],
+  [0, -1],
+  [0, 1],
+  [-0.35, 0],
+  [0.35, 0],
+  [0, -2],
+  [0, 2],
+]
 
 const anim = () => isEnabled('demoAnimations')
 
@@ -131,8 +186,26 @@ function ringArea(r: Ring): number {
   return a / 2
 }
 
+/** map image name of a single marker badge */
+const badgeName = (m: MarkerItem, size: 'sm' | 'md'): string => `dk-ic-${m.icon}-${m.tone ?? 'neutral'}-${size}`
+
 function fc(features: Feature[]): FeatureCollection {
   return { type: 'FeatureCollection', features }
+}
+
+/** features with a string `id` property (promoteId) */
+const withId = (f: Feature) => ({ ...f, properties: { ...(f.properties ?? {}), id: String(f.properties?.id ?? f.id) } }) as Feature
+
+type DesaFC = NonNullable<RegionGeo['desa']>
+/** base geo (no desa) + desa → one stable composed object, so the flood model (cached per geo object) is
+ * built once per region even across region switches */
+const composed = new WeakMap<RegionGeo, { desa: DesaFC; geo: RegionGeo }>()
+function geoWithDesa(base: RegionGeo, desa: DesaFC): RegionGeo {
+  const hit = composed.get(base)
+  if (hit && hit.desa === desa) return hit.geo
+  const geo = { ...base, desa }
+  composed.set(base, { desa, geo })
+  return geo
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement): HTMLElementTagNameMap[K] {
@@ -164,7 +237,15 @@ export class MapEngine {
   private desaLabels = new Map<string, Label>()
   private dynamic = new Map<string, { kind: MapLayer['kind']; layers: string[]; source?: string; data?: unknown }>()
   private markerItems = new Map<string, Map<string, MarkerItem>>()
-  private flood: { model: FloodModel; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; img: ImageData; lastH: number; lastDesaKey: number; layerId: string } | null = null
+  /** model: null until the first paint with hour > 0 (hour 0 is fully dry) and again after desa arrives */
+  private flood: { model: FloodModel | null; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; img: ImageData; lastH: number; lastDesaKey: number; layerId: string } | null = null
+  /** desa polygons that arrived for a region not (yet) installed — applied by setRegion */
+  private pendingDesa: { regionId: string; fc: DesaFC } | null = null
+  /** onNeedDesa already fired for the current region */
+  private desaAsked = false
+  /** desa layer state at the last applySpecs (null = no region applied yet); off → on counts as a user toggle */
+  private desaWasOn: boolean | null = null
+  private desaToggledOn = false
   private rain: RainLayer | null = null
   private rainAnimate = false
   private hour = 0
@@ -181,6 +262,12 @@ export class MapEngine {
   private fpsTimer = 0
   private labelRaf = 0
   private iconLoads = new Map<string, Promise<void>>()
+  /** rendered badge canvases (device px) by image name — cluster badges are composed from them */
+  private badgeCv = new Map<string, HTMLCanvasElement>()
+  /** declutter state per markers layer: groups drawn at zoom bucket zb */
+  private markerGroups = new Map<string, { zb: number; size: 'sm' | 'md'; groups: MarkerGroup[] }>()
+  /** the camera still shows the fitted region (no user move / flight since) → refit on resize */
+  private autoFit = true
 
   static async create(o: EngineOptions): Promise<MapEngine> {
     let style: StyleSpecification
@@ -226,7 +313,8 @@ export class MapEngine {
         'CooperativeGesturesHandler.WindowsHelpText': ms('coopWheel', L),
         'CooperativeGesturesHandler.MacHelpText': ms('coopWheelMac', L),
         'CooperativeGesturesHandler.MobileHelpText': ms('coopTouch', L),
-        'AttributionControl.ToggleAttribution': ms('sources', L),
+        // distinct from the kit's own "Sumber" popover button (two controls must not share one name)
+        'AttributionControl.ToggleAttribution': ms('attribution', L),
       },
     })
     this.map.touchZoomRotate.disableRotation()
@@ -249,6 +337,12 @@ export class MapEngine {
     if (!basemapOk) queueMicrotask(() => this.basemapFailed())
     this.map.on('move', this.scheduleLabels)
     this.map.on('resize', this.scheduleLabels)
+    this.map.on('zoom', this.checkDesa)
+    this.map.on('zoom', this.regroupMarkers)
+    // a user gesture ends the "still showing the fitted region" state (programmatic flights have no originalEvent)
+    this.map.on('movestart', (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) this.autoFit = false
+    })
     if (o.interactive) {
       this.map.on('mousemove', this.onMove)
       this.map.on('mouseout', this.onOut)
@@ -286,7 +380,11 @@ export class MapEngine {
       if (this.destroyed || token !== this.regionToken) return
     }
     this.pack = pack
-    this.geo = geo
+    // desa that arrived while this region was still loading / flying out
+    const pend = this.pendingDesa
+    this.pendingDesa = null
+    this.geo = !geo.desa && pend?.regionId === pack.id ? geoWithDesa(geo, pend.fc) : geo
+    this.desaAsked = false
     this.kec = geo.kecamatan.features.map((f) => {
       const id = String(f.properties?.id ?? f.id)
       const pk = pack.kecamatan.find((k) => k.id === id)
@@ -294,17 +392,105 @@ export class MapEngine {
       return { id, name: pk?.name ?? String(f.properties?.name ?? id), centroid: pk?.centroid ?? centroidOf(polys), polys, bbox: bboxOfPolys(polys), population: pk?.population ?? 0 }
     })
     this.kecById = new Map(this.kec.map((k) => [k.id, k]))
-    const packDesa = new Map(pack.kecamatan.flatMap((k) => k.desa.map((d) => [d.id, d] as const)))
-    this.desa = (geo.desa?.features ?? []).map((f) => {
-      const id = String(f.properties?.id ?? f.id)
-      const pd = packDesa.get(id)
-      return { id, name: pd?.name ?? String(f.properties?.name ?? id), kecamatanId: String(f.properties?.kecamatanId ?? ''), centroid: pd?.centroid ?? centroidOf(polysOf(f.geometry)) }
-    })
+    this.desa = this.desaInfo()
+    this.hoverDesa = null
     this.flood = null
     this.installRegionLayers()
     this.buildLabels()
     this.applySpecs()
     this.fitRegion(had && animate ? ENGINE.regionInDur : 0)
+  }
+
+  private desaInfo(): DesaInfo[] {
+    const pack = this.pack
+    const feats = this.geo?.desa?.features
+    if (!pack || !feats) return []
+    const packDesa = new Map(pack.kecamatan.flatMap((k) => k.desa.map((d) => [d.id, d] as const)))
+    return feats.map((f) => {
+      const id = String(f.properties?.id ?? f.id)
+      const pd = packDesa.get(id)
+      return { id, name: pd?.name ?? String(f.properties?.name ?? id), kecamatanId: String(f.properties?.kecamatanId ?? ''), centroid: pd?.centroid ?? centroidOf(polysOf(f.geometry)) }
+    })
+  }
+
+  /* ---------------------------------------------------------------- desa (lazy) */
+
+  /** true once the current region's desa polygons are in (MapView loads geometry without them first) */
+  get hasDesa(): boolean {
+    return !!this.geo?.desa
+  }
+
+  /** id of the region currently installed (null before the first setRegion) */
+  get regionId(): string | null {
+    return this.pack?.id ?? null
+  }
+
+  /**
+   * Desa polygons for `regionId` (fetched lazily by MapView after onNeedDesa). Updates the desa source, desa
+   * labels, hover info and the flood model (cached per geo object: the model is rebuilt from the composed geo, so
+   * flood desa shares / lighting and floodImpact() switch from the kecamatan fallback to real desa).
+   * Desa for a region that is not installed yet are kept and applied by setRegion.
+   */
+  setDesa(desa: DesaFC, regionId: string): void {
+    if (this.destroyed) return
+    if (!this.pack || !this.geo || this.pack.id !== regionId) {
+      this.pendingDesa = { regionId, fc: desa }
+      return
+    }
+    if (this.geo.desa === desa) return
+    this.geo = geoWithDesa(this.geo, desa)
+    this.desa = this.desaInfo()
+    this.setHoverDesa(null)
+    ;(this.map.getSource(IDS.desa) as GeoJSONSource | undefined)?.setData(fc(desa.features.map((f) => withId(f as Feature))))
+    for (const l of this.desaLabels.values()) l.el.remove()
+    this.desaLabels.clear()
+    const f = this.flood
+    if (f) {
+      f.model = null
+      f.lastH = -1
+      f.lastDesaKey = -1
+      const fl = this.floodEntry()
+      if (fl && this.isVisibleId(fl[0])) {
+        this.paintFloodNow(true)
+        this.updateDesaFlood(true)
+      }
+    }
+    this.scheduleLabels()
+  }
+
+  /** Ask MapView (once per region) for desa when something on screen needs them. */
+  private checkDesa = (): void => {
+    if (this.desaAsked || this.destroyed || !this.pack || this.hasDesa) return
+    const desaOn = this.specs.some((s) => s.kind === 'desa' && this.isVisible(s))
+    const fl = this.floodEntry()
+    const floodWet = !!fl && this.isVisibleId(fl[0]) && this.hour > 0
+    const zoomed = this.map.getZoom() >= ENGINE.desaLabelZoom - ENGINE.desaPrefetchZoom
+    if (floodWet || (desaOn && (zoomed || this.desaToggledOn))) this.requestDesa()
+  }
+
+  /** Fire onNeedDesa for the current region (no-op once asked or when desa are already in). */
+  requestDesa(): void {
+    if (this.desaAsked || !this.pack || this.hasDesa) return
+    this.desaAsked = true
+    this.o.callbacks.onNeedDesa?.(this.pack.id)
+  }
+
+  /** onNeedDesa failed (offline …): allow a later trigger to ask again */
+  desaFailed(regionId: string): void {
+    if (this.pack?.id === regionId) this.desaAsked = false
+  }
+
+  /**
+   * Flood impact (affected desa, people, area) at `hour` from the same model the map paints. null until the
+   * desa polygons are in (the call asks for them) — callers show a short loading state meanwhile.
+   */
+  floodImpact(hour: number): FloodImpact | null {
+    if (!this.pack || !this.geo) return null
+    if (!this.hasDesa) {
+      this.requestDesa()
+      return null
+    }
+    return floodImpact(buildFloodModel(this.pack, this.geo, 1), hour)
   }
 
   private installRegionLayers(): void {
@@ -317,7 +503,6 @@ export class MapEngine {
     this.rain = null
     this.updateLoop()
 
-    const withId = (f: Feature) => ({ ...f, properties: { ...(f.properties ?? {}), id: String(f.properties?.id ?? f.id) } }) as Feature
     map.addSource(IDS.kec, { type: 'geojson', data: fc(geo.kecamatan.features.map((f) => withId(f as Feature))), promoteId: 'id' })
     map.addSource(IDS.desa, { type: 'geojson', data: fc((geo.desa?.features ?? []).map((f) => withId(f as Feature))), promoteId: 'id' })
     map.addSource(IDS.rivers, { type: 'geojson', data: fc(geo.rivers.features as Feature[]) })
@@ -518,6 +703,10 @@ export class MapEngine {
           break
       }
     }
+    // a desa layer switched on by the user (not one that is on from the start) wants desa right away
+    if (this.desaWasOn === false && fixedOn.desa) this.desaToggledOn = true
+    if (!fixedOn.desa) this.desaToggledOn = false
+    this.desaWasOn = fixedOn.desa!
     for (const k of Object.keys(fixedOn) as FixedKind[]) this.setVis(FIXED_LAYERS[k], fixedOn[k]!)
     // the spotlight mask follows the kecamatan layer
     this.setVis(['dk-mask-fill'], fixedOn.kecamatan!)
@@ -531,10 +720,12 @@ export class MapEngine {
       if (d.kind === 'flood') this.flood = null
       this.dynamic.delete(id)
       this.markerItems.delete(id)
+      this.markerGroups.delete(id)
     }
     this.updateLoop()
     this.refreshLabelText()
     this.scheduleLabels()
+    this.checkDesa()
   }
 
   private applyChoropleth(spec: ChoroplethLayer | null): void {
@@ -595,7 +786,6 @@ export class MapEngine {
   private async applyMarkers(id: string, items: MarkerItem[], size: 'sm' | 'md', on: boolean): Promise<void> {
     const src = `dk-mk-src-${id}`
     const lid = `dk-mk-${id}`
-    const img = (m: MarkerItem) => `dk-ic-${m.icon}-${m.tone ?? 'neutral'}-${size}`
     if (!this.dynamic.has(id)) this.dynamic.set(id, { kind: 'markers', layers: [lid], source: src })
     const d = this.dynamic.get(id)!
     if (d.data === items) {
@@ -606,7 +796,7 @@ export class MapEngine {
     this.markerItems.set(id, new Map(items.map((m) => [m.id, m])))
     await Promise.all([...new Set(items.map((m) => `${m.icon}|${m.tone ?? 'neutral'}`))].map((k) => this.ensureBadge(k.split('|')[0]!, k.split('|')[1] as MapTone, size)))
     if (this.destroyed || this.dynamic.get(id) !== d || d.data !== items) return
-    const data = fc(items.map((m) => ({ type: 'Feature', id: m.id, properties: { id: m.id, img: img(m), pr: m.tone === 'danger' ? 3 : m.tone === 'warn' ? 2 : 1 }, geometry: { type: 'Point', coordinates: m.coord } })))
+    const data = this.markerData(id, size)
     const source = this.map.getSource(src) as GeoJSONSource | undefined
     if (source) source.setData(data)
     else {
@@ -627,6 +817,92 @@ export class MapEngine {
     // the visibility flag may have changed while badges loaded
     const spec = this.specs.find((s) => s.id === id)
     this.setVis([lid], spec ? this.isVisible(spec) : on)
+  }
+
+  /**
+   * Declutter: badges that would overlap at this zoom merge into one count badge (greedy, highest tone first,
+   * screen space). Pan-invariant (no rotation / pitch), so it is redone only when the zoom bucket changes.
+   * Below clusterMaxZoom only; the hit test / tooltip / click (zoom in) read the same groups.
+   */
+  private markerData(id: string, size: 'sm' | 'md'): FeatureCollection {
+    const z = this.map.getZoom()
+    const zb = Math.round(z * 4)
+    const items = [...(this.markerItems.get(id)?.values() ?? [])]
+    const pr = (m: MarkerItem) => (m.tone === 'danger' ? 3 : m.tone === 'warn' ? 2 : 1)
+    const R = z >= ENGINE.clusterMaxZoom ? 0 : ENGINE.badge[size] * badgeScale(z) * ENGINE.clusterGap
+    const groups: (MarkerGroup & { x: number; y: number })[] = []
+    for (const m of [...items].sort((a, b) => pr(b) - pr(a))) {
+      const p = this.map.project(m.coord)
+      const g = R > 0 ? groups.find((q) => Math.hypot(q.x - p.x, q.y - p.y) < R * (q.items.length > 1 ? 1.25 : 1)) : undefined
+      if (g) g.items.push(m)
+      else groups.push({ x: p.x, y: p.y, coord: m.coord, items: [m] })
+    }
+    for (const g of groups) {
+      if (g.items.length < 2) continue
+      g.coord = [g.items.reduce((s, m) => s + m.coord[0], 0) / g.items.length, g.items.reduce((s, m) => s + m.coord[1], 0) / g.items.length]
+    }
+    this.markerGroups.set(id, { zb, size, groups })
+    return fc(
+      groups.map((g, i) => {
+        const m = g.items[0]!
+        const one = g.items.length === 1
+        const img = one ? badgeName(m, size) : this.clusterImage(badgeName(m, size), g.items.length)
+        return { type: 'Feature', properties: { id: one ? m.id : `#${i}`, img, pr: pr(m) + (one ? 0 : 0.5) }, geometry: { type: 'Point', coordinates: g.coord } }
+      }),
+    )
+  }
+
+  private regroupMarkers = (): void => {
+    const zb = Math.round(this.map.getZoom() * 4)
+    let changed = false
+    for (const [id, st] of this.markerGroups) {
+      if (st.zb === zb) continue
+      const src = this.map.getSource(`dk-mk-src-${id}`) as GeoJSONSource | undefined
+      if (!src) continue
+      const n = st.groups.length
+      src.setData(this.markerData(id, st.size))
+      changed ||= this.markerGroups.get(id)!.groups.length !== n
+    }
+    if (changed) for (const l of [...this.kecLabels.values(), ...this.desaLabels.values()]) l.fit = undefined
+  }
+
+  /** Count badge: the group's top badge over a faded copy + a count pill, composed from the cached badge canvas. */
+  private clusterImage(base: string, n: number): string {
+    const name = `${base}-n${n}`
+    if (this.map.hasImage(name)) return name
+    const b = this.badgeCv.get(base)
+    if (!b) return base
+    const D = b.width
+    const S = Math.round(D * ENGINE.clusterScale)
+    const cv = document.createElement('canvas')
+    cv.width = S
+    cv.height = S
+    const ctx = cv.getContext('2d')!
+    const c = S / 2
+    const off = D * 0.14
+    ctx.globalAlpha = 0.6
+    ctx.drawImage(b, c - D / 2 + off, c - D / 2 - off)
+    ctx.globalAlpha = 1
+    ctx.drawImage(b, c - D / 2 - off * 0.5, c - D / 2 + off * 0.5)
+    const txt = n > 99 ? '99+' : String(n)
+    const r = D * 0.34
+    ctx.font = `800 ${Math.round(r * 1.35)}px Manrope, system-ui, sans-serif`
+    const w = Math.max(r * 2, ctx.measureText(txt).width + r)
+    const px = Math.min(S - w / 2 - 2, c + D * 0.36)
+    const py = Math.max(r + 2, c - D * 0.36)
+    ctx.beginPath()
+    ctx.roundRect(px - w / 2, py - r, w, r * 2, r)
+    ctx.fillStyle = '#f3f0ff'
+    ctx.fill()
+    ctx.lineWidth = 3
+    ctx.strokeStyle = MAPC.land
+    ctx.stroke()
+    ctx.fillStyle = MAPC.land
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(txt, px, py + r * 0.06)
+    this.map.addImage(name, ctx.getImageData(0, 0, S, S), { pixelRatio: 2 })
+    return name
   }
 
   /** Badge image (tone circle + ui/icons glyph) → map.addImage. */
@@ -664,6 +940,7 @@ export class MapEngine {
         }
       }
       if (this.destroyed || this.map.hasImage(name)) return
+      this.badgeCv.set(name, cv)
       this.map.addImage(name, ctx.getImageData(0, 0, D, D), { pixelRatio: pr })
     })()
     this.iconLoads.set(name, p)
@@ -679,16 +956,17 @@ export class MapEngine {
       return
     }
     if (!this.dynamic.has(id)) {
-      const model = buildFloodModel(this.pack!, this.geo!, 1)
+      // the grid depends on the bbox only (same as the model's); the model itself is built on the first wet hour
+      const grid = makeGrid(this.pack!.bbox, FLOOD.gridW)
       const canvas = document.createElement('canvas')
-      canvas.width = model.grid.w
-      canvas.height = model.grid.h
+      canvas.width = grid.w
+      canvas.height = grid.h
       const ctx = canvas.getContext('2d')!
-      const img = ctx.createImageData(model.grid.w, model.grid.h)
-      const [W, S, E, N] = model.grid.bbox
+      const img = ctx.createImageData(grid.w, grid.h)
+      const [W, S, E, N] = grid.bbox
       const src = `dk-flood-src-${id}`
       const lid = `dk-flood-${id}`
-      this.flood = { model, canvas, ctx, img, lastH: -1, lastDesaKey: -1, layerId: lid }
+      this.flood = { model: null, canvas, ctx, img, lastH: -1, lastDesaKey: -1, layerId: lid }
       this.paintFloodNow(true)
       this.map.addSource(src, { type: 'canvas', canvas, animate: false, coordinates: [[W, N], [E, N], [E, S], [W, S]] })
       // under the boundaries so lines stay crisp on top of the water
@@ -700,17 +978,34 @@ export class MapEngine {
       this.dynamic.set(id, { kind: 'flood', layers: [lid, `${lid}-desa`, `${lid}-desa-line`], source: src })
     }
     this.setVis(this.dynamic.get(id)!.layers, true)
+    // the hour may have moved while the layer was hidden (setTime only repaints a visible flood)
+    this.paintFloodNow()
     this.updateDesaFlood(true)
+  }
+
+  private floodEntry() {
+    return [...this.dynamic.entries()].find(([, d]) => d.kind === 'flood')
+  }
+
+  /** The flood model for the current geo: real desa once loaded, kecamatan polygons as the fallback before. */
+  private floodModel(): FloodModel | null {
+    const f = this.flood
+    if (!f || !this.pack || !this.geo) return null
+    return (f.model ??= buildFloodModel(this.pack, this.geo, 1))
   }
 
   private paintFloodNow(force = false): void {
     const f = this.flood
     if (!f) return
     if (!force && Math.abs(f.lastH - this.hour) < ENGINE.floodStep) return
+    // hour 0 is dry everywhere (first water at FLOOD.startHour): no model needed, clear the canvas
+    const wet = this.hour > 0
+    if (!wet && f.lastH === 0) return
     f.lastH = this.hour
-    paintFlood(f.model, this.hour, f.img.data)
+    if (wet) paintFlood(this.floodModel()!, this.hour, f.img.data)
+    else f.img.data.fill(0)
     f.ctx.putImageData(f.img, 0, 0)
-    const src = this.map.getSource(`dk-flood-src-${[...this.dynamic].find(([, d]) => d.kind === 'flood')?.[0] ?? ''}`) as CanvasSource | undefined
+    const src = this.map.getSource(`dk-flood-src-${this.floodEntry()?.[0] ?? ''}`) as CanvasSource | undefined
     if (src) {
       // CanvasSource.pause() uploads the texture once while _playing is set: one upload per change, no loop
       src.play()
@@ -718,23 +1013,27 @@ export class MapEngine {
     }
   }
 
+  /** desa 'light up' by wet share — only with real desa (the kecamatan fallback has no desa features) */
   private updateDesaFlood(force = false): void {
     const f = this.flood
-    if (!f || !this.map.getSource(IDS.desa)) return
+    if (!f || !this.hasDesa || !this.map.getSource(IDS.desa)) return
     const key = Math.floor(this.hour / ENGINE.desaStateStep)
     if (!force && key === f.lastDesaKey) return
     f.lastDesaKey = key
-    const shares = desaShares(f.model, this.hour)
-    f.model.desa.forEach((d, i) => {
+    if (this.hour <= 0 && !f.model) return // nothing wet yet and no state to clear
+    const model = this.floodModel()!
+    const shares = desaShares(model, this.hour)
+    model.desa.forEach((d, i) => {
       const s = shares[i]!
       this.map.setFeatureState({ source: IDS.desa, id: d.id }, { fl: s })
     })
   }
 
   private clearDesaFlood(): void {
-    if (!this.flood || !this.map.getSource(IDS.desa)) return
-    for (const d of this.flood.model.desa) this.map.setFeatureState({ source: IDS.desa, id: d.id }, { fl: 0 })
-    this.flood.lastDesaKey = -1
+    const f = this.flood
+    if (!f || !f.model || !this.hasDesa || !this.map.getSource(IDS.desa)) return
+    for (const d of f.model.desa) this.map.setFeatureState({ source: IDS.desa, id: d.id }, { fl: 0 })
+    f.lastDesaKey = -1
   }
 
   private applyRain(id: string, cells: RainCellInput[], on: boolean, animate: boolean): void {
@@ -760,11 +1059,12 @@ export class MapEngine {
       this.rain.hour = this.hour
       if (!this.ticking) this.map.triggerRepaint()
     }
-    const fl = [...this.dynamic.entries()].find(([, d]) => d.kind === 'flood')
+    const fl = this.floodEntry()
     if (this.flood && fl && this.isVisibleId(fl[0])) {
       this.paintFloodNow()
       this.updateDesaFlood()
     }
+    this.checkDesa()
   }
 
   private isVisibleId(id: string): boolean {
@@ -802,17 +1102,27 @@ export class MapEngine {
 
   /* ---------------------------------------------------------------- camera */
 
-  /** fit padding that keeps the region clear of the corner controls (right) and the Sumber / attribution row (bottom) */
+  /**
+   * fit padding that keeps the region clear of the corner control column (right; measured once it is rendered)
+   * and the Sumber / attribution row (bottom)
+   */
   private padding(extra = 0): { top: number; bottom: number; left: number; right: number } {
     const w = this.o.container.clientWidth
+    const narrow = w < ENGINE.compactWidth
     const p = Math.round(Math.max(12, Math.min(56, w * 0.05))) + extra
-    const ctrl = this.o.interactive ? (w < ENGINE.compactWidth ? 56 : 48) : 0
-    return { top: p, left: p, right: p + ctrl, bottom: p + (w < ENGINE.compactWidth ? 28 : 12) }
+    let ctrl = 0
+    if (this.o.interactive) {
+      const el = this.o.container.parentElement?.querySelector<HTMLElement>('.dk-map-ctrl')
+      // column left edge → right edge of the frame, plus a gap; before it renders: 44 px buttons (narrow) / 32 px
+      ctrl = (el && el.offsetWidth ? w - el.offsetLeft : narrow ? 62 : 50) + 14
+    }
+    return { top: p, left: p, right: Math.max(p, ctrl + extra), bottom: p + (narrow ? 28 : 12) }
   }
 
   fitRegion(durationS: number = ENGINE.flyDur): void {
     if (!this.pack) return
     const [W, S, E, N] = this.pack.bbox
+    this.autoFit = true
     this.map.fitBounds([[W, S], [E, N]], { padding: this.padding(), duration: anim() ? durationS * 1000 : 0, essential: true })
   }
 
@@ -821,10 +1131,12 @@ export class MapEngine {
     if (!k) return
     const [W, S, E, N] = k.bbox
     this.setSelected(id)
+    this.autoFit = false
     this.map.fitBounds([[W, S], [E, N]], { padding: this.padding(24), maxZoom: ENGINE.kecMaxZoom, duration: anim() ? ENGINE.flyDur * 1000 : 0, essential: true })
   }
 
   flyTo(center: LngLat, zoom?: number): void {
+    this.autoFit = false
     this.map.flyTo({ center, zoom: zoom ?? this.map.getZoom(), duration: anim() ? ENGINE.flyDur * 1000 : 0, essential: true })
   }
 
@@ -866,6 +1178,12 @@ export class MapEngine {
   setLang(lang: Lang): void {
     this.lang = lang
     if (this.choro) this.choro = { spec: this.choro.spec, r: resolveChoropleth(this.choro.spec, lang) }
+    // the locale option is read once at construction — keep the attribution toggle's name in the UI language
+    const tg = this.o.container.querySelector('.maplibregl-ctrl-attrib-button')
+    if (tg) {
+      tg.setAttribute('aria-label', ms('attribution', lang))
+      tg.setAttribute('title', ms('attribution', lang))
+    }
     this.refreshLabelText()
     this.scheduleLabels()
   }
@@ -878,6 +1196,8 @@ export class MapEngine {
 
   resize(): void {
     this.map.resize()
+    // the frame changed size (layout settling, rotation, full screen): keep the whole region framed until the user moves
+    if (this.autoFit && this.pack) this.fitRegion(0)
   }
 
   /* ---------------------------------------------------------------- pointer */
@@ -903,7 +1223,9 @@ export class MapEngine {
 
   private onClick = (e: MapMouseEvent): void => {
     const hit = this.pointAt(e, true)
-    if (hit?.marker) this.o.callbacks.onMarker?.(hit.marker.layer, hit.marker.id)
+    const group = hit?.marker && this.groupOf(hit.marker.layer, hit.marker.id)
+    if (group) this.zoomToGroup(group)
+    else if (hit?.marker) this.o.callbacks.onMarker?.(hit.marker.layer, hit.marker.id)
     else this.o.callbacks.onSelect?.(hit?.kec ?? null)
     // touch: keep the tooltip readable for a moment
     this.tipSticky = performance.now() + 2500
@@ -929,8 +1251,13 @@ export class MapEngine {
     this.map.getCanvas().style.cursor = marker || kec ? 'pointer' : ''
     const lines: [string, string?][] = []
     if (marker) {
+      const g = this.groupOf(marker.layer, marker.id)
       const m = this.markerItems.get(marker.layer)?.get(marker.id)
-      if (m) lines.push([m.label, m.detail])
+      if (g) {
+        const names = g.items.slice(0, 3).map((x) => x.label)
+        lines.push([`${fmt(g.items.length, this.lang)} ${ms('markersHere', this.lang)}`, `${names.join(', ')}${g.items.length > 3 ? ', …' : ''}`])
+        lines.push([ms(this.o.cooperative ? 'clusterTap' : 'clusterClick', this.lang)])
+      } else if (m) lines.push([m.label, m.detail])
     } else if (kec) {
       const k = this.kecById.get(kec)!
       lines.push([`${ms('kecamatan', this.lang)} ${k.name}`, this.valueText(kec, true)])
@@ -946,6 +1273,26 @@ export class MapEngine {
     else this.hideTip()
     void click
     return { kec, marker }
+  }
+
+  /** the merged group behind a count badge ('#<index>' ids), else null */
+  private groupOf(layer: string, id: string): MarkerGroup | null {
+    if (!id.startsWith('#')) return null
+    return this.markerGroups.get(layer)?.groups[Number(id.slice(1))] ?? null
+  }
+
+  /** click on a count badge: zoom in just far enough for its closest pair to separate, centred on the group */
+  private zoomToGroup(g: MarkerGroup): void {
+    const z0 = this.map.getZoom()
+    const pts = g.items.map((m) => this.map.project(m.coord))
+    let dmin = Infinity
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) dmin = Math.min(dmin, Math.hypot(pts[i]!.x - pts[j]!.x, pts[i]!.y - pts[j]!.y))
+    const need = ENGINE.badge.md * 1.3
+    const dz = dmin > 0 ? Math.log2(need / dmin) : Infinity
+    const z = Math.min(ENGINE.clusterMaxZoom, Math.max(z0 + 1, z0 + dz))
+    this.autoFit = false
+    this.hideTip()
+    this.map.easeTo({ center: g.coord, zoom: z, duration: anim() ? ENGINE.flyDur * 700 : 0, essential: true })
   }
 
   private valueText(kecId: string, long: boolean): string | undefined {
@@ -990,20 +1337,21 @@ export class MapEngine {
 
   /* ---------------------------------------------------------------- HTML labels */
 
-  private makeLabel(id: string, name: string, at: LngLat, cls: string): Label {
+  private makeLabel(id: string, name: string, at: LngLat, cls: string, polys?: Poly[]): Label {
     const e = el('div', `dk-map-lbl ${cls}`, this.o.labelsEl)
     e.setAttribute('aria-hidden', 'true')
     const n = el('span', 'dk-map-lbl-n', e)
     n.textContent = name
     const v = el('span', 'dk-map-lbl-v', e)
-    return { id, el: e, name: n, val: v, at, w: 0, h: 0, shown: false }
+    return { id, el: e, name: n, val: v, at, polys, w: 0, h: 0, shown: false }
   }
 
   private buildLabels(): void {
     for (const l of [...this.kecLabels.values(), ...this.desaLabels.values()]) l.el.remove()
     this.kecLabels.clear()
     this.desaLabels.clear()
-    for (const k of this.kec) this.kecLabels.set(k.id, this.makeLabel(k.id, k.name, k.centroid, 'is-kec'))
+    // anchor at the pole of inaccessibility, not the centroid: thin / bent kecamatan keep their label inside
+    for (const k of this.kec) this.kecLabels.set(k.id, this.makeLabel(k.id, k.name, labelPoint(k.polys), 'is-kec', k.polys))
     this.refreshLabelText()
   }
 
@@ -1022,12 +1370,77 @@ export class MapEngine {
       // ink follows the fill under the label (dark text on light classes)
       const c = this.choro
       const cls = c && !c.r.hidden.has(id) ? c.r.classOf[id] : undefined
-      const ink = labelInk(cls !== undefined ? c!.r.colors[cls]! : null)
+      // the selected label sits on its own dark pill, so it always takes the light ink
+      const ink = labelInk(cls !== undefined && id !== this.selected ? c!.r.colors[cls]! : null)
       l.el.style.setProperty('--lbl-ink', ink.color)
       l.el.style.setProperty('--lbl-halo', ink.halo)
       l.el.classList.toggle('is-sel', id === this.selected)
       l.w = 0
+      l.fit = undefined
     }
+    // marker layers may have changed: desa placements are re-checked too
+    for (const l of this.desaLabels.values()) l.fit = undefined
+  }
+
+  /** Visible marker badges as screen circles [x, y, r] (labels keep clear of them). */
+  private markerObstacles(z: number): [number, number, number][] {
+    const out: [number, number, number][] = []
+    const k = badgeScale(z)
+    for (const s of this.specs) {
+      if (s.kind !== 'markers' || !this.isVisible(s)) continue
+      const r = (ENGINE.badge[s.size ?? 'md'] / 2) * k
+      // the drawn groups (a count badge is wider); before the first grouping, every item
+      const groups = this.markerGroups.get(s.id)?.groups ?? s.items.map((m) => ({ coord: m.coord, items: [m] }))
+      for (const g of groups) {
+        const p = this.map.project(g.coord)
+        out.push([p.x, p.y, (g.items.length > 1 ? r * 1.35 : r) + ENGINE.labelMarkerPad])
+      }
+    }
+    return out
+  }
+
+  /**
+   * Where a label goes at this zoom: the first candidate offset that keeps it clear of marker badges and (for
+   * kecamatan) fully inside its own polygon; failing that, the first one clear of badges; failing that, the
+   * anchor, flagged `blocked` (shown only when selected / hovered). Pan-invariant (no rotation / pitch), so it is cached per zoom bucket and only redone on zoom.
+   */
+  private fitLabel(l: Label, ax: number, ay: number, z: number, obst: () => [number, number, number][]): NonNullable<Label['fit']> {
+    const zb = Math.round(z * 20)
+    if (l.fit && l.fit.z === zb) return l.fit
+    const { w, h } = l
+    const inset = 2
+    const inside = (cx: number, cy: number): boolean => {
+      if (!l.polys) return true
+      const xs = [cx - w / 2 + inset, cx, cx + w / 2 - inset]
+      const ys = [cy - h / 2 + inset, cy + h / 2 - inset]
+      for (const x of xs) for (const y of ys) if (!pointInPolys(this.map.unproject([x, y]).toArray() as LngLat, l.polys)) return false
+      return true
+    }
+    const clear = (cx: number, cy: number): boolean => {
+      for (const [mx, my, r] of obst()) {
+        const nx = Math.max(cx - w / 2, Math.min(mx, cx + w / 2)) - mx
+        const ny = Math.max(cy - h / 2, Math.min(my, cy + h / 2)) - my
+        if (nx * nx + ny * ny < r * r) return false
+      }
+      return true
+    }
+    type Fit = { dx: number; dy: number; out: boolean; blocked: boolean }
+    let pick: Fit | null = null
+    let clearOnly: Fit | null = null
+    for (const [fx, fy] of LABEL_TRIES) {
+      const dx = Math.round(fx * w)
+      const dy = Math.round(fy * (h + 2))
+      if (!clear(ax + dx, ay + dy)) continue
+      const inn = inside(ax + dx, ay + dy)
+      if (inn) {
+        pick = { dx, dy, out: false, blocked: false }
+        break
+      }
+      clearOnly ??= { dx, dy, out: true, blocked: false }
+    }
+    const fit = { z: zb, ...(pick ?? clearOnly ?? { dx: 0, dy: 0, out: !inside(ax, ay), blocked: true }) }
+    l.fit = fit
+    return fit
   }
 
   private scheduleLabels = (): void => {
@@ -1048,6 +1461,8 @@ export class MapEngine {
     const W = this.o.container.clientWidth
     const H = this.o.container.clientHeight
     const cands: { l: Label; x: number; y: number; prio: number }[] = []
+    let obstacles: [number, number, number][] | null = null
+    const obst = () => (obstacles ??= this.markerObstacles(z))
     const consider = (l: Label, prio: number) => {
       const p = this.map.project(l.at)
       if (p.x < -60 || p.y < -20 || p.x > W + 60 || p.y > H + 20) return
@@ -1079,6 +1494,21 @@ export class MapEngine {
     for (const c of cands) if (!c.l.w) {
       c.l.w = c.l.el.offsetWidth
       c.l.h = c.l.el.offsetHeight
+      c.l.fit = undefined
+    }
+    // move each label off marker badges / back inside its polygon (cached per zoom bucket)
+    // a label with no spot clear of the badges is dropped (the list / tooltip still name it) unless it is the
+    // selected or hovered one
+    for (let i = cands.length - 1; i >= 0; i--) {
+      const c = cands[i]!
+      const f = this.fitLabel(c.l, c.x, c.y, z, obst)
+      if (f.blocked && c.l.id !== this.selected && c.l.id !== this.hovered && c.l.id !== this.hoverDesa) {
+        cands.splice(i, 1)
+        continue
+      }
+      c.x += f.dx
+      c.y += f.dy
+      c.l.el.classList.toggle('is-out', f.out)
     }
     cands.sort((a, b) => b.prio - a.prio)
     const placed: [number, number, number, number][] = []
@@ -1089,6 +1519,8 @@ export class MapEngine {
       const y0 = c.y - c.l.h / 2 - pad
       const x1 = c.x + c.l.w / 2 + pad
       const y1 = c.y + c.l.h / 2 + pad
+      // a label cut by the frame edge is unreadable: drop it until it is fully in view
+      if (x0 + pad < 0 || y0 + pad < 0 || x1 - pad > W || y1 - pad > H) continue
       if (placed.some((p) => x0 < p[2] && x1 > p[0] && y0 < p[3] && y1 > p[1])) continue
       placed.push([x0, y0, x1, y1])
       shown.add(c.l)

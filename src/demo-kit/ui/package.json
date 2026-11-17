@@ -1,0 +1,6 @@
+{
+  "//": "Not a package: tells the bundler which Demo Kit ui modules have import-time side effects (CSS, the calm flag), so a demo that imports one component through the barrel does not pull every other one. type=module keeps tsx-run selftests ESM.",
+  "private": true,
+  "type": "module",
+  "sideEffects": ["*.css", "**/*.css", "./motion.ts"]
+}

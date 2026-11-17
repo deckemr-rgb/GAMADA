@@ -3,7 +3,7 @@
  * shield, portraits are faceless silhouettes, QR blocks encode nothing, signatures are seeded strokes.
  */
 import { memo, useId, type ReactElement } from 'react'
-import { makeRng } from '../world/rng'
+import { makeRng } from '../world/prng'
 import type { Background, FontKind, Run, SampleDoc, Shape } from './types'
 
 const FONTS: Record<FontKind, string> = {

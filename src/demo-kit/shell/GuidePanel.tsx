@@ -1,7 +1,8 @@
 /**
  * shell/GuidePanel.tsx — "Coba ini" (spec §6.3): a NON-modal right drawer (the visitor keeps using the demo
  * while the checklist ticks itself). Desktop: a column beside the canvas. < 768 px: a bottom sheet over the
- * canvas. Esc closes it when focus is inside. Completion → Confetti (≤ 1 s) + sfx.success + a card linking
+ * canvas. Esc closes it when focus is inside; closing with focus inside returns focus to the "?" toggle
+ * (aria-controls = id), or to the "⋯" button on mobile where the toggle lives in the sheet. Completion → Confetti (≤ 1 s) + sfx.success + a card linking
  * to a related product (products.ts `related`).
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -14,6 +15,7 @@ import { useSession } from '../world'
 import { useDemoStrings } from '../i18n'
 import { resetMissions, useMissionProgress, useMissionTracker, type Mission } from './missions'
 import { demoHref } from './url'
+import type { ShellSize } from './hooks'
 
 export interface GuidePanelProps {
   product: ProductSlug
@@ -22,9 +24,11 @@ export interface GuidePanelProps {
   onClose: () => void
   /** id of the panel (the "?" button's aria-controls) */
   id?: string
+  /** the shell's layout size: on 'sm' (phone) a mission's `hintSm` replaces its `hint` (bar controls live in "⋯") */
+  size?: ShellSize
 }
 
-export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelProps) {
+export function GuidePanel({ product, missions, open, onClose, id, size }: GuidePanelProps) {
   const t = useDemoStrings()
   const { lang } = useI18n()
   const session = useSession()
@@ -52,6 +56,24 @@ export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelP
     } else if (fresh.length) sfx.click()
   }, [done, complete, missions, lang, t])
 
+  // focus return: remember whether focus was inside when closing, then hand it to the toggle once hidden
+  const returnFocus = useRef(false)
+  const close = () => {
+    returnFocus.current = !!panel.current?.contains(document.activeElement)
+    onClose()
+  }
+  useLayoutEffect(() => {
+    if (open) return
+    const p = panel.current
+    const inside = returnFocus.current || (!!p && p.contains(document.activeElement))
+    returnFocus.current = false
+    if (!inside || !p) return
+    const scope: ParentNode = p.closest('.dk-shell') ?? document
+    const toggle = id ? scope.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(id)}"]`) : null
+    const target = toggle && toggle.getClientRects().length > 0 ? toggle : scope.querySelector<HTMLElement>('[data-dk-more]')
+    target?.focus()
+  }, [open, id])
+
   useLayoutEffect(() => {
     if (!open || !panel.current) return
     const tw = enterPanel(panel.current, { x: 16 })
@@ -73,7 +95,7 @@ export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelP
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             e.stopPropagation()
-            onClose()
+            close()
           }
         }}
       >
@@ -84,7 +106,7 @@ export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelP
               {t.tryThis}
             </h2>
           </div>
-          <IconButton icon="close" label={t.guideClose} onClick={onClose} />
+          <IconButton icon="close" label={t.guideClose} onClick={close} />
         </header>
         <p className="dk-guide-intro">{t.guideIntro}</p>
         <div className="dk-guide-progress">
@@ -97,6 +119,7 @@ export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelP
           {missions.map((m, i) => {
             const ok = done.includes(m.id)
             const isNext = next?.id === m.id
+            const hint = size === 'sm' ? (m.hintSm ?? m.hint) : m.hint
             return (
               <li key={m.id} className={`dk-guide-step${ok ? ' is-done' : ''}${isNext ? ' is-next' : ''}`}>
                 <span className="dk-guide-check" aria-hidden="true">
@@ -104,7 +127,7 @@ export function GuidePanel({ product, missions, open, onClose, id }: GuidePanelP
                 </span>
                 <span className="dk-guide-text">
                   <span className="dk-guide-label">{m.label[lang]}</span>
-                  {m.hint && !ok && <span className="dk-guide-hint">{m.hint[lang]}</span>}
+                  {hint && !ok && <span className="dk-guide-hint">{hint[lang]}</span>}
                   <span className="dk-sr">, {ok ? t.missionDone : isNext ? t.missionNext : t.missionTodo}</span>
                 </span>
               </li>

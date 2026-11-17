@@ -342,3 +342,45 @@ export function simplifyTopology(layers, { tol, lat0, decimals = 5, minAreaKm2 =
   }
   return { layers: outLayers, stats }
 }
+
+/* --------------------------------------------------------------------- quantisation (shipping precision) */
+
+/**
+ * Round every coordinate of a GeoJSON geometry to `d` decimals (4 ≈ 11 m) and clean up afterwards.
+ * Rounding is a pure function of the input vertex, so a border shared by two features (same vertices after
+ * simplifyTopology) stays identical in both: the result is still gap-free. Consecutive duplicates are dropped;
+ * lines with < 2 points and rings with < 4 points (or zero area) are removed, then empty parts.
+ */
+export function quantizeGeom(geom, d = 4) {
+  const line = (pts) => roundLine(pts, d)
+  const ring = (pts) => {
+    const r = roundLine(pts, d)
+    if (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])) r.push(r[0])
+    return r.length >= 4 && ringArea(r) !== 0 ? r : null
+  }
+  const poly = (rings) => {
+    const outer = ring(rings[0])
+    if (!outer) return null
+    return [outer, ...rings.slice(1).map(ring).filter(Boolean)]
+  }
+  switch (geom.type) {
+    case 'Point': return { type: 'Point', coordinates: roundPt(geom.coordinates, d) }
+    case 'MultiPoint': return { type: 'MultiPoint', coordinates: geom.coordinates.map((p) => roundPt(p, d)) }
+    case 'LineString': return { type: 'LineString', coordinates: line(geom.coordinates) }
+    case 'MultiLineString': return { type: 'MultiLineString', coordinates: geom.coordinates.map(line).filter((l) => l.length > 1) }
+    case 'Polygon': return { type: 'Polygon', coordinates: poly(geom.coordinates) ?? [] }
+    case 'MultiPolygon': {
+      const ps = geom.coordinates.map(poly).filter(Boolean)
+      return ps.length === 1 ? { type: 'Polygon', coordinates: ps[0] } : { type: 'MultiPolygon', coordinates: ps }
+    }
+    default: return geom
+  }
+}
+
+/** Quantise every feature of a FeatureCollection; features whose geometry became empty are dropped. */
+export function quantizeFC(fc, d = 4) {
+  const features = fc.features
+    .map((f) => ({ ...f, geometry: quantizeGeom(f.geometry, d) }))
+    .filter((f) => f.geometry.coordinates.length > 0)
+  return { ...fc, features }
+}

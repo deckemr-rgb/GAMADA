@@ -4,7 +4,7 @@
  * Tahap-1 functional versions on the site's dusk layer (the cinematic design arrives in tahap 6).
  */
 import type { ReactNode } from 'react'
-import { useI18n } from '../lib/i18n'
+import { useEcoI18n } from '../content/i18n/useEco'
 import { ECOSYSTEMS, type EcoOrInti, type ProductDef } from '../content/products'
 import { waLink } from '../content/site'
 import Card from '../components/ui/Card'
@@ -12,6 +12,7 @@ import { ButtonLink, WaIcon } from '../components/ui/Button'
 import AppLink from '../components/AppLink'
 import { Icon } from '../demo-kit/ui/icons'
 import '../styles/eco.css'
+import Arrow from '../components/ui/Arrow'
 
 /** "{n} produk" + { n: 17 } → "17 produk" (unknown keys stay as they are). */
 export function fill(s: string, v: Record<string, string | number>): string {
@@ -32,7 +33,7 @@ export function EcoBadge({ eco, className = '' }: { eco: EcoOrInti; className?: 
 
 /** Product card: the whole card is one link to /produk/<slug> (or `to`). */
 export function ProductCard({ p, to, cta, as = 'li', compact = false }: { p: ProductDef; to?: string; cta?: string; as?: 'li' | 'div'; compact?: boolean }) {
-  const { lang, t } = useI18n()
+  const { lang, eco: copy } = useEcoI18n()
   return (
     <Card as={as} className={`eco-pcard${compact ? ' is-compact' : ''}`}>
       <AppLink to={to ?? `/produk/${p.slug}`} className="eco-pcard-link" data-eco={p.eco}>
@@ -48,8 +49,8 @@ export function ProductCard({ p, to, cta, as = 'li', compact = false }: { p: Pro
         <span className="eco-pcard-desc">{p.descriptor[lang]}</span>
         {compact ? null : <span className="eco-pcard-tag">{p.tagline[lang]}</span>}
         <span className="eco-pcard-more">
-          {cta ?? t.eco.common.productPage}
-          <span aria-hidden="true"> →</span>
+          {cta ?? copy.common.productPage}
+          <Arrow />
         </span>
       </AppLink>
     </Card>
@@ -58,10 +59,10 @@ export function ProductCard({ p, to, cta, as = 'li', compact = false }: { p: Pro
 
 /** "Hubungi kami" — WhatsApp with a prefilled message (site.ts waLink). */
 export function ContactButton({ text, label }: { text: string; label?: string }) {
-  const { t } = useI18n()
-  const l = label ?? t.eco.common.contact
+  const { eco: copy } = useEcoI18n()
+  const l = label ?? copy.common.contact
   return (
-    <ButtonLink href={waLink(text)} variant="wa" icon={<WaIcon />} ariaLabel={`${l} ${t.eco.common.newTab}`}>
+    <ButtonLink href={waLink(text)} variant="wa" icon={<WaIcon />} ariaLabel={`${l} ${copy.common.newTab}`}>
       {l}
     </ButtonLink>
   )

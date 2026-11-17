@@ -4,7 +4,7 @@
  * chain-depth limit (WORLD.maxDepth). Reactions must be idempotent-ish: they check state before re-emitting.
  */
 import type { AnyFollowUp, ComplaintCluster, EventType, FollowUp, WorldEvent, WorldState } from './types'
-import { PUMP_PACKAGE } from './catalog'
+import { PUMP_PACKAGE } from './texts'
 import { computeScore } from './score'
 import { DAY_MIN, WORLD, distanceKm, ref, rows } from './util'
 

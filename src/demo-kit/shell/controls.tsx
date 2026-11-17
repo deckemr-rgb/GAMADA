@@ -3,7 +3,7 @@
  * AiModeToggle, ModeBadge, LangToggle, ResetButton, FullscreenButton, BackToProduct. Every one is usable on its
  * own (they read/write the world session + clock), and the "⋯" sheet reuses their inline variants.
  */
-import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useId, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PRODUCT_BY_SLUG, ROLES, type ProductSlug, type RoleId } from '../../content/products'
 import { useI18n, type Lang } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
@@ -11,8 +11,10 @@ import AppLink from '../../components/AppLink'
 import { Avatar, Icon, IconButton, Menu, Segmented, Tooltip } from '../ui'
 import { REGIONS } from '../region/loader'
 import { CLOCK, clock, formatTime, setSession, useClock, useSession, type ClockSpeed } from '../world'
-import { checkHealth, peekHealth } from '../ai'
-import { useDemoStrings } from '../i18n'
+// live-base directly, not the ai/ barrel: the barrel drags the scripted engine, intents and useAiChat (~9 KB gzip)
+// into every demo, also the ones without AI. live-base is dependency-free (the ai/ barrel re-exports it).
+import { checkHealth, peekHealth } from '../ai/live-base'
+import { roleInitials, switchLang, useDemoStrings } from '../i18n'
 import { Picker } from './Picker'
 
 /* ------------------------------------------------------------------ region */
@@ -29,10 +31,10 @@ export function RegionSwitcher({ inline }: { inline?: boolean }) {
   // one region only (tahap 1): a label, not a control (no dead dropdowns)
   if (list.length < 2) {
     return (
-      <span className="dk-shell-chip" title={t.regionOnly(current.name)}>
+      <span className="dk-shell-chip dk-region" title={t.regionOnly(current.name)}>
         <Icon name="flag" size={16} />
         <span className="dk-sr">{t.region}: </span>
-        <span>{current.shortName}</span>
+        <span className="dk-region-label">{current.shortName}</span>
       </span>
     )
   }
@@ -54,7 +56,7 @@ export function RegionSwitcher({ inline }: { inline?: boolean }) {
       }))}
     >
       <Icon name="flag" size={16} />
-      <span className="dk-pick-label">{current.shortName}</span>
+      <span className="dk-pick-label dk-region-label">{current.shortName}</span>
     </Picker>
   )
 }
@@ -71,7 +73,7 @@ export function RoleSwitcher({ product, inline }: { product: ProductSlug; inline
     sfx.click()
     setSession({ role: r })
   }
-  const lead = (r: RoleId, size: 24 | 32 = 24) => <Avatar name={name(r)} initials={ROLES[r].initials} size={size} />
+  const lead = (r: RoleId, size: 24 | 32 = 24) => <Avatar name={name(r)} initials={roleInitials(r, lang)} size={size} />
   if (roles.length < 2) {
     return (
       <span className="dk-shell-chip" title={t.roleAs(name(role))}>
@@ -176,12 +178,20 @@ export function useAiHealth(): HealthState {
   return state
 }
 
-export function AiModeToggle({ health }: { health: HealthState }) {
+/**
+ * Simulasi / Live. When the proxy is not live the Live pill is aria-disabled, and a tap / click on it explains why:
+ * `onUnavailable` (the shell pushes a toast), and the `inline` variant (the "⋯" sheet) also prints the reason as
+ * visible helper text under the pill — the hover / focus Tooltip never opens on touch.
+ */
+export function AiModeToggle({ health, inline, onUnavailable }: { health: HealthState; inline?: boolean; onUnavailable?: () => void }) {
   const t = useDemoStrings()
   const { aiMode } = useSession()
   const live = health === 'live'
   const set = (m: 'sim' | 'live') => {
-    if (m === 'live' && !live) return
+    if (m === 'live' && !live) {
+      onUnavailable?.()
+      return
+    }
     if (m !== aiMode) sfx.click()
     setSession({ aiMode: m })
   }
@@ -192,7 +202,8 @@ export function AiModeToggle({ health }: { health: HealthState }) {
     }
   }
   const tip = health === 'checking' ? t.aiLiveChecking : live ? t.aiLiveOn : t.aiLiveOff
-  return (
+  const whyId = useId()
+  const group = (
     <div className="dk-ai" role="radiogroup" aria-label={t.aiMode} onKeyDown={onKey}>
       <button type="button" role="radio" aria-checked={aiMode === 'sim'} tabIndex={aiMode === 'sim' ? 0 : -1} className="dk-ai-opt" onClick={() => set('sim')}>
         {t.aiSim}
@@ -203,15 +214,27 @@ export function AiModeToggle({ health }: { health: HealthState }) {
           role="radio"
           aria-checked={aiMode === 'live'}
           aria-disabled={!live || undefined}
+          aria-describedby={inline && !live ? whyId : undefined}
           tabIndex={aiMode === 'live' ? 0 : -1}
           className={`dk-ai-opt${aiMode === 'live' ? ' is-live' : ''}`}
           onClick={() => set('live')}
         >
           <span className="dk-ai-dot" aria-hidden="true" />
           {t.aiLive}
-          {!live && <span className="dk-sr">. {tip}</span>}
+          {!live && !inline && <span className="dk-sr">. {tip}</span>}
         </button>
       </Tooltip>
+    </div>
+  )
+  if (!inline) return group
+  return (
+    <div className="dk-ai-wrap">
+      {group}
+      {!live && (
+        <p className="dk-ai-why" id={whyId}>
+          {tip}
+        </p>
+      )}
     </div>
   )
 }
@@ -223,7 +246,7 @@ export function ModeBadge() {
   return (
     <span className="dk-modebadge" title={t.demoModeHint}>
       <span className="dk-modebadge-dot" aria-hidden="true" />
-      {t.demoMode}
+      <span className="dk-modebadge-text">{t.demoMode}</span>
       <span className="dk-sr">. {t.demoModeHint}</span>
     </span>
   )
@@ -239,7 +262,7 @@ export function LangToggle() {
       value={lang}
       onChange={(l) => {
         sfx.click()
-        setLang(l)
+        switchLang(l, setLang, { persist: true })
       }}
       options={[
         { value: 'id', label: 'ID' },

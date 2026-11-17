@@ -5,7 +5,7 @@
  */
 import { useMemo, useRef, type PointerEvent } from 'react'
 import { ChartFrame, ChartTip, useVizLang, type FrameProps } from './ChartFrame'
-import { localPoint, useIndexNav, useReveal, useSize, useTweened } from './core'
+import { localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 import { TONE, seriesColor, type Tone } from './palette'
 
 export interface SankeyNode {
@@ -132,8 +132,9 @@ export function SankeyLite(props: SankeyProps) {
   const fmt = props.format ?? ((v: number) => f.num(v))
   const plotRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(plotRef)
-  const p = useReveal(plotRef)
-  const vals = useTweened(useMemo(() => links.map((l) => Math.max(0, l.value)), [links]))
+  const vis = useRevealDom(plotRef)
+  useAttrTween(plotRef, links, vis)
+  const vals = useMemo(() => links.map((l) => Math.max(0, l.value)), [links])
   const H = props.height ?? (w < 520 ? 240 : 260)
   const L = useMemo(() => layout(nodes, links, vals, w, H), [nodes, links, vals, w, H])
   const nav = useIndexNav(L.links.length, { start: 0 })
@@ -177,26 +178,30 @@ export function SankeyLite(props: SankeyProps) {
   return (
     <ChartFrame {...props} autoSummary={summary} announce={nav.kbd ? readout : ''} hint={s.hintList}>
       <div ref={plotRef} className="dk-viz-plot" tabIndex={0} role="group" aria-label={`${props.title}. ${s.hintList}.`} onKeyDown={nav.onKeyDown} onBlur={nav.onBlur}>
-        <svg className={`dk-viz-svg dk-viz-fade${p > 0 ? '' : ' dk-viz-pre'}`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
+        <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
           <g className={`dk-viz-links${act !== null ? ' has-on' : ''}`}>
             {L.links.map((l, k) => (
               <path
                 key={`${l.s.id}-${l.t.id}`}
                 d={path(l)}
                 className={`dk-viz-link${act === k ? ' is-on' : ''}`}
-                pathLength={p < 1 ? 1 : undefined}
-                style={{ stroke: l.color, strokeWidth: Math.max(1, l.w), ...(p < 1 ? { strokeDasharray: 1, strokeDashoffset: 1 - p } : {}) }}
+                {...rv('draw')}
+                data-tw="d stroke-width"
+                pathLength={1}
+                strokeWidth={Math.max(1, l.w).toFixed(2)}
+                style={{ stroke: l.color }}
               />
             ))}
           </g>
+          <g {...rv('fade', { len: 0.66 })}>
           {L.nodes.map((n) => {
             const last = n.col === ncol - 1
             const inside = !last
             return (
               <g key={n.id}>
-                <rect x={n.x} y={n.y} width={NODE_W} height={n.h} rx={2} style={{ fill: n.color }} />
+                <rect data-tw="y height" x={n.x} y={n.y} width={NODE_W} height={n.h} rx={2} style={{ fill: n.color }} />
                 {n.h >= 12 && (
-                  <text x={inside ? n.x + NODE_W + 6 : n.x - 6} y={n.y + n.h / 2 + 4} className={`${inside ? '' : 't-end '}t-strong`} style={{ opacity: Math.min(1, p * 1.5), paintOrder: 'stroke', stroke: 'var(--dk-viz-surface)', strokeWidth: 3, strokeLinejoin: 'round' }}>
+                  <text data-tw="y" x={inside ? n.x + NODE_W + 6 : n.x - 6} y={n.y + n.h / 2 + 4} className={`${inside ? '' : 't-end '}t-strong`} style={{ paintOrder: 'stroke', stroke: 'var(--dk-viz-surface)', strokeWidth: 3, strokeLinejoin: 'round' }}>
                     {n.label}
                     <tspan className="t-muted" dx={5} style={{ fontWeight: 500 }}>
                       {fmt(n.value)}
@@ -206,6 +211,7 @@ export function SankeyLite(props: SankeyProps) {
               </g>
             )
           })}
+          </g>
         </svg>
         {cur && (
           <ChartTip x={(cur.s.x + NODE_W + cur.t.x) / 2} y={(cur.y0 + cur.y1) / 2 - cur.w / 2} width={w}>

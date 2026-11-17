@@ -1,14 +1,15 @@
 /**
  * LineChart / AreaChart — time or category series on a shared x index. Lines 2px, areas 16%, forecast as a
  * 10% band + dashed line (spec §8.4). Pointer tooltip with a vertical crosshair, ←/→ keyboard readout,
- * stroke-dashoffset draw-in on first view, GSAP-interpolated updates (values and y-domain).
+ * stroke-dashoffset draw-in on first view and GSAP attribute tweens on data updates (paths glide on the DOM
+ * nodes; React renders the final geometry once).
  */
 import { useMemo, useRef, type PointerEvent } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { area as d3area, curveMonotoneX, line as d3line } from 'd3-shape'
 import { extent, max as d3max, min as d3min } from 'd3-array'
 import { ChartFrame, ChartTip, TipRow, useVizLang, type FrameProps, type LegendItem } from './ChartFrame'
-import { flatten, localPoint, unflatten, useIndexNav, useReveal, useSize, useTweened } from './core'
+import { localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 import { seriesColor } from './palette'
 import type { Formatters } from './format'
 import type { VizStrings } from './i18n'
@@ -90,7 +91,7 @@ function XYChart(props: Inner) {
   const xf = props.xFormat ?? defaultX(f)
   const plotRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(plotRef)
-  const p = useReveal(plotRef)
+  const vis = useRevealDom(plotRef)
   const h = height ?? (w < 520 ? 200 : 240)
   const N = Math.max(1, x.length)
   const actualN = series[0]?.values.length ?? 0
@@ -114,18 +115,14 @@ function XYChart(props: Inner) {
     return sc.domain() as [number, number]
   }, [props.yDomain, props.zero, series, fc, target, kind])
 
-  /* tween everything numeric in one array */
-  const shape = useMemo(() => [...series.map((d) => d.values), fc?.values ?? [], fc?.lo ?? [], fc?.hi ?? [], domain], [series, fc, domain])
-  const flat = useMemo(() => flatten(shape), [shape])
-  const tw = useTweened(flat)
-  const rows = unflatten(tw, shape)
-  const vals = rows.slice(0, series.length)
-  const fcV = rows[series.length] ?? []
-  const fcLo = rows[series.length + 1] ?? []
-  const fcHi = rows[series.length + 2] ?? []
-  const dom = rows[series.length + 3] ?? domain
-  const y0 = dom[0] ?? 0
-  const y1 = dom[1] ?? 1
+  /* final geometry; data updates glide through attribute tweens on the paths */
+  const dataKey = useMemo(() => [series, fc, domain], [series, fc, domain])
+  useAttrTween(plotRef, dataKey, vis)
+  const vals = series.map((d) => d.values)
+  const fcV = fc?.values ?? []
+  const fcLo = fc?.lo ?? []
+  const fcHi = fc?.hi ?? []
+  const [y0, y1] = domain
 
   const ticksTarget = useMemo(() => scaleLinear().domain(domain).ticks(4), [domain])
   const tickW = Math.max(...ticksTarget.map((t) => axisFmt(t).length), 2) * 6.2 + 10
@@ -203,8 +200,6 @@ function XYChart(props: Inner) {
   }, [series, fc, s, f])
 
   const tipY = hi !== null ? sy(isFc ? (fcV[hi - lastI - 1] ?? 0) : (valueAt(0, hi) ?? y0)) : 0
-  const drawn = p > 0
-  const fade = p >= 1 ? 1 : Math.max(0, (p - 0.4) / 0.6)
 
   return (
     <ChartFrame {...props} autoSummary={summary} legend={legend} announce={nav.kbd ? readout : ''} hint={s.hintX}>
@@ -217,7 +212,7 @@ function XYChart(props: Inner) {
         onKeyDown={nav.onKeyDown}
         onBlur={nav.onBlur}
       >
-        <svg className={`dk-viz-svg${drawn ? '' : ' dk-viz-pre'} dk-viz-fade`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
+        <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} aria-hidden="true">
           {ticksTarget.map((t) => {
             const yy = sy(t)
             if (yy < PAD.t - 1 || yy > h - PAD.b + 1) return null
@@ -245,12 +240,12 @@ function XYChart(props: Inner) {
           )}
           {kind === 'area' &&
             vals.map((v, i) => (
-              <path key={`a-${series[i]?.id}`} d={areaGen(v) ?? ''} style={{ fill: colorOf(i), fillOpacity: 0.16, opacity: fade }} />
+              <path key={`a-${series[i]?.id}`} {...rv('fade', { delay: 0.4 })} data-tw="d" d={areaGen(v) ?? ''} style={{ fill: colorOf(i), fillOpacity: 0.16 }} />
             ))}
           {fc && (
-            <g style={{ opacity: p >= 1 ? 1 : Math.max(0, (p - 0.8) / 0.2) }}>
-              {fcBand && <path d={fcBand} style={{ fill: colorOf(0), fillOpacity: 0.1 }} />}
-              <path d={fcLine} className="dk-viz-line is-dash" style={{ stroke: colorOf(0), opacity: 0.9 }} />
+            <g {...rv('fade', { delay: 0.8 })}>
+              {fcBand && <path data-tw="d" d={fcBand} style={{ fill: colorOf(0), fillOpacity: 0.1 }} />}
+              <path data-tw="d" d={fcLine} className="dk-viz-line is-dash" style={{ stroke: colorOf(0), opacity: 0.9 }} />
             </g>
           )}
           {target && (
@@ -265,22 +260,19 @@ function XYChart(props: Inner) {
             const ser = series[i]
             const d = lineGen(v) ?? ''
             const dashed = !!ser?.dashed
-            const drawing = p < 1 && !dashed
             return (
               <path
                 key={`l-${ser?.id}`}
+                {...(dashed ? rv('fade', { delay: 0.4 }) : rv('draw'))}
+                data-tw="d"
                 d={d}
-                pathLength={drawing ? 1 : undefined}
+                pathLength={dashed ? undefined : 1}
                 className={`dk-viz-line${dashed ? ' is-dash' : ''}`}
-                style={{
-                  stroke: colorOf(i),
-                  ...(drawing ? { strokeDasharray: 1, strokeDashoffset: 1 - p } : {}),
-                  ...(dashed ? { opacity: fade } : {}),
-                }}
+                style={{ stroke: colorOf(i) }}
               />
             )
           })}
-          {lastI >= 0 && lastV !== undefined && p >= 1 && <circle cx={sx(lastI)} cy={sy(lastV)} r={3.5} className="dk-viz-last" style={{ fill: colorOf(0) }} />}
+          {lastI >= 0 && lastV !== undefined && <circle {...rv('fade', { delay: 0.95, len: 0.05 })} data-tw="cx cy" cx={sx(lastI)} cy={sy(lastV)} r={3.5} className="dk-viz-last" style={{ fill: colorOf(0) }} />}
           {hi !== null && (
             <g className="dk-viz-cross">
               <line x1={sx(hi)} x2={sx(hi)} y1={PAD.t} y2={h - PAD.b} />

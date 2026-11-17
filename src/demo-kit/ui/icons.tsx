@@ -4,7 +4,7 @@
  * One glyph per product icon key in src/content/products.ts + the UI set. Decorative by default; pass
  * `title` to make the icon an image with an accessible name.
  */
-import type { ReactElement, SVGProps } from 'react'
+import { memo, type ReactElement, type SVGProps } from 'react'
 
 type Glyph = () => ReactElement
 
@@ -563,7 +563,8 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   title?: string
 }
 
-export function Icon({ name, size = 20, title, className, strokeWidth = 1.5, ...rest }: IconProps) {
+/** Memoised: a list re-render (new row, drawer open) does not rebuild every glyph. */
+export const Icon = memo(function Icon({ name, size = 20, title, className, strokeWidth = 1.5, ...rest }: IconProps) {
   const glyph = isIconName(name) ? G[name] : G.dot
   const a11y = title ? { role: 'img' as const, 'aria-label': title } : { 'aria-hidden': true as const }
   return (
@@ -585,4 +586,4 @@ export function Icon({ name, size = 20, title, className, strokeWidth = 1.5, ...
       {glyph()}
     </svg>
   )
-}
+})

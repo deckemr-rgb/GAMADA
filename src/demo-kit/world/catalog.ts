@@ -3,92 +3,17 @@
  * medium, bank and brand produced from these lists is FICTIONAL; nothing here names a real person or firm.
  * Products are generic (no trademarks).
  */
-import type { Bi, BizKind, ComplaintCategory, NameGroup } from './types'
+import type { Bi, BizKind, ComplaintCategory } from './types'
 
-/* ================================================================== names */
-
-export interface NameSet {
-  m: string[]
-  f: string[]
-  /** family / second names (shared or per gender) */
-  last?: string[]
-  lastF?: string[]
-  /** probability of a second name */
-  pLast: number
-}
-
-export const NAMES: Partial<Record<NameGroup, NameSet>> = {
-  jawa: {
-    m: ['Budi', 'Agus', 'Slamet', 'Sugeng', 'Joko', 'Bambang', 'Wahyu', 'Teguh', 'Hadi', 'Eko', 'Dwi', 'Puji', 'Sutrisno', 'Suparman', 'Darmo', 'Wawan', 'Yanto', 'Heru', 'Rudi', 'Supriyadi', 'Sukirno', 'Bayu', 'Aris', 'Tri', 'Sarwono', 'Mulyono', 'Raka', 'Dimas', 'Galih', 'Fajar'],
-    f: ['Siti', 'Sri', 'Endang', 'Wulan', 'Rini', 'Tutik', 'Sulastri', 'Suminah', 'Ratna', 'Dewi', 'Ani', 'Yuni', 'Ningsih', 'Kartini', 'Sumarni', 'Indah', 'Puspita', 'Sumiati', 'Retno', 'Wartini', 'Dian', 'Ayu', 'Nur', 'Lestari'],
-    last: ['Santoso', 'Wibowo', 'Susanto', 'Purnomo', 'Hartono', 'Setiawan', 'Nugroho', 'Saputra', 'Pratama', 'Prasetyo', 'Wicaksono', 'Gunawan', 'Utomo', 'Raharjo', 'Sulistyo'],
-    lastF: ['Handayani', 'Rahmawati', 'Lestari', 'Utami', 'Wahyuni', 'Rahayu', 'Purwanti', 'Astuti', 'Susilowati', 'Kusumawati'],
-    pLast: 0.55,
-  },
-  sunda: {
-    m: ['Asep', 'Ujang', 'Dede', 'Cecep', 'Dadang', 'Ade', 'Iwan', 'Jajang', 'Yayan', 'Engkos', 'Dodi', 'Rahmat'],
-    f: ['Euis', 'Neng', 'Yeni', 'Iis', 'Teti', 'Nenden', 'Lilis', 'Cucu', 'Nining', 'Imas'],
-    last: ['Suryana', 'Hidayat', 'Permana', 'Sopian', 'Kusnadi', 'Ruhiyat', 'Supriatna', 'Gumilar'],
-    lastF: ['Nurhayati', 'Komalasari', 'Rostika', 'Kurniasih', 'Suryani'],
-    pLast: 0.7,
-  },
-  batak: {
-    m: ['Togar', 'Parlindungan', 'Hotman', 'Bonar', 'Martua', 'Sahat', 'Jonner', 'Binsar', 'Poltak', 'Daniel'],
-    f: ['Rosmawati', 'Lamtiur', 'Tiurma', 'Debora', 'Romauli', 'Hotnida', 'Ruth', 'Sondang'],
-    last: ['Siregar', 'Nasution', 'Simanjuntak', 'Hutapea', 'Sitompul', 'Pardede', 'Lubis', 'Harahap', 'Sinaga', 'Manurung', 'Tambunan', 'Panjaitan'],
-    pLast: 1,
-  },
-  minang: {
-    m: ['Rizal', 'Zulkifli', 'Hendri', 'Afrizal', 'Yusrizal', 'Fadli', 'Syahrul', 'Irwan', 'Arif', 'Rahmad'],
-    f: ['Rahmi', 'Yusnita', 'Elvi', 'Fitri', 'Desi', 'Zulaikha', 'Nurhasanah', 'Rosna'],
-    last: ['Chaniago', 'Piliang', 'Sikumbang', 'Tanjung', 'Koto', 'Effendi', 'Syafri'],
-    pLast: 0.6,
-  },
-  bugis: {
-    m: ['Muhammad Ilham', 'Nurdin', 'Syarifuddin', 'Haerul', 'Sulfikar', 'Akbar', 'Irfan', 'Ridwan', 'Andi Baso', 'Andi Fikri'],
-    f: ['Hasmawati', 'Nurhaedah', 'Jumriah', 'Rahmatia', 'Andi Nurul', 'Sitti Rahma', 'Hasnah', 'Rosmiati'],
-    pLast: 0,
-  },
-  tionghoa: {
-    m: ['Hendra', 'Kevin', 'Steven', 'William', 'Yohanes', 'Andreas', 'Felix', 'Hartono', 'Budi', 'Ronald', 'Wilson'],
-    f: ['Lina', 'Mei Ling', 'Susan', 'Lily', 'Yuliana', 'Natalia', 'Veronica', 'Melinda', 'Fransiska', 'Shinta'],
-    last: ['Wijaya', 'Halim', 'Tanuwijaya', 'Gunawan', 'Setiadi', 'Kusuma', 'Tanjaya', 'Lim', 'Tan', 'Gozali', 'Sutanto', 'Hartanto', 'Liem', 'Oei'],
-    pLast: 0.9,
-  },
-  madura: {
-    m: ['Moh. Hasan', 'Fathorrahman', 'Syaiful', 'Ahmad Fauzi', 'Mat Sahri', 'Abdul Rahem', 'Holili', 'Bakri', 'Moh. Rofiq', 'Sukri'],
-    f: ['Siti Aisyah', 'Hosniyah', 'Maimunah', 'Juwairiyah', 'Nur Hasanah', 'Fatimah', 'Halimah', 'Sumiyati'],
-    pLast: 0,
-  },
-  bali: {
-    m: ['I Wayan Sudarsana', 'I Made Artawan', 'I Nyoman Suardana', 'I Ketut Wirawan', 'I Putu Budiasa', 'I Gede Mahendra', 'I Komang Adi'],
-    f: ['Ni Wayan Sukarini', 'Ni Made Ayu Lestari', 'Ni Nyoman Ariani', 'Ni Ketut Sriasih', 'Ni Putu Wahyuni', 'Ni Kadek Dewi'],
-    pLast: 0,
-  },
-  banjar: {
-    m: ['Ahmad Rizani', 'Muhammad Yusran', 'Saberan', 'Rusdiansyah', 'Fahrurrazi', 'Taufikurrahman'],
-    f: ['Masliana', 'Rusmini', 'Norhayati', 'Mahmudah', 'Rabiatul', 'Hairiyah'],
-    pLast: 0,
-  },
-}
-
-/** regional language code (pack.languages.regional) → name group it boosts */
-export const LANG_GROUP: Record<string, NameGroup> = {
-  jv: 'jawa', su: 'sunda', min: 'minang', bug: 'bugis', mad: 'madura', bal: 'bali', bat: 'batak', bjn: 'banjar',
-}
-/** national background mix (Indonesia is diverse everywhere) */
-export const BASE_GROUP_WEIGHT: Partial<Record<NameGroup, number>> = {
-  jawa: 10, sunda: 6, batak: 4, minang: 4, bugis: 3, tionghoa: 5, madura: 4, bali: 2, banjar: 2,
-}
-/** weight added to the region's own language groups (split between them) */
-export const REGIONAL_BOOST = 140
+/* names → names.ts; runtime texts (labels, SLA, natural-event texts, pump package) → texts.ts. Re-exported here so
+   `import { … } from './catalog'` keeps working; the runtime imports texts.ts directly and never loads this file. */
+export * from './names'
+export * from './texts'
 
 /* ================================================================== fictional organisations */
 
 export const COMPANY_WORDS = ['Sarana', 'Tirta', 'Karya', 'Mitra', 'Cipta', 'Bumi', 'Graha', 'Putra', 'Prima', 'Sentosa', 'Abadi', 'Makmur', 'Utama', 'Kencana', 'Perkasa', 'Mandiri', 'Lestari', 'Wira', 'Arta', 'Sinar', 'Daya', 'Teknik', 'Rekayasa', 'Selaras', 'Bangun', 'Cahaya', 'Tunas', 'Panca', 'Catur', 'Tri']
 export const SHOP_NAMES = ['Karya Tirta Makmur', 'Sido Rukun Abadi', 'Sinar Lestari Jaya', 'Mulyo Agung Sentosa', 'Rejeki Bumi Mandiri', 'Tunas Kencana Baru']
-export const MEDIA_OUTLETS = ['Warta Senja Raya', 'Kabar Simpang Kota', 'Lensa Kalangan', 'Gema Pelita Daerah', 'Rona Kabar', 'Ruang Warta 24', 'Titik Temu News', 'Jurnal Pinggir Kali']
-export const SOCIAL_HANDLES = ['@infowarga.kini', '@kabar.sekitar.id', '@sobat.lintas', '@jalan.kampung', '@ceritawarga', '@pantau.desa', '@suara.pinggiran', '@warung.diskusi', '@relawan.kali', '@anak.pasar']
 export const LENDERS = ['Koperasi Mitra Usaha Sejahtera', 'KSP Arunika Bersama', 'Bank Pelita Arta Daerah', 'BPR Sinar Lumbung Karya']
 export const COMPETITOR_BRANDS = ['Toko Bangunan Gading Sentosa', 'Depo Bahan Sumber Agung']
 
@@ -226,57 +151,6 @@ export const SKUS = { shop: shopSkus(), kopi: KOPI, warung: WARUNG }
 
 /* ================================================================== text templates */
 
-/** fallback complaint texts (Indonesian) when the pack has no template for a category; {d} = desa */
-export const COMPLAINT_TEXT: Record<ComplaintCategory, Bi[]> = {
-  banjir: [
-    { id: 'Air mulai masuk rumah warga di {d}, sudah sebetis. Mohon bantuan pompa.', en: 'Water is entering homes in {d}, already calf-deep. Please send pumps.' },
-    { id: 'Jalan utama {d} tergenang, motor tidak bisa lewat.', en: 'The main road in {d} is flooded, motorbikes cannot pass.' },
-    { id: 'Saluran air di {d} meluap sejak subuh.', en: 'The drain in {d} has overflowed since dawn.' },
-  ],
-  'jalan-rusak': [
-    { id: 'Jalan berlubang besar dekat balai desa {d}, sudah ada yang jatuh.', en: 'Big pothole near the {d} village hall, someone has already fallen.' },
-    { id: 'Aspal jalan poros {d} mengelupas sepanjang 200 meter.', en: 'Asphalt on the {d} main road is peeling for 200 metres.' },
-  ],
-  sampah: [
-    { id: 'Sampah di TPS {d} belum diangkut tiga hari, bau sekali.', en: 'Rubbish at the {d} collection point has not been picked up for three days.' },
-    { id: 'Ada pembuangan sampah liar di pinggir sungai {d}.', en: 'Illegal dumping on the riverbank in {d}.' },
-  ],
-  pju: [
-    { id: 'Lampu jalan di perempatan {d} mati sudah seminggu.', en: 'The street light at the {d} crossroads has been out for a week.' },
-    { id: 'Tiga tiang PJU di {d} tidak menyala, rawan kecelakaan.', en: 'Three street lights in {d} are off, accident-prone.' },
-  ],
-  'air-bersih': [
-    { id: 'Air PDAM di {d} keruh sejak kemarin.', en: 'Tap water in {d} has been murky since yesterday.' },
-    { id: 'Distribusi air bersih ke {d} berhenti dua hari.', en: 'Clean-water supply to {d} stopped two days ago.' },
-  ],
-  'pohon-tumbang': [
-    { id: 'Pohon tumbang menutup jalan di {d} setelah hujan deras.', en: 'A fallen tree blocks the road in {d} after heavy rain.' },
-  ],
-  pungli: [
-    { id: 'Ada yang minta uang tambahan saat urus surat di {d}.', en: 'Someone asked for an extra payment when processing a letter in {d}.' },
-  ],
-  kesehatan: [
-    { id: 'Antrean puskesmas dekat {d} sangat panjang, obat habis.', en: 'The health-centre queue near {d} is very long and medicine has run out.' },
-  ],
-  sekolah: [
-    { id: 'Atap ruang kelas SD di {d} bocor, murid dipindah.', en: 'The roof of a primary-school classroom in {d} is leaking, pupils were moved.' },
-  ],
-  adminduk: [
-    { id: 'KTP-el saya rusak, bagaimana cara ganti? Saya di {d}.', en: 'My e-ID card is damaged, how do I replace it? I live in {d}.' },
-    { id: 'Akta kelahiran anak belum jadi sejak sebulan lalu.', en: "My child's birth certificate is still not issued after a month." },
-  ],
-  bansos: [
-    { id: 'Saya terdaftar penerima bansos tapi bantuan belum cair. Warga {d}.', en: 'I am registered for social aid but have not received it. Resident of {d}.' },
-  ],
-  lainnya: [
-    { id: 'Ada anjing liar berkeliaran di sekitar {d}.', en: 'Stray dogs are roaming around {d}.' },
-  ],
-}
-
-export const COMPLAINT_WEIGHTS: [ComplaintCategory, number][] = [
-  ['jalan-rusak', 22], ['banjir', 12], ['sampah', 12], ['pju', 10], ['air-bersih', 10], ['adminduk', 10], ['bansos', 8], ['pohon-tumbang', 5], ['kesehatan', 4], ['sekolah', 3], ['pungli', 2], ['lainnya', 2],
-]
-
 /** keyword guesses to map a complaint category to an OPD of the pack (short or name) */
 export const CATEGORY_OPD_HINTS: Record<ComplaintCategory, string[]> = {
   banjir: ['pupr', 'pekerjaan umum', 'bpbd'],
@@ -292,35 +166,6 @@ export const CATEGORY_OPD_HINTS: Record<ComplaintCategory, string[]> = {
   bansos: ['dinsos', 'sosial'],
   lainnya: ['satpol', 'kominfo', 'sekretariat'],
 }
-export const CATEGORY_SLA_DAYS: Record<ComplaintCategory, number> = {
-  banjir: 1, 'jalan-rusak': 7, sampah: 2, pju: 3, 'air-bersih': 2, 'pohon-tumbang': 1, pungli: 5, kesehatan: 3, sekolah: 7, adminduk: 3, bansos: 5, lainnya: 5,
-}
-export const CATEGORY_LABEL: Record<ComplaintCategory, Bi> = {
-  banjir: { id: 'Banjir/Genangan', en: 'Flood/Waterlogging' }, 'jalan-rusak': { id: 'Jalan rusak', en: 'Damaged road' }, sampah: { id: 'Sampah', en: 'Waste' },
-  pju: { id: 'PJU mati', en: 'Street light out' }, 'air-bersih': { id: 'Air bersih', en: 'Clean water' }, 'pohon-tumbang': { id: 'Pohon tumbang', en: 'Fallen tree' },
-  pungli: { id: 'Pungli', en: 'Illegal levy' }, kesehatan: { id: 'Kesehatan', en: 'Health' }, sekolah: { id: 'Sekolah', en: 'School' },
-  adminduk: { id: 'Adminduk', en: 'Civil registry' }, bansos: { id: 'Bansos', en: 'Social aid' }, lainnya: { id: 'Lainnya', en: 'Other' },
-}
-
-/** news / social mention templates ({k} = kecamatan, {r} = region short name) */
-export const MENTION_TEXT: { topic: string; s: number; t: Bi }[] = [
-  { topic: 'layanan', s: 0.6, t: { id: 'Urus KTP-el di MPP {r} sekarang cepat, 30 menit selesai.', en: 'Getting an e-ID at the {r} public service mall is now fast, done in 30 minutes.' } },
-  { topic: 'layanan', s: -0.5, t: { id: 'Antrean layanan di Kec. {k} masih mengular sejak pagi.', en: 'Service queues in {k} district have been long since morning.' } },
-  { topic: 'jalan', s: -0.7, t: { id: 'Warga Kec. {k} keluhkan jalan rusak yang tak kunjung diperbaiki.', en: 'Residents of {k} complain about a road that never gets fixed.' } },
-  { topic: 'jalan', s: 0.4, t: { id: 'Perbaikan jalan poros Kec. {k} mulai dikerjakan pekan ini.', en: 'Repairs to the main road in {k} start this week.' } },
-  { topic: 'banjir', s: -0.6, t: { id: 'Hujan semalam bikin was-was warga bantaran sungai di Kec. {k}.', en: 'Overnight rain worries riverbank residents in {k}.' } },
-  { topic: 'banjir', s: 0.3, t: { id: 'BPBD {r} siagakan pompa dan perahu di titik rawan.', en: '{r} disaster agency puts pumps and boats on standby at vulnerable spots.' } },
-  { topic: 'harga', s: -0.5, t: { id: 'Harga cabai di pasar Kec. {k} mulai merangkak naik.', en: 'Chilli prices at the {k} market are starting to creep up.' } },
-  { topic: 'harga', s: 0.2, t: { id: 'Stok beras di pasar {r} dipastikan aman jelang akhir tahun.', en: 'Rice stocks in {r} markets are confirmed safe ahead of year-end.' } },
-  { topic: 'umkm', s: 0.7, t: { id: 'UMKM {r} ramai pesanan dari pameran produk lokal.', en: '{r} small businesses busy with orders from a local product fair.' } },
-  { topic: 'umkm', s: 0.4, t: { id: 'Pelatihan pembukuan digital untuk pelaku usaha Kec. {k}.', en: 'Digital bookkeeping training for business owners in {k}.' } },
-  { topic: 'sampah', s: -0.4, t: { id: 'Tumpukan sampah di pinggir jalan Kec. {k} dikeluhkan pengendara.', en: 'Rubbish piles along the road in {k} annoy commuters.' } },
-  { topic: 'kesehatan', s: 0.3, t: { id: 'Puskesmas Kec. {k} buka layanan sore untuk pekerja.', en: 'The {k} health centre opens an evening service for workers.' } },
-  { topic: 'pendidikan', s: 0.5, t: { id: 'Sekolah di Kec. {k} raih juara lomba sains tingkat provinsi.', en: 'A school in {k} wins a provincial science contest.' } },
-  { topic: 'bansos', s: -0.3, t: { id: 'Sebagian warga Kec. {k} tanyakan jadwal pencairan bansos.', en: 'Some residents of {k} ask about the social-aid payment schedule.' } },
-  { topic: 'layanan', s: 0.0, t: { id: 'Pemkab {r} umumkan jadwal layanan keliling bulan ini.', en: '{r} government announces this month\'s mobile service schedule.' } },
-]
-
 export const LETTER_TPL: { kind: 'undangan' | 'permohonan' | 'laporan' | 'edaran'; from: string; s: Bi }[] = [
   { kind: 'undangan', from: 'Sekretariat Daerah Provinsi', s: { id: 'Undangan rapat koordinasi kesiapsiagaan musim hujan', en: 'Invitation: rainy-season preparedness coordination meeting' } },
   { kind: 'permohonan', from: 'Pemerintah Desa', s: { id: 'Permohonan bantuan perbaikan tanggul desa', en: 'Request for help repairing the village embankment' } },
@@ -373,18 +218,6 @@ export const PROCUREMENT_TPL: { n: Bi; hint: string[]; base: number; items: [str
   { n: { id: 'Penyediaan Makan Minum Rapat', en: 'Meeting Catering' }, hint: ['sekretariat'], base: 185_000_000, items: [['Nasi kotak', 'Boxed meal', 6000, 'kotak']] },
   { n: { id: 'Pengadaan Tempat Sampah Terpilah', en: 'Sorted Waste Bins' }, hint: ['dlh', 'lingkungan hidup'], base: 320_000_000, items: [['Tempat sampah 3 warna', '3-colour waste bin', 500, 'set']] },
 ]
-
-/** the emergency pump package created by the flood.alert reaction (Awas Belanja analyses it later) */
-export const PUMP_PACKAGE = {
-  key: 'pompa-darurat',
-  name: { id: 'Pengadaan Pompa Air Darurat', en: 'Emergency Water Pump Procurement' },
-  items: [
-    { name: { id: 'Pompa air portabel 6 inci (diesel)', en: '6-inch portable water pump (diesel)' }, qty: 12, unit: 'unit', hpsPrice: 48_500_000, marketPrice: 31_800_000 },
-    { name: { id: 'Selang hisap & buang 6 inci', en: '6-inch suction & discharge hose' }, qty: 24, unit: 'rol', hpsPrice: 6_900_000, marketPrice: 4_650_000 },
-    { name: { id: 'Genset 10 kVA', en: '10 kVA generator' }, qty: 4, unit: 'unit', hpsPrice: 62_000_000, marketPrice: 47_500_000 },
-    { name: { id: 'Bahan bakar solar (7 hari)', en: 'Diesel fuel (7 days)' }, qty: 3000, unit: 'liter', hpsPrice: 13_900, marketPrice: 12_900 },
-  ],
-}
 
 export const TENDER_TPL: { t: Bi; kbli: string; base: number }[] = [
   { t: { id: 'Pengadaan Material Rehabilitasi Rumah Tidak Layak Huni', en: 'Materials for Substandard-Housing Rehabilitation' }, kbli: '46634', base: 680_000_000 },

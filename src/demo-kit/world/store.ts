@@ -3,12 +3,14 @@
  * React hook with memoised selector slices.
  *
  *   emit(type, payload, source) → queued → microtask: reducer → auditLog row → reactions … → ONE notify
+ * The pipeline (engine.ts: reducers, reactions, audit texts) is loaded on the first emit (or preloadWorldEngine()),
+ * so viewing a world never downloads it; the first batch is processed as soon as it arrives.
  */
 import { useCallback, useRef, useSyncExternalStore } from 'react'
 import type { RegionPack } from '../region/types'
 import type { EventMap, EventSource, EventType, TableKey, WorldEvent, WorldState } from './types'
-import { createEvent, processEvents } from './engine'
-import { generateWorld } from './seed'
+import type { ProductSlug } from '../../content/products'
+import { createEvent } from './events'
 import { clock } from './clock'
 import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, type Persisted } from './persist'
 import { TABLE_KEYS, WORLD, emptyTable } from './util'
@@ -45,6 +47,57 @@ const statusSubs = new Set<() => void>()
 type Listener = (e: WorldEvent) => void
 const listeners = new Map<EventType | '*', Set<Listener>>()
 
+/* The event pipeline: loaded on the first emit; events queue up meanwhile and are processed in order. */
+let pipeline: typeof import('./engine') | null = null
+let pipelineLoad: Promise<void> | null = null
+function loadPipeline(): Promise<void> {
+  pipelineLoad ??= import('./engine').then(
+    (m) => {
+      pipeline = m
+    },
+    (e: unknown) => {
+      pipelineLoad = null
+      throw e
+    },
+  )
+  return pipelineLoad
+}
+/** Start downloading the event pipeline without awaiting (e.g. when the user is about to act). */
+export function preloadWorldEngine(): void {
+  loadPipeline().catch(() => {})
+}
+function scheduleFlush() {
+  if (scheduled) return
+  scheduled = true
+  if (pipeline) queueMicrotask(flush)
+  else
+    loadPipeline().then(
+      () => queueMicrotask(flush),
+      (err: unknown) => {
+        // keep the queue; the next emit retries the download
+        scheduled = false
+        console.error('[world] event pipeline failed to load', err)
+      },
+    )
+}
+
+/* The generator (seed.ts + catalog + name lists + NIK rules, the heaviest part of the world) is loaded only when a
+   world has to be GENERATED or reset. A page that never loads a world never fetches it. DemoShell preloads it at
+   boot (before it knows whether IndexedDB holds a saved world) so a first visit does not wait twice and Reset works
+   offline afterwards; the cost is counted in the map-demo floor budget. */
+let seedModule: Promise<typeof import('./seed')> | null = null
+function loadGenerator(): Promise<typeof import('./seed')> {
+  seedModule ??= import('./seed').catch((e: unknown) => {
+    seedModule = null
+    throw e
+  })
+  return seedModule
+}
+/** Start downloading the world generator without awaiting (e.g. while the region pack is still loading). */
+export function preloadWorldGenerator(): void {
+  loadGenerator().catch(() => {})
+}
+
 function notify() {
   for (const fn of [...subs]) {
     try {
@@ -67,8 +120,8 @@ function flush() {
   scheduled = false
   const batch = queue
   queue = []
-  if (batch.length) {
-    const r = processEvents(current, seq, batch, (err, e) => console.error(`[world] ${e.type} failed`, err))
+  if (batch.length && pipeline) {
+    const r = pipeline.processEvents(current, seq, batch, (err, e) => console.error(`[world] ${e.type} failed`, err))
     if (r.dropped) console.warn(`[world] ${r.dropped} follow-up event(s) dropped (depth > ${WORLD.maxDepth})`)
     current = r.state
     notify()
@@ -109,18 +162,22 @@ export const world = {
 /**
  * Emit a world event. Ids missing from the payload (complaint id/code, ticket id, …) are assigned synchronously,
  * so the returned event already carries them; the state changes in the next microtask.
+ *
+ * `source` is REQUIRED (CONTRACTS.md): a product passes its own slug — the shell only announces cross-product
+ * effects whose root event came from the current product, and the audit log shows it as the actor. Background
+ * events use 'clock' (with `opts.origin` = the product whose domain they belong to), the tour uses 'tour'.
  */
-export function emit<K extends EventType>(type: K, payload: EventMap[K], source: EventSource = 'user', opts: { at?: number } = {}): WorldEvent<K> {
+export function emit<K extends EventType>(
+  type: K, payload: EventMap[K], source: EventSource, opts: { at?: number; origin?: ProductSlug } = {},
+): WorldEvent<K> {
   const e = createEvent(current, seq, type, payload, source, opts.at ?? clock.get().minutes)
+  if (opts.origin) e.origin = opts.origin
   queue.push(e as WorldEvent)
-  if (!scheduled) {
-    scheduled = true
-    queueMicrotask(flush)
-  }
+  scheduleFlush()
   return e
 }
 
-/** resolves after every queued event (and its reactions) has been processed */
+/** resolves after every queued event (and its reactions) has been processed (the first time: after the pipeline loaded) */
 export function settled(): Promise<void> {
   if (!queue.length && !scheduled) return Promise.resolve()
   return new Promise((r) => idleWaiters.push(r))
@@ -150,8 +207,10 @@ export async function loadWorld(p: RegionPack, seed: number): Promise<void> {
   setStatus('loading')
   const saved = await loadPersisted(p.id, seed)
   if (token !== loadToken) return
-  if (saved) install(saved.state, saved.clock)
-  else install(generateWorld(p, seed), WORLD.clockStart)
+  if (saved) return install(saved.state, saved.clock)
+  const { generateWorld } = await loadGenerator()
+  if (token !== loadToken) return
+  install(generateWorld(p, seed), WORLD.clockStart)
 }
 
 /** back to the seed: regenerate, forget the saved copy, clock to the default morning */
@@ -159,6 +218,7 @@ export async function resetWorld(): Promise<void> {
   if (!pack) return
   const p = pack
   const seed = current.seed
+  const { generateWorld } = await loadGenerator()
   cancelPersist()
   await clearPersisted(p.id, seed)
   loadToken++

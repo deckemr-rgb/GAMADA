@@ -121,3 +121,41 @@ Re-run: `node tools/perf.mjs http://127.0.0.1:4173/ 2 1440 900 1.25`. Probe one 
 ## Tahap 0 (ekosistem): rute /lab/_design
 
 Perubahan tahap 0 tidak menyentuh beranda: hanya satu rute lazy baru dan tiga chunk arah visual (20–27 KB gzip JS masing-masing). Uji A/B bergantian terhadap commit `aa30cac` pada CPU 2× menunjukkan tidak ada penurunan (detail: [perf/tahap0-ab.txt](perf/tahap0-ab.txt)). Catatan: layar kini berjalan di 144 Hz (Fase 2 diukur di 60 Hz), jadi bandingkan hanya A/B pada sesi yang sama, bukan dengan tabel Fase 2.
+
+## Tahap 1 (ekosistem): demo-kit, rute demo, i18n EN lazy — 2026-11-17
+
+A/B bergantian dalam satu sesi terhadap commit `aa30cac` (baseline tahap 0), working tree di atas `22f8e22`. Scroll beranda dengan `tools/perf.mjs` (CPU 1× dan 2×, 4 run per varian), muat `/?off=preloader` dengan skrip CDP (FCP, LCP, long task, TBT, JS yang di-fetch) pada profil Chrome dingin dan dengan cache shader GPU hangat. Detail dan angka mentah: [perf/tahap1-ab.txt](perf/tahap1-ab.txt).
+
+| metrik (median) | base | tahap 1 |
+|---|---|---|
+| JS awal gzip | 256.2 KB (3 berkas) | **253.6 KB** (8 berkas, modulepreload) |
+| scroll p95 CPU 1× (hero→tranq · konten) | 13.3 · 12.8 ms | 12.3 · 12.7 ms |
+| scroll p95 CPU 2× (hero→tranq · konten) | 37.2 · 25.6 ms | 35.1 · 24.3 ms |
+| frame >50 ms, total 4 run, CPU 1× / 2× | 47 / 98 | 46 / 110 (satu run 49; median per run 24 vs 21) |
+| LCP, cache shader hangat, CPU 1× / 2× | 1654 / 2672 ms | 1580 / 2646 ms |
+| TBT, cache shader hangat, CPU 1× / 2× | 474 / 1612 ms | 462 / 1658 ms |
+| LCP, profil dingin, CPU 1× / 2× | 5422 / 6754 ms | 5706 / 6662 ms |
+
+**Kesimpulan: beranda tidak memburuk.** Modul beranda praktis sama; chunk-nya hanya dipecah ulang (react-router, gsap, Lenis, kamus ID jadi chunk bersama karena rute lazy baru) dan kamus EN kini lazy. Satu sinyal dicatat: LCP profil dingin CPU 1× +224 ms (selisih berpasangan, 16/20 pasangan). Sinyal itu hilang di CPU 2×, dengan cache shader hangat, dan saat tracing. Trace menunjukkan muat dingin di kedua build didominasi kompilasi shader WebGL sinkron (`setShaders` ogl, sekitar 3 s, lalu callback resize kanvas WebGL yang menunggu GPU). Jadi selisih itu dibaca sebagai variasi waktu GPU, bukan kode beranda.
+
+Temuan lama, bukan regresi: pada profil tanpa cache shader, kompilasi shader sinkron itu memblok main thread 3–4 s sebelum first paint (FCP sekitar 5 s di lab ini, sekitar 1.5 s dengan cache hangat).
+
+### Polish: `codeSplitting` grup `vendor` + `motion` — A/B ulang 2026-11-17
+
+`vite.config.ts` kini mengelompokkan chunk inti beranda: `vendor` (react, react-dom, scheduler, react-router, preload-helper) dan `motion` (gsap kecuali Draggable/InertiaPlugin, Lenis, `src/lib/motion|perf|smoothScroll`). Metode, skrip, dan flag sama persis dengan A/B di atas (worktree baru dari `aa30cac`, port 4181/4182, satu sesi bergantian: muat dingin 20 + 10 pasang, hangat 8 + 8 pasang, scroll 4 run per varian per CPU). Detail, pita noise, daftar modul, dan angka mentah: blok "polish / codeSplitting" di [perf/tahap1-ab.txt](perf/tahap1-ab.txt).
+
+| metrik (median) | base `aa30cac` | polish (codeSplitting) | selisih berpasangan · pita noise |
+|---|---|---|---|
+| JS di-fetch saat muat, gzip | 256.2 KB (3 berkas) | **252.8 KB** (7 berkas) | −3.4 KB |
+| jalur kritis (entry + modulepreload), gzip | 222.2 KB | 220.9 KB | −1.3 KB (tahap 1 sebelum polish: 219.3 KB) |
+| LCP dingin CPU 1× / 2× | 5584 / 6498 ms | 5678 / 6564 ms | +100 (12/20) / +24 (5/10) · IQR base ±136 / ±108 |
+| LCP hangat CPU 1× / 2× | 1702 / 2716 ms | 1678 / 2710 ms | −60 / −26 · IQR base ±37 / ±53 |
+| TBT dingin CPU 1× / 2× | 1223 / 2480 ms | 1238 / 2517 ms | +5 / +68 · boot90 −45..+39 / −165..+430 |
+| TBT hangat CPU 1× / 2× | 525 / 1762 ms | 527 / 1674 ms | +9 / **−95** (7/8 lebih baik) |
+| scroll p95 CPU 1× (hero→tranq · tranq→bio · konten) | 12.8 · 13.3 · 13.4 ms | 12.7 · 14.0 · 13.1 ms | ±1 ms antar-run |
+| scroll p95 CPU 2× (hero→tranq · tranq→bio · konten) | 30.6 · 27.3 · 23.9 ms | 31.9 · 28.0 · 23.1 ms | ±1–2 ms antar-run |
+| frame >50 ms, total 4 run, CPU 1× / 2× | 46 / 57 | 45 / 58 | per run 9–13 / 12–17 di kedua varian |
+
+**Kesimpulan: beranda tidak memburuk.** Tidak ada metrik yang interval bootstrap-90%-nya seluruhnya di sisi "lebih buruk". LCP dingin CPU 1× +100 ms (intervalnya memuat 0) adalah pola GPU yang sama dengan A/B tahap 1 (+224 ms saat itu), tidak membesar di CPU 2× dan hilang dengan cache shader hangat. Condongnya p95 dua skenario adegan (+0.7 / +1.3 ms) tidak signifikan (n=4, p≈0.34), frame >50 ms identik, dan chunking tidak mengubah kode yang dieksekusi saat scroll.
+
+Isi chunk `motion`: gsap-core, CSSPlugin, ScrollTrigger, Observer, SplitText, CustomEase, `utils/paths`, Lenis, `motion.ts`, `perf.ts`, `smoothScroll.ts`, `store.ts` (semuanya sudah ada di jalur kritis base). Flip, MotionPathPlugin, dan plugin lain tidak ikut. Pengecualian: `gsap/utils/matrix` dan `gsap/utils/VelocityTracker` (sekitar 6.8 KB raw, 2–3 KB gzip) hanya dipakai Draggable/InertiaPlugin (Testimonials, lazy). Keduanya ikut tertarik ke `motion` karena regex grup hanya mengecualikan `Draggable|InertiaPlugin`, tidak `utils/*`. Efeknya tidak terlihat di metrik, tetapi bisa dikembalikan ke HomeSections dengan pengecualian `utils[\\/](matrix|VelocityTracker)`.

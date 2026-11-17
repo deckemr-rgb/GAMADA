@@ -39,7 +39,7 @@ footer[id],
   bottom: -40px;
   background: linear-gradient(180deg, rgba(18, 14, 44, 0.72) 0%, rgba(18, 14, 44, 0.45) 55%, rgba(18, 14, 44, 0) 100%);
 }
-/* after a few px of scroll: solid semi-opaque bar + shadow (no backdrop-filter) */
+/* after a few px of scroll: opaque bar + shadow (no backdrop-filter) */
 .gnav-solid {
   background: var(--c-bar);
   border-bottom: 1px solid var(--c-line);
@@ -232,6 +232,46 @@ footer[id],
 }
 .lang-toggle-btn:not([aria-pressed='true']):hover {
   color: var(--c-white);
+}
+/* link arrows (components/ui/Arrow): margin, not a text space, so flex links keep the gap */
+.ln-arrow {
+  display: inline-block;
+  flex: none;
+}
+.ln-arrow--next {
+  margin-inline-start: 0.4em;
+}
+.ln-arrow--back {
+  margin-inline-end: 0.4em;
+}
+.ln-arrow--mid {
+  margin-inline: 0.35em;
+}
+/* status for a language that could not load: hidden while empty, a small note under the toggle when set */
+.lang-toggle {
+  position: relative;
+}
+.lang-toggle-status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.lang-toggle-status:not(:empty) {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-ink);
+  font: 600 0.8rem/1.4 var(--font-body);
+  box-shadow: var(--shadow-1);
 }
 
 /* primary CTA (peach → gold). The gold is a ::before layer faded by opacity (no colour transition). */
@@ -610,6 +650,16 @@ footer[id],
     opacity 0.3s ease,
     visibility 0s;
 }
+/* the footer content is on screen: step aside (it has its own WhatsApp link) */
+.wa-float[data-away='true'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px);
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease,
+    visibility 0s linear 0.3s;
+}
 @media (max-width: 768px) {
   html[data-stage='in'] .wa-float {
     opacity: 0;
@@ -619,6 +669,19 @@ footer[id],
       transform 0.3s ease,
       opacity 0.3s ease,
       visibility 0s linear 0.3s;
+  }
+}
+/* phones: a smaller button tucked closer to the corner covers less of the text column while scrolling */
+@media (max-width: 560px) {
+  .wa-float {
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
+  }
+  .wa-float-icon {
+    width: 26px;
+    height: 26px;
   }
 }
 /* short landscape: the sound toggle sits bottom right → lift the WhatsApp button above it */
@@ -791,7 +854,7 @@ footer[id],
 .page-hero {
   position: relative;
   overflow: hidden;
-  padding: calc(var(--nav-h) + clamp(56px, 9vw, 120px)) var(--gutter) clamp(56px, 8vw, 104px);
+  padding: calc(var(--nav-h) + clamp(56px, 9vw, 120px)) var(--gutter) clamp(32px, 4vw, 56px);
   background: var(--c-ink);
 }
 .page-hero-sky {
@@ -833,10 +896,14 @@ footer[id],
   font-size: clamp(1rem, 1.4vw, 1.15rem);
   line-height: 1.65;
 }
+/* the page's primary CTAs sit with the lead (not stranded below the hero's bottom padding) */
+.page-hero-actions {
+  margin-top: clamp(24px, 3vw, 36px);
+}
 .page-body {
   width: min(var(--content-w), calc(100% - 2 * var(--gutter)));
   margin: 0 auto;
-  padding: clamp(40px, 6vw, 80px) 0 var(--space-section);
+  padding: clamp(16px, 2vw, 32px) 0 var(--space-section);
 }
 .page-building {
   margin: 0 0 32px;

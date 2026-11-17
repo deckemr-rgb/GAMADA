@@ -2,7 +2,7 @@
  * docs/noise.ts — one static scan-grain tile, generated once on a canvas (seeded) and reused as a CSS background.
  * No SVG filters, nothing animated.
  */
-import { mulberry32 } from '../world/rng'
+import { mulberry32 } from '../world/prng'
 
 const SIZE = 128
 let cached: string | null = null

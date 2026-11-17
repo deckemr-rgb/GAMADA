@@ -4,13 +4,19 @@
  * ke produk". The guide "?" and the command palette sit with the action buttons.
  *   lg ≥ 1280: everything · md 768–1279: role + clock in the bar, the rest in "⋯" · sm < 768: name + "⋯".
  * MoreSheet is the "⋯" drawer (inline controls: popovers cannot open inside a modal drawer).
+ * `interim` (a tahap-1 placeholder canvas): the role, clock, AI and reset controls are not shown, because nothing
+ * on that canvas reacts to them (spec §8.5: no control without an effect).
+ * Fit: the bar measures itself (fitBar) and steps through data-tight 1..3 (badge → dot, region → icon, shorter
+ * role label) until the middle group and the product name fit; it never overlaps the end group.
  */
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { ECOSYSTEMS, type EcoOrInti, type ProductDef } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { Button, Drawer, IconButton } from '../ui'
 import { useDemoStrings } from '../i18n'
 import { AiModeToggle, BackToProduct, ClockControl, FullscreenButton, LangToggle, ModeBadge, RegionSwitcher, ResetButton, RoleSwitcher, type HealthState } from './controls'
 import type { ShellSize } from './hooks'
+import { preloadPalette } from './lazy'
 
 export const ecoShortName = (eco: EcoOrInti): string => ECOSYSTEMS[eco].name.replace(/^GAMADA\s+/, '')
 
@@ -50,10 +56,44 @@ export function Breadcrumb({ product, size }: { product: ProductDef; size: Shell
   )
 }
 
+/** Tightening steps, applied in order until nothing overflows (CSS in shell.css: `.dk-topbar[data-tight]`). */
+const TIGHT_MAX = 3
+
+function overflowing(bar: HTMLElement): boolean {
+  const mid = bar.querySelector<HTMLElement>('.dk-topbar-mid')
+  const name = bar.querySelector<HTMLElement>('.dk-crumbs-name')
+  return bar.scrollWidth > bar.clientWidth + 1 || (!!mid && mid.scrollWidth > mid.clientWidth + 1) || (!!name && name.scrollWidth > name.clientWidth + 1)
+}
+
+/** Start loose, then tighten one step at a time while the bar overflows (a few sync layouts, only on resize). */
+function fitBar(bar: HTMLElement): void {
+  bar.removeAttribute('data-tight')
+  for (let level = 1; level <= TIGHT_MAX && overflowing(bar); level++) bar.setAttribute('data-tight', String(level))
+}
+
+function useFitBar(ref: RefObject<HTMLElement | null>, deps: readonly unknown[]): void {
+  useLayoutEffect(() => {
+    const bar = ref.current
+    if (!bar) return
+    fitBar(bar)
+    if (typeof ResizeObserver === 'undefined') return
+    // the bar's width (viewport) and the size of every control (role / language / fonts change their labels)
+    const ro = new ResizeObserver(() => fitBar(bar))
+    ro.observe(bar)
+    bar.querySelectorAll('.dk-crumbs ol, .dk-topbar-mid > *, .dk-topbar-end').forEach((el) => ro.observe(el))
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+}
+
 export interface TopBarProps {
   product: ProductDef
   size: ShellSize
   health: HealthState
+  /** tahap-1 placeholder canvas: hide the controls nothing on the canvas reacts to (role, clock, AI, reset) */
+  interim?: boolean
+  /** a tap / click on the disabled "Live" pill: explain why (toast) */
+  onLiveUnavailable?: () => void
   rewinding: boolean
   onReset: () => void
   fullscreen: { supported: boolean; active: boolean; toggle: () => void }
@@ -62,9 +102,11 @@ export interface TopBarProps {
   onOpenMore: () => void
 }
 
-export function TopBar({ product, size, health, rewinding, onReset, fullscreen, guide, onOpenPalette, onOpenMore }: TopBarProps) {
+export function TopBar({ product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette, onOpenMore }: TopBarProps) {
   const t = useDemoStrings()
   const lg = size === 'lg' || size === 'xl'
+  const bar = useRef<HTMLElement>(null)
+  useFitBar(bar, [size, interim, product.slug])
   const guideBtn = guide.available && (
     <IconButton
       icon="help"
@@ -76,7 +118,7 @@ export function TopBar({ product, size, health, rewinding, onReset, fullscreen, 
     />
   )
   return (
-    <header className={`dk-topbar is-${size}`} aria-label={t.topBar}>
+    <header ref={bar} className={`dk-topbar is-${size}`} aria-label={t.topBar}>
       {size !== 'sm' && (
         <AppLink to="/" className="dk-topbar-logo" aria-label="GAMADA">
           <Mark />
@@ -85,19 +127,28 @@ export function TopBar({ product, size, health, rewinding, onReset, fullscreen, 
       <Breadcrumb product={product} size={size} />
       <div className="dk-topbar-mid">
         {lg && <RegionSwitcher />}
-        {size !== 'sm' && <RoleSwitcher product={product.slug} />}
-        {size !== 'sm' && <ClockControl rewinding={rewinding} />}
-        {lg && <AiModeToggle health={health} />}
+        {size !== 'sm' && !interim && <RoleSwitcher product={product.slug} />}
+        {size !== 'sm' && !interim && <ClockControl rewinding={rewinding} />}
+        {lg && !interim && <AiModeToggle health={health} onUnavailable={onLiveUnavailable} />}
         {lg && <ModeBadge />}
       </div>
       <div className="dk-topbar-end">
         {lg && <LangToggle />}
-        {lg && <IconButton icon="search" label={`${t.palette} (${t.kbdOpen})`} aria-keyshortcuts="Control+K Meta+K" onClick={onOpenPalette} />}
+        {lg && (
+          <IconButton
+            icon="search"
+            label={`${t.palette} (${t.kbdOpen})`}
+            aria-keyshortcuts="Control+K Meta+K"
+            onClick={onOpenPalette}
+            onPointerEnter={preloadPalette}
+            onFocus={preloadPalette}
+          />
+        )}
         {size !== 'sm' && guideBtn}
-        {lg && <ResetButton onRequest={onReset} />}
+        {lg && !interim && <ResetButton onRequest={onReset} />}
         {lg && fullscreen.supported && <FullscreenButton active={fullscreen.active} onToggle={fullscreen.toggle} />}
         {lg && <BackToProduct product={product.slug} compact={size !== 'xl'} />}
-        {!lg && <IconButton icon="more" label={t.more} onClick={onOpenMore} />}
+        {!lg && <IconButton icon="more" label={t.more} onClick={onOpenMore} data-dk-more="" />}
       </div>
     </header>
   )
@@ -109,7 +160,7 @@ export interface MoreSheetProps extends Omit<TopBarProps, 'onOpenMore'> {
 }
 
 /** The "⋯" sheet: on sm everything, on md only what the bar does not show. */
-export function MoreSheet({ open, onClose, product, size, health, rewinding, onReset, fullscreen, guide, onOpenPalette }: MoreSheetProps) {
+export function MoreSheet({ open, onClose, product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette }: MoreSheetProps) {
   const t = useDemoStrings()
   const sm = size === 'sm'
   const then = (fn: () => void) => () => {
@@ -124,23 +175,25 @@ export function MoreSheet({ open, onClose, product, size, health, rewinding, onR
           <h3 className="dk-more-h">{t.region}</h3>
           <RegionSwitcher inline />
         </section>
-        {sm && (
+        {sm && !interim && (
           <section className="dk-more-sec">
             <h3 className="dk-more-h">{t.role}</h3>
             <RoleSwitcher product={product.slug} inline />
           </section>
         )}
-        {sm && (
+        {sm && !interim && (
           <section className="dk-more-sec">
             <h3 className="dk-more-h">{t.clock}</h3>
             <ClockControl inline rewinding={rewinding} />
           </section>
         )}
         <section className="dk-more-sec dk-more-row">
-          <div>
-            <h3 className="dk-more-h">{t.aiMode}</h3>
-            <AiModeToggle health={health} />
-          </div>
+          {!interim && (
+            <div className="dk-more-ai">
+              <h3 className="dk-more-h">{t.aiMode}</h3>
+              <AiModeToggle health={health} inline onUnavailable={onLiveUnavailable} />
+            </div>
+          )}
           <div>
             <h3 className="dk-more-h">{t.language}</h3>
             <LangToggle />
@@ -158,9 +211,11 @@ export function MoreSheet({ open, onClose, product, size, health, rewinding, onR
           <Button icon="search" variant="secondary" onClick={then(onOpenPalette)}>
             {t.paletteTitle}
           </Button>
-          <Button icon="reset" variant="secondary" onClick={then(onReset)}>
-            {t.reset}
-          </Button>
+          {!interim && (
+            <Button icon="reset" variant="secondary" onClick={then(onReset)}>
+              {t.reset}
+            </Button>
+          )}
           {fullscreen.supported && (
             <Button icon="fullscreen" variant="secondary" aria-pressed={fullscreen.active} onClick={then(fullscreen.toggle)}>
               {fullscreen.active ? t.exitFullscreen : t.fullscreen}

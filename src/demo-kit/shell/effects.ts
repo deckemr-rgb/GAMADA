@@ -9,7 +9,7 @@
  */
 import { PRODUCT_BY_SLUG, isProductSlug, type Bi, type ProductSlug } from '../../content/products'
 import type { AuditEntry, EventType, WorldEvent, WorldState } from '../world'
-import { DEMO_STRINGS } from '../i18n'
+import { DEMO_ID, demoStringsIfLoaded, type DemoDict } from '../i18n'
 import { SHELL } from './constants'
 
 /** Follow-ups whose `source` is the producer but whose consumer is another product. */
@@ -29,10 +29,14 @@ export interface CrossEffect {
   focus: string | null
 }
 
+/** The toast is shown in the language current at push time, and EN is in memory whenever the site is in EN
+ *  (demo-kit/i18n); an Indonesian session that never loaded EN gets ID text in both slots, which it never shows. */
+const dict = (lang: 'id' | 'en'): DemoDict => demoStringsIfLoaded(lang) ?? DEMO_ID
+
 type Recent = Pick<WorldEvent, 'id' | 'type' | 'source' | 'causeId' | 'depth' | 'payload'>
 
 function rootLabel(e: Recent, lang: 'id' | 'en', summary: string | null): string {
-  const L = DEMO_STRINGS[lang].rootLabel
+  const L = dict(lang).rootLabel
   const p = e.payload as Record<string, unknown>
   switch (e.type) {
     case 'complaint.created':
@@ -64,7 +68,7 @@ function rootLabel(e: Recent, lang: 'id' | 'en', summary: string | null): string
         ? summary.length > 48
           ? `${summary.slice(0, 47)}…`
           : summary
-        : DEMO_STRINGS[lang].eventFrom(isProductSlug(e.source) ? PRODUCT_BY_SLUG[e.source].name : e.source)
+        : dict(lang).eventFrom(isProductSlug(e.source) ? PRODUCT_BY_SLUG[e.source].name : e.source)
   }
 }
 
@@ -134,12 +138,12 @@ export function createEffectTracker(product: ProductSlug) {
         rootId: root.id,
         target,
         title: {
-          id: DEMO_STRINGS.id.forwardedTo(rootLabel(root, 'id', rootRow?.summary.id ?? null), name),
-          en: DEMO_STRINGS.en.forwardedTo(rootLabel(root, 'en', rootRow?.summary.en ?? null), name),
+          id: dict('id').forwardedTo(rootLabel(root, 'id', rootRow?.summary.id ?? null), name),
+          en: dict('en').forwardedTo(rootLabel(root, 'en', rootRow?.summary.en ?? null), name),
         },
         body: row?.summary ?? {
-          id: DEMO_STRINGS.id.openIn(name),
-          en: DEMO_STRINGS.en.openIn(name),
+          id: dict('id').openIn(name),
+          en: dict('en').openIn(name),
         },
         focus: refId(row?.entityRefs[0]),
       }

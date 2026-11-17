@@ -1,60 +1,20 @@
 /**
  * world/engine.ts — the pure event pipeline used by the store (and the self-tests):
- *   prepare (assign ids) → reducer → auditLog row → reactions (follow-ups, depth-limited, BFS) → next event.
+ *   prepare (assign ids, events.ts) → reducer → auditLog row → reactions (follow-ups, depth-limited, BFS) → next event.
+ * The store loads this module (with reducers, reactions and audit texts) on the FIRST emitted event, so a page that
+ * only shows a world never downloads it.
  * Deterministic: same state + same events ⇒ same result. The only mutable thing is the `seq` counter bag,
  * which the caller owns and which is written back into `state.meta.seq` at the end of each batch.
  */
-import type { AnyWorldEvent, EventMap, EventSource, EventType, Minutes, TableKey, WorldEvent, WorldState } from './types'
+import type { AnyWorldEvent, EventType, WorldEvent, WorldState } from './types'
 import { REDUCERS, type Reducer } from './reducers'
 import { REACTIONS } from './reactions'
 import { describe } from './audit'
-import { nextEventId, nextId, type Seq } from './ids'
+import { createEvent } from './events'
+import { nextId, type Seq } from './ids'
 import { WORLD, beginBatch, endBatch, upsert } from './util'
 
-/** payload fields that receive a generated id when missing: [field, table, alsoCode] */
-const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
-  'complaint.created': [['id', 'complaints', true], ['ticketId', 'tickets']],
-  'complaint.clustered': [['clusterId', 'clusters']],
-  'service.booked': [['id', 'bookings', true]],
-  'briefing.generated': [['id', 'briefings']],
-  'instruction.issued': [['id', 'instructions']],
-  'actionItem.created': [['id', 'actionItems']],
-  'letter.dispositioned': [['letterId', 'letters']],
-  'hoax.detected': [['id', 'hoaxAlerts']],
-  'mention.created': [['id', 'mentions']],
-  'flood.alert': [['id', 'alerts']],
-  'eligibility.opened': [['id', 'programs']],
-  'procurement.created': [['id', 'procurements', true]],
-  'sale.created': [['id', 'sales', true]],
-  'po.sent': [['id', 'purchaseOrders', true]],
-  'ledger.posted': [['id', 'ledger']],
-  'coaching.assigned': [['id', 'coachings']],
-  'bid.submitted': [['id', 'bids']],
-  'need.created': [['id', 'catalogNeeds', true]],
-  'match.made': [['id', 'matches']],
-  'order.created': [['id', 'orders', true]],
-  'loan.applied': [['id', 'loanApps']],
-  'market.operation': [['id', 'marketOps']],
-}
-
-/** fill generated ids into a (copied) payload */
-export function prepare<K extends EventType>(s: WorldState, seq: Seq, type: K, payload: EventMap[K]): EventMap[K] {
-  const fields = ID_FIELDS[type]
-  if (!fields) return payload
-  const p = { ...(payload as Record<string, unknown>) }
-  const year = s.day.slice(0, 4)
-  for (const [field, table, code] of fields) {
-    if (p[field] === undefined || p[field] === null || p[field] === '') p[field] = nextId(seq, table, year)
-    if (code && (p.code === undefined || p.code === null || p.code === '')) p.code = p[field]
-  }
-  return p as EventMap[K]
-}
-
-export function createEvent<K extends EventType>(
-  s: WorldState, seq: Seq, type: K, payload: EventMap[K], source: EventSource, at: Minutes, depth = 0, causeId: string | null = null,
-): WorldEvent<K> {
-  return { id: nextEventId(seq), type, at: Math.round(at), source, payload: prepare(s, seq, type, payload), depth, causeId }
-}
+export { createEvent, prepare } from './events'
 
 export interface BatchResult {
   state: WorldState
@@ -86,7 +46,7 @@ export function processEvents(state: WorldState, seq: Seq, events: WorldEvent[],
           ...next,
           auditLog: upsert(next.auditLog, {
             id: nextId(seq, 'auditLog'), eventId: e.id, at: e.at, source: e.source, type: e.type, summary, entityRefs: refs.filter((r) => !r.endsWith(':')),
-            depth: e.depth ?? 0, causeId: e.causeId ?? null,
+            depth: e.depth ?? 0, causeId: e.causeId ?? null, ...(e.origin ? { origin: e.origin } : {}),
           }),
         }
       } catch (err) {

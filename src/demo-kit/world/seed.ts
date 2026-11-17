@@ -21,6 +21,7 @@ import {
 } from './catalog'
 import { makeNamer, makeRng, mulberry32, hashString, streamRng, groupWeights, personName, type Rng } from './rng'
 import { formatId, nextId, type Seq } from './ids'
+import { makeNik as makeSpecimenNik } from '../docs/nik'
 import { scoreOf, computeScore } from './score'
 import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, emptyTable, isoDay, monthOf, offsetKm, pad, round, roundCoord, tableFrom } from './util'
 
@@ -693,14 +694,15 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const verifications: Verification[] = businesses.filter((b) => b.verified).slice(0, 36).map((b) => ({
     id: '', subjectKind: 'business' as const, subjectId: b.id, kind: 'kyb' as const, result: 'lolos' as const, score: rv.int(78, 97), at: -rv.int(5, 300) * DAY_MIN + rv.int(8, 15) * 60, by: 'kenal-mitra' as const,
   })).sort((a, b) => a.at - b.at).map((v) => ({ ...v, id: nid('verifications') }))
-  const nikPrefix = (kecId: string) => {
-    const code = (pack.kecamatan.find((k) => k.id === kecId)?.code ?? '').replace(/\D/g, '')
-    return (code + '000000').slice(0, 6)
-  }
+  // One NIK rule for the whole demo (docs/nik.ts): Kemendagri kecamatan code + birth date (women +40) + serial ≥ 9001
+  // (specimen range, documents are SPESIMEN). Same rng draws as before: day, month, serial.
+  const packKec = new Map(pack.kecamatan.map((k) => [k.id, k]))
   const makeNik = (c: Citizen) => {
-    const dob = rv.int(1, 28) + (c.gender === 'P' ? 40 : 0)
-    // serials ≥ 9000 so specimen NIKs are unlikely to match real ones; documents are SPESIMEN
-    return `${nikPrefix(c.kecamatanId)}${pad(dob)}${pad(rv.int(1, 12))}${pad((Number(year) - c.age) % 100)}${rv.int(9001, 9999)}`
+    const day = rv.int(1, 28)
+    const month = rv.int(1, 12)
+    const serial = rv.int(9001, 9999)
+    const birth = `${String(Number(year) - c.age).padStart(4, '0')}-${pad(month)}-${pad(day)}`
+    return makeSpecimenNik(packKec.get(c.kecamatanId) ?? { id: c.kecamatanId }, birth, c.gender, serial)
   }
   const documents: DocumentRec[] = []
   const regPool = citizens.filter((c) => floodSet.has(c.kecamatanId))
@@ -845,10 +847,11 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   })
 
   /* ---------------------------------------------------------------- audit rows for this morning's activity */
+  // background activity before the session (like natural.ts): source 'clock', owning product in origin
   const auditDrafts: Omit<AuditEntry, 'id' | 'eventId'>[] = []
-  for (const c of complaints) if (c.at >= 0) auditDrafts.push({ at: c.at, source: 'sapa-warga', type: 'complaint.created', summary: { id: `Aduan ${c.code} (${CATEGORY_LABEL[c.category].id}) masuk dari ${c.channel.toUpperCase()}`, en: `Complaint ${c.code} (${CATEGORY_LABEL[c.category].en}) received via ${c.channel.toUpperCase()}` }, entityRefs: [`complaints:${c.id}`, `tickets:${c.ticketId}`], depth: 0, causeId: null })
-  for (const s of sales) if (s.at >= 0) auditDrafts.push({ at: s.at, source: 'toko-autopilot', type: 'sale.created', summary: { id: `Transaksi ${s.code} · Rp ${s.total.toLocaleString('id-ID')}`, en: `Sale ${s.code} · Rp ${s.total.toLocaleString('id-ID')}` }, entityRefs: [`sales:${s.id}`], depth: 0, causeId: null })
-  for (const m of mentions) if (m.at >= 0) auditDrafts.push({ at: m.at, source: 'radar-isu', type: 'mention.created', summary: { id: `Mention baru: ${m.outlet} (${m.sentiment})`, en: `New mention: ${m.outlet} (${m.sentiment})` }, entityRefs: [`mentions:${m.id}`], depth: 0, causeId: null })
+  for (const c of complaints) if (c.at >= 0) auditDrafts.push({ at: c.at, source: 'clock', origin: 'sapa-warga', type: 'complaint.created', summary: { id: `Aduan ${c.code} (${CATEGORY_LABEL[c.category].id}) masuk dari ${c.channel.toUpperCase()}`, en: `Complaint ${c.code} (${CATEGORY_LABEL[c.category].en}) received via ${c.channel.toUpperCase()}` }, entityRefs: [`complaints:${c.id}`, `tickets:${c.ticketId}`], depth: 0, causeId: null })
+  for (const s of sales) if (s.at >= 0) auditDrafts.push({ at: s.at, source: 'clock', origin: 'toko-autopilot', type: 'sale.created', summary: { id: `Transaksi ${s.code} · Rp ${s.total.toLocaleString('id-ID')}`, en: `Sale ${s.code} · Rp ${s.total.toLocaleString('id-ID')}` }, entityRefs: [`sales:${s.id}`], depth: 0, causeId: null })
+  for (const m of mentions) if (m.at >= 0) auditDrafts.push({ at: m.at, source: 'clock', origin: 'radar-isu', type: 'mention.created', summary: { id: `Mention baru: ${m.outlet} (${m.sentiment})`, en: `New mention: ${m.outlet} (${m.sentiment})` }, entityRefs: [`mentions:${m.id}`], depth: 0, causeId: null })
   auditDrafts.sort((a, b) => a.at - b.at)
   const auditLog: AuditEntry[] = auditDrafts.map((a) => {
     const n = (seq.event ?? 0) + 1

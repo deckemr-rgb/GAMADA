@@ -135,6 +135,16 @@ export interface MapViewHandle {
   setTime(hours: number): void
   /** the MapLibre map instance (escape hatch; typed loosely so callers need no MapLibre import) */
   raw(): unknown
+  /**
+   * Desa polygons are lazy (MapView loads geometry without desa.min.json and fetches it when the desa layer is
+   * switched on / zoomed in or the flood is scrubbed past +0 h). Resolves once the current region's desa are in.
+   */
+  loadDesa(): Promise<void>
+  /**
+   * Flood impact at `hours` from the same model the map paints (seed 1). null until desa are in — the call
+   * starts that download; await loadDesa() and call again (show a short loading state meanwhile).
+   */
+  floodImpact(hours: number): FloodImpact | null
 }
 
 export interface MapViewProps {

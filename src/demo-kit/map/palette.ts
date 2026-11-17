@@ -59,7 +59,7 @@ export const toneColor = (t: MapTone): string => TONE_BADGE[t][0]
 
 /** Label text colour on top of a fill: dark text on light fills, light text on dark fills (AA on both). */
 export function labelInk(fill: string | null): { color: string; halo: string } {
-  if (fill && luminance(fill) > 0.28) return { color: '#0f0c24', halo: 'rgba(255,255,255,0.35)' }
+  if (fill && luminance(fill) > 0.28) return { color: '#0f0c24', halo: 'rgba(236,255,250,0.6)' }
   return { color: '#f3f0ff', halo: 'rgba(16,13,38,0.85)' }
 }
 

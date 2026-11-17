@@ -14,6 +14,9 @@ export interface Mission {
   label: Bi
   /** optional one-line hint under the label */
   hint?: Bi
+  /** the hint on a phone-sized shell, where the bar's role / clock / AI controls sit in the "⋯" sheet (falls back
+   *  to `hint`). Write one whenever `hint` points at the top bar. */
+  hintSm?: Bi
   /** auto-tick rule; omit for UI-only steps that the product marks with markMission() */
   done?: (e: WorldEvent, s: WorldState) => boolean
 }

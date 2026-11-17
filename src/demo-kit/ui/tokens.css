@@ -276,3 +276,23 @@
     scroll-behavior: auto !important;
   }
 }
+/* the same net for the URL / runtime switches, not only the OS setting: ?motion=reduced (html[data-motion]),
+   ?off=demoAnimations / ?static=1 / perf degrade ≥ 3 (html[data-dk-calm], set by ui/motion.ts motionMode()),
+   and calm roots (.dk-root.is-calm from DemoShell, or any .dk-calm wrapper) */
+html[data-motion='reduced'] .dk-root *,
+html[data-motion='reduced'] .dk-root *::before,
+html[data-motion='reduced'] .dk-root *::after,
+html[data-dk-calm] .dk-root *,
+html[data-dk-calm] .dk-root *::before,
+html[data-dk-calm] .dk-root *::after,
+.dk-root.is-calm *,
+.dk-root.is-calm *::before,
+.dk-root.is-calm *::after,
+.dk-calm *,
+.dk-calm *::before,
+.dk-calm *::after {
+  transition-duration: 0.01s !important;
+  animation-duration: 0.01s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}

@@ -1,6 +1,6 @@
 /// <reference types="node" />
 /**
- * Parity: the site's structured-kind schemas (STRUCTURED_SCHEMAS in ai/live.ts, registered by default in provider.ts)
+ * Parity: the site's structured-kind schemas (STRUCTURED_SCHEMAS in ai/live.ts, the default validators of validateStructured in ai/live.ts)
  * must equal the proxy's tool schemas (server/ai-proxy/src/schemas.ts → TOOLS). Both are converted to JSON Schema
  * (input side), descriptions dropped and enums sorted, then compared kind by kind. Also: every proxy mock example
  * passes the site validator, followups + Extracted shapes agree.
@@ -10,8 +10,7 @@
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { z } from 'zod'
-import { ExtractedSchema, FOLLOWUPS_SCHEMA, STRUCTURED_KINDS, STRUCTURED_SCHEMAS } from '../live'
-import { validateStructured } from '../provider'
+import { ExtractedSchema, FOLLOWUPS_SCHEMA, STRUCTURED_KINDS, STRUCTURED_SCHEMAS, validateStructured } from '../live'
 
 function assert(c: unknown, msg: string): asserts c {
   if (!c) throw new Error(msg)
@@ -82,7 +81,7 @@ async function main() {
   assert(fu, 'followups shape drift')
   console.log('shapes: every kind + followups identical (JSON Schema, descriptions ignored) OK')
 
-  // 3. proxy mock examples pass the site validator (default registration in provider.ts); garbage does not
+  // 3. proxy mock examples pass the site validator (validateStructured in ai/live.ts); garbage does not
   for (const t of Object.values(server.TOOLS)) {
     if (t.kind === 'followups') continue
     const v = validateStructured({ kind: t.kind, data: mock.MOCK_STRUCTURED[t.name] })

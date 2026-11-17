@@ -43,7 +43,8 @@
   --c-surface-2: rgba(255, 255, 255, 0.07);
   --c-line: rgba(185, 178, 255, 0.16);
   --c-line-strong: rgba(185, 178, 255, 0.32);
-  --c-bar: rgba(22, 19, 50, 0.94);
+  /* scrolled site header: fully opaque (no backdrop-filter, so any alpha lets page text show through) */
+  --c-bar: rgb(22, 19, 50);
 
   --radius: 14px;
   --radius-sm: 10px;

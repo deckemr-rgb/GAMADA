@@ -85,12 +85,31 @@
   height: 100%;
   min-height: 0;
 }
+.dk-scf-pos-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dk-scf-pos-cats {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 12px 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dk-scf-pos-cats > * {
+  flex: none;
+}
 .dk-scf-pos-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   align-content: start;
   gap: 10px;
-  padding: 14px;
+  padding: 12px 14px 14px;
   overflow: auto;
 }
 .dk-scf-pos-item {
@@ -98,7 +117,7 @@
   display: grid;
   align-content: space-between;
   gap: 10px;
-  min-height: 88px;
+  min-height: 92px;
   padding: 12px;
   border: 1px solid var(--dk-line);
   border-radius: var(--dk-r-input);
@@ -115,11 +134,18 @@
 }
 .dk-scf-pos-name {
   font: 600 var(--dk-t13) var(--dk-font);
+  overflow-wrap: anywhere;
+}
+/* price + quantity share the bottom row: the badge never sits on the (wrapping) name */
+.dk-scf-pos-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 22px;
 }
 .dk-scf-pos-qty {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  flex: none;
   min-width: 22px;
   height: 22px;
   padding: 0 6px;

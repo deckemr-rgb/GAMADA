@@ -69,11 +69,20 @@ export default function Footer() {
               <li>
                 <AppLink to="/karya">{f.allWork}</AppLink>
               </li>
-              {CASES.map((c) => (
-                <li key={c.slug}>
-                  <AppLink to={`/karya/${c.slug}`}>{c.name}</AppLink>
-                </li>
-              ))}
+              {CASES.map((c) =>
+                c.merged ? (
+                  // folded into an ecosystem product: link its new home and say so (not the retired /karya page)
+                  <li key={c.slug}>
+                    <AppLink to={c.merged.to} aria-label={`${c.name}, ${f.nowPartOf.replace('{name}', c.merged.name)}`}>
+                      {`${c.name} → ${c.merged.name}`}
+                    </AppLink>
+                  </li>
+                ) : (
+                  <li key={c.slug}>
+                    <AppLink to={`/karya/${c.slug}`}>{c.name}</AppLink>
+                  </li>
+                ),
+              )}
               {SITE.github ? (
                 <li>
                   <a href={SITE.github} target="_blank" rel="noopener noreferrer">

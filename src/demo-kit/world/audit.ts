@@ -3,7 +3,7 @@
  * event (GAMADA Inti → Audit Log and the "jejak data" trail). Runs AFTER the reducer, so it can read names.
  */
 import type { AnyWorldEvent, Bi, EntityRef, WorldState } from './types'
-import { CATEGORY_LABEL } from './catalog'
+import { CATEGORY_LABEL } from './texts'
 import { fmtRp, hhmm, ref } from './util'
 
 const kecName = (s: WorldState, id: string) => s.region.kecamatan.find((k) => k.id === id)?.name ?? id

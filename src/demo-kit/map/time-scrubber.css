@@ -1,0 +1,126 @@
+/* map/time-scrubber.css — TimeScrubber (direction C, dusk palette). Loaded only by the component that uses it.
+   No backdrop-filter, no animated filters; only transform/opacity transitions. */
+/* ------------------------------------------------------------------ TimeScrubber */
+.dk-mts {
+  padding: 12px;
+  border: 1px solid var(--dk-line, rgba(185, 178, 255, 0.12));
+  border-radius: var(--dk-r-card, 14px);
+  background: var(--dk-s1, #231b48);
+}
+.dk-mts-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dk-mts-label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.dk-mts-out {
+  font: 400 24px/1 var(--dk-font-display, var(--font-display));
+  color: var(--dk-text, #f3f0ff);
+}
+.dk-mts-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dk-mts-play {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--dk-accent, var(--c-teal, #3fe0c0));
+  color: var(--dk-on-accent, #06231e);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.dk-mts-play:active {
+  transform: scale(0.94);
+}
+.dk-mts-track {
+  flex: 1;
+  min-width: 0;
+}
+.dk-mts-range {
+  --p: 0%;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.dk-mts-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--c-cyan, #4fd1ff) var(--p), #3a3470 var(--p));
+}
+.dk-mts-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--c-cyan, #4fd1ff) var(--p), #3a3470 var(--p));
+}
+.dk-mts-range::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid #1a1638;
+  border-radius: 50%;
+  background: #f3f0ff;
+  -webkit-appearance: none;
+}
+.dk-mts-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #1a1638;
+  border-radius: 50%;
+  background: #f3f0ff;
+}
+.dk-mts-ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  color: var(--dk-faint, #a29bcc);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .dk-mts-play {
+    width: 44px;
+    height: 44px;
+  }
+}
+/* touch: the scrubber is the main control of the flood / rain demos — 44 px hit area, 28 px thumb */
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-mts-range {
+    height: var(--dk-target, 44px);
+  }
+  .dk-mts-range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+  }
+  .dk-mts-range::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+  }
+  .dk-mts-range::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    margin-top: -11px;
+  }
+  .dk-mts-range::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .dk-mts-ticks {
+    padding: 0 7px;
+  }
+}

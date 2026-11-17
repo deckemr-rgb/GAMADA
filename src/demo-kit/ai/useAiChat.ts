@@ -4,13 +4,25 @@
  * The hook never imports the world store: callers pass `getContext()` (sim answers read it as ctx.world; live
  * requests send summarize(getContext()) ≤ 6 KB). World events a simulated answer wants (`SimResponse.emits`)
  * are handed to `onEmits` after the answer finished streaming.
+ *
+ * The hook does not import the engine either: provider.ts (scripted engine, intent matcher, streaming) is loaded
+ * with import() on the first send(), or earlier with prepare() (e.g. when the chat input gets focus), so a page
+ * whose chat is never used never downloads it. staticConversation (sync, needs the engine) lives in static.ts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PRODUCT_BY_SLUG, type ProductSlug, type RoleId } from '../../content/products'
 import { useI18n } from '../../lib/i18n'
-import type { ChatRequest, Lang, Msg, SimResponse, Structured, ToolCall } from './types'
-import { getAi, getScenario, takeSimExtras } from './provider'
-import { simulate } from './scripted/engine'
+import type { AiChunk, ChatRequest, Lang, Msg, SimResponse, Structured, ToolCall } from './types'
+
+/** the engine half (provider + scripted engine + matcher + streaming), loaded once on first use */
+let engine: Promise<typeof import('./provider')> | null = null
+export function loadAiEngine(): Promise<typeof import('./provider')> {
+  engine ??= import('./provider').catch((e: unknown) => {
+    engine = null
+    throw e
+  })
+  return engine
+}
 
 export type ChatStatus = 'thinking' | 'streaming' | 'done' | 'stopped' | 'error'
 
@@ -57,6 +69,8 @@ export interface UseAiChat {
   stop: () => void
   /** abort and clear the conversation */
   reset: () => void
+  /** start loading the AI engine now (e.g. on input focus) so the first answer starts without a fetch */
+  prepare: () => void
   busy: boolean
   thinking: boolean
   streaming: boolean
@@ -122,7 +136,9 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
         patch(aid, fn)
       }
       try {
-        for await (const c of getAi(mode).chat(req)) {
+        const { getAi, takeSimExtras } = await loadAiEngine()
+        const chunks: AsyncIterable<AiChunk> | AiChunk[] = ctrl.signal.aborted ? [] : getAi(mode).chat(req)
+        for await (const c of chunks) {
           if (ctrl.signal.aborted) break
           switch (c.type) {
             case 'text':
@@ -174,6 +190,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
   )
 
   const stop = useCallback(() => ctrlRef.current?.abort(), [])
+  const prepare = useCallback(() => void loadAiEngine().catch(() => {}), [])
   const reset = useCallback(() => {
     ctrlRef.current?.abort()
     ctrlRef.current = null
@@ -193,6 +210,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
       send,
       stop,
       reset,
+      prepare,
       busy: last?.status === 'thinking' || last?.status === 'streaming',
       thinking: last?.status === 'thinking',
       streaming: last?.status === 'streaming',
@@ -201,40 +219,5 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
       last,
       fellBack: !!last?.fellBack,
     }
-  }, [messages, send, stop, reset])
-}
-
-/**
- * Build a finished conversation instantly with the simulation (for ?static=1 renders, thumbnails and
- * restored sessions). Each text is answered with the history so far; emits are ignored.
- */
-export function staticConversation(
-  product: ProductSlug,
-  texts: string[],
-  opts: { lang: Lang; role?: RoleId; world?: unknown },
-): ChatMessage[] {
-  const role = opts.role ?? PRODUCT_BY_SLUG[product].defaultRole
-  const out: ChatMessage[] = []
-  const history: Msg[] = []
-  texts.forEach((text, i) => {
-    history.push({ role: 'user', content: text })
-    const { match, response, fallback } = simulate(getScenario(product), { product, role, lang: opts.lang, messages: [...history], world: opts.world ?? null })
-    out.push({ id: `s-u${i}`, role: 'user', content: text })
-    const a: ChatMessage = {
-      id: `s-a${i}`,
-      role: 'assistant',
-      content: response.text,
-      status: 'done',
-      mode: 'sim',
-      toolCalls: (response.toolCalls ?? []).map((c, k) => ({ ...c, id: `s-${i}-${k}` })),
-      structured: response.structured ? [response.structured] : [],
-      followUps: response.followUps ?? [],
-      confidence: match.confidence,
-    }
-    if (!fallback && match.intentId) a.intentId = match.intentId
-    if (response.translation) a.translation = response.translation
-    out.push(a)
-    history.push({ role: 'assistant', content: response.text })
-  })
-  return out
+  }, [messages, send, stop, reset, prepare])
 }

@@ -1,0 +1,6 @@
+{
+  "//": "Not a package: tells the bundler that only the CSS in Demo Kit viz has import-time side effects, so a demo that imports one chart through the barrel does not pull every chart. type=module keeps tsx-run tests ESM.",
+  "private": true,
+  "type": "module",
+  "sideEffects": ["*.css", "**/*.css"]
+}

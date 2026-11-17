@@ -5,6 +5,7 @@ import { findWork } from '../content/work'
 import PageShell from '../components/PageShell'
 import AppLink from '../components/AppLink'
 import NotFound from './NotFound'
+import Arrow from '../components/ui/Arrow'
 
 export default function KaryaDetail() {
   const { t } = useI18n()
@@ -21,7 +22,7 @@ export default function KaryaDetail() {
       heroExtra={
         <p className="demo-bar">
           <AppLink to="/karya">
-            <span aria-hidden="true">← </span>
+            <Arrow dir="back" />
             {d.back}
           </AppLink>
           <span aria-hidden="true"> · </span>

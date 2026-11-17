@@ -3,7 +3,7 @@
  * fictional ticket state: a new ticket bumps the KPIs, slides into the table, lands in the kanban, the
  * inbox and the flow log; moving a card updates the table; resolving fires confetti and a toast.
  */
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { startTransition, useCallback, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useI18n, type Lang } from '../../lib/i18n'
 import { ECOSYSTEMS, PRODUCTS, type EcoOrInti } from '../../content/products'
 import {
@@ -80,7 +80,7 @@ const C = {
     noMatchBody: 'Ubah kata kunci atau nyalakan lagi kanal yang disaring.',
     clearFilter: 'Hapus saringan',
     kanbanTitle: 'Setiap status punya tempat, setiap perpindahan terlihat',
-    kanbanLead: 'Kartu meluncur ke kolom barunya (GSAP Flip). Papan ketik: panah untuk berpindah, Shift + panah untuk memindah kartu.',
+    kanbanLead: 'Kartu meluncur ke kolom barunya (tween GSAP, tanpa plugin Flip). Papan ketik: panah untuk berpindah, Shift + panah untuk memindah kartu.',
     board: 'Papan status tiket',
     feedTitle: 'Pesan masuk dan jejak kejadian dalam satu pandangan',
     feedLead: 'Kotak masuk warga di kiri; log alur bercap waktu dan narasi "Urutan kejadian" di kanan.',
@@ -178,7 +178,7 @@ const C = {
     noMatchBody: 'Change the search or switch the filtered channels back on.',
     clearFilter: 'Clear filters',
     kanbanTitle: 'Every status has a place, every move is visible',
-    kanbanLead: 'Cards glide to their new column (GSAP Flip). Keyboard: arrows to move around, Shift + arrow to move a card.',
+    kanbanLead: 'Cards glide to their new column (a GSAP tween, no Flip plugin). Keyboard: arrows to move around, Shift + arrow to move a card.',
     board: 'Ticket status board',
     feedTitle: 'Incoming messages and the trail of events at a glance',
     feedLead: 'Citizen inbox on the left; a timestamped flow log and the "Sequence of events" story on the right.',
@@ -291,12 +291,28 @@ function useColumns(c: Copy, lang: Lang): TableColumn<Ticket>[] {
   )
 }
 
+type ToastPush = ReturnType<typeof useToastQueue>['push']
+
+/** Owns the toast queue so a push renders this stack only (INP: the page does not re-render for a toast). */
+function ToastStack({ apiRef }: { apiRef: { current: ToastPush | null } }) {
+  const q = useToastQueue()
+  apiRef.current = q.push
+  return (
+    <ToastRegion>
+      {q.toasts.map((t) => (
+        <Toast key={t.id} data={t} onDismiss={q.dismiss} />
+      ))}
+    </ToastRegion>
+  )
+}
+
 export default function Section() {
   const { lang } = useI18n()
   const c = C[lang]
   const [eco, setEco] = useState<EcoOrInti>('satu-daerah')
   const [tickets, setTickets] = useState<Ticket[]>(sampleTickets)
-  const [seq, setSeq] = useState(142)
+  // a ref, not state: the insert renders as a transition, so two quick clicks must not reuse a stale number
+  const seq = useRef(142)
   const [clock, setClock] = useState(8 * 60 + 42)
   const [openId, setOpenId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -310,7 +326,9 @@ export default function Section() {
   const [summaryKey, setSummaryKey] = useState(0)
   const summaryLoading = useSkeleton(summaryKey)
   const [form, setForm] = useState({ text: '', kec: 'Kalitidu', cat: '3', err: '' })
-  const toasts = useToastQueue()
+  // the queue lives in its own small component: pushing a toast re-renders only the toast stack, not the page
+  const toastApi = useRef<ToastPush | null>(null)
+  const toasts = { push: (d: Parameters<ToastPush>[0]) => toastApi.current?.(d) }
   const kanbanRef = useRef<HTMLDivElement>(null)
   const [log, setLog] = useState<TimelineItem[]>(() => [
     { id: 'l3', time: '08.40', title: lang === 'id' ? 'SW-2026-0141 → Diverifikasi' : 'SW-2026-0141 → Verified', tone: 'neutral', source: 'Sapa Warga' },
@@ -319,6 +337,20 @@ export default function Section() {
   ])
 
   const columns = useColumns(c, lang)
+  // stable per language: unchanged kanban cards skip re-rendering (Kanban memoises by item + renderCard)
+  const renderCard = useCallback(
+    (t: Ticket) => (
+      <div className="dk-scu-card">
+        <span className="dk-num dk-faint dk-scu-card-id">{t.id}</span>
+        <span className="dk-scu-card-t">{t.category[lang]}</span>
+        <span className="dk-scu-card-m">
+          <span className="dk-faint">{t.kecamatan}</span>
+          <SlaLabel minutesLeft={t.slaMin} done={t.status === 'selesai'} />
+        </span>
+      </div>
+    ),
+    [lang],
+  )
   const byId = useMemo(() => new Map(tickets.map((t) => [t.id, t])), [tickets])
   const open = openId ? (byId.get(openId) ?? big?.find((t) => t.id === openId) ?? null) : null
   const lateCount = tickets.filter((t) => t.status !== 'selesai' && t.slaMin < 0).length
@@ -329,18 +361,21 @@ export default function Section() {
   const addLog = (title: string, extra: Partial<TimelineItem> = {}) => setLog((l) => [{ id: `l${Date.now()}${Math.random()}`, time: fmtTime(clock), title, tone: 'neutral' as const, source: 'Sapa Warga', ...extra }, ...l].slice(0, 40))
 
   const simulate = (custom?: Partial<Ticket>) => {
-    const t = { ...nextTicket(seq, clock), ...custom }
-    setDataset('today')
-    setTickets((ts) => [t, ...ts])
-    setSeq((n) => n + 1)
-    setClock((m) => m + 3)
-    setLog((l) =>
-      [
-        { id: `${t.id}-ai`, time: fmtTime(clock), title: c.logAi, detail: '+0,9 s · 398 token', tone: 'accent' as const, icon: 'spark' as const, source: 'AI' },
-        { id: `${t.id}-new`, time: fmtTime(clock), title: c.logNew(t.id, chLabel(t.channel)), tone: 'neutral' as const, source: 'Sapa Warga' },
-        ...l,
-      ].slice(0, 40),
-    )
+    const t = { ...nextTicket(seq.current++, clock), ...custom }
+    // INP: the toast is the immediate feedback; the grid / board / feed update renders as a transition right
+    // after that paint (React yields), so the click is not held by the page-wide re-layout of the insert
+    startTransition(() => {
+      setDataset('today')
+      setTickets((ts) => [t, ...ts])
+      setClock((m) => m + 3)
+      setLog((l) =>
+        [
+          { id: `${t.id}-ai`, time: fmtTime(clock), title: c.logAi, detail: '+0,9 s · 398 token', tone: 'accent' as const, icon: 'spark' as const, source: 'AI' },
+          { id: `${t.id}-new`, time: fmtTime(clock), title: c.logNew(t.id, chLabel(t.channel)), tone: 'neutral' as const, source: 'Sapa Warga' },
+          ...l,
+        ].slice(0, 40),
+      )
+    })
     toasts.push({ title: c.tNew(t.id, chLabel(t.channel)), body: t.category[lang], tone: 'accent', icon: 'inbox', onActivate: () => setOpenId(t.id) })
   }
 
@@ -359,7 +394,7 @@ export default function Section() {
 
   const resetSim = () => {
     setTickets(sampleTickets())
-    setSeq(142)
+    seq.current = 142
     setClock(8 * 60 + 42)
     setOpenId(null)
     setSaved([])
@@ -388,6 +423,53 @@ export default function Section() {
     setSaved((s) => [id, ...s])
     toasts.push({ title: c.tSent, body: c.tSentBody(id), tone: 'accent', icon: 'meja' })
   }
+
+  /* memoised blocks: a new ticket or an opened drawer must not rebuild the static parts of the page */
+  const inboxItems = useMemo(
+    () =>
+      tickets.slice(0, 7).map((t) => ({
+        id: t.id,
+        title: t.from,
+        preview: t.text[lang],
+        time: fmtTime(t.at),
+        unread: t.status === 'baru',
+        from: t.from,
+        tone: t.status !== 'selesai' && t.slaMin < 0 ? ('danger' as const) : undefined,
+        meta: (
+          <>
+            <Chip>{t.channel === 'Telepon' ? c.phone : t.channel}</Chip>
+            <Chip icon="pin">{t.kecamatan}</Chip>
+          </>
+        ),
+      })),
+    [tickets, lang, c],
+  )
+  const iconsPanel = useMemo(
+    () => (
+            <Panel title={c.icons} icon="grid">
+              <ul className="dk-scu-icons">
+                {Object.values(PRODUCTS).map((p) => (
+                  <li key={p.slug} title={p.name}>
+                    <Icon name={p.icon} />
+                    <span>{p.name}</span>
+                  </li>
+                ))}
+              </ul>
+              <details className="dk-scu-details">
+                <summary>{c.allIcons(ICON_NAMES.length)}</summary>
+                <ul className="dk-scu-icons is-all">
+                  {ICON_NAMES.map((n) => (
+                    <li key={n} title={n}>
+                      <Icon name={n} />
+                      <span>{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </Panel>
+    ),
+    [c],
+  )
 
   const top = tickets[0]
   const storyTicket = (open && byId.get(open.id)) || top
@@ -528,16 +610,7 @@ export default function Section() {
           itemLabel={(t) => `${t.id} ${t.category[lang]}`}
           onMove={(id, to) => setStatus(id, to as TicketStatus)}
           onOpen={(t) => setOpenId(t.id)}
-          renderCard={(t) => (
-            <div className="dk-scu-card">
-              <span className="dk-num dk-faint dk-scu-card-id">{t.id}</span>
-              <span className="dk-scu-card-t">{t.category[lang]}</span>
-              <span className="dk-scu-card-m">
-                <span className="dk-faint">{t.kecamatan}</span>
-                <SlaLabel minutesLeft={t.slaMin} done={t.status === 'selesai'} />
-              </span>
-            </div>
-          )}
+          renderCard={renderCard}
         />
       </section>
 
@@ -550,21 +623,7 @@ export default function Section() {
               label={c.inboxLabel}
               selectedId={openId}
               onSelect={setOpenId}
-              items={tickets.slice(0, 7).map((t) => ({
-                id: t.id,
-                title: t.from,
-                preview: t.text[lang],
-                time: fmtTime(t.at),
-                unread: t.status === 'baru',
-                from: t.from,
-                tone: t.status !== 'selesai' && t.slaMin < 0 ? 'danger' : undefined,
-                meta: (
-                  <>
-                    <Chip>{chLabel(t.channel)}</Chip>
-                    <Chip icon="pin">{t.kecamatan}</Chip>
-                  </>
-                ),
-              }))}
+              items={inboxItems}
             />
           </Panel>
           <Panel title={trail === 'log' ? c.log : c.story} icon={trail === 'log' ? 'list' : 'flag'} meta={<span className="dk-faint">{c.sim}</span>}>
@@ -706,27 +765,7 @@ export default function Section() {
             )}
           </Panel>
 
-          <Panel title={c.icons} icon="grid">
-            <ul className="dk-scu-icons">
-              {Object.values(PRODUCTS).map((p) => (
-                <li key={p.slug} title={p.name}>
-                  <Icon name={p.icon} />
-                  <span>{p.name}</span>
-                </li>
-              ))}
-            </ul>
-            <details className="dk-scu-details">
-              <summary>{c.allIcons(ICON_NAMES.length)}</summary>
-              <ul className="dk-scu-icons is-all">
-                {ICON_NAMES.map((n) => (
-                  <li key={n} title={n}>
-                    <Icon name={n} />
-                    <span>{n}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </Panel>
+          {iconsPanel}
         </div>
       </section>
 
@@ -825,11 +864,7 @@ export default function Section() {
       />
 
       <Confetti fire={confetti} />
-      <ToastRegion>
-        {toasts.toasts.map((t) => (
-          <Toast key={t.id} data={t} onDismiss={toasts.dismiss} />
-        ))}
-      </ToastRegion>
+      <ToastStack apiRef={toastApi} />
     </div>
   )
 }

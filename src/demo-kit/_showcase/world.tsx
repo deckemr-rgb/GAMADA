@@ -7,9 +7,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useI18n } from '../../lib/i18n'
 import { isEnabled } from '../../lib/motion'
-import { PRODUCT_BY_SLUG, isProductSlug, type EcoOrInti } from '../../content/products'
-import { RegionPack } from '../region/types'
-import { MINI_PACK } from '../world/__fixtures__/mini-pack'
+import { PRODUCT_BY_SLUG, isProductSlug, type EcoOrInti, type ProductSlug } from '../../content/products'
+import type { RegionPack } from '../region/types'
+import { loadRegion } from '../region/loader'
 import {
   CLOCK, DEFAULT_SEED, WORLD, activeAlerts, clock, complaintKpi, distanceKm, emit, formatTime, latestAudit, loadWorld, overdueActions, resetWorld, rows,
   serviceIndex, setNaturalEvents, settled, shallowEqual, slaOnTimePct, tableCounts, useClock, useNaturalEvents, useWorld, useWorldStatus, world, worldDate,
@@ -24,14 +24,14 @@ const T = {
     ready: 'Dunia siap', loading: 'Memuat dunia…', seedNote: 'Data simulasi · seed', entities: 'entitas', clock: 'Jam dunia', play: 'Jalankan jam', pause: 'Jeda jam',
     speed: 'Kecepatan', jump: 'Lompat ke', natural: 'Kejadian alami', naturalHint: 'aduan, transaksi, mention, harga mengikuti ritme jam',
     triggers: 'Picu kejadian nyata', reset: 'Reset dunia', resetSure: 'Yakin? Klik lagi', audit: 'Log audit (live)', auditHint: 'setiap event menulis satu baris; ↳ = reaksi lintas produk',
-    rows: 'baris', processed: 'event diproses sejak seed', effects: 'Efek lintas produk', counts: 'Jumlah entitas', reaction: 'reaksi', empty: 'Belum ada event.',
+    rows: 'baris', seeded: 'riwayat seed', processed: 'event baru sejak seed', shown: 'terbaru ditampilkan', alertsOf: 'dari', alertsAll: 'tercatat', effects: 'Efek lintas produk', counts: 'Jumlah entitas', reaction: 'reaksi', empty: 'Belum ada event.',
     kpiComplaints: 'Aduan hari ini', kpiSla: 'SLA tepat waktu', kpiAlerts: 'Peringatan aktif', kpiLate: 'Tindak lanjut terlambat', kpiIndex: 'Indeks layanan', vsYesterday: 'vs kemarin',
   },
   en: {
     ready: 'World ready', loading: 'Loading world…', seedNote: 'Simulated data · seed', entities: 'entities', clock: 'World clock', play: 'Run clock', pause: 'Pause clock',
     speed: 'Speed', jump: 'Jump to', natural: 'Natural events', naturalHint: 'complaints, sales, mentions, prices follow the hour',
     triggers: 'Trigger real events', reset: 'Reset world', resetSure: 'Sure? Click again', audit: 'Audit log (live)', auditHint: 'every event writes one row; ↳ = cross-product reaction',
-    rows: 'rows', processed: 'events processed since seed', effects: 'Cross-product effects', counts: 'Entity counts', reaction: 'reaction', empty: 'No events yet.',
+    rows: 'rows', seeded: 'seeded history', processed: 'new events since seed', shown: 'latest shown', alertsOf: 'of', alertsAll: 'on record', effects: 'Cross-product effects', counts: 'Entity counts', reaction: 'reaction', empty: 'No events yet.',
     kpiComplaints: 'Complaints today', kpiSla: 'SLA on time', kpiAlerts: 'Active alerts', kpiLate: 'Overdue follow-ups', kpiIndex: 'Service index', vsYesterday: 'vs yesterday',
   },
 } satisfies Record<L, Record<string, string>>
@@ -40,7 +40,7 @@ const ECO_VAR: Record<EcoOrInti, string> = { inti: 'var(--c-lavender)', 'satu-da
 const SOURCE_LABEL: Record<string, { id: string; en: string }> = { user: { id: 'Pengguna', en: 'User' }, clock: { id: 'Jam', en: 'Clock' }, tour: { id: 'Tur', en: 'Tour' } }
 
 const COUNT_KEYS: { k: TableKey; id: string; en: string }[] = [
-  { k: 'complaints', id: 'Aduan', en: 'Complaints' }, { k: 'clusters', id: 'Klaster', en: 'Clusters' }, { k: 'alerts', id: 'Peringatan', en: 'Alerts' },
+  { k: 'complaints', id: 'Aduan', en: 'Complaints' }, { k: 'clusters', id: 'Klaster', en: 'Clusters' }, { k: 'alerts', id: 'Peringatan (semua)', en: 'Alerts (all)' },
   { k: 'procurements', id: 'Paket pengadaan', en: 'Procurements' }, { k: 'catalogNeeds', id: 'Kebutuhan pemda', en: 'Gov. needs' }, { k: 'programs', id: 'Program bansos', en: 'Aid programmes' },
   { k: 'marketOps', id: 'Operasi pasar', en: 'Market ops' }, { k: 'letters', id: 'Surat', en: 'Letters' }, { k: 'actionItems', id: 'Tindak lanjut', en: 'Action items' },
   { k: 'sales', id: 'Transaksi', en: 'Sales' }, { k: 'ledger', id: 'Jurnal', en: 'Journal entries' }, { k: 'mentions', id: 'Mention', en: 'Mentions' },
@@ -48,19 +48,14 @@ const COUNT_KEYS: { k: TableKey; id: string; en: string }[] = [
 ]
 
 /* ------------------------------------------------------------------ region pack (real one when present) */
-const PACKS = import.meta.glob<{ default: unknown }>('../region/packs/*/pack.json')
+// through the public region loader (fetched static asset, validated at build time) — no zod, no pack JS chunk
 async function loadShowcasePack(): Promise<RegionPack> {
-  const key = Object.keys(PACKS).find((k) => k.includes('/bojonegoro/'))
-  if (key) {
-    try {
-      const m = await PACKS[key]!()
-      const r = RegionPack.safeParse(m.default)
-      if (r.success) return r.data
-    } catch {
-      /* fall back to the fixture */
-    }
+  try {
+    return await loadRegion('bojonegoro')
+  } catch {
+    // fallback fixture (zod-parsed): loaded only when the real pack cannot be fetched
+    return (await import('../world/__fixtures__/mini-pack')).MINI_PACK
   }
-  return MINI_PACK
 }
 
 /* ------------------------------------------------------------------ scenario helpers (all emit real events) */
@@ -147,7 +142,15 @@ async function runStaticScript(pack: RegionPack) {
 }
 
 /* ------------------------------------------------------------------ small pieces */
-function SourceChip({ source, lang }: { source: EventSource; lang: L }) {
+function SourceChip({ source, origin, lang }: { source: EventSource; origin?: ProductSlug | undefined; lang: L }) {
+  if (source === 'clock' && origin && isProductSlug(origin)) {
+    // natural background event: "Jam · Toko Autopilot"
+    return (
+      <span className="dk-world-src dk-world-src--plain" title={PRODUCT_BY_SLUG[origin].name}>
+        {SOURCE_LABEL.clock![lang]} · {PRODUCT_BY_SLUG[origin].name}
+      </span>
+    )
+  }
   if (isProductSlug(source)) {
     const p = PRODUCT_BY_SLUG[source]
     return (
@@ -191,7 +194,7 @@ function AuditRow({ a, lang }: { a: AuditEntry; lang: L }) {
   return (
     <li className={`dk-world-row${depth ? ' is-reaction' : ''}`} style={{ ['--depth' as string]: depth }}>
       <time className="dk-world-time">{formatTime(a.at)}</time>
-      <SourceChip source={a.source} lang={lang} />
+      <SourceChip source={a.source} origin={a.origin} lang={lang} />
       <span className="dk-world-sum">
         {depth ? <span className="dk-world-arrow" aria-hidden="true">↳ </span> : null}
         {a.summary[lang]}
@@ -208,7 +211,8 @@ function Counts({ lang }: { lang: L }) {
   useEffect(() => {
     const p = prev.current
     prev.current = counts
-    if (!p) return
+    // no "+n" badges for the world appearing (empty → loaded/reset): only for events that changed it
+    if (!p || Object.values(p).every((n) => n === 0)) return
     const next: Record<string, { d: number; key: number }> = {}
     for (const { k } of COUNT_KEYS) {
       const d = counts[k] - (p[k] ?? 0)
@@ -310,7 +314,7 @@ export default function Section() {
   const audit = useWorld((s) => latestAudit(s, 14))
   const auditTotal = useWorld((s) => s.auditLog.ids.length)
   const kpi = useWorld((s) => ({
-    ...complaintKpi(s, c.minutes), sla: slaOnTimePct(s), alerts: activeAlerts(s).length, late: overdueActions(s, c.minutes).length, index: serviceIndex(s, c.minutes),
+    ...complaintKpi(s, c.minutes), sla: slaOnTimePct(s), alerts: activeAlerts(s).length, alertsAll: s.alerts.ids.length, late: overdueActions(s, c.minutes).length, index: serviceIndex(s, c.minutes),
   }), shallowEqual)
   const cluster = useWorld(clusterProgress, shallowEqual)
   const hasSuggestion = useWorld((s) => rows(s.marketOps).some((m) => m.stage === 'recommended'))
@@ -355,7 +359,7 @@ export default function Section() {
       <div className="dk-world-kpis">
         <Kpi label={t.kpiComplaints} value={fmt(kpi.today)} sub={`${kpi.delta >= 0 ? '+' : ''}${kpi.delta} ${t.vsYesterday}`} />
         <Kpi label={t.kpiSla} value={`${kpi.sla}%`} />
-        <Kpi label={t.kpiAlerts} value={fmt(kpi.alerts)} />
+        <Kpi label={t.kpiAlerts} value={fmt(kpi.alerts)} sub={`${t.alertsOf} ${fmt(kpi.alertsAll)} ${t.alertsAll}`} />
         <Kpi label={t.kpiLate} value={fmt(kpi.late)} />
         <Kpi label={t.kpiIndex} value={kpi.index} />
       </div>
@@ -427,7 +431,10 @@ export default function Section() {
         <section className="dk-world-card dk-world-auditcard" aria-labelledby="dk-world-audit-h">
           <div className="dk-world-auditbar">
             <h3 id="dk-world-audit-h" className="dk-world-h">{t.audit}</h3>
-            <span className="dk-world-faint">{fmt(auditTotal)} {t.rows} · {fmt(header.processed)} {t.processed}</span>
+            {/* every processed event writes exactly one audit row; the rest of the log is the seeded history */}
+            <span className="dk-world-faint">
+              {fmt(auditTotal)} {t.rows} = {fmt(Math.max(0, auditTotal - header.processed))} {t.seeded} + {fmt(Math.min(header.processed, auditTotal))} {t.processed} · {fmt(audit.length)} {t.shown}
+            </span>
           </div>
           <p className="dk-world-faint dk-world-hint">{t.auditHint}</p>
           {audit.length ? (

@@ -9,14 +9,4 @@ const id = {
   hoursSuffix: ' jam',
 }
 
-const en: typeof id = {
-  eyebrow: 'GAMADA in numbers',
-  title: 'A small studio with work you can try.',
-  pagesAndDemos: 'Pages & demos you can try',
-  mobileApps: 'Mobile app demos',
-  enterpriseProjects: 'Enterprise projects',
-  responseHours: 'Maximum response time',
-  hoursSuffix: ' h',
-}
-
-export const stats = { id, en }
+export const stats = id

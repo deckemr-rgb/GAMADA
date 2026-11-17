@@ -4,10 +4,23 @@
  * Enter/click picks it (the parent flies the map there). A polite live region announces the flight.
  */
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { useI18n } from '../../lib/i18n'
+import { useI18n, type Lang } from '../../lib/i18n'
 import { Icon } from '../ui/icons'
-import { fmt, ms } from './strings'
+import { fmt } from './strings'
 import './map.css'
+import './kecamatan-list.css'
+
+/** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
+const S = {
+  hidden: { id: 'Data agregat disembunyikan untuk menjaga anonimitas', en: 'Aggregate hidden to protect anonymity' },
+  hiddenShort: { id: 'Disembunyikan (ambang anonimitas)', en: 'Hidden (anonymity threshold)' },
+  listLabel: { id: 'Daftar kecamatan', en: 'District list' },
+  listHint: { id: 'Pilih kecamatan untuk menerbangkan peta ke sana.', en: 'Pick a district to fly the map there.' },
+  filter: { id: 'Cari kecamatan', en: 'Find a district' },
+  noMatch: { id: 'Tidak ada kecamatan yang cocok.', en: 'No matching district.' },
+  flyingTo: { id: 'Peta menuju', en: 'Map moving to' },
+} as const
+const ms = (k: keyof typeof S, lang: Lang): string => S[k][lang]
 
 export interface KecamatanListProps {
   items: { id: string; name: string }[]

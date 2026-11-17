@@ -7,17 +7,19 @@
  * simulated answer continues the turn. If the live stream already produced text, only the simulation's
  * non-text chunks (steps, structured, follow-ups) are appended. An invalid structured result (zod; default
  * schemas = STRUCTURED_SCHEMAS, mirrored from the proxy) is replaced by the simulation's structured result.
+ * zod lives only in ai/live.ts, which is loaded with import() the first time a live request is made — the sim
+ * path (and every demo route) never downloads it.
  * Owner decision: ANY fallback, also one part-way through a live answer, ends with done = { mode: 'sim',
  * fellBack: true }, so the badge never says "Live" for an answer the simulation completed. Every fallback
  * notifies onLiveFallback() listeners (the shell shows the toast "AI Live sedang sibuk, beralih ke Simulasi",
  * spec §8.5). Wire protocol: server/ai-proxy/README.md → "Protokol SSE".
  */
-import { z } from 'zod'
 import { DEMO } from '../../lib/motion'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
-import type { AiChunk, AiProvider, ChatRequest, Extracted, ExtractRequest, Scenario, SimResponse, Structured } from './types'
+import type { AiChunk, AiProvider, ChatRequest, Extracted, ExtractRequest, SimResponse } from './types'
+import { scenarios } from './scenarios'
 import { simChunks, simulate, type SimResult } from './scripted/engine'
-import { checkHealth, isLiveConfigured, LiveError, liveChat, liveExtract, peekHealth, STRUCTURED_SCHEMAS, type LiveErrorKind } from './live'
+import { checkHealth, isLiveConfigured, LiveError, notifyLiveFallback, peekHealth, type FallbackInfo } from './live-base'
 import { sleep } from './stream'
 
 /* ------------------------------------------------------------------ constants (module-local, see report) */
@@ -26,52 +28,21 @@ export const PROVIDER = {
   simExtractMs: 360,
 } as const
 
-/** Toast copy for a live → sim fallback (spec §8.5). */
-export const LIVE_FALLBACK_NOTICE = {
-  id: 'AI Live sedang sibuk, beralih ke Simulasi',
-  en: 'Live AI is busy, switching to Simulation',
-} as const
+export { LIVE_FALLBACK_NOTICE, onLiveFallback, registerStructuredSchema, type FallbackInfo, type FallbackReason } from './live-base'
 
-/* ------------------------------------------------------------------ scenarios */
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyScenario = Scenario<any>
-const scenarios = new Map<ProductSlug, AnyScenario>()
-
-/** Register (or replace) the simulation scenario of a product. */
-export function registerScenario<W>(s: Scenario<W>): void {
-  scenarios.set(s.product, s as AnyScenario)
-}
-/** Remove a product's scenario (tests, showcase cleanup). */
-export function unregisterScenario(slug: ProductSlug): void {
-  scenarios.delete(slug)
-}
-export function getScenario(slug: ProductSlug): Scenario<unknown> | undefined {
-  return scenarios.get(slug)
+/** the zod half of the live client, loaded once on first live use */
+let liveModule: Promise<typeof import('./live')> | null = null
+function loadLive(): Promise<typeof import('./live')> {
+  liveModule ??= import('./live').catch((e: unknown) => {
+    liveModule = null
+    throw e
+  })
+  return liveModule
 }
 
-/* ------------------------------------------------------------------ structured validation */
+/* ------------------------------------------------------------------ scenarios (registry: scenarios.ts) */
 
-const StructuredEnvelope = z.object({ kind: z.string().min(1), data: z.record(z.string(), z.unknown()) })
-const kindSchemas = new Map<string, z.ZodType<Record<string, unknown>>>(Object.entries(STRUCTURED_SCHEMAS))
-
-/**
- * Per-kind zod schema for Structured.data. The proxy's 24 kinds are pre-registered (STRUCTURED_SCHEMAS); a product
- * may replace one with a stricter schema, which must still accept the proxy's shape (else live always falls back).
- */
-export function registerStructuredSchema(kind: string, schema: z.ZodType<Record<string, unknown>>): void {
-  kindSchemas.set(kind, schema)
-}
-
-/** Validate a structured value (envelope + registered per-kind schema). null when invalid. */
-export function validateStructured(value: unknown): Structured | null {
-  const env = StructuredEnvelope.safeParse(value)
-  if (!env.success) return null
-  const schema = kindSchemas.get(env.data.kind)
-  if (!schema) return env.data
-  const p = schema.safeParse(env.data.data)
-  return p.success ? { kind: env.data.kind, data: p.data } : null
-}
+export { registerScenario, unregisterScenario, getScenario } from './scenarios'
 
 /* ------------------------------------------------------------------ per-request extras (side channel) */
 
@@ -104,31 +75,9 @@ function simulateReq(req: ChatRequest): SimResult {
   return result
 }
 
-/* ------------------------------------------------------------------ fallback events */
+/* ------------------------------------------------------------------ fallback events (bus: live-base.ts) */
 
-export type FallbackReason = LiveErrorKind
-export interface FallbackInfo {
-  product: ProductSlug
-  reason: FallbackReason
-  status?: number
-  op: 'chat' | 'extract'
-}
-const fallbackListeners = new Set<(info: FallbackInfo) => void>()
-
-/** Subscribe to live → sim fallbacks (for the toast). Returns unsubscribe. */
-export function onLiveFallback(fn: (info: FallbackInfo) => void): () => void {
-  fallbackListeners.add(fn)
-  return () => void fallbackListeners.delete(fn)
-}
-function notify(info: FallbackInfo): void {
-  for (const fn of fallbackListeners) {
-    try {
-      fn(info)
-    } catch {
-      /* listener errors never break the chat */
-    }
-  }
-}
+const notify = (info: FallbackInfo): void => notifyLiveFallback(info)
 
 /* ------------------------------------------------------------------ sim provider */
 
@@ -182,7 +131,16 @@ export function createLiveProvider(opts: LiveProviderOptions = {}): AiProvider {
     const ctrl = new AbortController()
     const forward = () => ctrl.abort()
     userSignal?.addEventListener('abort', forward, { once: true })
-    const it = liveChat({ ...req, signal: ctrl.signal })
+    let live: typeof import('./live')
+    try {
+      live = await loadLive()
+    } catch (e) {
+      userSignal?.removeEventListener('abort', forward)
+      if (userSignal?.aborted) return
+      yield* fallback(req, new LiveError('network', `live client failed to load: ${String(e)}`), false)
+      return
+    }
+    const it = live.liveChat({ ...req, signal: ctrl.signal })
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       let first: IteratorResult<AiChunk>
@@ -212,7 +170,7 @@ export function createLiveProvider(opts: LiveProviderOptions = {}): AiProvider {
         while (!cur.done) {
           const c = cur.value
           if (c.type === 'structured') {
-            const v = validateStructured(c.value)
+            const v = live.validateStructured(c.value)
             if (v) yield { type: 'structured', value: v }
             else invalidStructured = true
           } else if (c.type === 'done') {
@@ -251,7 +209,7 @@ export function createLiveProvider(opts: LiveProviderOptions = {}): AiProvider {
   async function extract(req: ExtractRequest): Promise<Extracted> {
     try {
       if (!isLiveConfigured()) throw new LiveError('unavailable')
-      return await liveExtract(req)
+      return await (await loadLive()).liveExtract(req)
     } catch (e) {
       if (req.signal?.aborted) throw e
       const err = e instanceof LiveError ? e : new LiveError('network', String(e))

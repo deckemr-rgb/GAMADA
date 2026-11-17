@@ -1,0 +1,100 @@
+/* map/layer-toggle.css — LayerToggle (direction C, dusk palette). Loaded only by the component that uses it.
+   No backdrop-filter, no animated filters; only transform/opacity transitions. */
+/* ------------------------------------------------------------------ LayerToggle */
+.dk-mlt {
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--dk-line, rgba(185, 178, 255, 0.12));
+  border-radius: var(--dk-r-card, 14px);
+  background: var(--dk-s1, #231b48);
+}
+.dk-mlt-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dk-mlt ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-mlt-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--dk-r-input, 10px);
+  background: transparent;
+  color: var(--dk-text, #f3f0ff);
+  text-align: left;
+  cursor: pointer;
+}
+.dk-mlt-row:hover {
+  background: var(--dk-s2, #2b2152);
+}
+.dk-mlt-icon {
+  color: var(--dk-muted, #c9c3ea);
+}
+.dk-mlt-text {
+  display: grid;
+  min-width: 0;
+}
+.dk-mlt-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.dk-mlt-hint {
+  color: var(--dk-faint, #a29bcc);
+  font-size: 11px;
+  line-height: 15px;
+}
+.dk-mlt-chip {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.dk-mlt-switch {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #3a3470;
+  transition: background-color 0.2s;
+}
+.dk-mlt-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f3f0ff;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.dk-mlt-row[aria-checked='true'] .dk-mlt-switch {
+  background: var(--dk-accent, var(--c-teal, #3fe0c0));
+}
+.dk-mlt-row[aria-checked='true'] .dk-mlt-knob {
+  transform: translateX(14px);
+  background: var(--dk-on-accent, #06231e);
+}
+.dk-mlt-row[aria-checked='true'] .dk-mlt-icon {
+  color: var(--dk-accent, var(--c-teal, #3fe0c0));
+}
+
+@media (max-width: 767px) {
+  .dk-mlt-row {
+    min-height: 44px;
+  }
+}

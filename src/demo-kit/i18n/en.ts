@@ -42,6 +42,7 @@ export const en: DemoDict = {
   cancel: 'Cancel',
   rewinding: 'Rewinding the clock…',
   resetDone: 'The demo world is back to the start',
+  resetFailed: 'Reset failed: check the connection and try again',
   fullscreen: 'Full screen',
   exitFullscreen: 'Exit full screen',
   guide: 'Guide',

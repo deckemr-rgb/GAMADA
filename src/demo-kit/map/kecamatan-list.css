@@ -1,0 +1,116 @@
+/* map/kecamatan-list.css — KecamatanList (direction C, dusk palette). Loaded only by the component that uses it.
+   No backdrop-filter, no animated filters; only transform/opacity transitions. */
+/* ------------------------------------------------------------------ KecamatanList */
+.dk-mkl {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--dk-line, rgba(185, 178, 255, 0.12));
+  border-radius: var(--dk-r-card, 14px);
+  background: var(--dk-s1, #231b48);
+}
+.dk-mkl-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dk-mkl-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dk-mkl-unit {
+  color: var(--dk-faint, #a29bcc);
+  font-size: 11px;
+  text-align: right;
+}
+.dk-mkl-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--dk-line-2, rgba(185, 178, 255, 0.22));
+  border-radius: var(--dk-r-input, 10px);
+  background: var(--dk-bg, #1a1638);
+  color: var(--dk-muted, #c9c3ea);
+}
+.dk-mkl-filter input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--dk-text, #f3f0ff);
+  font: inherit;
+  font-size: 13px;
+}
+.dk-mkl-filter input::placeholder {
+  color: var(--dk-faint, #a29bcc);
+}
+.dk-mkl-hint {
+  margin: 8px 0 6px;
+  color: var(--dk-faint, #a29bcc);
+  font-size: 11px;
+  line-height: 15px;
+}
+.dk-mkl-list {
+  flex: 1;
+  min-height: 0;
+  max-height: 340px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overflow: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+.dk-mkl-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dk-text, #f3f0ff);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.dk-mkl-row:hover {
+  background: var(--dk-s2, #2b2152);
+}
+.dk-mkl-row.is-sel {
+  background: var(--dk-s2, #2b2152);
+  box-shadow: inset 2px 0 0 var(--dk-accent, var(--c-teal, #3fe0c0));
+}
+.dk-mkl-val {
+  color: var(--dk-muted, #c9c3ea);
+  font-size: 12px;
+}
+.dk-mkl-bar {
+  grid-column: 1 / -1;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--dk-accent, var(--c-teal, #3fe0c0)) var(--w), rgba(185, 178, 255, 0.1) var(--w));
+}
+.dk-mkl-empty {
+  margin: 12px 0;
+  color: var(--dk-muted, #c9c3ea);
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .dk-mkl-row {
+    min-height: 44px;
+  }
+  .dk-mkl-filter input {
+    height: 44px;
+  }
+}

@@ -20,7 +20,7 @@ export function useMediaQuery(query: string): boolean {
 export type ShellSize = 'sm' | 'md' | 'lg' | 'xl'
 
 /** Layout size from the SHELL's own width (it may live in a bounded box, not the viewport):
- *  sm < 768 (name + "⋯") · md < 1240 (role + clock, rest in "⋯") · lg < 1440 (all controls) · xl (+ full crumbs). */
+ *  sm < 768 (name + "⋯") · md < 1240 (role + clock, rest in "⋯") · lg < 1600 (all controls) · xl (+ full crumbs). */
 export function sizeFor(width: number): ShellSize {
   return width < SHELL.mobileBp ? 'sm' : width < SHELL.compactBp ? 'md' : width < SHELL.wideBp ? 'lg' : 'xl'
 }

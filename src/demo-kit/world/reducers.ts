@@ -4,7 +4,7 @@
  * Payload ids are already assigned by engine.prepare() when a reducer runs.
  */
 import type { Alert, EventType, Instruction, LngLat, MarketOperation, Program, Sale, SalesDay, Ticket, WorldEvent, WorldState } from './types'
-import { CATEGORY_SLA_DAYS, CATEGORY_LABEL } from './catalog'
+import { CATEGORY_SLA_DAYS, CATEGORY_LABEL } from './texts'
 import { DAY_MIN, centroid, get, monthOf, patch, patchMany, upsert } from './util'
 
 export type Reducer<K extends EventType> = (s: WorldState, e: WorldEvent<K>) => WorldState
