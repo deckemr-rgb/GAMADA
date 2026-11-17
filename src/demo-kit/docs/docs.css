@@ -160,9 +160,10 @@
   outline-offset: 2px;
 }
 .dk-doc-mark {
+  /* outside the box, in the page margin to its left: never covers the text being read */
   position: absolute;
-  top: -9px;
-  left: -9px;
+  top: -1px;
+  right: calc(100% + 3px);
   display: grid;
   place-items: center;
   min-width: 17px;

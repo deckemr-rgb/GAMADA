@@ -11,7 +11,7 @@ import { Button, Drawer, Icon, StatusChip, formatSla } from '../../demo-kit/ui'
 import { LineChart } from '../../demo-kit/viz'
 import { CATEGORY_LABEL, DAY_MIN, hhmm, useSession, useWorld, world, type Minutes } from '../../demo-kit/world'
 import { opdLeaderboard, opdScorecard } from '../../demo-kit/world/satu-daerah'
-import { kecName, withControls } from './data'
+import { kecName, useNow, withControls } from './data'
 
 const C = {
   eyebrow: { id: 'Scorecard OPD · 30 hari', en: 'Agency scorecard · 30 days' },
@@ -35,8 +35,9 @@ const C = {
   tst: { baru: { id: 'Baru', en: 'New' }, diverifikasi: { id: 'Diverifikasi', en: 'Verified' }, diteruskan: { id: 'Diteruskan', en: 'Forwarded' }, diproses: { id: 'Diproses', en: 'In progress' }, selesai: { id: 'Selesai', en: 'Done' } },
 }
 
-export default function Scorecard({ open, onClose, opdId, now, onInstruct }: { open: boolean; onClose: () => void; opdId: string; now: Minutes; onInstruct?: (opdIds: string[]) => void }) {
+export default function Scorecard({ open, onClose, opdId, onInstruct }: { open: boolean; onClose: () => void; opdId: string; onInstruct?: (opdIds: string[]) => void }) {
   const { lang } = useI18n()
+  const now = useNow(5)
   const session = useSession()
   const lb = useWorld((s) => opdLeaderboard(s, now))
   const tickets = useWorld((s) => s.tickets)
@@ -57,6 +58,8 @@ export default function Scorecard({ open, onClose, opdId, now, onInstruct }: { o
     return dt.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short' })
   })
   const closed = card.trend.reduce((a, d) => a + d.closed, 0)
+  // the agency's most urgent open ticket, so Sapa Warga opens on this agency's work (not its default view)
+  const firstOpen = [...card.openTickets].sort((a, b) => a.slaDueAt - b.slaDueAt)[0]?.complaintId ?? null
   const tasks = [...card.actions].sort((a, b) => Number(b.status !== 'selesai' && b.dueAt < now) - Number(a.status !== 'selesai' && a.dueAt < now) || a.dueAt - b.dueAt)
 
   return (
@@ -68,7 +71,7 @@ export default function Scorecard({ open, onClose, opdId, now, onInstruct }: { o
       width={480}
       footer={
         <>
-          <AppLink className="dk-mp-linkbtn" to={withControls(demoHref('sapa-warga', session))}>
+          <AppLink className="dk-mp-linkbtn" to={withControls(demoHref('sapa-warga', session, firstOpen))}>
             {C.tickets[lang]}
             <Icon name="arrowUpRight" size={12} />
           </AppLink>

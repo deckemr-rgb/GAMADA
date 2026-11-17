@@ -80,10 +80,10 @@ export default function SiagaWilayah({ product }: DemoCanvasProps) {
   }, [focus, clearFocus])
 
   return (
-    <div className={`dk-sw is-${size}`} data-eco="satu-daerah" data-product={product}>
-      <BrowserFrame slug="siaga-wilayah" label={t('frame')} className="dk-sw-frame">
-        <div className={`dk-sw-body${open || size === 'sm' ? '' : ' is-collapsed'}`}>
-          <div className="dk-sw-stage">
+    <div className={`dk-sg is-${size}`} data-eco="satu-daerah" data-product={product}>
+      <BrowserFrame slug="siaga-wilayah" label={t('frame')} className="dk-sg-frame">
+        <div className={`dk-sg-body${open || size === 'sm' ? '' : ' is-collapsed'}`}>
+          <div className="dk-sg-stage">
             <MapStage />
             <Timeline />
           </div>
@@ -121,7 +121,7 @@ export const missions: readonly Mission[] = [
   {
     id: 'imagery',
     label: { id: 'Buka citra satelit', en: 'Open the satellite imagery' },
-    hint: { id: 'Tombol "Lapisan" di peta → Citra satelit (simulasi).', en: 'The "Layers" button on the map → Satellite imagery (simulated).' },
+    hint: { id: 'Tombol "Lapisan" di peta → Citra satelit Sentinel-2 (2016), atau tab Lingkungan.', en: 'The "Layers" button on the map → Sentinel-2 satellite imagery (2016), or the Environment tab.' },
   },
   {
     id: 'harvest',

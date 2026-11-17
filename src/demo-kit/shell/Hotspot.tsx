@@ -42,9 +42,24 @@ export interface HotspotProps {
   label?: string
   /** search root for the selector */
   root?: () => Element | null
+  /**
+   * where the label hangs: 'below' = under the target's bottom edge, 'above' = above the dot (the target's
+   * top-right corner), 'auto' (default) = below when there is room in the viewport, else above. The label never
+   * covers the target itself and is clamped inside the viewport.
+   */
+  placement?: 'auto' | 'below' | 'above'
 }
 
-export function Hotspot({ target, id, label, root }: HotspotProps) {
+/** true when the point is painted by `el` (or a descendant): not clipped by a scroller and not covered by a sheet */
+function visibleAt(el: Element, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) return false
+  const hit = document.elementFromPoint(x, y)
+  if (!hit) return false
+  // our own ring never takes hits (pointer-events: none)
+  return el === hit || el.contains(hit) || hit.contains(el)
+}
+
+export function Hotspot({ target, id, label, root, placement = 'auto' }: HotspotProps) {
   const auto = useId()
   const key = id ?? `${auto}:${target}`
   const [gone, setGone] = useState(() => isDismissed(key))
@@ -105,30 +120,57 @@ export function Hotspot({ target, id, label, root }: HotspotProps) {
 
   const show = !gone && !!el && first === key
 
-  // follow the target
+  // follow the target (re-queried when it remounts, e.g. a persona switch)
   useLayoutEffect(() => {
     if (!show || !el) return
     const r = ring.current
     if (!r) return
+    const lab = r.querySelector<HTMLElement>('.dk-hotspot-label')
+    let cur: Element = el
     let last = ''
+    let tick = 0
+    let seen = true
     const place = () => {
-      if (!el.isConnected) return
-      const b = el.getBoundingClientRect()
+      if (!cur.isConnected) {
+        const scope = rootRef.current?.() ?? document
+        const again = scope.querySelector(target)
+        if (!again) {
+          r.style.visibility = 'hidden'
+          return
+        }
+        cur = again
+        last = ''
+      }
+      const b = cur.getBoundingClientRect()
       const k = `${b.left}|${b.top}|${b.width}|${b.height}`
-      if (k === last) return
+      // geometry unchanged: only re-check coverage (a sheet opening over the target) about 4× a second
+      if (k === last && ++tick % 15 !== 0) return
       last = k
-      // the dot sits on the target's top-right corner; hidden while the corner is scrolled out of the root
+      // the dot sits on the target's top-right corner; hidden while that corner is clipped or covered
       const x = b.right - 2
       const y = b.top + 2
       const box = rootRef.current?.()?.getBoundingClientRect()
       const inside = !box || (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom)
+      seen = !!b.width && !!b.height && inside && visibleAt(cur, Math.max(0, b.right - 6), Math.max(0, b.top + 6))
       r.style.transform = `translate(${x}px, ${y}px)`
-      r.style.visibility = b.width && b.height && inside ? 'visible' : 'hidden'
+      r.style.visibility = seen ? 'visible' : 'hidden'
+      if (!lab || !seen) return
+      const lw = lab.offsetWidth
+      const lh = lab.offsetHeight
+      const roomBelow = window.innerHeight - b.bottom
+      const below = placement === 'below' || (placement === 'auto' && roomBelow > lh + 16)
+      // vertical: under the target's bottom edge, or above the dot
+      const top = below ? b.bottom - y + 6 : -(lh + 16)
+      // horizontal: right-aligned to the dot, clamped inside the viewport (8 px margin)
+      let left = 6 - lw
+      if (x + left < 8) left = 8 - x
+      if (x + left + lw > window.innerWidth - 8) left = window.innerWidth - 8 - lw - x
+      lab.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
     }
     place()
     gsap.ticker.add(place)
     return () => gsap.ticker.remove(place)
-  }, [show, el])
+  }, [show, el, placement, target])
 
   if (!show) return null
   const still = motionMode() !== 'full'

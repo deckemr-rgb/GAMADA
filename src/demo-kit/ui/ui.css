@@ -972,8 +972,20 @@ button.dk-chip:hover {
 .dk-kpi-tag:empty {
   display: none;
 }
-.dk-kpi-spark {
+.dk-kpi.is-wrap .dk-kpi-label {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+/* the number never shrinks; the spark gives way (and clips) when the cell is narrow */
+.dk-kpi-val {
   flex: none;
+}
+.dk-kpi-spark {
+  flex: 0 1 120px;
+  min-width: 0;
+  overflow: hidden;
+  justify-content: flex-end;
   display: inline-flex;
   margin-bottom: 4px;
   color: var(--dk-accent);
@@ -1474,6 +1486,7 @@ button.dk-chip:hover {
 /* ------------------------------------------------------------------ Inbox */
 .dk-inbox {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1547,6 +1560,7 @@ button.dk-chip:hover {
   gap: 8px;
 }
 .dk-inbox-title {
+  min-width: 0;
   overflow: hidden;
   color: var(--dk-muted);
   font: 500 var(--dk-t13) var(--dk-font);
@@ -1787,6 +1801,9 @@ button.dk-chip:hover {
   position: absolute;
   inset: 0;
   background: var(--dk-overlay);
+}
+.dk-ov--clear > .dk-ov-scrim {
+  background: transparent;
 }
 .dk-modal,
 .dk-drawer {

@@ -15,7 +15,7 @@ import type {
   Facility, Harvest, WaterGauge, SeedFacts,
 } from './types'
 import {
-  ACTION_TPL, AGENT_TEAMS, BIZ_KINDS, BIZ_WORDS, BRAND_TEXT, CALL_CUSTOMERS, CANDIDATE_ROLES, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
+  ACTION_TPL_BY_OPD, ACTION_TPL_GENERAL, AGENT_TEAMS, BIZ_KINDS, BIZ_WORDS, BRAND_TEXT, CALL_CUSTOMERS, CANDIDATE_ROLES, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
   CATEGORY_SLA_DAYS, COMPANY_WORDS, COMPETITOR_BRANDS, COMPLAINT_TEXT, COMPLAINT_WEIGHTS, LENDERS, LETTER_TPL, MEDIA_OUTLETS,
   MEETING_PARTICIPANTS, MEETING_TPL, MENTION_TEXT, PROCUREMENT_TPL, SHOP_NAMES, SKILLS, SKUS, SOCIAL_HANDLES, TENDER_TPL,
   PUMP_HISTORY, SPLIT_PACKAGES, PERSONAS,
@@ -273,6 +273,12 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   for (let i = 0; i < 6; i++) meetingDrafts.push({ title: MEETING_TPL[(i + 1) % MEETING_TPL.length]!, at: -rm.int(1, 14) * DAY_MIN + rm.int(8, 14) * 60, done: true })
   meetingDrafts.push({ title: MEETING_TPL[0]!, at: 9 * 60, done: false }, { title: MEETING_TPL[3]!, at: 13 * 60 + 30, done: false })
   meetingDrafts.sort((a, b) => a.at - b.at)
+  // today's flood meeting is the sample recording Naskah Pintar plays: its participants are the clip's speakers
+  // (the random draw still runs, so the rest of the seed is unchanged)
+  // the clip (media MEETING_BANJIR) names Camat Kalitidu; other regions fall back to their first flood kecamatan
+  const floodKecName = (region.kecamatan.find((k) => k.id === 'kalitidu') ?? region.kecamatan.find((k) => k.id === region.floodKecamatanIds[0]))?.name
+  const meetingPeople = (m: { title: Bi; done: boolean }, drawn: string[]): string[] =>
+    m.title === MEETING_TPL[0] && !m.done ? ['Sekda', 'Kepala Dinas PUPR', 'Kalaksa BPBD', 'Kepala Dinas Sosial', floodKecName ? `Camat ${floodKecName}` : 'Camat'] : drawn
   for (const m of meetingDrafts) {
     const id = nid('meetings')
     const items: string[] = []
@@ -282,12 +288,12 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
         const due = m.at + rm.int(2, 10) * DAY_MIN
         const opd = rm.pick(region.opd)
         const status: ActionItem['status'] = due < now ? rm.weighted([['selesai', 62], ['proses', 28], ['baru', 10]] as const) : rm.weighted([['baru', 50], ['proses', 45], ['selesai', 5]] as const)
-        actionItems.push({ id: aid, title: rm.pick(ACTION_TPL), opdId: opd.id, pic: `Kepala ${opd.short}`, dueAt: due, status, source: { kind: 'meeting', id }, createdAt: m.at + 90 })
+        actionItems.push({ id: aid, title: rm.pick(ACTION_TPL_BY_OPD[opd.id] ?? ACTION_TPL_GENERAL), opdId: opd.id, pic: `Kepala ${opd.short}`, dueAt: due, status, source: { kind: 'meeting', id }, createdAt: m.at + 90 })
         items.push(aid)
       }
     }
     meetings.push({
-      id, title: m.title, at: m.at, durationMin: rm.pick([60, 90, 120]), participants: rm.sample(MEETING_PARTICIPANTS, rm.int(4, 6)),
+      id, title: m.title, at: m.at, durationMin: rm.pick([60, 90, 120]), participants: meetingPeople(m, rm.sample(MEETING_PARTICIPANTS, rm.int(4, 6))),
       status: m.done ? 'selesai' : 'terjadwal', transcribed: m.done, summary: m.done ? { id: `Notulen ${m.title.id} disahkan.`, en: `Minutes of ${m.title.en} approved.` } : null,
       actionItemIds: items,
     })

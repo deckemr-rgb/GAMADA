@@ -41,6 +41,10 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   const [listening, setListening] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState<number | null>(null)
+  /** the transcript (+ meeting) whose follow-ups are in the world: saving it again would duplicate them */
+  const [savedFor, setSavedFor] = useState<string | null>(null)
+  const key = `${target}|${text.trim()}`
+  const already = savedFor === key
   const rec = useRef<Recognizer | null>(null)
   const base = useRef('')
   const supported = useMemo(() => recognitionSupported(), [])
@@ -92,12 +96,18 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   }
 
   const save = () => {
-    if (!out) return
+    if (!out || already) return
     const s = world.get()
+    const src = target ? target : null
+    const exists = (title: string, opdId: string) =>
+      s.actionItems.ids.some((id) => {
+        const x = s.actionItems.byId[id]
+        return !!x && x.source.id === src && x.opdId === opdId && x.title.id === title
+      })
     let n = 0
     for (const a of out.actionItems) {
       const opdId = resolveOpd(s, a.owner) ?? s.region.opd[0]?.id
-      if (!opdId) continue
+      if (!opdId || exists(a.task, opdId)) continue
       const opd = s.region.opd.find((o) => o.id === opdId)
       emit(
         'actionItem.created',
@@ -111,13 +121,14 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
       emit('meeting.transcribed', { meetingId: target, summary: { id: sum, en: sum } }, 'naskah-pintar')
     }
     setSaved(n)
+    setSavedFor(key)
     toast({ title: S.rSaved(n), tone: 'accent', icon: 'checkCircle' })
   }
 
   const names = opdNames.split('|')
   return (
     <section className="dk-np-card dk-np-recorder" aria-label={S.rTitle}>
-      <header className="dk-np-card-h">
+      <header className="dk-np-card-h dk-np-rec-h">
         <h3>
           <Icon name="mic" size={16} />
           {S.rTitle}
@@ -198,15 +209,15 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
                 <p className="dk-np-muted">{S.rNone}</p>
               )}
               {out.actionItems.length > 0 &&
-                (saved === null ? (
+                (saved !== null || already ? (
+                  <p className="dk-np-done" role="status">
+                    <Icon name="checkCircle" size={16} />
+                    {saved !== null ? S.rSaved(saved) : S.rAlready}
+                  </p>
+                ) : (
                   <Button variant="primary" icon="check" onClick={save} data-np="rec-save">
                     {S.rSave(out.actionItems.length)}
                   </Button>
-                ) : (
-                  <p className="dk-np-done" role="status">
-                    <Icon name="checkCircle" size={16} />
-                    {S.rSaved(saved)}
-                  </p>
                 ))}
             </>
           )}

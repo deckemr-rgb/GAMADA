@@ -346,7 +346,7 @@ export const REACTIONS: Reaction[] = [
     const t = NOTIFY_TEXT.booking
     return [fu('citizen.notified', {
       to: [cid], kind: 'antrean', refs: [ref('bookings', e.payload.id)],
-      text: fillBi({ id: t.id.replace('{service}', sv.id).replace('{place}', place.id), en: t.en.replace('{service}', sv.en).replace('{place}', place.en) }, { code, time }),
+      text: fillBi({ id: t.id.replace('{service}', sv.id).replace('{place}', place.id).replace('{time}', time.replace(':', '.')), en: t.en.replace('{service}', sv.en).replace('{place}', place.en) }, { code, time }),
     }, 'sapa-warga')]
   }),
 

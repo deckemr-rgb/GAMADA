@@ -13,7 +13,7 @@ async function autoDemoDone(chat: Locator): Promise<void> {
 }
 
 test('DemoShell boots from ?role= ?t= ?lang=en and keeps them in the URL', async ({ page, errors }) => {
-  await page.goto('/demo/siaga-wilayah?role=kepala-daerah&t=10:00&lang=en&off=preloader')
+  await page.goto('/demo/indeks-ekonomi?role=kepala-daerah&t=10:00&lang=en&off=preloader')
   await settle(page)
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   // the placeholder marks the session role (from ?role=) as current, in English

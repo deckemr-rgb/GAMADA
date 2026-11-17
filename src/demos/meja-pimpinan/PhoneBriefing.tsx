@@ -10,7 +10,7 @@ import { PhoneFrame } from '../../demo-kit/frames'
 import { Icon, Modal, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
 import { cancel, speak } from '../../demo-kit/media'
 import { hhmm, rows, useClock, useWorld, world, type WorldState } from '../../demo-kit/world'
-import { briefingItems } from '../../demo-kit/world/satu-daerah'
+import { mpBriefingItems } from './data'
 import type { Bi } from './strings'
 
 const H = {
@@ -39,7 +39,7 @@ export default function PhoneBriefing({ open, onClose, onCompose, onInstruct, le
   const [openItem, setOpenItem] = useState<number | null>(null)
   const [talking, setTalking] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
-  const cur = useMemo(() => briefingItems(world.get(), now), [b, now])
+  const cur = useMemo(() => mpBriefingItems(world.get(), now), [b, now])
   const detail = (title: Bi) => cur.find((c) => c.title.id === title.id)?.detail[lang] ?? null
   const at = b ? hhmm(b.at).replace(':', '.') : ''
   const sources = b ? new Set(b.items.map((i) => i.source)).size : 0

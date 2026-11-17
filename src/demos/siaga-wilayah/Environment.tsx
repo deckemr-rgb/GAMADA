@@ -2,7 +2,7 @@
  * siaga-wilayah/Environment.tsx — tab "Lingkungan" (lazy): SIMULATED land-use change detection. Four change sites in
  * real kecamatan (sites.ts), each with a before/after comparison of the procedural "citra (simulasi)" (imagery.ts):
  * drag the slider (or use the arrow keys) to wipe between 2019 and 2026. The map flies to the site and shows the
- * sites as markers; the full-region imagery is one switch away.
+ * sites as markers; the real Sentinel-2 2016 mosaic (kit `imagery` layer) is one switch away.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
@@ -12,7 +12,7 @@ import { world } from '../../demo-kit/world'
 import { loadRegionGeo } from '../../demo-kit/region/loader'
 import { changeSites, KIND_LABEL, type ChangeSite } from './sites'
 import { fill, nf, type Bi } from './strings'
-import { mapRef, ui, useUi } from './ui'
+import { mapRef, revealMap, ui, useUi } from './ui'
 import './more.css'
 
 const T = {
@@ -24,9 +24,9 @@ const T = {
   mark: { id: 'Tandai area berubah', en: 'Outline the changed area' },
   area: { id: '{n} ha', en: '{n} ha' },
   conf: { id: 'keyakinan model {n} %', en: 'model confidence {n} %' },
-  imgOn: { id: 'Tampilkan citra di peta', en: 'Show imagery on the map' },
-  imgOff: { id: 'Sembunyikan citra di peta', en: 'Hide imagery on the map' },
-  note: { id: 'Citra prosedural (simulasi), bukan citra satelit asli. Lokasi kecamatan nyata; perubahan, luas dan keyakinan adalah simulasi.', en: 'Procedural imagery (simulated), not real satellite data. District locations are real; changes, areas and confidence are simulated.' },
+  imgOn: { id: 'Tampilkan citra Sentinel-2 (2016) di peta', en: 'Show Sentinel-2 (2016) imagery on the map' },
+  imgOff: { id: 'Sembunyikan citra satelit di peta', en: 'Hide the satellite imagery on the map' },
+  note: { id: 'Perbandingan sebelum/sesudah ini citra prosedural (simulasi), bukan citra satelit asli. Lokasi kecamatan nyata; perubahan, luas dan keyakinan adalah simulasi. Citra di peta adalah mosaik Sentinel-2 bebas awan 2016 (EOX, CC BY 4.0).', en: 'This before/after comparison is procedural imagery (simulated), not real satellite data. District locations are real; changes, areas and confidence are simulated. The map imagery is the Sentinel-2 cloudless 2016 mosaic (EOX, CC BY 4.0).' },
   rendering: { id: 'Menyusun citra simulasi…', en: 'Rendering simulated imagery…' },
 } satisfies Record<string, Bi>
 
@@ -63,24 +63,25 @@ export default function Environment() {
 
   const cur = sites.find((x) => x.id === site) ?? null
   const pick = (x: ChangeSite) => {
+    revealMap()
     ui.set({ site: x.id, picked: { layer: 'changes', id: x.id } })
     mapRef.current?.flyTo(x.center, 13)
   }
 
   return (
-    <div className="dk-sw-tab">
-      <section className="dk-sw-card" aria-labelledby="sw-env-h">
-        <h3 className="dk-sw-h" id="sw-env-h">
+    <div className="dk-sg-tab">
+      <section className="dk-sg-card" aria-labelledby="sw-env-h">
+        <h3 className="dk-sg-h" id="sw-env-h">
           <Icon name="eye" size={16} />
           {L('title')}
         </h3>
-        <p className="dk-sw-muted">{L('lead')}</p>
-        <ul className="dk-sw-sites">
+        <p className="dk-sg-muted">{L('lead')}</p>
+        <ul className="dk-sg-sites">
           {sites.map((x) => (
             <li key={x.id}>
               <button type="button" aria-pressed={x.id === site} onClick={() => pick(x)}>
                 <strong>{KIND_LABEL[x.kind][lang]}</strong>
-                <span className="dk-sw-muted">
+                <span className="dk-sg-muted">
                   Kec. {x.kecamatanName} · {L('area', { n: nf(x.areaHa, lang) })}
                 </span>
               </button>
@@ -89,10 +90,13 @@ export default function Environment() {
         </ul>
       </section>
       {cur ? <Compare key={cur.id} site={cur} L={L} /> : <Skeleton height={240} radius={14} />}
-      <Button variant="secondary" size="sm" icon="globe" aria-pressed={imgOn} onClick={() => ui.layer('imagery', !imgOn)}>
+      <Button variant="secondary" size="sm" icon="globe" aria-pressed={imgOn} onClick={() => {
+        if (!imgOn) revealMap()
+        ui.layer('imagery', !imgOn)
+      }}>
         {imgOn ? L('imgOff') : L('imgOn')}
       </Button>
-      <p className="dk-sw-note">{L('note')}</p>
+      <p className="dk-sg-note">{L('note')}</p>
     </div>
   )
 }
@@ -141,44 +145,44 @@ function Compare({ site, L }: { site: ChangeSite; L: (k: keyof typeof T, v?: Rec
   // the changed area: blob radius → % of the crop
   const rPct = (site.radiusKm / CMP.kmW) * 100
   return (
-    <section className="dk-sw-card" aria-label={`${KIND_LABEL[site.kind][lang]} · Kec. ${site.kecamatanName}`}>
-      <div className={`dk-sw-cmp${ready ? '' : ' is-busy'}`}>
+    <section className="dk-sg-card" aria-label={`${KIND_LABEL[site.kind][lang]} · Kec. ${site.kecamatanName}`}>
+      <div className={`dk-sg-cmp${ready ? '' : ' is-busy'}`}>
         <canvas ref={beforeRef} width={CMP.w} height={CMP.h} aria-hidden="true" />
-        <div ref={clipRef} className="dk-sw-cmp-after" style={{ clipPath: 'inset(0 0 0 50%)' }}>
+        <div ref={clipRef} className="dk-sg-cmp-after" style={{ clipPath: 'inset(0 0 0 50%)' }}>
           <canvas ref={afterRef} width={CMP.w} height={CMP.h} aria-hidden="true" />
           {mark && (
-            <svg className="dk-sw-cmp-mark" viewBox="0 0 100 62.5" preserveAspectRatio="none" aria-hidden="true">
+            <svg className="dk-sg-cmp-mark" viewBox="0 0 100 62.5" preserveAspectRatio="none" aria-hidden="true">
               <ellipse cx="50" cy="31.25" rx={rPct * 1.15} ry={rPct * 1.15} />
             </svg>
           )}
         </div>
-        <div ref={knobRef} className="dk-sw-cmp-knob" style={{ transform: 'translateX(50cqw)' }} aria-hidden="true">
+        <div ref={knobRef} className="dk-sg-cmp-knob" style={{ transform: 'translateX(50cqw)' }} aria-hidden="true">
           <span />
         </div>
-        <span className="dk-sw-cmp-tag is-l">{L('before')}</span>
-        <span className="dk-sw-cmp-tag is-r">{L('after')}</span>
-        {!ready && <span className="dk-sw-cmp-wait">{L('rendering')}</span>}
+        <span className="dk-sg-cmp-tag is-l">{L('before')}</span>
+        <span className="dk-sg-cmp-tag is-r">{L('after')}</span>
+        {!ready && <span className="dk-sg-cmp-wait">{L('rendering')}</span>}
         <input
           type="range"
           min={0}
           max={100}
           step={1}
           defaultValue={50}
-          className="dk-sw-cmp-range"
+          className="dk-sg-cmp-range"
           aria-label={L('slider')}
           aria-valuetext={`${L('before')} | ${L('after')}`}
           onInput={(e) => onInput(Number((e.target as HTMLInputElement).value))}
           data-sw="compare"
         />
       </div>
-      <div className="dk-sw-cmp-meta">
+      <div className="dk-sg-cmp-meta">
         <p>
           <strong>{site.from[lang]}</strong> → <strong>{site.to[lang]}</strong>
         </p>
-        <p className="dk-sw-muted">
+        <p className="dk-sg-muted">
           Kec. {site.kecamatanName} · {L('area', { n: nf(site.areaHa, lang) })} · {L('conf', { n: Math.round(site.confidence * 100) })}
         </p>
-        <label className="dk-sw-check">
+        <label className="dk-sg-check">
           <input type="checkbox" checked={mark} onChange={(e) => setMark(e.target.checked)} />
           {L('mark')}
         </label>

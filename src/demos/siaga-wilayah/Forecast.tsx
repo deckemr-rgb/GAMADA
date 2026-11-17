@@ -13,7 +13,7 @@ import type { FloodImpact } from '../../demo-kit/map'
 import { ensureRain } from './Timeline'
 import { riverGauge } from './data'
 import { fill, nf, type Bi } from './strings'
-import { ensureDesa, mapRef, ui, useUi } from './ui'
+import { ensureDesa, impactAt, mapRef, revealMap, ui, useUi } from './ui'
 import { useI18n } from '../../lib/i18n'
 import './more.css'
 
@@ -66,11 +66,12 @@ export default function Forecast() {
   const i6 = useUi((s) => s.impact6)
   const desaReady = useUi((s) => s.desaReady)
   const [busy, setBusy] = useState(false)
+  const sel = useUi((s) => s.selectedKec)
   const g = useWorld(riverGauge)
   const peakRain = useWorld(rainPeak)
 
   useEffect(() => {
-    if (desaReady && !i6) ui.set({ impact6: mapRef.current?.floodImpact(6) ?? null })
+    if (desaReady && !i6) ui.set({ impact6: impactAt(6) })
   }, [desaReady, i6])
 
   const imp = useMemo(() => (i6 ? project(i6, h) : null), [i6, h])
@@ -103,7 +104,7 @@ export default function Forecast() {
   }
 
   return (
-    <div className="dk-sw-tab">
+    <div className="dk-sg-tab">
       <Segmented
         label={L('horizon')}
         value={h}
@@ -115,7 +116,7 @@ export default function Forecast() {
         ]}
       />
       {!imp ? (
-        <section className="dk-sw-card">
+        <section className="dk-sg-card">
           <p>{busy || (desaReady && !i6) ? L('loading') : L('need')}</p>
           <Button variant="primary" size="sm" icon="play" onClick={compute} busy={busy}>
             {L('run')}
@@ -123,7 +124,7 @@ export default function Forecast() {
         </section>
       ) : (
         <>
-          <dl className="dk-sw-kpis dk-sw-card" aria-live="polite">
+          <dl className="dk-sg-kpis dk-sg-card" aria-live="polite">
             <div>
               <dd className="dk-num">{nf(imp.desa.length, lang)}</dd>
               <dt>{L('desa')}</dt>
@@ -141,32 +142,34 @@ export default function Forecast() {
               <dt>{L('peak')}</dt>
             </div>
           </dl>
-          <section className="dk-sw-card" aria-labelledby="sw-fc-list">
-            <h3 className="dk-sw-h" id="sw-fc-list">
+          <section className="dk-sg-card" aria-labelledby="sw-fc-list">
+            <h3 className="dk-sg-h" id="sw-fc-list">
               <Icon name="pin" size={16} />
               {L('list')}
             </h3>
-            <ol className="dk-sw-desa">
+            <ol className="dk-sg-desa">
               {imp.desa.slice(0, size === 'sm' ? 6 : 10).map((d) => (
                 <li key={d.id}>
                   <button
                     type="button"
+                    aria-current={sel === d.kecamatanId || undefined}
                     onClick={() => {
+                      revealMap()
                       ui.set({ selectedKec: d.kecamatanId })
                       mapRef.current?.fitKecamatan(d.kecamatanId)
                     }}
                   >
                     <span>
                       <strong>{d.name}</strong>
-                      <span className="dk-sw-muted"> · {kecName(d.kecamatanId)}</span>
+                      <span className="dk-sg-muted"> · {kecName(d.kecamatanId)}</span>
                     </span>
-                    <span className="dk-sw-muted dk-num">{h === '72' ? L('receding') : L('onset', { h: nf(d.onset, lang, 1) })}</span>
+                    <span className="dk-sg-muted dk-num">{h === '72' ? L('receding') : L('onset', { h: nf(d.onset, lang, 1) })}</span>
                     <span className="dk-num">{L('ppl', { n: nf(d.people, lang) })}</span>
                   </button>
                 </li>
               ))}
             </ol>
-            <p className="dk-sw-fine">{L('peopleNote')}</p>
+            <p className="dk-sg-fine">{L('peopleNote')}</p>
           </section>
         </>
       )}
@@ -186,7 +189,7 @@ export default function Forecast() {
           height={size === 'sm' ? 160 : 150}
         />
       )}
-      <p className="dk-sw-note">{L('mapNote')}</p>
+      <p className="dk-sg-note">{L('mapNote')}</p>
     </div>
   )
 }

@@ -6,7 +6,7 @@
  * Participants, agenda and discussion points below are derived from the same transcript lines.
  */
 import type { ActionItem, Bi, Meeting, Minutes, WorldState } from '../../demo-kit/world'
-import { DAY_MIN, hhmm } from '../../demo-kit/world/util'
+import { DAY_MIN, hhmm, rows } from '../../demo-kit/world/util'
 import type { ClipSegment } from '../../demo-kit/media/playback'
 import { MEETING_BANJIR, MEETING_BANJIR_NOTES } from '../../demo-kit/media/samples'
 import type { RoleId } from '../../content/products'
@@ -81,17 +81,85 @@ export const SPEAKER_FIRST: { id: string; seg: number }[] = (() => {
 })()
 
 export const SUMMARY: Bi = {
-  id: 'Rapat koordinasi membahas kenaikan Bengawan Solo (Siaga II) dan rembesan tanggul Ngujo. Diputuskan: PUPR menangani tanggul hari ini, pinjam pakai 4 pompa, Dinsos memverifikasi 50 berkas bansos, BPBD menyiarkan peringatan dini, dan Camat Kalitidu menyiapkan titik evakuasi.',
-  en: 'The coordination meeting covered the rising Bengawan Solo (alert level II) and the Ngujo embankment seepage. Decided: Public Works fixes the embankment today, 4 pumps are borrowed, Social Affairs verifies 50 aid files, BPBD broadcasts early warnings and the Head of Kalitidu prepares an evacuation point.',
+  id: 'Rapat koordinasi membahas kenaikan muka air Bengawan Solo dan rembesan tanggul Ngujo. Diputuskan: PUPR menangani tanggul hari ini, pinjam pakai 4 pompa, Dinsos memverifikasi 50 berkas bansos, BPBD menyiarkan peringatan dini, dan Camat Kalitidu menyiapkan titik evakuasi.',
+  en: 'The coordination meeting covered the rising Bengawan Solo and the Ngujo embankment seepage. Decided: Public Works fixes the embankment today, 4 pumps are borrowed, Social Affairs verifies 50 aid files, BPBD broadcasts early warnings and the Head of Kalitidu prepares an evacuation point.',
 }
 
 /** the transcript as plain text for the AI ("Sekda: …") */
-export function transcriptText(lang: Lang, upTo = CLIP.segments.length - 1): string {
+export function transcriptText(lang: Lang, segments: ClipSegment[] = CLIP.segments, upTo = segments.length - 1): string {
   const name = new Map(CLIP.speakers.map((sp) => [sp.id, sp.label[lang]]))
-  return CLIP.segments
+  return segments
     .slice(0, upTo + 1)
     .map((s) => `${name.get(s.speaker) ?? s.speaker}: ${lang === 'en' && s.en ? s.en : s.text}`)
     .join('\n')
+}
+
+/* ------------------------------------------------------------------ the meeting's facts, from the world */
+
+/**
+ * The river report in the meeting (transcript line 2 + discussion point 1) is read from the world the moment the
+ * meeting is first shown: the river gauge (level vs alert level, rising or not) and the districts of today's flood
+ * reports, so the minutes say what Meja Pimpinan and Siaga Wilayah show (all labelled simulated). Frozen per
+ * meeting for the session, so a replay or the official minutes never drift from what was "said".
+ */
+export interface MeetingFacts {
+  topic: Bi
+  line: { text: string; en: string }
+}
+const factsCache = new Map<string, MeetingFacts | null>()
+const nId = (n: number, d: number) => n.toFixed(d).replace('.', ',')
+const listId = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} dan ${xs[xs.length - 1]}` : (xs[0] ?? ''))
+const listEn = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : (xs[0] ?? ''))
+
+export function meetingFacts(s: WorldState, meetingId: string | undefined, now: Minutes): MeetingFacts | null {
+  const key = `${s.day}:${meetingId ?? '-'}`
+  if (factsCache.has(key)) return factsCache.get(key) ?? null
+  const river = rows(s.gauges).find((g) => g.kind === 'sungai')
+  if (!river) return null // world not loaded yet: keep the recording's own words, do not cache
+  const kecName = (id: string) => s.region.kecamatan.find((k) => k.id === id)?.name ?? id
+  const count = new Map<string, number>()
+  for (const c of rows(s.complaints)) if (c.category === 'banjir' && c.at >= 0 && c.at <= now) count.set(c.kecamatanId, (count.get(c.kecamatanId) ?? 0) + 1)
+  const kec = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
+  for (const k of s.region.floodKecamatanIds) if (kec.length < 3 && !kec.includes(k)) kec.push(k)
+  const names = kec.slice(0, 4).map(kecName)
+  const rising = river.level - (river.history[0] ?? river.level) > 0.05
+  const near = river.normal + (river.siaga - river.normal) * 0.6
+  const st =
+    river.level >= river.awas
+      ? { id: 'sudah melewati batas awas', en: 'above the danger level' }
+      : river.level >= river.siaga
+        ? { id: 'sudah melewati batas siaga', en: 'above the alert level' }
+        : river.level >= near
+          ? { id: 'mendekati batas siaga', en: 'close to the alert level' }
+          : { id: 'masih di bawah batas siaga', en: 'still below the alert level' }
+  const lim = river.level >= river.siaga ? river.awas : river.siaga
+  const trend = rising ? { id: 'masih naik', en: 'still rising' } : { id: 'mulai stabil', en: 'levelling off' }
+  const where = names.length ? { id: listId(names), en: listEn(names) } : null
+  const spoken = river.name.replace(/\s*·\s*/g, ' ')
+  const facts: MeetingFacts = {
+    topic: {
+      id: `Muka air ${river.name} ${nId(river.level, 2)} m, ${st.id} (${nId(lim, 1)} m) dan ${trend.id}${where ? `; genangan dilaporkan di ${where.id}` : ''} (data simulasi).`,
+      en: `${river.name} at ${river.level.toFixed(2)} m, ${st.en} (${lim.toFixed(1)} m) and ${trend.en}${where ? `; flooding reported in ${where.en}` : ''} (simulated data).`,
+    },
+    line: {
+      text: `Muka air ${spoken} ${nId(river.level, 2)} meter, ${st.id} ${nId(lim, 1)} meter, dan ${trend.id}.${where ? ` Genangan dilaporkan di ${where.id}.` : ''}`,
+      en: `The ${spoken} gauge reads ${river.level.toFixed(2)} metres, ${st.en} of ${lim.toFixed(1)} metres, and ${trend.en}.${where ? ` Flooding is reported in ${where.en}.` : ''}`,
+    },
+  }
+  factsCache.set(key, facts)
+  return facts
+}
+
+/** discussion points with the world's river report in point 1 */
+export function topicsWith(facts: MeetingFacts | null): ScriptLine[] {
+  return facts ? SCRIPT.topics.map((t) => (t.key === 't1' ? { ...t, text: facts.topic } : t)) : SCRIPT.topics
+}
+
+/** the clip's segments with line 2 (the river report) spoken from the world; timing unchanged */
+export function segmentsWith(facts: MeetingFacts | null): { voice: ClipSegment[]; fast: ClipSegment[] } {
+  if (!facts) return { voice: SEGS_VOICE, fast: SEGS_FAST }
+  const swap = (list: ClipSegment[]) => list.map((sg, i) => (i === 1 ? { ...sg, text: facts.line.text, en: facts.line.en } : sg))
+  return { voice: swap(SEGS_VOICE), fast: swap(SEGS_FAST) }
 }
 
 /* ------------------------------------------------------------------ world helpers */

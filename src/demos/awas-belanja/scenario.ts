@@ -207,7 +207,7 @@ const INTENTS: Intent<AbContext>[] = [
   },
   {
     id: 'pemenang-berulang',
-    examples: ['Siapa yang sering menang?', 'Apakah pemenangnya itu-itu saja', 'Who keeps winning?', 'Is there a repeat winner', 'Sing menang kok iku-iku wae?'],
+    examples: ['Siapa yang sering menang?', 'Siapa pemenangnya?', 'Apakah pemenangnya itu-itu saja', 'Who keeps winning?', 'Who won?', 'Who is the winner', 'Is there a repeat winner', 'Sing menang kok iku-iku wae?', 'Sapa sing menang?'],
     respond: detectorAnswer('pemenang-berulang'),
   },
   {

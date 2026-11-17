@@ -48,6 +48,8 @@ export interface VoiceRecorderProps {
   /** accessible name / visible caption of the hold button */
   label?: string
   className?: string
+  /** words per second of the sample playback timeline (default 2.3; higher = shorter sample, e.g. 4 ≈ 7 s) */
+  sampleWps?: number
 }
 
 type Phase = 'idle' | 'starting' | 'recording' | 'finishing' | 'sample'
@@ -98,7 +100,7 @@ const S = {
   },
 }
 
-export function VoiceRecorder({ speechCodes, sample, onResult, onInterim, label, className }: VoiceRecorderProps) {
+export function VoiceRecorder({ speechCodes, sample, onResult, onInterim, label, className, sampleWps = 2.3 }: VoiceRecorderProps) {
   const { lang } = useI18n()
   const s = S[lang]
   const langs = useMemo(() => speechLangs(speechCodes), [speechCodes])
@@ -119,7 +121,7 @@ export function VoiceRecorder({ speechCodes, sample, onResult, onInterim, label,
   cb.current = { onResult, onInterim }
 
   /* ---------------------------------------------------------------- sample voice note */
-  const sampleSegs = useMemo(() => timeline([{ speaker: 'warga', text: sample.text }], { wps: 2.3, start: 0.2 }), [sample.text])
+  const sampleSegs = useMemo(() => timeline([{ speaker: 'warga', text: sample.text }], { wps: sampleWps, start: 0.2 }), [sample.text, sampleWps])
   const samplePeaks = useMemo(() => peaksForClip(sampleSegs, 48, sample.id.length * 13), [sampleSegs, sample.id])
   const { pb, state: ps } = usePlayback(sampleSegs, sample.lang, { rate: RECORDER.sampleRate })
   const sampleWords = useMemo(() => wordsOf(sample.text), [sample.text])
@@ -279,6 +281,9 @@ export function VoiceRecorder({ speechCodes, sample, onResult, onInterim, label,
       <div className="dk-vr-main">
         {!block ? (
           <button
+            // distinct keys: when the mic is denied mid-hold, the sample button must be a NEW element, so the
+            // release of the hold does not land on it as a click
+            key="hold"
             type="button"
             className="dk-vr-btn"
             aria-pressed={recording}
@@ -297,7 +302,7 @@ export function VoiceRecorder({ speechCodes, sample, onResult, onInterim, label,
             <span className="dk-sr">{label ?? s.hold}</span>
           </button>
         ) : (
-          <button type="button" className="dk-vr-btn is-sample" onClick={playSample} aria-pressed={phase === 'sample'}>
+          <button key="sample" type="button" className="dk-vr-btn is-sample" onClick={playSample} aria-pressed={phase === 'sample'}>
             <span ref={ring} className="dk-vr-ring" aria-hidden="true" />
             <Icon name={phase === 'sample' ? 'pause' : 'play'} size={26} />
             <span className="dk-sr">{phase === 'sample' ? s.stop : s.sample}</span>

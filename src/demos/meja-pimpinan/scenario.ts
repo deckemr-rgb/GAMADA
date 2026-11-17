@@ -8,7 +8,7 @@
 import type { Intent, Scenario, SimContext, SimResponse, Lang } from '../../demo-kit/ai/chat'
 import { CATEGORY_LABEL, DAY_MIN, clock, negativeIssues, overdueActions, rows, world, type ComplaintCategory, type Minutes, type WorldState } from '../../demo-kit/world'
 import { briefingItems, complaintsByKecamatan, kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
-import { devOf, kecName, opdShort, opdsInText } from './data'
+import { devOf, kecName, opdShort, opdsInText, riskRank, riskiestProcurement, topRiser } from './data'
 import type { AskContext } from './ideas'
 import { categoryOf, forecastOf, runQuery, type QueryResult, type QuerySpec } from './query'
 import { topicLabel } from './strings'
@@ -70,7 +70,9 @@ const F = {
   },
 }
 const chips = (lang: Lang, ...k: (keyof (typeof F)['id'])[]) => k.map((x) => F[lang][x])
-const catName = (c: ComplaintCategory, lang: Lang) => CATEGORY_LABEL[c][lang].toLowerCase()
+/** a label mid-sentence: lower case, but acronyms stay ("PJU mati", not "pju mati") */
+const lc = (t: string) => (/^[A-Z]{2}/.test(t) ? t : t.toLowerCase())
+const catName = (c: ComplaintCategory, lang: Lang) => lc(CATEGORY_LABEL[c][lang])
 
 /* ------------------------------------------------------------------ intents */
 
@@ -127,7 +129,7 @@ const intents: Intent[] = [
       if (cat === 'jalan-rusak') causes.push(L === 'id' ? 'diduga juga lalu lintas truk musim panen di ruas kabupaten' : 'harvest-season truck traffic on district roads is another likely factor')
       if (cat === 'sampah') causes.push(L === 'id' ? 'diduga jadwal angkut terganggu di sekitar pasar' : 'collection schedules near markets were probably disrupted')
       const why = causes.length ? (L === 'id' ? ` Kemungkinan penyebab: ${causes.join('; ')}.` : ` Likely causes: ${causes.join('; ')}.`) : ''
-      return { text: head + where + why, structured: query(spec), toolCalls: [step(spec, r)], followUps: [L === 'id' ? `Instruksikan ${opdShort(s, s.region.categoryOpd[cat])} menangani ${name} di ${top?.label ?? s.region.shortName}` : `Instruct ${opdShort(s, s.region.categoryOpd[cat])} to handle ${CATEGORY_LABEL[cat].en.toLowerCase()} in ${top?.label ?? s.region.shortName}`, ...chips(L, 'forecast', 'slow')] }
+      return { text: head + where + why, structured: query(spec), toolCalls: [step(spec, r)], followUps: [L === 'id' ? `Instruksikan ${opdShort(s, s.region.categoryOpd[cat])} menangani ${name} di ${top?.label ?? s.region.shortName}` : `Instruct ${opdShort(s, s.region.categoryOpd[cat])} to handle ${lc(CATEGORY_LABEL[cat].en)} in ${top?.label ?? s.region.shortName}`, ...chips(L, 'forecast', 'slow')] }
     },
   },
   {
@@ -145,7 +147,7 @@ const intents: Intent[] = [
       const top3 = r.rows.slice(0, 3).map((x) => `${x.label} (${x.value})`).join(', ')
       const L = ctx.lang
       const text = r.rows.length
-        ? L === 'id' ? `Tiga kecamatan dengan aduan${cat ? ` ${catName(cat, L)}` : ''} terbanyak dalam 7 hari: ${top3}. Total ${r.total} aduan di ${r.rows.length} kecamatan. Peta saya arahkan ke ${r.rows[0]!.label}.` : `Top three districts by${cat ? ` ${CATEGORY_LABEL[cat].en.toLowerCase()}` : ''} complaints in 7 days: ${top3}. ${r.total} complaints across ${r.rows.length} districts. The map now shows ${r.rows[0]!.label}.`
+        ? L === 'id' ? `Tiga kecamatan dengan aduan${cat ? ` ${catName(cat, L)}` : ''} terbanyak dalam 7 hari: ${top3}. Total ${r.total} aduan di ${r.rows.length} kecamatan. Peta saya arahkan ke ${r.rows[0]!.label}.` : `Top three districts by${cat ? ` ${lc(CATEGORY_LABEL[cat].en)}` : ''} complaints in 7 days: ${top3}. ${r.total} complaints across ${r.rows.length} districts. The map now shows ${r.rows[0]!.label}.`
         : L === 'id' ? 'Belum ada aduan dalam 7 hari terakhir untuk kriteria itu.' : 'No complaints in the last 7 days for that criterion.'
       return { text, structured: query(spec), toolCalls: [step(spec, r)], followUps: chips(L, 'cause', 'forecast', 'slow') }
     },
@@ -202,6 +204,30 @@ const intents: Intent[] = [
     },
   },
   {
+    id: 'bandingkan-minggu',
+    examples: [
+      'Bandingkan aduan minggu ini dengan minggu lalu', 'Aduan minggu ini dibanding minggu lalu', 'Apakah aduan naik dibanding pekan lalu?', 'Perbandingan aduan pekan ini dan pekan lalu',
+      'Compare complaints this week with last week', 'Are complaints up versus last week?', 'Week over week complaints', 'This week vs last week',
+      'Aduan minggu iki dibandhing minggu wingi', 'Aduane mundhak ora tinimbang minggu wingi?',
+    ],
+    respond: (ctx) => {
+      const { s, now } = ws(ctx)
+      const L = ctx.lang
+      const spec: QuerySpec = { metric: 'complaints', groupBy: 'category', range: '7d', chart: 'bar' }
+      const r = runQuery(s, now, spec, L)
+      const cur = r.rows.reduce((a, x) => a + x.value, 0)
+      const prev = r.rows.reduce((a, x) => a + (x.prev ?? 0), 0)
+      const moves = [...r.rows].map((x) => ({ x, d: x.value - (x.prev ?? 0) })).sort((a, b) => b.d - a.d)
+      const up = moves.filter((m) => m.d > 0).slice(0, 2)
+      const down = moves.filter((m) => m.d < 0).slice(-2).reverse()
+      const list = (ms: typeof up) => ms.map((m) => `${lc(m.x.label)} ${m.d > 0 ? '+' : '−'}${Math.abs(m.d)}`).join(', ')
+      const text = L === 'id'
+        ? `7 hari terakhir ${cur} aduan, pekan sebelumnya ${prev} (${pct(L, cur, prev)}).${up.length ? ` Naik paling banyak: ${list(up)}.` : ''}${down.length ? ` Turun: ${list(down)}.` : ''} Batang tipis di grafik = pekan lalu.`
+        : `Last 7 days: ${cur} complaints, the week before: ${prev} (${pct(L, cur, prev)}).${up.length ? ` Biggest rises: ${list(up)}.` : ''}${down.length ? ` Falls: ${list(down)}.` : ''} The thin bars in the chart are last week.`
+      return { text, structured: query(spec), toolCalls: [step(spec, r)], followUps: chips(L, 'cause', 'rank', 'forecast') }
+    },
+  },
+  {
     id: 'tren-sla',
     examples: [
       'Bagaimana tren SLA 30 hari terakhir?', 'Apakah ketepatan waktu layanan membaik?', 'Tren penyelesaian tiket tepat waktu', 'Grafik SLA sebulan',
@@ -225,7 +251,7 @@ const intents: Intent[] = [
   {
     id: 'prediksi-aduan',
     examples: [
-      'Perkiraan jumlah aduan tiga hari ke depan', 'Prediksi aduan besok', 'Berapa aduan yang akan masuk besok?', 'Proyeksi aduan minggu ini',
+      'Perkiraan jumlah aduan tiga hari ke depan', 'Prediksi aduan besok', 'Berapa aduan yang akan masuk besok?', 'Proyeksi aduan beberapa hari ke depan',
       'Forecast complaints for the next three days', 'How many complaints should we expect tomorrow?', 'Predict tomorrow complaints',
       'Sesuk kira-kira aduan pira?', 'Ramalan aduan telung dina ngarep',
     ],
@@ -301,8 +327,8 @@ const intents: Intent[] = [
       const L = ctx.lang
       const spec: QuerySpec = { metric: 'procurement_risk', groupBy: 'none', range: '30d', chart: 'bar' }
       const r = runQuery(s, now, spec, L)
-      const ps = rows(s.procurements).filter((p) => p.status !== 'selesai').sort((a, b) => (b.riskScore ?? devOf(b)) - (a.riskScore ?? devOf(a)))
-      const p = ps[0]
+      const ps = rows(s.procurements).filter((p) => p.status !== 'selesai').sort((a, b) => riskRank(b) - riskRank(a))
+      const p = riskiestProcurement(s)
       const text = p
         ? L === 'id' ? `Paling berisiko: ${p.name.id} (${p.code}), ${p.flagged ? `skor risiko ${p.riskScore} dari Awas Belanja` : `HPS ${nf(L, devOf(p))}% di atas harga pasar dan belum dianalisis`}. ${ps.filter((x) => devOf(x) > 20).length} paket punya HPS > 20% di atas pasar. Saran: minta reviu Inspektorat sebelum kontrak.` : `Highest risk: ${p.name.en} (${p.code}), ${p.flagged ? `risk score ${p.riskScore} from Awas Belanja` : `cost estimate ${nf(L, devOf(p))}% above market, not analysed yet`}. ${ps.filter((x) => devOf(x) > 20).length} packages have estimates > 20% above market. Suggestion: ask the Inspectorate to review before signing.`
         : L === 'id' ? 'Tidak ada paket pengadaan aktif.' : 'No active procurement packages.'
@@ -313,26 +339,41 @@ const intents: Intent[] = [
     id: 'harga-pangan',
     examples: [
       'Harga bahan pokok apa yang naik minggu ini?', 'Harga cabai naik berapa persen?', 'Bagaimana harga beras di pasar?', 'Komoditas yang harganya melonjak',
-      'Which food prices are rising?', 'How are market prices this week?', 'How much did chilli prices go up?',
+      'Which food prices are rising?', 'How are market prices this week?', 'How much did chilli prices go up?', 'Which price rose most this week?', 'What got more expensive this week?', 'Forecast chilli prices for next week',
+      'Ramalkan harga cabai minggu depan', 'Perkiraan harga beras ke depan',
       'Rega lombok munggah pira?', 'Regane beras piye saiki?',
     ],
     respond: (ctx) => {
       const { s, now } = ws(ctx)
       const L = ctx.lang
       const t = norm(ctx.text)
-      const com = s.region.commodities.find((c) => t.includes(norm(c.name.id).split(' ')[0]!) || t.includes(norm(c.name.en).split(' ').slice(-1)[0]!) || (/lombok|chilli|chili/.test(t) && c.id.startsWith('cabai')))
+      // whole words only ("price" must not read as "rice")
+      const tw = ` ${t} `
+      const has = (w: string | undefined) => !!w && tw.includes(` ${w} `)
+      const com = s.region.commodities.find((c) => has(norm(c.name.id).split(' ')[0]) || has(norm(c.name.en).split(' ').slice(-1)[0]) || (/\b(lombok|chilli|chili|chillies)\b/.test(t) && c.id.startsWith('cabai')))
       const spec: QuerySpec = com ? { metric: 'prices', groupBy: 'market', range: '7d', filter: { commodity: com.id }, chart: 'bar' } : { metric: 'prices', groupBy: 'commodity', range: '7d', chart: 'bar' }
       const r = runQuery(s, now, spec, L)
       const top = r.rows[0]
       const pts = rows(s.prices).filter((p) => !com || p.commodityId === com.id)
       const avgP = pts.length ? pts.reduce((a, p) => a + p.price, 0) / pts.length : 0
       const op = rows(s.marketOps).find((m) => m.stage === 'recommended')
-      const text = top
+      const tr0 = topRiser(s)
+      const trName = tr0 ? (s.region.commodities.find((c) => c.id === tr0.p.commodityId)?.name ?? { id: tr0.p.commodityId, en: tr0.p.commodityId }) : null
+      const single = !com && tr0 && trName
         ? L === 'id'
-          ? `${com ? `Harga ${com.name.id.toLowerCase()} rata-rata Rp ${nf(L, Math.round(avgP / 50) * 50)}/${com.unit} (simulasi). Kenaikan sepekan tertinggi di ${top.label} (${top.value >= 0 ? '+' : ''}${nf(L, top.value, 1)}%).` : `Kenaikan harga sepekan tertinggi: ${r.rows.slice(0, 3).map((x) => `${x.label} ${x.value >= 0 ? '+' : ''}${nf(L, x.value, 1)}%`).join(', ')} (rata-rata semua pasar, simulasi).`}${op ? ' Sinyal Pasar sudah merekomendasikan operasi pasar; Anda bisa menyetujuinya lewat "Beri instruksi".' : ''}`
-          : `${com ? `${com.name.en} averages Rp ${nf(L, Math.round(avgP / 50) * 50)}/${com.unit} (simulated). The largest weekly rise is at ${top.label} (${top.value >= 0 ? '+' : ''}${nf(L, top.value, 1)}%).` : `Largest weekly price rises: ${r.rows.slice(0, 3).map((x) => `${x.label} ${x.value >= 0 ? '+' : ''}${nf(L, x.value, 1)}%`).join(', ')} (average of all markets, simulated).`}${op ? ' Sinyal Pasar has recommended a market operation; you can approve it via "Issue instruction".' : ''}`
-        : L === 'id' ? 'Belum ada data harga.' : 'No price data yet.'
-      return { text, structured: query(spec), toolCalls: [step(spec, r)], followUps: [L === 'id' ? 'Instruksikan Disperindag pantau pasokan cabai' : 'Instruct the trade office to monitor chilli supply', ...chips(L, 'issues', 'flood')] }
+          ? ` Kenaikan tertinggi di satu pasar: ${trName.id.toLowerCase()} di ${s.markets.byId[tr0.p.marketId]?.name ?? tr0.p.marketId} ${tr0.d >= 0 ? '+' : ''}${nf(L, tr0.d * 100, 1)}% (yang disebut di briefing).`
+          : ` Largest rise at a single market: ${trName.en.toLowerCase()} at ${s.markets.byId[tr0.p.marketId]?.name ?? tr0.p.marketId} ${tr0.d >= 0 ? '+' : ''}${nf(L, tr0.d * 100, 1)}% (the one in the briefing).`
+        : ''
+      const fc = /ramal|prediksi|perkira|proyeksi|forecast|predict|projection/.test(t)
+        ? L === 'id' ? 'Saya belum meramal harga; yang ada adalah pergerakan sepekan terakhir. ' : "I don't forecast prices yet; here is the movement over the last week. "
+        : ''
+      const text = fc + (top
+        ? L === 'id'
+          ? `${com ? `Harga ${com.name.id.toLowerCase()} rata-rata Rp ${nf(L, Math.round(avgP / 50) * 50)}/${com.unit} (simulasi). Kenaikan sepekan tertinggi di ${top.label} (${top.value >= 0 ? '+' : ''}${nf(L, top.value, 1)}%).` : `Kenaikan harga sepekan tertinggi: ${r.rows.slice(0, 3).map((x) => `${x.label} ${x.value >= 0 ? '+' : ''}${nf(L, x.value, 1)}%`).join(', ')} (rata-rata semua pasar, simulasi).${single}`}${op ? ' Sinyal Pasar sudah merekomendasikan operasi pasar; Anda bisa menyetujuinya lewat "Beri instruksi".' : ''}`
+          : `${com ? `${com.name.en} averages Rp ${nf(L, Math.round(avgP / 50) * 50)}/${com.unit} (simulated). The largest weekly rise is at ${top.label} (${top.value >= 0 ? '+' : ''}${nf(L, top.value, 1)}%).` : `Largest weekly price rises: ${r.rows.slice(0, 3).map((x) => `${x.label} ${x.value >= 0 ? '+' : ''}${nf(L, x.value, 1)}%`).join(', ')} (average of all markets, simulated).${single}`}${op ? ' Sinyal Pasar has recommended a market operation; you can approve it via "Issue instruction".' : ''}`
+        : L === 'id' ? 'Belum ada data harga.' : 'No price data yet.')
+      const watch = com?.name ?? trName ?? { id: 'bahan pokok', en: 'staples' }
+      return { text, structured: query(spec), toolCalls: [step(spec, r)], followUps: [L === 'id' ? `Instruksikan Disperindag pantau pasokan ${watch.id.toLowerCase()}` : `Instruct the trade office to monitor ${watch.en.toLowerCase()} supply`, ...chips(L, 'issues', 'flood')] }
     },
   },
   {
@@ -403,6 +444,32 @@ const intents: Intent[] = [
     },
   },
   {
+    // officials are never named (titles only): a "who is the head of …" question gets the agency's numbers instead
+    id: 'siapa-pejabat',
+    examples: [
+      'Siapa kepala dinas PUPR?', 'Siapa kepala BPBD sekarang?', 'Siapa pejabat yang memimpin Diskominfo?', 'Nama kepala dinas kesehatan',
+      'Who is the head of the public works office?', 'Who runs the BPBD?', 'Who leads the health office?', 'Name of the agency head',
+      'Sapa kepala dinas PU?', 'Sing mimpin BPBD sapa?',
+    ],
+    respond: (ctx) => {
+      const { s, now } = ws(ctx)
+      const L = ctx.lang
+      const id = opdsInText(s, ctx.text)[0]
+      const lb = opdLeaderboard(s, now)
+      const i = id ? lb.findIndex((r) => r.opdId === id) : -1
+      const r = lb[i]
+      const head = L === 'id'
+        ? 'Demo ini tidak memuat nama pejabat: pejabat disebut menurut jabatannya saja (mis. "Kepala Dinas PUPR").'
+        : 'This demo holds no names of officials: they are referred to by title only (e.g. "Head of Dinas PUPR").'
+      const tail = r
+        ? L === 'id'
+          ? ` Kinerja ${r.short}: peringkat ${i + 1} dari ${lb.length}, skor ${r.score}, SLA tepat waktu ${r.slaPct === null ? 'belum ada' : `${r.slaPct}%`}, ${r.openTickets} tiket terbuka, ${r.actionsLate} tindak lanjut terlambat.`
+          : ` ${r.short} performance: rank ${i + 1} of ${lb.length}, score ${r.score}, on-time SLA ${r.slaPct === null ? 'not yet available' : `${r.slaPct}%`}, ${r.openTickets} open tickets, ${r.actionsLate} overdue follow-ups.`
+        : ''
+      return { text: head + tail, followUps: chips(L, 'slow', 'overdue', 'sla') }
+    },
+  },
+  {
     id: 'beri-instruksi',
     examples: [
       'Instruksikan BPBD kerahkan pompa ke Kanor', 'Perintahkan Dinas PUPR memperbaiki jalan di Ngasem', 'Minta Diskominfo terbitkan klarifikasi', 'Tugaskan Disperindag pantau harga cabai',
@@ -441,8 +508,8 @@ const intents: Intent[] = [
       const r = runQuery(s, now, spec, L)
       const k = kpiStrip(s, now).complaints
       const text = L === 'id'
-        ? `${k.today} aduan masuk hari ini sampai pukul ${hh(now)} (kemarin pada jam yang sama ${k.yesterday}). Terbanyak: ${r.rows.slice(0, 3).map((x) => `${x.label.toLowerCase()} ${x.value}`).join(', ') || '-'}.`
-        : `${k.today} complaints today up to ${hh(now)} (yesterday at the same time: ${k.yesterday}). Most: ${r.rows.slice(0, 3).map((x) => `${x.label.toLowerCase()} ${x.value}`).join(', ') || '-'}.`
+        ? `${k.today} aduan masuk hari ini sampai pukul ${hh(now)} (kemarin pada jam yang sama ${k.yesterday}). Terbanyak: ${r.rows.slice(0, 3).map((x) => `${lc(x.label)} ${x.value}`).join(', ') || '-'}.`
+        : `${k.today} complaints today up to ${hh(now)} (yesterday at the same time: ${k.yesterday}). Most: ${r.rows.slice(0, 3).map((x) => `${lc(x.label)} ${x.value}`).join(', ') || '-'}.`
       return { text, structured: query(spec), toolCalls: [step(spec, r)], followUps: chips(L, 'rank', 'cause', 'forecast') }
     },
   },

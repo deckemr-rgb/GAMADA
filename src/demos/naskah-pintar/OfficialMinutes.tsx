@@ -12,7 +12,7 @@ import { PaperFrame, printPaper } from '../../demo-kit/frames'
 import { useWorld, type WorldState } from '../../demo-kit/world'
 import { hashString } from '../../demo-kit/world/prng'
 import { longDate } from '../../demo-kit/docs/nik'
-import { CLIP, SCRIPT, clockText, dueText, existingAction, picLabel } from './model'
+import { CLIP, SCRIPT, clockText, dueText, existingAction, picLabel, type ScriptLine } from './model'
 import { useStr } from './strings'
 import './official.css'
 
@@ -21,6 +21,7 @@ interface Props {
   onClose: () => void
   meetingId: string | null
   summary: string
+  topics: ScriptLine[]
 }
 
 const DAYS = { id: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] }
@@ -36,7 +37,7 @@ function view(s: WorldState, meetingId: string | null) {
   }
 }
 
-export default function OfficialMinutes({ open, onClose, meetingId, summary }: Props) {
+export default function OfficialMinutes({ open, onClose, meetingId, summary, topics }: Props) {
   const S = useStr()
   const { lang } = useI18n()
   const { markMission } = useShell()
@@ -50,7 +51,9 @@ export default function OfficialMinutes({ open, onClose, meetingId, summary }: P
 
   const print = () => {
     markMission('ekspor-notulen')
-    if (paper.current) printPaper(paper.current)
+    // print the PaperFrame itself (printPaper only looks upward from the element it gets)
+    const el = paper.current?.querySelector('.dk-paper') ?? paper.current
+    if (el) printPaper(el)
   }
 
   return (
@@ -121,7 +124,7 @@ export default function OfficialMinutes({ open, onClose, meetingId, summary }: P
 
           <h3>I. {S.nTopics}</h3>
           <ol className="dk-np-offlist">
-            {SCRIPT.topics.map((t) => (
+            {topics.map((t) => (
               <li key={t.key}>{t.text[lang]}</li>
             ))}
           </ol>
@@ -147,7 +150,7 @@ export default function OfficialMinutes({ open, onClose, meetingId, summary }: P
                 <tr key={a.key}>
                   <td className="dk-num">{i + 1}</td>
                   <td>{a.text[lang]}</td>
-                  <td>{picLabel(a.pic, lang)}</td>
+                  <td>{picLabel(a.pic, lang, a.opdId)}</td>
                   <td className="dk-num">{dueText(a.dueAt, lang, v.day)}</td>
                   <td>{S.fStatus[(status[i] ?? 'baru') as keyof typeof S.fStatus] ?? status[i]}</td>
                 </tr>

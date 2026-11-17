@@ -9,10 +9,10 @@ import { useI18n } from '../../lib/i18n'
 import { Chip, Icon, Segmented } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import AppLink from '../../components/AppLink'
-import { emit, ref, rows, shallowEqual, useSession, useWorld, type Harvest, type WorldState } from '../../demo-kit/world'
-import { floodAlerts, harvestPasca, productHref } from './data'
+import { rows, shallowEqual, useSession, useWorld, world, type Harvest, type WorldState } from '../../demo-kit/world'
+import { TIER_DROP, floodTiers, harvestPasca, productHref, setHarvestScenario } from './data'
 import { fill, nf, type Bi } from './strings'
-import { mapRef, ui, useUi, type AgriMetric, type Crop } from './ui'
+import { mapRef, revealMap, ui, useUi, type AgriMetric, type Crop } from './ui'
 import './more.css'
 
 const T = {
@@ -34,8 +34,9 @@ const T = {
   total: { id: 'estimasi panen (ton)', en: 'harvest estimate (t)' },
   delta: { id: 'vs musim normal', en: 'vs a normal season' },
   loss: { id: 'potensi kerugian (simulasi)', en: 'potential loss (simulated)' },
-  zone: { id: 'Wilayah terdampak: {k}', en: 'Affected area: {k}' },
-  zoneHint: { id: 'Zona peringatan aktif + kecamatan dengan ≥ 5 desa tergenang di model +6 jam.', en: 'Active warning zones + districts with ≥ 5 flooded villages in the +6 h model.' },
+  zone: { id: 'Terdampak berat (−{a} %): {k}', en: 'Hit hard (−{a} %): {k}' },
+  zone2: { id: 'Terdampak sedang (−{a} %): {k}', en: 'Moderately hit (−{a} %): {k}' },
+  zoneHint: { id: 'Berat = zona peringatan aktif atau ≥ 40 % desanya tergenang di model +6 jam; sedang = ≥ 5 desa tergenang. Cabai & bawang merah turun 1,2×.', en: 'Hard = an active warning zone or ≥ 40 % of its villages flooded in the +6 h model; moderate = ≥ 5 flooded villages. Chilli & shallot drop 1.2×.' },
   rows: { id: 'Kecamatan', en: 'District' },
   colEst: { id: 'Estimasi', en: 'Estimate' },
   colChg: { id: 'Perubahan', en: 'Change' },
@@ -50,10 +51,24 @@ const CROPS: (Crop | 'all')[] = ['all', 'padi', 'jagung', 'cabai', 'bawang-merah
 const FALLBACK_PRICE = 5500
 
 const harvestRows = (s: WorldState) => s.harvests
+/** follow-ups of the latest post-flood switch (one harvest.updated per severity tier, same minute) */
 const lastHarvestFollowUps = (s: WorldState) => {
-  const root = rows(s.auditLog).find((a) => a.type === 'harvest.updated' && a.source === 'siaga-wilayah')
+  const log = rows(s.auditLog)
+  const root = log.find((a) => a.type === 'harvest.updated' && a.source === 'siaga-wilayah')
   if (!root) return []
-  return rows(s.auditLog).filter((a) => a.causeId === root.eventId && (a.type === 'econ.updated' || a.type === 'supply.signal'))
+  const roots = new Set(log.filter((a) => a.type === 'harvest.updated' && a.source === 'siaga-wilayah' && a.at === root.at).map((a) => a.eventId))
+  // causal order (hard-hit tier first), market signals before the district indices
+  const out = log.filter((a) => !!a.causeId && roots.has(a.causeId) && (a.type === 'econ.updated' || a.type === 'supply.signal')).reverse()
+  // one market signal per commodity (the hard-hit tier's, the larger one), then up to three district indices
+  const seen = new Set<string>()
+  const supply = out.filter((a) => {
+    if (a.type !== 'supply.signal') return false
+    const k = a.summary.en.replace(/-?\d.*$/, '')
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  return [...supply.slice(0, 3), ...out.filter((a) => a.type === 'econ.updated').slice(0, 3)]
 }
 
 export default function Agriculture() {
@@ -64,8 +79,8 @@ export default function Agriculture() {
   const crop = useUi((s) => s.crop)
   const metric = useUi((s) => s.metric)
   const pasca = useWorld(harvestPasca)
-  const alerts = useWorld(floodAlerts)
-  const floodKec = useWorld((s) => s.region.floodKecamatanIds)
+  const alertsT = useWorld((s) => s.alerts)
+  const sel = useUi((s) => s.selectedKec)
   const prices = useWorld((s) => s.region.commodities)
   const ht = useWorld(harvestRows)
   const follow = useWorld(lastHarvestFollowUps, shallowEqual)
@@ -73,26 +88,21 @@ export default function Agriculture() {
   // the farmland layer belongs to this tab
   useEffect(() => ui.layer('harvest', true), [])
 
-  // kecamatan where the +6 h model floods ≥ 5 villages, plus every active warning zone (fallback: scenario kecamatan)
+  // severity tiers from the active warnings + the +6 h model (the drop scales with how much of the kecamatan floods)
   const impact6 = useUi((s) => s.impact6)
-  const zone = useMemo(() => {
-    const per = new Map<string, number>()
-    for (const d of impact6?.desa ?? []) per.set(d.kecamatanId, (per.get(d.kecamatanId) ?? 0) + 1)
-    const hit = [...per.entries()].filter(([, n]) => n >= 5).sort((a, b) => b[1] - a[1]).map(([k]) => k)
-    const z = [...new Set([...alerts.flatMap((a) => a.kecamatanIds), ...hit])]
-    return z.length ? z : floodKec
-  }, [alerts, floodKec, impact6])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tiers = useMemo(() => floodTiers(world.get(), impact6), [alertsT, impact6])
   const kecName = (id: string) => pack?.kecamatan.find((k) => k.id === id)?.name ?? id
+  const names = (ids: string[]) => ids.slice(0, 4).map(kecName).join(', ') + (ids.length > 4 ? ` +${ids.length - 4}` : '')
 
   const setScenario = (v: 'normal' | 'pasca') => {
-    if ((v === 'pasca') === pasca) return
-    if (v === 'pasca') emit('harvest.updated', { scenario: 'pasca-banjir', kecamatanIds: zone, cause: alerts[0] ? ref('alerts', alerts[0].id) : null }, 'siaga-wilayah')
-    else {
-      const ids = [...new Set(rows(ht).filter((h) => h.scenario === 'pasca-banjir').map((h) => h.kecamatanId))]
-      emit('harvest.updated', { scenario: 'normal', kecamatanIds: ids }, 'siaga-wilayah')
-    }
+    setHarvestScenario(v, impact6)
     ui.set({ metric: 'change' })
   }
+  // the bottom-bar CTA can switch to post-flood too: show the drop on the map either way
+  useEffect(() => {
+    if (pasca) ui.set({ metric: 'change' })
+  }, [pasca])
 
   const list = useMemo(() => {
     const by = new Map<string, { base: number; now: number; ndvi: number; n: number; loss: number }>()
@@ -115,14 +125,14 @@ export default function Agriculture() {
   const rp = (n: number) => (n >= 1e9 ? `Rp ${nf(n / 1e9, lang, 1)} ${lang === 'id' ? 'M' : 'bn'}` : `Rp ${nf(n / 1e6, lang, 0)} ${lang === 'id' ? 'jt' : 'm'}`)
 
   return (
-    <div className="dk-sw-tab">
-      <section className="dk-sw-card" aria-labelledby="sw-ag-h">
-        <h3 className="dk-sw-h" id="sw-ag-h">
+    <div className="dk-sg-tab">
+      <section className="dk-sg-card" aria-labelledby="sw-ag-h">
+        <h3 className="dk-sg-h" id="sw-ag-h">
           <Icon name="grid" size={16} />
           {L('title')}
         </h3>
-        <div className="dk-sw-ctl">
-          <span className="dk-sw-muted">{L('scenario')}</span>
+        <div className="dk-sg-ctl">
+          <span className="dk-sg-muted">{L('scenario')}</span>
           <Segmented
             label={L('scenario')}
             value={pasca ? 'pasca' : 'normal'}
@@ -133,12 +143,14 @@ export default function Agriculture() {
             ]}
           />
         </div>
-        <p className="dk-sw-fine">
-          {L('zone', { k: zone.slice(0, 5).map(kecName).join(', ') + (zone.length > 5 ? ` +${zone.length - 5}` : '') })} · {L('zoneHint')}
+        <p className="dk-sg-fine">
+          {tiers.heavy.length > 0 && <>{L('zone', { a: nf(TIER_DROP.heavy, lang), k: names(tiers.heavy) })}<br /></>}
+          {tiers.moderate.length > 0 && <>{L('zone2', { a: nf(TIER_DROP.moderate, lang), k: names(tiers.moderate) })}<br /></>}
+          {L('zoneHint')}
         </p>
-        <div className="dk-sw-ctl">
-          <span className="dk-sw-muted">{L('crop')}</span>
-          <div className="dk-sw-chips" role="group" aria-label={L('crop')}>
+        <div className="dk-sg-ctl">
+          <span className="dk-sg-muted">{L('crop')}</span>
+          <div className="dk-sg-chips" role="group" aria-label={L('crop')}>
             {CROPS.map((c) => (
               <Chip key={c} selected={crop === c} onToggle={() => ui.set({ crop: c })}>
                 {L(c)}
@@ -146,8 +158,8 @@ export default function Agriculture() {
             ))}
           </div>
         </div>
-        <div className="dk-sw-ctl">
-          <span className="dk-sw-muted">{L('metric')}</span>
+        <div className="dk-sg-ctl">
+          <span className="dk-sg-muted">{L('metric')}</span>
           <Segmented<AgriMetric>
             label={L('metric')}
             value={metric}
@@ -165,7 +177,7 @@ export default function Agriculture() {
         </div>
       </section>
 
-      <dl className="dk-sw-kpis dk-sw-card" aria-live="polite">
+      <dl className="dk-sg-kpis dk-sg-card" aria-live="polite">
         <div>
           <dd className="dk-num">{nf(Math.round(tot.now), lang)}</dd>
           <dt>{L('total')}</dt>
@@ -183,14 +195,14 @@ export default function Agriculture() {
         </div>
       </dl>
 
-      <section className="dk-sw-card" aria-live="polite" aria-labelledby="sw-ag-chain">
-        <h3 className="dk-sw-h" id="sw-ag-chain">
+      <section className="dk-sg-card" aria-live="polite" aria-labelledby="sw-ag-chain">
+        <h3 className="dk-sg-h" id="sw-ag-chain">
           <Icon name="share" size={16} />
           {L('chain')}
         </h3>
         {pasca && follow.length ? (
           <>
-            <ul className="dk-sw-chain">
+            <ul className="dk-sg-chain">
               {follow.slice(0, 6).map((a) => (
                 <li key={a.id}>
                   <Icon name={a.type === 'econ.updated' ? 'chart' : 'cart'} size={14} />
@@ -198,19 +210,19 @@ export default function Agriculture() {
                 </li>
               ))}
             </ul>
-            <p className="dk-sw-links">
+            <p className="dk-sg-links">
               <AppLink to={productHref('indeks-ekonomi', session)}>{L('open', { p: 'Indeks Ekonomi' })} →</AppLink>
               <AppLink to={productHref('sinyal-pasar', session)}>{L('open', { p: 'Sinyal Pasar' })} →</AppLink>
             </p>
           </>
         ) : (
-          <p className="dk-sw-muted">{L('chainNone')}</p>
+          <p className="dk-sg-muted">{L('chainNone')}</p>
         )}
       </section>
 
-      <section className="dk-sw-card" aria-labelledby="sw-ag-rows">
-        <table className="dk-sw-table">
-          <caption id="sw-ag-rows" className="dk-sw-h">
+      <section className="dk-sg-card" aria-labelledby="sw-ag-rows">
+        <table className="dk-sg-table">
+          <caption id="sw-ag-rows" className="dk-sg-h">
             {L('rows')} · {L(crop)}
           </caption>
           <thead>
@@ -223,9 +235,10 @@ export default function Agriculture() {
           </thead>
           <tbody>
             {list.slice(0, 12).map((r) => (
-              <tr key={r.id}>
+              <tr key={r.id} className={sel === r.id ? 'is-sel' : undefined}>
                 <th scope="row">
-                  <button type="button" onClick={() => {
+                  <button type="button" aria-current={sel === r.id || undefined} onClick={() => {
+                    revealMap()
                     ui.set({ selectedKec: r.id })
                     mapRef.current?.fitKecamatan(r.id)
                   }}>
@@ -240,16 +253,16 @@ export default function Agriculture() {
                   {nf(r.chg, lang, 1)} %
                 </td>
                 <td data-label={L('colNdvi')}>
-                  <span className="dk-sw-bar" aria-label={nf(r.ndvi, lang, 2)}>
+                  <span className="dk-sg-bar" aria-label={nf(r.ndvi, lang, 2)}>
                     <span style={{ transform: `scaleX(${r.ndvi})` }} />
                   </span>
-                  <span className="dk-num dk-sw-muted">{nf(r.ndvi, lang, 2)}</span>
+                  <span className="dk-num dk-sg-muted">{nf(r.ndvi, lang, 2)}</span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="dk-sw-fine">{L('sim')}</p>
+        <p className="dk-sg-fine">{L('sim')}</p>
       </section>
     </div>
   )

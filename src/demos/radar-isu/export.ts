@@ -167,7 +167,7 @@ function sheets(x: RadarExport, lang: L): Sheet[] {
         [id ? 'Mention 24 jam' : 'Mentions, 24 h', x.summary.mentions24h],
         [id ? 'Mention 24 jam sebelumnya' : 'Mentions, previous 24 h', x.summary.mentionsPrev24h],
         [id ? 'Indeks sentimen (−100…100)' : 'Sentiment index (−100…100)', x.summary.sentimentIndex],
-        [id ? 'Topik bernada negatif' : 'Topics leaning negative', x.summary.negativeTopics],
+        [id ? 'Isu negatif (topik dengan mention negatif)' : 'Negative issues (topics with negative mentions)', x.summary.negativeTopics],
         [id ? 'Perkiraan jangkauan' : 'Estimated reach', x.summary.reach24h],
       ],
     },

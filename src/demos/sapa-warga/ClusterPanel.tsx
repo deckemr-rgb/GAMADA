@@ -3,18 +3,29 @@
  * clusters the world formed (≥ 5 similar reports within 1 km → Meja Pimpinan, Siaga Wilayah, Radar Isu), the cluster
  * still forming with its progress, and a control to simulate one more neighbour report.
  */
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import { Button, EmptyState, Icon } from '../../demo-kit/ui'
 import { demoHref } from '../../demo-kit/shell'
-import { DAY_MIN, WORLD, hhmm, rows, useClock, useSession, useWorld, world, type LngLat } from '../../demo-kit/world'
+import { DAY_MIN, WORLD, hhmm, isEvent, onEvent, rows, useClock, useSession, useWorld, world, type LngLat, type WorldState } from '../../demo-kit/world'
 import { desaName, formingCluster, kecName, neighbourReport } from './model'
 import { fill, useT } from './strings'
 
 const MiniMap = lazy(() => import('./MiniMap'))
 const TARGETS: ProductSlug[] = ['meja-pimpinan', 'siaga-wilayah', 'radar-isu']
+
+/** what each product opens on (?focus=): Radar Isu knows mentions, not clusters → the topic post the cluster raised */
+function focusFor(s: WorldState, slug: ProductSlug, clusterId: string): string {
+  if (slug !== 'radar-isu') return clusterId
+  const cl = s.clusters.byId[clusterId]
+  if (!cl) return clusterId
+  const desa = desaName(s, cl.kecamatanId, cl.desaId).toLowerCase()
+  const ms = rows(s.mentions).filter((m) => m.topic === 'banjir' && m.at >= cl.at)
+  const m = ms.find((x) => x.at === cl.at && x.text.id.toLowerCase().includes(desa)) ?? ms.find((x) => x.text.id.toLowerCase().includes(desa)) ?? ms[0]
+  return m?.id ?? clusterId
+}
 
 export default function ClusterPanel({ focus, openTicket }: { focus: string | null; openTicket: (ticketId: string) => void }) {
   const { lang } = useI18n()
@@ -37,6 +48,19 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
     if (!sel && clusters[0]) setSel(clusters[0].id)
   }, [clusters, sel])
   const cur = clusters.find((c) => c.id === sel) ?? null
+  /* a cluster just formed (e.g. after "Simulasikan laporan warga sekitar"): bring the map with its heat point into view */
+  const mapBox = useRef<HTMLDivElement>(null)
+  useEffect(
+    () =>
+      onEvent('complaint.clustered', (e) => {
+        if (!isEvent(e, 'complaint.clustered')) return
+        const cl = world.get().clusters.byId[e.payload.clusterId ?? '']
+        if (!cl || cl.at !== e.at) return
+        setSel(cl.id)
+        window.setTimeout(() => mapBox.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 80)
+      }),
+    [],
+  )
   const s = world.get()
   const place = (kec: string, desa: string) => `${desaName(s, kec, desa)}, Kec. ${kecName(s, kec)}`
   const siti = s.citizens.byId[s.meta.personas.siti]
@@ -50,7 +74,7 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
     [clusters, flood, lang], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const go = (slug: ProductSlug, id: string) => {
-    const href = demoHref(slug, session, id)
+    const href = demoHref(slug, session, focusFor(world.get(), slug, id))
     const dev = new URLSearchParams(window.location.search).get('controls') === 'all'
     navigate(dev ? `${href}&controls=all` : href)
   }
@@ -66,7 +90,7 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
     <div className="dk-sw-cluster">
       <div className="dk-sw-cl-map">
         <h3 className="dk-sw-h3">{t.clusterHead}</h3>
-        <div className="dk-sw-minimap is-big" data-sw-map="">
+        <div ref={mapBox} className="dk-sw-minimap is-big" data-sw-map="">
           <Suspense fallback={<p className="dk-sw-muted">{t.mapLoading}</p>}>
             <MiniMap regionId={regionId} center={center} zoom={11.8} markers={markers} heat={heat} label={t.clusterMap} onMarker={openFromMap} />
           </Suspense>

@@ -112,7 +112,15 @@ export default function Produk() {
               <div>
                 <dt>{s.demoStatus}</dt>
                 <dd>
-                  <span className="eco-status">{fill(c.stageShort, { n: stage })}</span> {fill(s.statusBody, { name: p.name, n: stage })}
+                  {DEMO_READY[slug] ? (
+                    <>
+                      <span className="eco-status is-live">{s.statusReady}</span> {fill(s.statusReadyBody, { name: p.name })}
+                    </>
+                  ) : (
+                    <>
+                      <span className="eco-status">{fill(c.stageShort, { n: stage })}</span> {fill(s.statusBody, { name: p.name, n: stage })}
+                    </>
+                  )}
                 </dd>
               </div>
             </dl>

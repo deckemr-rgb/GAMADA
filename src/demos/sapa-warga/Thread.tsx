@@ -12,7 +12,7 @@ import { Icon } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import { FakeQr, LocationTile, Photo, StaticWave } from './photos'
 import { SLUG, looksEnglish, slaText, type Created, type PhotoId } from './model'
-import { STATUS_LABEL, STATUS_ORDER, fill, useT } from './strings'
+import { STATUS_LABEL, STATUS_ORDER, fill, toolLabel, useT } from './strings'
 
 const Speak = lazy(() => import('./Speak'))
 
@@ -244,7 +244,7 @@ function AssistantBubble({ m, isLast, created, actions }: { m: ChatMessage; isLa
           <p className="dk-sw-steps" aria-label={t.steps}>
             {m.toolCalls.map((c, i) => (
               <span key={c.id || i}>
-                {c.name.replace(/_/g, ' ')}
+                {toolLabel(c.name, lang)}
                 {c.ms ? <em className="dk-num"> {(c.ms / 1000).toFixed(1).replace('.', lang === 'id' ? ',' : '.')} s</em> : null}
               </span>
             ))}
@@ -363,7 +363,7 @@ function WorldMessage({ msg, hidden, latest, onAsk }: { msg: CitizenMessage; hid
             <div>
               <p className="dk-sw-queue-svc">{svc?.[lang] ?? ''}</p>
               <p className="dk-sw-queue-time dk-num">{booking ? hhmm(booking.slotAt).replace(':', '.') : ''} WIB</p>
-              <p className="dk-sw-muted">{msg.text[lang]}</p>
+              <p className="dk-sw-muted">{msg.text[lang].replace(/\b(\d{1,2}):(\d{2})\b/g, '$1.$2')}</p>
               <p className="dk-sw-fine">{t.qrNote}</p>
             </div>
           </div>
@@ -420,7 +420,7 @@ function Rating({ ticketId }: { ticketId: string }) {
 export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: {
   conv: Conv
   worldMsgs: Record<string, CitizenMessage>
-  greeting: { text: string; translation: string | null }
+  greeting: { text: string; translation: string | null; hint?: string | null }
   /** what this persona can try (shown while the conversation is empty) */
   tips: { icon: 'mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search'; text: string }[]
   actions: ThreadActions
@@ -481,6 +481,7 @@ export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: 
                     <span>{t.translation}</span> {greeting.translation}
                   </p>
                 )}
+                {greeting.hint && <p className="dk-sw-text dk-sw-ghint">{greeting.hint}</p>}
               </div>
               {conv.messages.length === 0 && (
                 <ul className="dk-sw-tips" aria-label={t.tryHere}>

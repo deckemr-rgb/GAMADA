@@ -5,7 +5,7 @@
  * (aria-controls = id), or to the "⋯" button on mobile where the toggle lives in the sheet. Completion → Confetti (≤ 1 s) + sfx.success + a card linking
  * to a related product (products.ts `related`).
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import { useI18n } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
@@ -28,12 +28,14 @@ export interface GuidePanelProps {
   size?: ShellSize
 }
 
-export function GuidePanel({ product, missions, open, onClose, id, size }: GuidePanelProps) {
+export function GuidePanel({ product, missions: all, open, onClose, id, size }: GuidePanelProps) {
   const t = useDemoStrings()
   const { lang } = useI18n()
   const session = useSession()
   const done = useMissionProgress(product)
-  useMissionTracker(product, missions)
+  useMissionTracker(product, all)
+  // phones hide missions whose feature is not offered there (Mission.hideSm)
+  const missions = useMemo(() => (size === 'sm' ? all.filter((m) => !m.hideSm) : all), [all, size])
   const panel = useRef<HTMLElement>(null)
   const total = missions.length
   const count = missions.filter((m) => done.includes(m.id)).length

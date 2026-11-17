@@ -6,8 +6,9 @@
 import { useMemo } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG } from '../../content/products'
-import { Button, Icon, StatusChip, type IconName } from '../../demo-kit/ui'
-import { DAY_MIN, emit, hhmm, rows, useWorld, type ActionItem, type Minutes, type WorldState } from '../../demo-kit/world'
+import { Button, Icon, StatusChip, formatSla, type IconName } from '../../demo-kit/ui'
+import { CATEGORY_LABEL, DAY_MIN, emit, hhmm, rows, useWorld, world, type ActionItem, type Minutes, type WorldState } from '../../demo-kit/world'
+import { kecName, useNow } from './data'
 
 const O = {
   title: { id: 'Tugas untuk {o}', en: 'Tasks for {o}' },
@@ -24,13 +25,21 @@ const O = {
   due: { id: 'tenggat', en: 'due' },
   brief: { id: 'Briefing pimpinan terakhir', en: "Leader's latest briefing" },
   noBrief: { id: 'Pimpinan belum menyusun briefing hari ini.', en: 'The leader has not composed a briefing today.' },
+  tickets: { id: 'Tiket terbuka, SLA terdekat dulu', en: 'Open tickets, nearest SLA first' },
+  noTickets: { id: 'Tidak ada tiket terbuka.', en: 'No open tickets.' },
+  more: { id: '+{n} tiket lain', en: '+{n} more tickets' },
 }
 
+const world0 = () => world.get()
 const latest = (s: WorldState) => rows(s.briefings).find((b) => b.at >= 0) ?? null
 
-export default function OpdTasks({ opdId, now }: { opdId: string; now: Minutes }) {
+export default function OpdTasks({ opdId }: { opdId: string }) {
   const { lang } = useI18n()
+  const now = useNow(5)
   const items = useWorld((s) => s.actionItems)
+  const ticketsT = useWorld((s) => s.tickets)
+  const complaints = useWorld((s) => s.complaints)
+  const open = useMemo(() => rows(ticketsT).filter((t) => t.opdId === opdId && t.status !== 'selesai').sort((a, b) => a.slaDueAt - b.slaDueAt), [ticketsT, opdId])
   const short = useWorld((s) => s.region.opd.find((o) => o.id === opdId)?.short ?? opdId)
   const b = useWorld(latest)
   const list = useMemo(() => {
@@ -79,6 +88,27 @@ export default function OpdTasks({ opdId, now }: { opdId: string; now: Minutes }
           </ul>
         ) : (
           <p className="dk-mp-meta">{O.none[lang]}</p>
+        )}
+        <h4 className="dk-mp-sc-h">
+          {O.tickets[lang]} <span className="dk-mp-meta">{open.length}</span>
+        </h4>
+        {open.length ? (
+          <ul className="dk-mp-sc-list">
+            {open.slice(0, 6).map((t) => {
+              const c = complaints.byId[t.complaintId]
+              const sl = formatSla(t.slaDueAt - now, lang)
+              return (
+                <li key={t.id}>
+                  <span className="dk-mp-sc-code dk-num">{t.code}</span>
+                  <span className="dk-mp-sc-t">{c ? `${CATEGORY_LABEL[c.category][lang]} · ${kecName(world0(), c.kecamatanId)}` : ''}</span>
+                  <span className={`dk-mp-sla is-${sl.tone}`}>{sl.text}</span>
+                </li>
+              )
+            })}
+            {open.length > 6 && <li className="dk-mp-meta">{O.more[lang].replace('{n}', String(open.length - 6))}</li>}
+          </ul>
+        ) : (
+          <p className="dk-mp-meta">{O.noTickets[lang]}</p>
         )}
         <h4 className="dk-mp-sc-h">{O.brief[lang]}</h4>
         {b ? (

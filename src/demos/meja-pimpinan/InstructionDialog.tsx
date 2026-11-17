@@ -11,7 +11,7 @@ import { PRODUCT_BY_SLUG } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { demoHref } from '../../demo-kit/shell'
 import { Button, Chip, Field, Icon, Modal, Segmented, Textarea, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
-import { DAY_MIN, emit, hhmm, settled, useSession, world, type Bi, type Minutes } from '../../demo-kit/world'
+import { DAY_MIN, clock, emit, hhmm, settled, useSession, world, type Bi, type Minutes } from '../../demo-kit/world'
 import { opdShort, withControls } from './data'
 import { leaderIdeas, presetFor, type Idea } from './ideas'
 import type { InstructionPreset } from './index'
@@ -49,7 +49,12 @@ function dueAt(d: Due, now: Minutes): Minutes {
   return d === 'today' ? Math.max(now + 60, day + 16 * 60) : d === 'tomorrow' ? day + DAY_MIN + 16 * 60 : day + 3 * DAY_MIN + 16 * 60
 }
 
-export default function InstructionDialog({ open, onClose, preset: given, now }: { open: boolean; onClose: () => void; preset?: InstructionPreset; now: Minutes }) {
+/** let the browser paint the pressed / busy state before the world work (keeps the click's next paint fast, INP) */
+const afterPaint = () => new Promise<void>((r) => window.requestAnimationFrame(() => window.setTimeout(r, 0)))
+
+export default function InstructionDialog({ open, onClose, preset: given }: { open: boolean; onClose: () => void; preset?: InstructionPreset }) {
+  // the world minute when the dialog opened (suggestions and deadlines are fixed for the life of the dialog)
+  const [now] = useState(() => clock.get().minutes)
   // a briefing item becomes its suggestion here (lazy chunk), then the dialog works on a plain preset
   const [preset] = useState<InstructionPreset | undefined>(() => (given?.item ? presetFor(world.get(), now, given.item) : given))
   const { lang } = useI18n()
@@ -84,7 +89,8 @@ export default function InstructionDialog({ open, onClose, preset: given, now }:
   const send = async () => {
     if (!canSend) return
     setState('sending')
-    const due0 = dueAt(due, now)
+    await afterPaint()
+    const due0 = dueAt(due, clock.get().minutes)
     const custom = chosen && chosen.text[lang] === text[lang] ? chosen.text : { id: text[lang], en: text[lang] }
     const refs = chosen?.refs ?? preset?.refs ?? []
     const origin = chosen?.origin ?? preset?.origin

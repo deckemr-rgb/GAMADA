@@ -51,10 +51,16 @@ export const REDUCERS: ReducerMap = {
     const p = e.payload
     return {
       ...s,
-      tickets: patch(s.tickets, p.ticketId, (t) => ({
-        ...t, status: p.status, opdId: p.opdId ?? t.opdId, updatedAt: e.at, closedAt: p.status === 'selesai' ? e.at : null,
-        rating: p.rating ?? t.rating, history: [...t.history, { at: e.at, status: p.status, ...(p.note ? { note: p.note } : {}) }],
-      })),
+      tickets: patch(s.tickets, p.ticketId, (t) => {
+        // re-emitting the same terminal status (e.g. a rating after 'selesai') keeps the first close time and history
+        const same = t.status === p.status
+        return {
+          ...t, status: p.status, opdId: p.opdId ?? t.opdId, updatedAt: e.at,
+          closedAt: p.status === 'selesai' ? (same && t.closedAt !== null ? t.closedAt : e.at) : null,
+          rating: p.rating ?? t.rating,
+          history: same && p.status === 'selesai' ? t.history : [...t.history, { at: e.at, status: p.status, ...(p.note ? { note: p.note } : {}) }],
+        }
+      }),
     }
   },
   'citizen.notified': (s, e) => {
@@ -112,7 +118,10 @@ export const REDUCERS: ReducerMap = {
     const disposition = { to: p.to, note: p.note, by: p.by ?? 'Kepala Daerah', at: e.at }
     const exists = !!s.letters.byId[id]
     const letters = exists
-      ? patch(s.letters, id, (l) => ({ ...l, status: 'didisposisi' as const, disposition }))
+      ? patch(s.letters, id, (l) => ({
+          ...l, status: 'didisposisi' as const, disposition,
+          ...(p.number ? { number: p.number } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}),
+        }))
       : upsert(s.letters, {
           id, number: `ND-${id}/${s.day.slice(0, 4)}`, from: p.by ?? 'Kepala Daerah', subject: p.subject ?? p.note, kind: 'nota-dinas', sifat: 'segera', receivedAt: e.at,
           dueAt: e.at + DAY_MIN, status: 'didisposisi', scanned: false, disposition, ...(p.instructionId ? { instructionId: p.instructionId } : {}),

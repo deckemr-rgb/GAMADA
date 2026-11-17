@@ -2,19 +2,24 @@
  * Leaderboard — OPD ranking (spec P2: SLA, follow-ups, satisfaction). Every row opens that agency's scorecard
  * (step 4). Sort by composite score, SLA or late follow-ups (Sekda opens on "late"). ↑/↓ move between rows.
  */
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { Icon, Segmented } from '../../demo-kit/ui'
-import { useWorld, type Minutes } from '../../demo-kit/world'
+import { shallowEqual, useWorld } from '../../demo-kit/world'
 import { opdLeaderboard } from '../../demo-kit/world/satu-daerah'
+import { useNow } from './data'
 import { nf, tr, trf } from './strings'
 
 type Sort = 'score' | 'sla' | 'late'
 
-export function Leaderboard({ now, onOpen, sortDefault, highlight }: { now: Minutes; onOpen: (opdId: string) => void; sortDefault: Sort; highlight: string | null }) {
+type Row = ReturnType<typeof opdLeaderboard>[number]
+const sameRows = (a: Row[], b: Row[]) => a.length === b.length && a.every((x, i) => shallowEqual(x, b[i]!))
+
+export function Leaderboard({ onOpen, sortDefault, highlight }: { onOpen: (opdId: string) => void; sortDefault: Sort; highlight: string | null }) {
   const { lang } = useI18n()
   const [sort, setSort] = useState<Sort>(sortDefault)
-  const lb = useWorld((s) => opdLeaderboard(s, now))
+  const now = useNow(5)
+  const lb = useWorld((s) => opdLeaderboard(s, now), sameRows)
   const list = useMemo(() => {
     const l = [...lb]
     if (sort === 'sla') l.sort((a, b) => (a.slaPct ?? 101) - (b.slaPct ?? 101))
@@ -23,13 +28,20 @@ export function Leaderboard({ now, onOpen, sortDefault, highlight }: { now: Minu
   }, [lb, sort])
   const rank = useMemo(() => new Map(lb.map((r, i) => [r.opdId, i + 1])), [lb])
 
+  // roving tabindex: the list is ONE Tab stop; ↑/↓ (Home/End) move between rows, Enter opens the scorecard
+  const [active, setActive] = useState<string | null>(null)
+  const cur = list.some((r) => r.opdId === active) ? active : (list[0]?.opdId ?? null)
+  const listRef = useRef<HTMLOListElement>(null)
   const onKey = (e: KeyboardEvent<HTMLOListElement>) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const btns = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button'))
-    const i = btns.indexOf(document.activeElement as HTMLButtonElement)
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+    const i = list.findIndex((r) => r.opdId === cur)
     if (i < 0) return
     e.preventDefault()
-    btns[Math.max(0, Math.min(btns.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+    const id = list[j]?.opdId
+    if (!id) return
+    setActive(id)
+    listRef.current?.querySelector<HTMLButtonElement>(`[data-opd="${id}"]`)?.focus()
   }
 
   return (
@@ -58,12 +70,12 @@ export function Leaderboard({ now, onOpen, sortDefault, highlight }: { now: Minu
         <span>{tr('colOpen', lang)}</span>
         <span>{tr('colLate', lang)}</span>
       </p>
-      <ol className="dk-mp-pb dk-mp-lb-list" onKeyDown={onKey}>
+      <ol ref={listRef} className="dk-mp-pb dk-mp-lb-list" onKeyDown={onKey} aria-label={`${tr('leaderboard', lang)} · ${tr('lbKeys', lang)}`}>
         {list.map((r) => {
           const mine = r.opdId === highlight
           return (
             <li key={r.opdId}>
-              <button type="button" className={`dk-mp-lb-row${mine ? ' is-mine' : ''}`} onClick={() => onOpen(r.opdId)} aria-label={`${trf('openScorecard', lang, { o: r.short })}: ${tr('sScore', lang)} ${r.score}, SLA ${r.slaPct ?? tr('noSla', lang)}${r.slaPct !== null ? '%' : ''}, ${r.openTickets} ${tr('colOpen', lang)}, ${r.actionsLate} ${tr('colLate', lang)}`}>
+              <button type="button" className={`dk-mp-lb-row${mine ? ' is-mine' : ''}`} data-opd={r.opdId} tabIndex={r.opdId === cur ? 0 : -1} onFocus={() => setActive(r.opdId)} onClick={() => onOpen(r.opdId)} aria-label={`${trf('openScorecard', lang, { o: r.short })}: ${tr('sScore', lang)} ${r.score}, SLA ${r.slaPct ?? tr('noSla', lang)}${r.slaPct !== null ? '%' : ''}, ${r.openTickets} ${tr('colOpen', lang)}, ${r.actionsLate} ${tr('colLate', lang)}`}>
                 <span className="dk-mp-lb-rank dk-num">{rank.get(r.opdId)}</span>
                 <span className="dk-mp-lb-name">
                   {r.short}

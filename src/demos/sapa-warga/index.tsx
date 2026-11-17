@@ -3,8 +3,8 @@
  *
  * Split 40/60: "HP Warga" (PhoneFrame: three personas, AI chat in Simulasi or Live, voice note in Basa Jawa, photo +
  * location reports, NIB checklist → form → PDF → MPP queue with QR) | "Konsol Petugas" (BrowserFrame: live KPIs,
- * omnichannel inbox, ticket Kanban with SLA, ticket drawer, cluster map). Below 768 px the two become tabs and the
- * layout switches to the console after a report is sent. Roles: Warga (default), Petugas Layanan (console first,
+ * omnichannel inbox, ticket Kanban with SLA, ticket drawer, cluster map). Below 768 px the two become tabs; after a
+ * report the phone stays put (the reply + translation) and offers "Lihat" to the console. Roles: Warga (default), Petugas Layanan (console first,
  * Kanban), Kepala Daerah (read-only summary instead of the console).
  *
  * World: emits complaint.created, service.booked, ticket.statusChanged, citizen.notified (officer reply) with source
@@ -24,10 +24,13 @@ import { Phone } from './Phone'
 import { Console, type ConsoleView } from './Console'
 import { SW, desaName, kecName, type Created, type PersonaKey } from './model'
 import type { Conv } from './Thread'
-import { useT } from './strings'
+import { fill, useT } from './strings'
 import './sapa-warga.css'
 
-const TicketDetail = lazy(() => import('./TicketDetail'))
+const loadDetail = () => import('./TicketDetail')
+const TicketDetail = lazy(loadDetail)
+/** warm the drawer chunk when the pointer / focus reaches the ticket lists (before the first tap) */
+export const warmDetail = () => void loadDetail().catch(() => undefined)
 const Summary = lazy(() => import('./Summary'))
 
 type Tab = 'left' | 'right'
@@ -110,6 +113,8 @@ export default function SapaWarga(_props: DemoCanvasProps) {
   const [tab, setTab] = useState<Tab>(role === 'warga' ? 'left' : 'right')
   const [view, setView] = useState<ConsoleView>(role === 'petugas' ? 'board' : 'inbox')
   const [ticket, setTicket] = useState<string | null>(null)
+  // closing only flips `open`: the drawer plays its exit and unmounts its map afterwards, not inside the Esc / click
+  const [ticketOpen, setTicketOpen] = useState(false)
   const [arrived, setArrived] = useState<{ ticketId: string; code: string; n: number } | null>(null)
   const [clusterNote, setClusterNote] = useState<{ id: string; n: number; place: string } | null>(null)
   const [focusCluster, setFocusCluster] = useState<string | null>(null)
@@ -118,6 +123,18 @@ export default function SapaWarga(_props: DemoCanvasProps) {
   const chip = useRef<HTMLDivElement>(null)
   const lastCreate = useRef(0)
   const fly = useFlight(root, chip)
+  /* one polite live region for what happens across the two screens (ticket arrived, cluster formed) */
+  const live = useRef<HTMLParagraphElement>(null)
+  const tRef = useRef(t)
+  tRef.current = t
+  const announce = useCallback((msg: string) => {
+    const el = live.current
+    if (!el) return
+    el.textContent = ''
+    window.setTimeout(() => {
+      if (live.current) live.current.textContent = msg
+    }, 60)
+  }, [])
   const personas = useWorld((s) => s.meta.personas)
 
   /* role changes what is shown */
@@ -146,10 +163,11 @@ export default function SapaWarga(_props: DemoCanvasProps) {
     (c: Created, from: Element | null) => {
       lastCreate.current = performance.now()
       setArrived((a) => ({ ticketId: c.ticketId, code: c.code, n: (a?.n ?? 0) + 1 }))
-      if (sm) window.setTimeout(() => setTab('right'), SW.tabSwitchMs)
-      else fly(from, c.code)
+      announce(fill(t.ticketArrived, { code: c.code }))
+      // mobile stays on the phone (the Javanese reply + translation is the moment); the phone offers "Lihat"
+      if (!sm) fly(from, c.code)
     },
-    [sm, fly],
+    [sm, fly, t],
   )
 
   /* clusters (Sapa Warga → Meja Pimpinan, Siaga Wilayah, Radar Isu): banner, and the map right after the visitor's report */
@@ -160,7 +178,9 @@ export default function SapaWarga(_props: DemoCanvasProps) {
         const s = world.get()
         const cl = s.clusters.byId[e.payload.clusterId ?? '']
         if (!cl) return
-        setClusterNote({ id: cl.id, n: cl.complaintIds.length, place: `${desaName(s, cl.kecamatanId, cl.desaId)}, Kec. ${kecName(s, cl.kecamatanId)}` })
+        const place = `${desaName(s, cl.kecamatanId, cl.desaId)}, Kec. ${kecName(s, cl.kecamatanId)}`
+        setClusterNote({ id: cl.id, n: cl.complaintIds.length, place })
+        if (cl.at === e.at) announce(fill(tRef.current.clusterFormed, { n: cl.complaintIds.length, place }))
         if (cl.at === e.at && performance.now() - lastCreate.current < 8000) {
           setFocusCluster(cl.id)
           setView('cluster')
@@ -174,8 +194,13 @@ export default function SapaWarga(_props: DemoCanvasProps) {
     const f = shell.focus
     if (!f) return
     const s = world.get()
-    if (s.tickets.byId[f]) setTicket(f)
-    else if (s.complaints.byId[f]) setTicket(s.complaints.byId[f]!.ticketId)
+    if (s.tickets.byId[f]) {
+      setTicket(f)
+      setTicketOpen(true)
+    } else if (s.complaints.byId[f]) {
+      setTicket(s.complaints.byId[f]!.ticketId)
+      setTicketOpen(true)
+    }
     else if (s.clusters.byId[f]) {
       setFocusCluster(f)
       setView('cluster')
@@ -185,14 +210,19 @@ export default function SapaWarga(_props: DemoCanvasProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shell.focus])
 
-  const openTicket = useCallback((id: string) => setTicket(id), [])
+  const openTicket = useCallback((id: string) => {
+    setTicket(id)
+    setTicketOpen(true)
+  }, [])
+  const closeTicket = useCallback(() => setTicketOpen(false), [])
   const ticketPersona = useWorld((s) => {
     const tk = ticket ? s.tickets.byId[ticket] : undefined
     const c = tk ? s.complaints.byId[tk.complaintId] : undefined
     return !!c?.citizenId && Object.values(s.meta.personas).includes(c.citizenId)
   })
 
-  const left = <Phone persona={persona} setPersona={setPersona} convs={convs} onCreated={onCreated} flat={sm} />
+  const toConsole = useCallback(() => setTab('right'), [])
+  const left = <Phone persona={persona} setPersona={setPersona} convs={convs} onCreated={onCreated} flat={sm} toConsole={sm ? toConsole : null} />
   const right =
     role === 'kepala-daerah' ? (
       <Suspense fallback={<p className="dk-sw-muted">{t.mapLoading}</p>}>
@@ -224,9 +254,16 @@ export default function SapaWarga(_props: DemoCanvasProps) {
       {!sm && <p className="dk-sw-lead">{LEAD[role][lang]}</p>}
       <SplitStage left={left} right={right} labels={labels} ratio={[40, 60]} tab={tab} onTabChange={setTab} className="dk-sw-split" />
       <div ref={chip} className="dk-sw-flight" aria-hidden="true" hidden />
+      <p ref={live} className="dk-sr" aria-live="polite" />
       {ticket && (
-        <Suspense fallback={null}>
-          <TicketDetail ticketId={ticket} onClose={() => setTicket(null)} readOnly={role === 'kepala-daerah'} persona={ticketPersona} />
+        <Suspense
+          fallback={
+            <div className="dk-sw-dskel" role="status" aria-busy="true">
+              {t.loading}
+            </div>
+          }
+        >
+          <TicketDetail key={ticket} ticketId={ticket} open={ticketOpen} onClose={closeTicket} readOnly={role === 'kepala-daerah'} persona={ticketPersona} />
         </Suspense>
       )}
     </div>
@@ -244,14 +281,15 @@ export const missions: readonly Mission[] = [
   {
     id: 'voice',
     label: { id: 'Kirim voice note', en: 'Send a voice note' },
-    hint: { id: 'Ibu Siti: chip "Voice note contoh" (atau tombol mikrofon), lalu putar contoh Basa Jawa', en: 'Ibu Siti: the "Sample voice note" chip (or the microphone), then play the Javanese sample' },
+    hint: { id: 'Ibu Siti: ketuk chip "Voice note contoh" (contoh Basa Jawa, ±3 detik), atau tahan tombol mikrofon untuk bicara', en: 'Ibu Siti: tap the "Sample voice note" chip (a 3-second Javanese sample), or hold the microphone to speak' },
     done: (e) => isEvent(e, 'complaint.created') && e.payload.channel === 'voice' && e.source === 'sapa-warga',
   },
   {
     id: 'flood',
     label: { id: 'Laporkan banjir', en: 'Report a flood' },
     hint: { id: 'Ibu Siti: "Foto genangan + lokasi", lalu Kirim', en: 'Ibu Siti: "Flood photo + location", then Send' },
-    done: (e) => isEvent(e, 'complaint.created') && e.payload.category === 'banjir' && e.source === 'sapa-warga',
+    // the visitor's own report (a persona), not the cluster panel's simulated neighbours
+    done: (e) => isEvent(e, 'complaint.created') && e.payload.category === 'banjir' && e.source === 'sapa-warga' && !!e.payload.citizenId && Object.values(world.get().meta.personas).includes(e.payload.citizenId),
   },
   {
     id: 'forward',
@@ -270,5 +308,6 @@ export const missions: readonly Mission[] = [
 export const hotspot: DemoShellProps['hotspot'] = {
   target: '[data-hotspot="voice"]',
   id: 'sapa-warga:voice',
+  placement: 'above',
   label: { id: 'Mulai dari sini', en: 'Start here' },
 }

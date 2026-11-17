@@ -502,6 +502,8 @@
   position: relative;
   isolation: isolate;
   display: grid;
+  /* one shrinkable track: a long agency name ellipsizes instead of widening the lane (EN) */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 6px;
   min-height: 92px;
@@ -533,11 +535,13 @@
   font: 600 var(--dk-t12) var(--dk-font);
 }
 .dk-np-lane-h b {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dk-np-lane-h span {
+  flex: none;
   color: var(--dk-accent);
 }
 .dk-np-lane-list {
@@ -768,8 +772,27 @@
   .dk-np-banner {
     flex-wrap: wrap;
   }
-  .dk-np-unit > span {
+  .dk-np-unit:not(.is-inline) > span {
     display: none;
+  }
+  .dk-np-rolenote {
+    flex-wrap: wrap;
+  }
+  .dk-np-rolenote > span {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .dk-np-unit.is-inline {
+    flex: 1 1 100%;
+    padding-left: 20px;
+  }
+  .dk-np-unit.is-inline select {
+    min-height: 44px;
+  }
+  /* kit BrowserFrame hides the dots below 640 px, so the URL pill would land in the auto column and squeeze the
+     actions column; keep URL flexible and actions sized to content (kit handoff: same rule in frames.css) */
+  .dk-np-frame .dk-bframe-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .dk-np-acts-r.is-head {
     display: none;
@@ -818,4 +841,40 @@ html[data-dk-calm] .dk-np-summary.is-streaming::after {
   left: 0;
   height: 14px;
   pointer-events: none;
+}
+
+/* phones: the three tabs share the row (short labels, no icons; Tabs `fill`) — no sideways scrolling */
+.dk-np-tabs .dk-tabs.is-fill .dk-tablist {
+  gap: 0;
+  padding: 0 8px;
+}
+.dk-np-tabs .dk-tabs.is-fill .dk-tab {
+  min-width: 0;
+  gap: 4px;
+  padding: 0 6px;
+}
+
+/* playback repaints stay inside their own small layers (the waveform's progress clip, the writing dots, the
+   time read-out) instead of re-rasterising the whole tab every frame */
+.dk-np-wave,
+.dk-np-writing,
+.dk-np-time {
+  contain: paint;
+  will-change: transform;
+}
+/* re-showing the Rapat tab: transcript and minutes cards below the fold skip their render until scrolled to */
+.dk-np-transcript,
+.dk-np-minutes {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+/* recorder header on phones: heading on its own row, the back button under it */
+@media (max-width: 479px) {
+  .dk-np-rec-h {
+    flex-wrap: wrap;
+  }
+  .dk-np-rec-h h3 {
+    flex: 1 0 100%;
+  }
 }

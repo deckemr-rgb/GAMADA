@@ -1,7 +1,8 @@
 /**
  * BriefingPlayer (lazy, loads on "Dengarkan briefing") — reads the briefing aloud with the browser voice
  * (id-ID / en-GB), segment by segment, and reports the item being read so the panel can highlight it. Without a
- * voice it runs the same timeline silently (text mode) so the highlight still walks the items.
+ * voice it runs the same timeline silently (text mode) so the highlight still walks the items. Stopping is the panel's
+ * own "Hentikan" button (one stop control); this bar offers pause / resume.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
@@ -16,7 +17,6 @@ const P = {
   reading: { id: 'Membacakan butir {i} dari {n}', en: 'Reading item {i} of {n}' },
   intro2: { id: 'Pembukaan', en: 'Opening' },
   silent: { id: 'tanpa suara: perangkat tidak punya suara bahasa ini', en: 'silent: this device has no voice for the language' },
-  stop: { id: 'Hentikan pembacaan', en: 'Stop reading' },
   pause: { id: 'Jeda', en: 'Pause' },
   play: { id: 'Lanjutkan', en: 'Resume' },
 }
@@ -95,7 +95,6 @@ export default function BriefingPlayer({ items: live, at, leader, onActive, onLi
           <span style={{ transform: `scaleX(${pct})` }} />
         </span>
       </div>
-      <IconButton icon="close" size="sm" label={P.stop[lang]} onClick={() => { pb.pause(); onEnd() }} />
     </div>
   )
 }

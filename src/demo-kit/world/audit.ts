@@ -33,7 +33,7 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const n = cl?.complaintIds.length ?? e.payload.complaintIds.length
       const desa = s.region.kecamatan.find((k) => k.id === e.payload.kecamatanId)?.desa.find((d) => d.id === e.payload.desaId)?.name ?? e.payload.desaId
       return {
-        summary: { id: `Klaster ${CATEGORY_LABEL[e.payload.category].id.toLowerCase()} ${desa}: ${n} aduan → Meja Pimpinan & Siaga Wilayah`, en: `${CATEGORY_LABEL[e.payload.category].en} cluster in ${desa}: ${n} complaints → Meja Pimpinan & Siaga Wilayah` },
+        summary: { id: `Klaster ${CATEGORY_LABEL[e.payload.category].id.toLowerCase()} ${desa}: ${n} aduan → Meja Pimpinan, Siaga Wilayah & Radar Isu`, en: `${CATEGORY_LABEL[e.payload.category].en} cluster in ${desa}: ${n} complaints → Meja Pimpinan, Siaga Wilayah & Radar Isu` },
         refs: [ref('clusters', e.payload.clusterId ?? ''), ...e.payload.complaintIds.map((c) => ref('complaints', c))],
       }
     }

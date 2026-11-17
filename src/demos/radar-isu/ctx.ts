@@ -3,7 +3,7 @@
  * from it (ctx.world) and Live sends the same object to the proxy, so both modes see exactly what is on screen.
  */
 import { rows, type Bi, type WorldState } from '../../demo-kit/world'
-import { getDeepResult, hoaxPhase, radarKpis, sentimentIndex } from './model'
+import { getDeepResult, hoaxPhase, negIssues, radarKpis, sentimentIndex } from './model'
 import { TOPIC } from './strings'
 
 export interface RadarCtx {
@@ -25,6 +25,17 @@ export interface RadarCtx {
     topic: string
     label: Bi
     count: number
+    reach: number
+    score: number
+  }[]
+  /** topics with negative mentions in 24 h, most negative mentions first (the ecosystem's "isu negatif") */
+  negIssues: {
+    topic: string
+    label: Bi
+    /** negative mentions */
+    count: number
+    /** all mentions of the topic */
+    total: number
     reach: number
     score: number
   }[]
@@ -104,6 +115,19 @@ export function radarCtx(s: WorldState, now: number): RadarCtx {
     }))
     .sort((a, b) => b.count - a.count || b.reach - a.reach)
     .slice(0, 8)
+  const neg = negIssues(s.mentions, now)
+    .slice(0, 5)
+    .map((n) => {
+      const g = by.get(n.topic)
+      return {
+        topic: n.topic,
+        label: TOPIC[n.topic] ?? { id: n.topic, en: n.topic },
+        count: n.count,
+        total: g?.n ?? n.count,
+        reach: n.reach,
+        score: g ? Math.round((g.sum / g.n) * 100) / 100 : -1,
+      }
+    })
   const series = sentimentIndex(s.mentions, now)
   const trend = series.filter((_, i) => i % 8 === 0 || i === series.length - 1).map((p) => ({ at: hm(p.at), value: p.value }))
   const ph = hoaxPhase(s, now)
@@ -139,6 +163,7 @@ export function radarCtx(s: WorldState, now: number): RadarCtx {
       reach24h: k.reach,
     },
     topics,
+    negIssues: neg,
     sentimentTrend: trend,
     hoax:
       ph.kind === 'active' || ph.kind === 'clarified'

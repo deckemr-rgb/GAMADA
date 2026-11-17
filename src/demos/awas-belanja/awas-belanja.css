@@ -1321,9 +1321,10 @@
   }
 }
 @media (max-width: 767px), (pointer: coarse) {
+  /* the kit draws a 1 px border around the field: the input itself must still be 44 px tall */
   .dk-ab .dk-input,
   .dk-ab .dk-select {
-    height: var(--dk-target);
+    height: calc(var(--dk-target) + 2px);
   }
 }
 /* the package title takes focus when a package opens: ring only for keyboard users */
@@ -1334,11 +1335,10 @@
   border-radius: 6px;
   box-shadow: var(--dk-focus);
 }
-/* hotspot wrapper: the kit centres the ring on the target's top-right corner and hangs its label 66 px to the left,
-   so the wrapper's right padding gives both room beside the button instead of over its text (kitHandoff) */
+/* hotspot wrapper: the ring sits on the button's top-right corner; the kit Hotspot now places its label under the
+   target (placement 'auto'), so the wrapper needs no extra room */
 .dk-ab-hs {
   display: inline-flex;
-  padding-right: 64px;
 }
 @media (max-width: 767px) {
   .dk-ab-flood-act > .dk-ab-linkbtn {

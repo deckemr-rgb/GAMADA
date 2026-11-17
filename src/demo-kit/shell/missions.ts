@@ -17,6 +17,9 @@ export interface Mission {
   /** the hint on a phone-sized shell, where the bar's role / clock / AI controls sit in the "⋯" sheet (falls back
    *  to `hint`). Write one whenever `hint` points at the top bar. */
   hintSm?: Bi
+  /** not offered on a phone-sized shell (the feature is hidden there): the phone guide lists, counts and
+   *  completes without it */
+  hideSm?: boolean
   /** auto-tick rule; omit for UI-only steps that the product marks with markMission() */
   done?: (e: WorldEvent, s: WorldState) => boolean
 }

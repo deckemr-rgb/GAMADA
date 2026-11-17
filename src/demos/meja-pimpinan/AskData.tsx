@@ -11,9 +11,8 @@ import { PRODUCT_BY_SLUG, isProductSlug } from '../../content/products'
 import { registerScenario, useAiChat, type ChatMessage, type Structured } from '../../demo-kit/ai/chat'
 import { Button, Icon, IconButton, Input, dropChips } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
-import { clock, emit, useClock, useSession, useWorld, world, type EventMap } from '../../demo-kit/world'
-import { briefingItems } from '../../demo-kit/world/satu-daerah'
-import { causeQuestion, opdsInText, risingCategory } from './data'
+import { clock, emit, useSession, useWorld, world, type EventMap } from '../../demo-kit/world'
+import { causeQuestion, mpBriefingItems, opdsInText, risingCategory, useNow } from './data'
 import { askContext } from './ideas'
 import { parseSpec, runQuery } from './query'
 import { QueryChart } from './QueryChart'
@@ -53,15 +52,16 @@ const A = {
   ai: { id: 'Asisten', en: 'Assistant' },
 }
 
-export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, pending, onPendingTaken, autoFocus }: AskProps & { draft: string; pending: string | null; onPendingTaken: () => void; autoFocus?: boolean }) {
+export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, pending, onPendingTaken, autoFocus }: AskProps & { draft: string; pending: string | null; onPendingTaken: () => void; autoFocus?: { current: boolean } }) {
   const { lang } = useI18n()
   const session = useSession()
-  const now = useClock().minutes
+  const now = useNow(60)
   const [text, setText] = useState(draft)
   const formRef = useRef<HTMLFormElement>(null)
   useLayoutEffect(() => {
-    // taking over from the stub while the viewer was typing: keep the focus and put the caret after the text
-    if (!autoFocus) return
+    // taking over from the stub while the viewer was still typing in it (not after they tabbed on): keep the focus and
+    // put the caret after the text
+    if (!autoFocus?.current) return
     const input = formRef.current?.querySelector('input')
     if (!input) return
     input.focus()
@@ -82,7 +82,7 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
       if (m.status === 'done' && (m.content || m.structured?.length)) cb.current.onAnswered()
       // Live compose_briefing: the world briefing is assembled from the world itself (refs to real entities)
       if (m.mode === 'live' && m.structured?.some((x) => x.kind === 'briefing')) {
-        const items = briefingItems(world.get(), clock.get().minutes)
+        const items = mpBriefingItems(world.get(), clock.get().minutes)
         emit('briefing.generated', { items: items.map(({ title, source, refs }) => ({ title, source, refs })) }, 'meja-pimpinan')
       }
       // the map flies to the district the answer is about (once per answer)
@@ -114,11 +114,39 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
   const logRef = useRef<HTMLDivElement>(null)
   const count = chat.messages.length
   useLayoutEffect(() => {
-    // a new question scrolls to the top of that question, so its answer (text + chart) reads from the start
+    // a new question scrolls to the top of that question, so its answer (text + chart) reads from the start; when
+    // the log box changes size (the panel takes a larger share, a banner appears, the window resizes) the newest
+    // question is put back at the top instead of leaving the view on pieces of older answers
     const el = logRef.current
-    const q = el?.querySelectorAll<HTMLElement>('.dk-mp-q')
-    const last = q?.[q.length - 1]
-    if (el && last) el.scrollTop = Math.max(0, last.offsetTop - el.offsetTop - 6)
+    if (!el) return
+    const anchor = () => {
+      const q = el.querySelectorAll<HTMLElement>('.dk-mp-q')
+      const last = q[q.length - 1]
+      if (last) el.scrollTop = Math.max(0, last.offsetTop - el.offsetTop - 6)
+    }
+    anchor()
+    if (typeof ResizeObserver === 'undefined') return
+    // while the answer streams in (text, then chart) the question can only reach the top once there is enough below
+    // it: keep re-anchoring as the answer grows, until the viewer scrolls the log themselves
+    let pinned = true
+    const unpin = () => (pinned = false)
+    el.addEventListener('wheel', unpin, { passive: true })
+    el.addEventListener('touchmove', unpin, { passive: true })
+    let h = el.clientHeight
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight !== h) {
+        h = el.clientHeight
+        anchor()
+      } else if (pinned) anchor()
+    })
+    ro.observe(el)
+    const last = el.lastElementChild
+    if (last) ro.observe(last)
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('wheel', unpin)
+      el.removeEventListener('touchmove', unpin)
+    }
   }, [count])
   const [expanded, setExpanded] = useState(true)
   const sm = useShell().size === 'sm'
@@ -163,7 +191,7 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
             </div>
           </>
         ) : (
-          chat.messages.filter((m) => !(m.status === 'stopped' && !m.content)).map((m) => (m.role === 'user' ? <p key={m.id} className="dk-mp-q"><span className="dk-sr">{A.you[lang]}: </span>{m.content}</p> : <Answer key={m.id} m={m} lang={lang} now={now} onFly={onFly} onInstruct={onInstruct} onAsk={ask} busy={chat.busy} />))
+          chat.messages.filter((m) => !(m.status === 'stopped' && !m.content)).map((m) => (m.role === 'user' ? <p key={m.id} className="dk-mp-q"><span className="dk-sr">{A.you[lang]}: </span>{m.content}</p> : <Answer key={m.id} m={m} lang={lang} onFly={onFly} onInstruct={onInstruct} onAsk={ask} busy={chat.busy} />))
         )}
       </div>
       <form ref={formRef} className="dk-mp-askform" onSubmit={submit}>
@@ -180,7 +208,29 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
   )
 }
 
-function Answer({ m, lang, now, onFly, onInstruct, onAsk, busy }: { m: ChatMessage; lang: Lang; now: number; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct']; onAsk: (q: string) => void; busy: boolean }) {
+/** what an agent step looked at, in words ("Sumber: aduan · per kecamatan · 7 hari"); the tool name stays in the tooltip */
+const PV = {
+  src: { id: 'Sumber', en: 'Source' },
+  metric: {
+    complaints: { id: 'aduan', en: 'complaints' }, sla_on_time: { id: 'SLA tepat waktu', en: 'on-time SLA' }, ticket_backlog: { id: 'tiket terbuka', en: 'open tickets' },
+    alerts: { id: 'peringatan', en: 'alerts' }, mentions_negative: { id: 'isu negatif', en: 'negative issues' }, procurement_risk: { id: 'paket pengadaan', en: 'procurement packages' },
+    sales: { id: 'penjualan UMKM', en: 'small-business sales' }, prices: { id: 'harga pasar', en: 'market prices' }, econ_index: { id: 'indeks ekonomi', en: 'economic index' },
+    action_items_overdue: { id: 'tindak lanjut terlambat', en: 'overdue follow-ups' },
+  } as Record<string, { id: string; en: string }>,
+  group: {
+    kecamatan: { id: 'per kecamatan', en: 'by district' }, opd: { id: 'per OPD', en: 'by agency' }, category: { id: 'per kategori', en: 'by category' }, day: { id: 'per hari', en: 'by day' },
+    commodity: { id: 'per komoditas', en: 'by commodity' }, market: { id: 'per pasar', en: 'by market' },
+  } as Record<string, { id: string; en: string }>,
+  range: { today: { id: 'hari ini', en: 'today' }, '7d': { id: '7 hari', en: '7 days' }, '30d': { id: '30 hari', en: '30 days' }, '90d': { id: '90 hari', en: '90 days' } } as Record<string, { id: string; en: string }>,
+  tool: { issue_instruction: { id: 'draf instruksi', en: 'instruction draft' }, compose_briefing: { id: 'briefing dari 6 produk', en: 'briefing from 6 products' } } as Record<string, { id: string; en: string }>,
+}
+function provenance(name: string, input: Record<string, unknown>, lang: Lang): string {
+  const w = (x: unknown, m: Record<string, { id: string; en: string }>) => (typeof x === 'string' ? m[x]?.[lang] : undefined)
+  const parts = typeof input.metric === 'string' ? [w(input.metric, PV.metric) ?? input.metric, w(input.groupBy, PV.group), w(input.range, PV.range)] : [PV.tool[name]?.[lang] ?? name]
+  return `${PV.src[lang]}: ${parts.filter(Boolean).join(' · ')}`
+}
+
+function Answer({ m, lang, onFly, onInstruct, onAsk, busy }: { m: ChatMessage; lang: Lang; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct']; onAsk: (q: string) => void; busy: boolean }) {
   const chipsRef = useRef<HTMLDivElement>(null)
   const done = m.status === 'done' || m.status === 'stopped'
   useLayoutEffect(() => {
@@ -202,15 +252,14 @@ function Answer({ m, lang, now, onFly, onInstruct, onAsk, busy }: { m: ChatMessa
       {!!m.toolCalls?.length && (
         <ul className="dk-mp-steps" aria-label={A.steps[lang]}>
           {m.toolCalls.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} title={c.name}>
               <Icon name="zap" size={12} />
-              <code>{c.name}</code>
-              {typeof c.input.metric === 'string' && <span>{[c.input.metric, c.input.groupBy, c.input.range].filter(Boolean).join(' · ')}</span>}
+              {provenance(c.name, c.input, lang)}
             </li>
           ))}
         </ul>
       )}
-      {done && (m.structured ?? []).map((st, i) => <StructuredView key={i} st={st} lang={lang} now={now} onFly={onFly} onInstruct={onInstruct} />)}
+      {done && (m.structured ?? []).map((st, i) => <StructuredView key={i} st={st} lang={lang} onFly={onFly} onInstruct={onInstruct} />)}
       {m.fellBack && <p className="dk-mp-fell">{A.fell[lang]}</p>}
       {done && !!m.followUps?.length && (
         <div ref={chipsRef} className="dk-mp-chips">
@@ -225,9 +274,9 @@ function Answer({ m, lang, now, onFly, onInstruct, onAsk, busy }: { m: ChatMessa
   )
 }
 
-function StructuredView({ st, lang, now, onFly, onInstruct }: { st: Structured; lang: Lang; now: number; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct'] }) {
-  // numbers are computed once, when the answer lands (later world changes do not rewrite an answer)
-  const [at] = useState(now)
+function StructuredView({ st, lang, onFly, onInstruct }: { st: Structured; lang: Lang; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct'] }) {
+  // numbers are computed once, at the exact minute the answer lands (later world changes do not rewrite an answer)
+  const [at] = useState(() => clock.get().minutes)
   const res = useMemo(() => {
     if (st.kind !== 'query') return null
     const spec = parseSpec(st.data)

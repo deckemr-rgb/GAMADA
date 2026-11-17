@@ -10,11 +10,12 @@ import { Sparkline } from '../../demo-kit/viz'
 import { DAY_MIN, rows, shallowEqual, useWorld, type Minutes } from '../../demo-kit/world'
 import { kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
 import { negativeIssues } from '../../demo-kit/world'
-import { complaintDays, negativeHours, slaDays } from './data'
+import { complaintDays, negativeHours, slaDays, useNow } from './data'
 import { topicLabel, tr } from './strings'
 
-export function Kpis({ now, role, opdId, compact }: { now: Minutes; role: RoleId; opdId: string; compact?: boolean }) {
+export function Kpis({ role, opdId, compact }: { role: RoleId; opdId: string; compact?: boolean }) {
   const { lang } = useI18n()
+  const now = useNow(1)
   const k = useWorld((s) => kpiStrip(s, now), shallowEqual)
   const days = useWorld((s) => complaintDays(s, now))
   const sla = useWorld((s) => slaDays(s, Math.floor(now / DAY_MIN)))

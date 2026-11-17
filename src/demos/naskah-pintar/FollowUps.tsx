@@ -5,10 +5,10 @@
  * preview the AI drafts (Simulasi / Live) and sends actionItem.reminded. Kepala OPD sees its own agency only.
  * Phones: the board becomes a list per agency.
  */
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
-import { Badge, Button, Chip, EmptyState, Icon, Kanban, Kpi, Modal, Segmented, SlaLabel, StatusChip, flashNewRow, useMedia, type KanbanColumn } from '../../demo-kit/ui'
+import { Badge, Button, Chip, EmptyState, Icon, IconButton, Kanban, Kpi, Modal, Segmented, SlaLabel, StatusChip, flashNewRow, motionMode, useMedia, type KanbanColumn } from '../../demo-kit/ui'
 import { emit, useClock, useWorld, world, type ActionItem } from '../../demo-kit/world'
 import { actionBoard } from '../../demo-kit/world/satu-daerah'
 import { DAY_MIN } from '../../demo-kit/world/util'
@@ -25,7 +25,11 @@ type View = 'opd' | 'status' | 'due'
 
 const NEXT: Record<ActionItem['status'], ActionItem['status'] | null> = { baru: 'proses', proses: 'selesai', selesai: null }
 
-export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav: NpNav; focusItem: string | null; focusOpd: string | null; focusKey: number }) {
+/** card order inside a lane / column: overdue, new, in progress, done; then by deadline */
+const RANK = (i: Item) => (i.late ? 0 : i.status === 'baru' ? 1 : i.status === 'proses' ? 2 : 3)
+const byRank = (a: Item, b: Item) => RANK(a) - RANK(b) || a.dueAt - b.dueAt
+
+export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKey }: { nav: NpNav; focusItem: string | null; focusOpd: string | null; focusOpds: readonly string[] | null; focusKey: number }) {
   const S = useStr()
   const { lang } = useI18n()
   const now = useClock().minutes
@@ -33,18 +37,24 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
   const opds = useWorld((s) => s.region.opd)
   const board = useWorld((s) => actionBoard(s, now))
   const sm = useMedia('(max-width: 767px)')
-  const [view, setView] = useState<View>('opd')
+  /* a Kepala OPD has one agency: on a wide screen the status board says more than one full-width lane (phones keep
+     the per-agency list, which already reads as one card list) */
+  const [view, setView] = useState<View>(() => (nav.role === 'kepala-opd' && !window.matchMedia('(max-width: 767px)').matches ? 'status' : 'opd'))
   const [lateOnly, setLateOnly] = useState(false)
+  const [showDone, setShowDone] = useState(false)
   /* the segmented control / chip answer at once; the (heavier) board follows in a non-blocking render (INP) */
   const dView = useDeferredValue(view)
   const dLate = useDeferredValue(lateOnly)
   const stale = dView !== view || dLate !== lateOnly
   const [remind, setRemind] = useState<string | null>(null)
-  const [pin, setPin] = useState<string | null>(null)
+  /** agencies brought to the front of the board by a jump (lane button, letter, instruction) */
+  const [pin, setPin] = useState<readonly string[]>([])
   const root = useRef<HTMLDivElement>(null)
+  /** a jump waiting for the board to render it: scroll + flash + focus once its lane is in the DOM */
+  const landing = useRef<{ id: string | null; opd: string | null } | null>(null)
 
   const cols = useMemo(() => (nav.myOpd ? board.filter((c) => c.opdId === nav.myOpd) : board), [board, nav.myOpd])
-  const all = useMemo(() => cols.flatMap((c) => c.items), [cols])
+  const all = useMemo(() => cols.flatMap((c) => c.items).sort(byRank), [cols])
   const items = useMemo(() => (dLate ? all.filter((i) => i.late) : all), [all, dLate])
   const k = useMemo(() => {
     const open = all.filter((i) => i.status !== 'selesai')
@@ -57,26 +67,44 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
   }, [all])
   const name = useCallback((id: string) => opdLabel(opds.find((o) => o.id === id), id, lang), [opds, lang])
 
-  /* focus from the banner / a lane / a toast: show that agency (or item), flash it */
+  /* a jump from the banner / a lane / a letter / a toast: bring those agencies to the front, then land on the card */
   useEffect(() => {
-    if (!focusItem && !focusOpd) return
-    if (focusItem && view === 'due') setView('opd')
-    const id = focusItem
-    const opd = focusOpd ?? (id ? world.get().actionItems.byId[id]?.opdId : null) ?? null
-    setPin(opd)
-    const raf = requestAnimationFrame(() => {
-      const el = root.current
-      if (!el) return
-      const card = id ? el.querySelector<HTMLElement>(`[data-item="${CSS.escape(id)}"]`) : null
-      const col = opd ? el.querySelector<HTMLElement>(`[data-col-opd="${CSS.escape(opd)}"]`) : null
-      const firstOfOpd = !card && opd ? el.querySelector<HTMLElement>(`[data-opd="${CSS.escape(opd)}"]`) : null
-      const target = card ?? col ?? firstOfOpd
-      target?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-      const flashEl = card?.closest<HTMLElement>('.dk-kb-card, .dk-np-fcard') ?? col?.closest<HTMLElement>('.dk-np-fgroup') ?? firstOfOpd?.closest<HTMLElement>('.dk-kb-col') ?? null
-      if (flashEl) flashNewRow(flashEl, { slide: false })
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [focusItem, focusOpd, focusKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!focusItem && !focusOpd && !focusOpds?.length) return
+    const opd = focusOpd ?? (focusItem ? world.get().actionItems.byId[focusItem]?.opdId : null) ?? focusOpds?.[0] ?? null
+    const list = [...new Set([...(opd ? [opd] : []), ...(focusOpds ?? [])])]
+    setPin(list)
+    if (view === 'due' || (view === 'status' && !focusItem)) setView('opd')
+    // the jump's agencies and card must be on the board: drop the overdue-only filter
+    setLateOnly(false)
+    landing.current = { id: focusItem, opd }
+  }, [focusItem, focusOpd, focusOpds, focusKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* after the render that shows the pinned lane: scroll the board to it, centre the card, flash and focus it */
+  useLayoutEffect(() => {
+    const land = landing.current
+    const el = root.current
+    if (!land || !el || stale) return
+    const card = land.id ? el.querySelector<HTMLElement>(`[data-item="${CSS.escape(land.id)}"]`) : null
+    const opd = land.opd
+    const col = opd ? el.querySelector<HTMLElement>(`[data-col-opd="${CSS.escape(opd)}"]`) : null
+    const firstOfOpd = !card && opd ? el.querySelector<HTMLElement>(`[data-opd="${CSS.escape(opd)}"]`) : null
+    const target = card ?? firstOfOpd ?? col
+    if (!target) return
+    landing.current = null
+    const kb = el.querySelector<HTMLElement>('.dk-np-kanban')
+    const lane = target.closest<HTMLElement>('.dk-kb-col')
+    if (kb && lane) kb.scrollLeft = Math.max(0, lane.offsetLeft - kb.offsetLeft - 8)
+    const smooth = motionMode() === 'full'
+    target.scrollIntoView({ block: card || firstOfOpd ? 'center' : 'nearest', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
+    const flashEl = target.closest<HTMLElement>('.dk-kb-card, .dk-np-fcard') ?? col?.closest<HTMLElement>('.dk-np-fgroup') ?? null
+    if (flashEl) flashNewRow(flashEl, { slide: false })
+    // keyboard and screen-reader users land on the card too
+    const focusEl = target.closest<HTMLElement>('.dk-kb-card') ?? (target.matches('[data-item]') ? target : null)
+    if (focusEl) {
+      if (!focusEl.hasAttribute('tabindex')) focusEl.tabIndex = -1
+      focusEl.focus({ preventScroll: true })
+    } else col?.focus({ preventScroll: true })
+  })
 
   /* cards that appear while the board is open (instructions, letters, meetings) get the new-row highlight */
   const known = useRef<Set<string> | null>(null)
@@ -106,13 +134,23 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
     [S, lang, day, now, name, dView, canRemind, move],
   )
 
+  /* lanes: pinned first, then the ones with overdue work, open work, the newest item; lanes holding only finished
+     work fold into one "N OPD tuntas" chip (unless pinned or shown) */
+  const lanes = useMemo(() => {
+    const rows = cols
+      .filter((c) => !dLate || c.items.some((i) => i.late))
+      .map((c) => {
+        const open = c.items.filter((i) => i.status !== 'selesai').length
+        return { c, open, late: c.items.filter((i) => i.late).length, newest: Math.max(...c.items.map((i) => i.createdAt)), pin: pin.indexOf(c.opdId) }
+      })
+    rows.sort((a, b) => (a.pin < 0 ? 99 : a.pin) - (b.pin < 0 ? 99 : b.pin) || b.late - a.late || b.open - a.open || b.newest - a.newest)
+    const done = rows.filter((r) => r.open === 0 && r.pin < 0 && r.c.opdId !== nav.myOpd)
+    const shown = showDone ? rows : rows.filter((r) => !done.includes(r))
+    return { shown, done: done.length }
+  }, [cols, dLate, pin, showDone, nav.myOpd])
   const opdColumns: KanbanColumn[] = useMemo(
-    () =>
-      cols
-        .filter((c) => !dLate || c.items.some((i) => i.late))
-        .sort((a, b) => Number(b.opdId === pin) - Number(a.opdId === pin))
-        .map((c) => ({ id: c.opdId, title: name(c.opdId), tone: c.items.some((i) => i.late) ? 'danger' : 'neutral' })),
-    [cols, dLate, name, pin],
+    () => lanes.shown.map(({ c, late }) => ({ id: c.opdId, title: name(c.opdId), tone: late ? 'danger' : 'neutral' })),
+    [lanes, name],
   )
   const statusColumns: KanbanColumn[] = useMemo(
     () => [
@@ -122,23 +160,30 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
     ],
     [S],
   )
+  const shownIds = useMemo(() => new Set(opdColumns.map((c) => c.id)), [opdColumns])
+  const laneItems = useMemo(() => items.filter((i) => shownIds.has(i.opdId)), [items, shownIds])
   const byOpd = useCallback((i: Item) => i.opdId, [])
   const byStatus = useCallback((i: Item) => i.status, [])
   const itemId = useCallback((i: Item) => i.id, [])
   const label = useCallback((i: Item) => i.title[lang], [lang])
   const target = remind ? (world.get().actionItems.byId[remind] ?? null) : null
+  const empty = dLate ? (
+    <EmptyState art="chart" title={S.fEmptyLate} compact action={{ label: S.fShowAll, icon: 'kanban', onClick: () => setLateOnly(false) }} />
+  ) : (
+    <EmptyState art="chart" title={S.fEmpty} compact action={{ label: S.mPlay, icon: 'play', onClick: () => nav.go('rapat') }} />
+  )
   const boardEl = useMemo(
     () =>
       !items.length ? (
-        <EmptyState art="chart" title={dLate ? S.fEmptyLate : S.fEmpty} compact />
+        empty
       ) : dView === 'due' ? (
         <DueList items={items} S={S} lang={lang} day={day} now={now} name={name} canRemind={canRemind} onMove={move} onRemind={setRemind} />
       ) : sm && dView === 'opd' ? (
         <div className="dk-np-fgroups">
           {opdColumns.map((c) => {
-            const list = items.filter((i) => i.opdId === c.id)
+            const list = laneItems.filter((i) => i.opdId === c.id)
             return (
-              <details key={c.id} className="dk-np-fgroup" open={list.some((i) => i.late) || c.id === (pin ?? nav.myOpd)}>
+              <details key={c.id} className="dk-np-fgroup" open={list.some((i) => i.late) || pin.includes(c.id) || c.id === nav.myOpd}>
                 <summary data-col-opd={c.id}>
                   <b>{c.title}</b>
                   <span className="dk-np-fgroup-n">
@@ -159,19 +204,22 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
           })}
         </div>
       ) : dView === 'opd' ? (
-        <Kanban<Item> className="dk-np-kanban" columns={opdColumns} items={items} itemId={itemId} itemColumn={byOpd} itemLabel={label} renderCard={renderCard} label={S.fBoard} />
+        <LaneBoard S={S} count={opdColumns.length}>
+          <Kanban<Item> className="dk-np-kanban" columns={opdColumns} items={laneItems} itemId={itemId} itemColumn={byOpd} itemLabel={label} renderCard={renderCard} label={S.fBoard} />
+        </LaneBoard>
       ) : (
-        <Kanban<Item> className="dk-np-kanban is-status" columns={statusColumns} items={items} itemId={itemId} itemColumn={byStatus} itemLabel={label} renderCard={renderCard} onMove={move} label={S.fBoard} />
+        <Kanban<Item> className="dk-np-kanban is-status" columns={statusColumns} items={items} itemId={itemId} itemColumn={byStatus} itemLabel={label} renderCard={renderCard} onMove={move} moveButton={false} label={S.fBoard} />
       ),
-    [items, dView, dLate, sm, S, lang, day, now, name, canRemind, move, opdColumns, statusColumns, pin, nav.myOpd, renderCard, itemId, byOpd, byStatus, label],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, laneItems, dView, dLate, sm, S, lang, day, now, name, canRemind, move, opdColumns, statusColumns, pin, nav.myOpd, renderCard, itemId, byOpd, byStatus, label],
   )
 
   return (
     <div className="dk-np-follow" ref={root}>
       <p className="dk-np-lead dk-np-tablead">{S.fLead}</p>
       <div className="dk-np-kpis">
-        <Kpi label={S.fOpen} value={k.open} hero />
-        <Kpi label={S.fLate} value={k.late} />
+        <Kpi label={S.fLate} value={k.late} hero className={k.late > 0 ? 'dk-np-kpi-late' : undefined} />
+        <Kpi label={S.fOpen} value={k.open} />
         <Kpi label={S.fToday} value={k.today} />
         <Kpi label={S.fDone} value={k.done} />
       </div>
@@ -190,6 +238,11 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
         <Chip icon="alert" tone={lateOnly ? 'danger' : 'neutral'} selected={lateOnly} onToggle={() => setLateOnly((v) => !v)}>
           {S.fLateOnly} ({k.late})
         </Chip>
+        {view === 'opd' && (lanes.done > 0 || showDone) && (
+          <Chip icon="checkCircle" selected={showDone} onToggle={() => setShowDone((v) => !v)}>
+            {S.fDoneLanes(lanes.done)}
+          </Chip>
+        )}
       </div>
 
       <div className={`dk-np-fboard${stale ? ' is-stale' : ''}`} aria-busy={stale || undefined}>
@@ -197,6 +250,74 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusKey }: { nav:
       </div>
 
       {target && <Reminder item={target} onClose={() => setRemind(null)} name={name(target.opdId)} asOpd={nav.role === 'kepala-opd'} />}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ lane navigation */
+
+/** the agency board with previous / next lane buttons, an edge fade and "Agencies 1–4 of 12" */
+function LaneBoard({ S, count, children }: { S: NpDict; count: number; children: ReactNode }) {
+  const wrap = useRef<HTMLDivElement>(null)
+  const [range, setRange] = useState<{ a: number; b: number; start: boolean; end: boolean }>({ a: 1, b: Math.min(count, 4), start: true, end: count <= 4 })
+  const measure = useCallback(() => {
+    const kb = wrap.current?.querySelector<HTMLElement>('.dk-np-kanban')
+    if (!kb) return
+    const colsEl = [...kb.querySelectorAll<HTMLElement>('.dk-kb-col')]
+    const l = kb.scrollLeft
+    const r = l + kb.clientWidth
+    let a = 0
+    let b = 0
+    colsEl.forEach((c, i) => {
+      const x0 = c.offsetLeft - kb.offsetLeft
+      const x1 = x0 + c.offsetWidth
+      if (x1 > l + 8 && x0 < r - 8) {
+        if (!a) a = i + 1
+        b = i + 1
+      }
+    })
+    const next = { a: a || 1, b: b || Math.min(count, 1), start: l <= 2, end: r >= kb.scrollWidth - 2 }
+    setRange((p) => (p.a === next.a && p.b === next.b && p.start === next.start && p.end === next.end ? p : next))
+  }, [count])
+  useLayoutEffect(() => {
+    const kb = wrap.current?.querySelector<HTMLElement>('.dk-np-kanban')
+    if (!kb) return
+    measure()
+    let raf = 0
+    const on = () => {
+      if (!raf)
+        raf = requestAnimationFrame(() => {
+          raf = 0
+          measure()
+        })
+    }
+    kb.addEventListener('scroll', on, { passive: true })
+    window.addEventListener('resize', on)
+    return () => {
+      cancelAnimationFrame(raf)
+      kb.removeEventListener('scroll', on)
+      window.removeEventListener('resize', on)
+    }
+  }, [measure, count])
+  const step = (dir: 1 | -1) => {
+    const kb = wrap.current?.querySelector<HTMLElement>('.dk-np-kanban')
+    const col = kb?.querySelector<HTMLElement>('.dk-kb-col')
+    if (!kb || !col) return
+    kb.scrollBy({ left: dir * (col.offsetWidth + 12), behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+  }
+  const scrolls = !(range.start && range.end)
+  return (
+    <div ref={wrap} className={`dk-np-laneboard${range.end ? '' : ' has-more'}${range.start ? '' : ' has-less'}`}>
+      {scrolls && (
+        <div className="dk-np-lanenav">
+          <span className="dk-np-muted dk-num" aria-live="polite">
+            {S.fLanesInfo(range.a, range.b, count)}
+          </span>
+          <IconButton icon="chevronLeft" label={S.fPrevLane} size="sm" onClick={() => step(-1)} disabled={range.start} />
+          <IconButton icon="chevronRight" label={S.fNextLane} size="sm" onClick={() => step(1)} disabled={range.end} />
+        </div>
+      )}
+      {children}
     </div>
   )
 }
@@ -224,7 +345,7 @@ function Card({ it, S, lang, day, now, opdName, showOpd, canRemind, onMove, onRe
       <p className="dk-np-item-t">{it.title[lang]}</p>
       <p className="dk-np-item-m">
         <Icon name="user" size={12} />
-        {picLabel(it.pic, lang)}
+        {picLabel(it.pic, lang, it.opdId)}
         {showOpd && <span className="dk-np-item-opd">· {opdName}</span>}
       </p>
       <div className="dk-np-item-row">
@@ -284,7 +405,7 @@ function DueList({ items, S, lang, day, now, name, canRemind, onMove, onRemind }
               {name(it.opdId)}
             </span>
             <span role="cell" data-label={S.nPic}>
-              {picLabel(it.pic, lang)}
+              {picLabel(it.pic, lang, it.opdId)}
             </span>
             <span role="cell" data-label={S.nDue} className="dk-num dk-np-due-d">
               {dueText(it.dueAt, lang, day)} {it.status !== 'selesai' && <SlaLabel minutesLeft={it.dueAt - now} />}
@@ -325,18 +446,29 @@ function Reminder({ item, onClose, name, asOpd }: { item: ActionItem; onClose: (
   const started = useRef(false)
   const out = structuredOf<ReminderOut>(ai.last, 'reminder')
   /* who receives / signs: the PIC from the Secretariat, or (Kepala OPD) the agency's own implementing staff */
-  const to = asOpd ? S.wStaff(name) : picLabel(item.pic, lang)
+  const to = asOpd ? S.wStaff(name) : picLabel(item.pic, lang, item.opdId)
   const from = asOpd ? S.wFromOpd(name) : S.wFromSetda
   const done = ai.last?.status === 'done' || ai.last?.status === 'error' || ai.last?.status === 'stopped'
 
+  /* the AI draft starts after the modal's first paint, so opening it answers at once (INP) */
   useEffect(() => {
     if (started.current) return
-    started.current = true
-    const s = world.get()
-    void ai.ask(
-      lang === 'id' ? 'Buat pesan pengingat WhatsApp untuk PIC tindak lanjut ini' : 'Draft a WhatsApp reminder to the person in charge of this follow-up',
-      buildCtx(s, now, lang, 'reminder', { item: { ...ctxItem(s, item, now, lang), pic: to, from, dueAt: item.dueAt, nowAt: now } }),
-    )
+    let t = 0
+    const raf = requestAnimationFrame(() => {
+      t = window.setTimeout(() => {
+        if (started.current) return
+        started.current = true
+        const s = world.get()
+        void ai.ask(
+          lang === 'id' ? 'Buat pesan pengingat WhatsApp untuk PIC tindak lanjut ini' : 'Draft a WhatsApp reminder to the person in charge of this follow-up',
+          buildCtx(s, now, lang, 'reminder', { item: { ...ctxItem(s, item, now, lang), pic: to, from, dueAt: item.dueAt, nowAt: now } }),
+        )
+      }, 0)
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (done && !text) setText(out?.message ?? ai.last?.content ?? '')

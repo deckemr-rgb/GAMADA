@@ -7,7 +7,7 @@
  * Emits procurement.flagged / procurement.recommended (source awas-belanja); consumes flood.alert (via the
  * procurement.created reaction: the emergency pump package), match.made (local SME offers) and ?focus=<id>.
  */
-import { Suspense, lazy, startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { Activity, Suspense, lazy, startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import type { DemoCanvasProps } from '../registry'
 import type { Mission } from '../../demo-kit/shell'
 import { useShell } from '../../demo-kit/shell'
@@ -145,7 +145,19 @@ export default function Canvas(_props: DemoCanvasProps) {
         <p className="dk-sr" role="status" aria-live="polite">
           {said}
         </p>
-        {openId ? (
+        {/* the list stays mounted (hidden) while a package is open: Back is instant, focus returns to the same row, and
+            the shell hotspot keeps its (connected) target instead of drawing a stale ring (kitHandoff) */}
+        <Activity mode={openId ? 'hidden' : 'visible'}>
+          <List
+            roleKey={roleKey}
+            fresh={fresh}
+            onOpen={open}
+            onShortcut={() => {
+              openPumpWhenReady.current = true
+            }}
+          />
+        </Activity>
+        {openId && (
           <Suspense fallback={<LoadingText>{t.loading}</LoadingText>}>
             <Detail
               id={openId}
@@ -160,15 +172,6 @@ export default function Canvas(_props: DemoCanvasProps) {
               arrived={arrived}
             />
           </Suspense>
-        ) : (
-          <List
-            roleKey={roleKey}
-            fresh={fresh}
-            onOpen={open}
-            onShortcut={() => {
-              openPumpWhenReady.current = true
-            }}
-          />
         )}
       </div>
       {chatOpen && (

@@ -9,7 +9,7 @@ import { Button, EmptyState, Icon, flashNewRow } from '../../demo-kit/ui'
 import { emit, onEvent, rows, useClock, useSession, useWorld, world, type Alert, type WorldState } from '../../demo-kit/world'
 import { canSend, clockText, confirmedIds, floodAlerts, floodClusterSize, floodReports, phonesReached, riverGauge, shelters, swRole } from './data'
 import { S, levelKey, nf, useT } from './strings'
-import { mapRef, ui, useUi } from './ui'
+import { mapRef, revealMap, ui, useUi } from './ui'
 
 const rainSummary = (s: WorldState) => {
   const c = rows(s.rainCells)
@@ -22,13 +22,13 @@ export function Alerts() {
   const { t } = useT()
   const role = swRole(useSession().role)
   return (
-    <div className="dk-sw-tab">
+    <div className="dk-sg-tab">
       {role === 'kepala-daerah' && <Exec />}
       <Situation />
       <AlertList role={role} />
       <Reports />
       <Shelters />
-      {role === 'pertanian' && <p className="dk-sw-note">{t('readOnly')}</p>}
+      {role === 'pertanian' && <p className="dk-sg-note">{t('readOnly')}</p>}
     </div>
   )
 }
@@ -47,9 +47,9 @@ function Exec() {
     [nf(phones, lang), t('execPhones')],
   ]
   return (
-    <section className="dk-sw-card dk-sw-exec" aria-label={t('exec')}>
-      <h3 className="dk-sw-h">{t('exec')}</h3>
-      <dl className="dk-sw-kpis">
+    <section className="dk-sg-card dk-sg-exec" aria-label={t('exec')}>
+      <h3 className="dk-sg-h">{t('exec')}</h3>
+      <dl className="dk-sg-kpis">
         {cells.map(([v, l]) => (
           <div key={l}>
             <dd className="dk-num">{v}</dd>
@@ -57,7 +57,7 @@ function Exec() {
           </div>
         ))}
       </dl>
-      <p className="dk-sw-fine">{t('hudNote')}</p>
+      <p className="dk-sg-fine">{t('hudNote')}</p>
     </section>
   )
 }
@@ -77,26 +77,26 @@ function Situation() {
   const y = (v: number) => H - ((v - lo) / (hi - lo || 1)) * H
   const d = hist.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')
   return (
-    <section className="dk-sw-card" aria-labelledby="sw-sit">
-      <h3 className="dk-sw-h" id="sw-sit">
+    <section className="dk-sg-card" aria-labelledby="sw-sit">
+      <h3 className="dk-sg-h" id="sw-sit">
         <Icon name="rain" size={16} />
         {t('situation')}
       </h3>
       <p>{rain ? t('rainOn', { n: rain.n, peak: nf(rain.peak, lang), kec }) : t('rainNone')}</p>
       {g && (
-        <div className="dk-sw-gauge">
+        <div className="dk-sg-gauge">
           <div>
-            <p className="dk-sw-muted">
+            <p className="dk-sg-muted">
               {t('gauge')} · {g.name}
             </p>
             <p className="dk-num">{t('gaugeOf', { v: nf(g.level, lang, 2), s: nf(g.siaga, lang, 1), a: nf(g.awas, lang, 1) })}</p>
           </div>
-          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="dk-sw-spark" role="img" aria-label={`${t('gauge')} 24 h: ${nf(hist[0] ?? 0, lang, 2)} → ${nf(g.level, lang, 2)} m`}>
+          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="dk-sg-spark" role="img" aria-label={`${t('gauge')} 24 h: ${nf(hist[0] ?? 0, lang, 2)} → ${nf(g.level, lang, 2)} m`}>
             <line x1="0" x2={W} y1={y(g.siaga)} y2={y(g.siaga)} className="is-siaga" />
             <line x1="0" x2={W} y1={y(g.awas)} y2={y(g.awas)} className="is-awas" />
             <path d={d} />
           </svg>
-          <p className="dk-sw-fine">{t('gaugeSim')}</p>
+          <p className="dk-sg-fine">{t('gaugeSim')}</p>
         </div>
       )}
     </section>
@@ -119,13 +119,13 @@ function AlertList({ role }: { role: ReturnType<typeof swRole> }) {
     return flashNewRow(el)
   }, [flash, alerts])
   return (
-    <section className="dk-sw-card" aria-labelledby="sw-al">
-      <h3 className="dk-sw-h" id="sw-al">
+    <section className="dk-sg-card" aria-labelledby="sw-al">
+      <h3 className="dk-sg-h" id="sw-al">
         <Icon name="alert" size={16} />
         {t('alerts')}
       </h3>
       {alerts.length ? (
-        <ul className="dk-sw-alerts" ref={listRef}>
+        <ul className="dk-sg-alerts" ref={listRef}>
           {alerts.map((a) => (
             <AlertRow key={a.id} a={a} lang={lang} canSend={send} />
           ))}
@@ -148,20 +148,24 @@ function AlertRow({ a, lang, canSend: send }: { a: Alert; lang: 'id' | 'en'; can
   const nConf = a.confirmedBy?.length ?? 0
   const lv = levelKey(a.level)
   return (
-    <li className={`dk-sw-alert is-l${a.level}`} data-id={a.id}>
-      <button type="button" className="dk-sw-alert-main" onClick={() => a.kecamatanIds[0] && mapRef.current?.fitKecamatan(a.kecamatanIds[0])}>
-        <span className="dk-sw-lv">
+    <li className={`dk-sg-alert is-l${a.level}`} data-id={a.id}>
+      <button type="button" className="dk-sg-alert-main" onClick={() => {
+        if (!a.kecamatanIds[0]) return
+        revealMap()
+        mapRef.current?.fitKecamatan(a.kecamatanIds[0])
+      }}>
+        <span className="dk-sg-lv">
           {t('level')} {a.level} · {S[lv][lang]}
         </span>
         <strong>{a.title[lang]}</strong>
-        <span className="dk-sw-muted">
+        <span className="dk-sg-muted">
           {t('issued', { t: clockText(a.at, lang) })}
           {a.expectedAt !== null ? ` · ${t('expected', { t: clockText(a.expectedAt, lang) })}` : ''}
         </span>
       </button>
-      <div className="dk-sw-alert-foot">
+      <div className="dk-sg-alert-foot">
         {a.broadcast ? (
-          <span className="dk-sw-sent">
+          <span className="dk-sg-sent">
             <Icon name="check" size={12} />
             {t('sentTo', { n: nf(a.broadcast.recipients, lang), ch: a.broadcast.channels.join(', ').toUpperCase() })}
           </span>
@@ -170,10 +174,10 @@ function AlertRow({ a, lang, canSend: send }: { a: Alert; lang: 'id' | 'en'; can
             {t('sendNow')}
           </Button>
         ) : (
-          <span className="dk-sw-muted">{t('notSent')}</span>
+          <span className="dk-sg-muted">{t('notSent')}</span>
         )}
         {nConf > 0 && (
-          <span className="dk-sw-okbadge">
+          <span className="dk-sg-okbadge">
             <Icon name="check" size={12} />
             {t('confirmed')} · {nConf}
           </span>
@@ -207,29 +211,30 @@ function Reports() {
   const simulate = () => simulateReports()
   const shown = reports.slice(0, 6)
   return (
-    <section className="dk-sw-card" aria-labelledby="sw-rp">
-      <h3 className="dk-sw-h" id="sw-rp">
+    <section className="dk-sg-card" aria-labelledby="sw-rp">
+      <h3 className="dk-sg-h" id="sw-rp">
         <Icon name="chat" size={16} />
         {t('reports')}
-        <span className="dk-sw-count dk-num">{reports.length}</span>
+        <span className="dk-sg-count dk-num">{reports.length}</span>
       </h3>
-      {cluster >= 5 && <p className="dk-sw-okline">{t('reportsCluster', { n: cluster })}</p>}
+      {cluster >= 5 && <p className="dk-sg-okline">{t('reportsCluster', { n: cluster })}</p>}
       {shown.length ? (
-        <ul className="dk-sw-reports" ref={listRef} aria-live="polite">
+        <ul className="dk-sg-reports" ref={listRef} aria-live="polite">
           {shown.map((c) => (
             <li key={c.id} data-id={c.id}>
               <button type="button" onClick={() => {
+                revealMap()
                 ui.set({ picked: { layer: 'reports', id: c.id } })
                 mapRef.current?.flyTo(c.coord, 12.5)
               }}>
-                <span className="dk-sw-time dk-num">{minutes - c.at < 3 && c.at <= minutes ? t('now') : clockText(c.at, lang)}</span>
-                <span className="dk-sw-rtext">
+                <span className="dk-sg-time dk-num">{minutes - c.at < 3 && c.at <= minutes ? t('now') : clockText(c.at, lang)}</span>
+                <span className="dk-sg-rtext">
                   <strong>{c.code}</strong> {c.summary[lang]}
                 </span>
                 {confirmed.has(c.id) && (
-                  <span className="dk-sw-okbadge" title={t('confirmed')}>
+                  <span className="dk-sg-okbadge" title={t('confirmed')}>
                     <Icon name="check" size={12} />
-                    <span className="dk-sw-sr">{t('confirmed')}</span>
+                    <span className="dk-sg-sr">{t('confirmed')}</span>
                   </span>
                 )}
               </button>
@@ -237,14 +242,14 @@ function Reports() {
           ))}
         </ul>
       ) : (
-        <p className="dk-sw-muted">{t('reportsNone')}</p>
+        <p className="dk-sg-muted">{t('reportsNone')}</p>
       )}
       {cluster < 5 && (
-        <div className="dk-sw-simrow">
+        <div className="dk-sg-simrow">
           <Button size="sm" variant="ghost" icon="plus" onClick={simulate} data-sw="sim-reports">
             {t('reportsSim')}
           </Button>
-          <span className="dk-sw-fine">{t('reportsSimHint')}</span>
+          <span className="dk-sg-fine">{t('reportsSimHint')}</span>
         </div>
       )}
     </section>
@@ -286,18 +291,21 @@ function Shelters() {
   const occ = list.reduce((n, f) => n + f.occupied, 0)
   const cap = list.reduce((n, f) => n + f.capacity, 0)
   return (
-    <section className="dk-sw-card" aria-labelledby="sw-sh">
-      <h3 className="dk-sw-h" id="sw-sh">
+    <section className="dk-sg-card" aria-labelledby="sw-sh">
+      <h3 className="dk-sg-h" id="sw-sh">
         <Icon name="home" size={16} />
         {t('shelters')}
       </h3>
       <p>{occ ? t('sheltersOf', { o: nf(occ, lang), c: nf(cap, lang), n: list.filter((f) => f.occupied).length }) : t('sheltersIdle', { n: list.length })}</p>
       {occ > 0 && (
-        <div className="dk-sw-meter" role="img" aria-label={`${Math.round((occ / Math.max(1, cap)) * 100)} %`}>
+        <div className="dk-sg-meter" role="img" aria-label={`${Math.round((occ / Math.max(1, cap)) * 100)} %`}>
           <span style={{ transform: `scaleX(${Math.min(1, occ / Math.max(1, cap))})` }} />
         </div>
       )}
-      <Button size="sm" variant="ghost" icon="pin" aria-pressed={facOn} onClick={() => ui.layer('facilities', !facOn)}>
+      <Button size="sm" variant="ghost" icon="pin" aria-pressed={facOn} onClick={() => {
+        if (!facOn) revealMap()
+        ui.layer('facilities', !facOn)
+      }}>
         {facOn ? t('hideOnMap') : t('showOnMap')}
       </Button>
     </section>

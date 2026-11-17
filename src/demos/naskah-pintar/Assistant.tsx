@@ -5,10 +5,11 @@
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useI18n } from '../../lib/i18n'
-import { Badge, Button, Chip, Drawer } from '../../demo-kit/ui'
+import { Badge, Button, Chip, Drawer, IconButton } from '../../demo-kit/ui'
 import { useClock, world } from '../../demo-kit/world'
 import { useNaskahAi } from './ai'
 import { buildCtx } from './ctx'
+import { lettersCtx } from './inbox'
 import { SCRIPT, dueText } from './model'
 import type { NpNav } from './index'
 import { useStr } from './strings'
@@ -42,7 +43,11 @@ export default function Assistant({ open, onClose, nav }: { open: boolean; onClo
         now,
         lang,
         'ask',
-        meeting ? { minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: a.pic, due: dueText(a.dueAt, lang, s.day) })) } } : {},
+        {
+          // the inbox as the screen shows it (sample letters' number / sender / subject)
+          letters: lettersCtx(s),
+          ...(meeting ? { minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: a.pic, due: dueText(a.dueAt, lang, s.day) })) } } : {}),
+        },
         nav.myOpd,
       ),
     )
@@ -92,17 +97,13 @@ export default function Assistant({ open, onClose, nav }: { open: boolean; onClo
           </div>
         )}
         <form className="dk-np-askform" onSubmit={submit}>
-          <input className="dk-np-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={S.aPlaceholder} aria-label={S.aInput} data-np="ask-input" />
+          <input className="dk-np-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={S.aPlaceholder} aria-label={S.aInput} data-np="ask-input" data-autofocus />
           {ai.busy ? (
             <Button type="button" variant="quiet" onClick={ai.stop}>
               {S.aStop}
             </Button>
           ) : (
-            q.trim() && (
-              <Button type="submit" variant="primary" icon="send" data-np="ask-send">
-                {S.aSend}
-              </Button>
-            )
+            <IconButton type="submit" icon="send" variant="primary" label={S.aSendLabel} disabled={!q.trim()} data-np="ask-send" />
           )}
         </form>
       </div>

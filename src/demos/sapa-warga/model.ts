@@ -29,8 +29,6 @@ export const SW = {
   slotCount: 6,
   /** ticket flight phone → console (s), spec ≤ 900 ms */
   flightS: 0.85,
-  /** delay before the mobile layout switches to the console tab after a ticket is created (ms) */
-  tabSwitchMs: 650,
 } as const
 
 /* ------------------------------------------------------------------ personas */
@@ -331,6 +329,7 @@ export interface SwContext {
   services: SwService[]
   kecamatan: { id: string; name: string }[]
   categoryOpd: Record<string, string>
+  /** queueAhead: today's MPP bookings whose slot starts within the next 60 minutes */
   today: { complaints: number; byCategory: Partial<Record<ComplaintCategory, number>>; open: number; mppBookings: number; queueAhead: number }
   myTickets: SwTicketRef[]
   nextCode: string
@@ -366,7 +365,7 @@ export function buildContext(s: WorldState, pack: RegionPack | null, key: Person
     services,
     kecamatan: s.region.kecamatan.map((k) => ({ id: k.id, name: k.name })),
     categoryOpd,
-    today: { complaints: today.length, byCategory, open, mppBookings: mpp.length, queueAhead: mpp.filter((b) => b.slotAt <= now + 60).length + 3 },
+    today: { complaints: today.length, byCategory, open, mppBookings: mpp.length, queueAhead: mpp.filter((b) => b.slotAt >= now && b.slotAt < now + 60).length },
     myTickets,
     nextCode: nextComplaintCode(s),
     justCreated,
@@ -375,9 +374,80 @@ export function buildContext(s: WorldState, pack: RegionPack | null, key: Person
   }
 }
 
+/**
+ * The Live request body: the same facts in one language and short strings, so the whole service list fits the 6 KB
+ * context budget (summarize() would otherwise halve the arrays and drop services such as NIB). The full context rides
+ * along as a non-enumerable `full` property: summarize()/JSON skip it, while the Simulasi fallback (which receives
+ * the same object) reads it.
+ */
+export const LIVE_CONTEXT_BYTES = 5600
+export function liveContext(x: SwContext): object {
+  const enc = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null
+  const size = (v: unknown) => (enc ? enc.encode(JSON.stringify(v)).length : JSON.stringify(v).length)
+  const cut = (v: string, n: number) => (v.length > n ? `${v.slice(0, n - 1)}…` : v)
+  const build = (reqChars: number) => ({
+    region: x.region,
+    now: x.now,
+    persona: x.persona ? { nama: x.persona.name, gender: x.persona.gender, umur: x.persona.age, bahasa: x.persona.lang, desa: x.persona.desa, kecamatan: x.persona.kecamatan } : null,
+    services: x.services.map((v) => ({ id: v.id, nama: v.name.id, syarat: cut(v.requirements.map((r) => r.id).join('; '), reqChars), slaHari: v.slaDays, kanal: v.channel, opd: v.opd, biaya: v.fee.id })),
+    kecamatan: x.kecamatan.map((k) => k.name).join(', '),
+    categoryOpd: x.categoryOpd,
+    today: x.today,
+    myTickets: x.myTickets.slice(-6).map((t) => ({ code: t.code, status: t.status, kategori: t.category, opd: t.opd, sisaSlaMenit: t.slaLeftMin, rating: t.rating })),
+    nextCode: x.nextCode,
+    justCreated: x.justCreated ? { code: x.justCreated.code, kategori: x.justCreated.category, opd: x.justCreated.opd, slaJam: x.justCreated.slaHours, kanal: x.justCreated.channel, tempat: x.justCreated.place, terjemahan: x.justCreated.translation?.id ?? null } : null,
+    alertHere: x.alertHere,
+    clusterHere: x.clusterHere,
+    catatan: 'Data simulasi demo; jam layanan MPP 08.00–15.00 adalah contoh.',
+  })
+  let out = build(220)
+  for (const n of [160, 110, 70, 40]) {
+    if (size(out) <= LIVE_CONTEXT_BYTES) break
+    out = build(n)
+  }
+  Object.defineProperty(out, 'full', { value: x, enumerable: false })
+  return out
+}
+
+/** a place named by the Live AI (create_ticket.location: names, not ids) → the region's kecamatan / desa ids */
+export function resolvePlace(s: WorldState, loc: unknown, fallback: { kecamatanId: string; desaId: string }): { kecamatanId: string; desaId: string } {
+  const l = (loc && typeof loc === 'object' ? loc : {}) as { kecamatan?: unknown; desa?: unknown; detail?: unknown }
+  const norm = (v: unknown) => (typeof v === 'string' ? v.toLowerCase().replace(/\b(kecamatan|kec\.?|desa|kelurahan|kel\.?|ds\.?)\s*/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim() : '')
+  const kq = norm(l.kecamatan)
+  const dq = norm(l.desa)
+  const detail = norm(l.detail)
+  const kecs = s.region.kecamatan
+  let kec = kq ? kecs.find((k) => norm(k.name) === kq) ?? kecs.find((k) => kq.includes(norm(k.name)) || norm(k.name).includes(kq)) : undefined
+  // a desa named without its kecamatan: search the whole region (the persona's kecamatan first)
+  if (!kec && dq) {
+    const order = [...kecs].sort((a, b) => Number(b.id === fallback.kecamatanId) - Number(a.id === fallback.kecamatanId))
+    kec = order.find((k) => k.desa.some((d) => norm(d.name) === dq))
+  }
+  if (!kec && detail) kec = kecs.find((k) => detail.includes(norm(k.name)))
+  if (!kec) return fallback
+  const desa = (dq && kec.desa.find((d) => norm(d.name) === dq)) || (detail && kec.desa.find((d) => detail.includes(norm(d.name)))) || null
+  if (desa) return { kecamatanId: kec.id, desaId: desa.id }
+  return kec.id === fallback.kecamatanId ? fallback : { kecamatanId: kec.id, desaId: kec.desa[0]?.id ?? fallback.desaId }
+}
+
 /* ------------------------------------------------------------------ small formatting */
 
 export const L = <T,>(lang: Lang, v: { id: T; en: T }): T => v[lang]
+/**
+ * Run `fn` right after the next paint (rAF → task). A tap paints its own feedback first (selected tab, cleared
+ * composer) and the heavy re-render follows, so the interaction's next paint stays fast (INP ≤ 200 ms).
+ * Returns a cancel function.
+ */
+export function afterPaint(fn: () => void): () => void {
+  let t: ReturnType<typeof setTimeout> | null = null
+  const r = requestAnimationFrame(() => {
+    t = setTimeout(fn, 0)
+  })
+  return () => {
+    cancelAnimationFrame(r)
+    if (t !== null) clearTimeout(t)
+  }
+}
 export function slaText(hours: number, lang: Lang): string {
   if (hours < 48) return lang === 'id' ? `${hours} jam` : `${hours} hours`
   const d = Math.round(hours / 24)

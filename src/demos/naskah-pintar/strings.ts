@@ -5,12 +5,17 @@ import { useI18n } from '../../lib/i18n'
 
 type Lang = 'id' | 'en'
 
+/** English singular / plural */
+const pl = (n: number, one: string, many: string) => (n === 1 ? one : many)
+
 const id = {
   frame: 'Naskah Pintar: notulen, surat masuk, tindak lanjut',
   tabsLabel: 'Bagian Naskah Pintar',
   tabMeeting: 'Rapat',
   tabLetters: 'Surat Masuk',
   tabFollow: 'Tindak Lanjut',
+  /* phones: three tabs must fit in ~326 px */
+  tabShort: { rapat: 'Rapat', surat: 'Surat', tindak: 'Tugas' },
   askAi: 'Tanya AI',
   myUnit: 'Unit kerja saya',
   loading: 'Memuat…',
@@ -35,7 +40,12 @@ const id = {
   mPlace: 'Ruang Rapat Sekretariat Daerah',
   mParticipants: (n: number) => `${n} peserta`,
   mStatus: { terjadwal: 'Terjadwal', berlangsung: 'Berlangsung', selesai: 'Notulen jadi' },
-  mLead: 'Rapat berjalan, notulen dan tindak lanjut menulis dirinya sendiri.',
+  mLead: {
+    terjadwal: 'Putar rekaman: notulen dan tindak lanjut akan menulis dirinya sendiri.',
+    berlangsung: 'Rapat berjalan, notulen dan tindak lanjut menulis dirinya sendiri.',
+    selesai: (n: number) => `Notulen selesai · ${n} tindak lanjut terbagi ke OPD.`,
+  },
+  mEarly: (t: string) => `Rapat dijadwalkan ${t}; rekaman simulasinya bisa diputar sekarang.`,
   mPlay: 'Putar rekaman contoh',
   mPause: 'Jeda',
   mResume: 'Lanjutkan',
@@ -98,6 +108,7 @@ const id = {
   rSave: (n: number) => `Simpan ${n} tindak lanjut`,
   rSaved: (n: number) => `${n} tindak lanjut tersimpan ke papan OPD`,
   rClose: 'Kembali ke rekaman contoh',
+  rAlready: 'Tindak lanjut dari transkrip ini sudah tersimpan. Ubah transkrip untuk menyimpan lagi.',
   rErr: {
     denied: 'Akses mikrofon ditolak. Anda tetap bisa mengetik atau menempel transkrip.',
     nomic: 'Mikrofon tidak ditemukan. Ketik atau tempel transkrip di bawah.',
@@ -215,6 +226,12 @@ const id = {
   fReminded: (t: string) => `Diingatkan ${t}`,
   fEmpty: 'Tidak ada tindak lanjut di sini.',
   fEmptyLate: 'Tidak ada yang lewat tenggat. Semua tepat waktu.',
+  fShowAll: 'Tampilkan semua tugas',
+  fDoneLanes: (n: number) => `${n} OPD tuntas`,
+  fDoneLanesHint: (n: number) => `Tampilkan ${n} OPD yang semua tugasnya selesai`,
+  fPrevLane: 'Kolom OPD sebelumnya',
+  fNextLane: 'Kolom OPD berikutnya',
+  fLanesInfo: (a: number, b: number, n: number) => `OPD ${a}–${b} dari ${n}`,
   fItem: 'Tindak lanjut',
   fOpd: 'OPD',
   fAction: 'Aksi',
@@ -242,6 +259,7 @@ const id = {
   aLead: 'Tanya soal rapat, surat, dan tindak lanjut. Jawaban diambil dari data di layar.',
   aPlaceholder: 'Mis. tindak lanjut apa yang lewat tenggat?',
   aSend: 'Kirim',
+  aSendLabel: 'Kirim pertanyaan',
   aStop: 'Hentikan',
   aInput: 'Pertanyaan untuk AI',
   aConversation: 'Percakapan dengan AI',
@@ -266,6 +284,7 @@ const en: Dict = {
   tabMeeting: 'Meeting',
   tabLetters: 'Incoming',
   tabFollow: 'Follow-ups',
+  tabShort: { rapat: 'Meeting', surat: 'Letters', tindak: 'Tasks' },
   askAi: 'Ask AI',
   myUnit: 'My agency',
   loading: 'Loading…',
@@ -278,7 +297,7 @@ const en: Dict = {
   },
 
   instrTitle: 'Instruction from the Regional Head received',
-  instrBody: (opds: string, n: number) => `Memo dispositioned to ${opds}; ${n} follow-ups created automatically.`,
+  instrBody: (opds: string, n: number) => `Memo dispositioned to ${opds}; ${n} ${pl(n, 'follow-up', 'follow-ups')} created automatically.`,
   instrOpen: 'View the memo',
   instrTasks: 'View follow-ups',
   dismiss: 'Dismiss notice',
@@ -287,7 +306,12 @@ const en: Dict = {
   mPlace: 'Regional Secretariat meeting room',
   mParticipants: (n: number) => `${n} participants`,
   mStatus: { terjadwal: 'Scheduled', berlangsung: 'In progress', selesai: 'Minutes ready' },
-  mLead: 'The meeting runs; minutes and follow-ups write themselves.',
+  mLead: {
+    terjadwal: 'Play the recording: the minutes and follow-ups will write themselves.',
+    berlangsung: 'The meeting runs; minutes and follow-ups write themselves.',
+    selesai: (n: number) => `Minutes done · ${n} ${pl(n, 'follow-up', 'follow-ups')} shared out to the agencies.`,
+  },
+  mEarly: (t: string) => `The meeting is scheduled for ${t}; its simulated recording can be played now.`,
   mPlay: 'Play the sample recording',
   mPause: 'Pause',
   mResume: 'Resume',
@@ -306,10 +330,10 @@ const en: Dict = {
   mFromHere: 'Play from here',
   mCollapse: 'Hide',
   mExpand: 'Show',
-  mDone: (n: number) => `Meeting over · ${n} follow-ups are on the agency board`,
+  mDone: (n: number) => `Meeting over · ${n} ${pl(n, 'follow-up is', 'follow-ups are')} on the agency board`,
   mFormat: 'Official memo format',
   mToastTitle: 'Meeting minutes saved',
-  mToastBody: (n: number) => `${n} follow-ups reached the agency board and the Regional Head’s desk.`,
+  mToastBody: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} reached the agency board and the Regional Head’s desk.`,
   mToastAct: 'Open Follow-ups',
 
   nTitle: 'Minutes',
@@ -327,10 +351,10 @@ const en: Dict = {
   nDue: 'Due',
   nStatus: 'Status',
   nYourUnit: 'Your agency',
-  nLiveCheck: (d: number, a: number) => `Checked by Live AI: ${d} decisions, ${a} follow-ups`,
+  nLiveCheck: (d: number, a: number) => `Checked by Live AI: ${d} ${pl(d, 'decision', 'decisions')}, ${a} ${pl(a, 'follow-up', 'follow-ups')}`,
   lanesTitle: 'Follow-up board by agency',
   lanesHint: 'Cards fly to the column of the agency in charge.',
-  laneOpen: (opd: string, n: number) => `${opd}: ${n} follow-ups. Open in Follow-ups`,
+  laneOpen: (opd: string, n: number) => `${opd}: ${n} ${pl(n, 'follow-up', 'follow-ups')}. Open in Follow-ups`,
 
   rTitle: 'Record or type your meeting',
   rLead: 'Speak near the microphone (Web Speech) or paste a transcript. The AI drafts the decisions and follow-ups.',
@@ -343,11 +367,12 @@ const en: Dict = {
   rSample: 'Fill an example',
   rSampleText: 'Good afternoon, let us open the inflation control meeting. Rice prices rose three percent this week. Decision: a rice market operation is held at the city market. Trade prepares the market operation tomorrow at ten. Agriculture reports farmers’ grain stocks within two days. Communications broadcasts the market operation schedule today.',
   rExtract: 'Draft the minutes with AI',
-  rResult: (d: number, a: number) => `${d} decisions · ${a} follow-ups found`,
+  rResult: (d: number, a: number) => `${d} ${pl(d, 'decision', 'decisions')} · ${a} ${pl(a, 'follow-up', 'follow-ups')} found`,
   rNone: 'The AI found no follow-ups yet. Add sentences with a task, an agency and a deadline.',
-  rSave: (n: number) => `Save ${n} follow-ups`,
-  rSaved: (n: number) => `${n} follow-ups saved to the agency board`,
+  rSave: (n: number) => `Save ${n} ${pl(n, 'follow-up', 'follow-ups')}`,
+  rSaved: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} saved to the agency board`,
   rClose: 'Back to the sample recording',
+  rAlready: 'The follow-ups from this transcript are already saved. Change the transcript to save again.',
   rErr: {
     denied: 'Microphone access was denied. You can still type or paste a transcript.',
     nomic: 'No microphone found. Type or paste a transcript below.',
@@ -360,7 +385,10 @@ const en: Dict = {
   oTitle: 'Official minutes (government memo format)',
   oPrint: 'Print / Save as PDF',
   oClose: 'Close',
-  oGov: (r: string) => `GOVERNMENT OF ${r.toUpperCase()}`,
+  oGov: (r: string) => {
+    const m = /^(Kabupaten|Kota)\s+(.+)$/i.exec(r.trim())
+    return m ? `${(m[2] ?? '').toUpperCase()} ${(m[1] ?? '').toLowerCase() === 'kota' ? 'CITY' : 'REGENCY'} GOVERNMENT` : `GOVERNMENT OF ${r.toUpperCase()}`
+  },
   oSecretariat: 'REGIONAL SECRETARIAT',
   oAddr: 'Jalan Pemuda · Regency government centre',
   oHead: 'MEETING MINUTES',
@@ -415,15 +443,15 @@ const en: Dict = {
   lPickOpd: 'Choose an agency…',
   lRemoveOpd: (o: string) => `Remove ${o}`,
   lNeedOpd: 'Choose at least one recipient agency.',
-  lApproved: (by: string, at: string) => `Dispositioned by ${by} · ${at}`,
-  lTasksMade: (n: number) => `${n} follow-ups created for the recipient agencies`,
+  lApproved: (by: string, at: string) => `Dispositioned by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} · ${at}`,
+  lTasksMade: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} created for the recipient agencies`,
   lSeeTasks: 'View follow-ups',
   lStamp: 'DISPOSITION',
   lFields: (n: number) => `Fields read (OCR): ${n}`,
   lConf: 'confidence',
   lArchive: 'Letter archive',
   lDispo: 'Disposition',
-  lNotaFrom: 'Instruction from the Regional Head',
+  lNotaFrom: 'Regional Head instruction',
   lNota: 'INTERNAL MEMO',
   lNotaTo: 'To',
   lNotaHal: 'Subject',
@@ -462,10 +490,16 @@ const en: Dict = {
   fReminded: (t: string) => `Reminded ${t}`,
   fEmpty: 'No follow-ups here.',
   fEmptyLate: 'Nothing overdue. Everything is on time.',
+  fShowAll: 'Show all tasks',
+  fDoneLanes: (n: number) => `${n} ${pl(n, 'agency', 'agencies')} up to date`,
+  fDoneLanesHint: (n: number) => `Show ${n} ${pl(n, 'agency', 'agencies')} whose tasks are all done`,
+  fPrevLane: 'Previous agency column',
+  fNextLane: 'Next agency column',
+  fLanesInfo: (a: number, b: number, n: number) => `Agencies ${a}–${b} of ${n}`,
   fItem: 'Follow-up',
   fOpd: 'Agency',
   fAction: 'Action',
-  fCount: (n: number) => `${n} tasks`,
+  fCount: (n: number) => `${n} ${pl(n, 'task', 'tasks')}`,
   fDoneN: (n: number) => `${n} done`,
   fNew: 'new',
 
@@ -487,6 +521,7 @@ const en: Dict = {
   aLead: 'Ask about meetings, letters and follow-ups. Answers come from the data on screen.',
   aPlaceholder: 'E.g. which follow-ups are overdue?',
   aSend: 'Send',
+  aSendLabel: 'Send the question',
   aStop: 'Stop',
   aInput: 'Question for the AI',
   aConversation: 'Conversation with the AI',
@@ -547,20 +582,54 @@ export function opdLabel(opd: { id: string; short: string } | undefined, opdId: 
 
 const PIC_EN: Record<string, string> = {
   'Kadis PUPR': 'Head of Public Works',
+  'Kepala Dinas PUPR': 'Head of Public Works',
   Kadinsos: 'Head of Social Affairs',
   'Kalaksa BPBD': 'Head of the Disaster Agency',
   Sekda: 'Regional Secretary',
   Bupati: 'Regent',
   'Kepala Daerah': 'Regional Head',
 }
-/** person in charge (titles only) in the UI language */
-export function picLabel(pic: string, lang: Lang): string {
+/** common Indonesian agency short names → OPD id (PIC strings only carry the short name) */
+const OPD_SHORT: Record<string, string> = {
+  'dinas pupr': 'pupr', pupr: 'pupr', dishub: 'dishub', dinsos: 'dinsos', dinkes: 'dinkes', disdik: 'disdik', dlh: 'dlh', distan: 'distan',
+  disperindag: 'disperindag', diskominfo: 'diskominfo', bappeda: 'bappeda', bpbd: 'bpbd', dpmptsp: 'dpmptsp', disperkim: 'perkim',
+  'satpol pp': 'satpolpp', inspektorat: 'inspektorat', 'bagian pbj': 'ukpbj', 'dinas koperasi & umkm': 'diskopumkm', diskopumkm: 'diskopumkm',
+  'paten kecamatan': 'kecamatan', kecamatan: 'kecamatan', bapenda: 'bapenda', disdukcapil: 'disdukcapil',
+}
+/** "Head of the Public Works office" style title from an OPD id */
+function headOf(opdId: string): string | null {
+  if (opdId === 'kecamatan') return 'Head of the district office'
+  const en = OPD_EN[opdId]
+  if (!en) return null
+  return `Head of ${en}`
+}
+/** person in charge (titles only) in the UI language; "Kepala <agency>" reads through the agency's English name
+ *  ("Head of Public Works (PUPR)") instead of a half-translated "Head of Dinas PUPR" */
+export function picLabel(pic: string, lang: Lang, opdId?: string): string {
   if (lang === 'id') return pic
   const hit = PIC_EN[pic]
   if (hit) return hit
   const camat = /^Camat (.+)$/.exec(pic)
   if (camat) return `Head of ${camat[1]} District`
   const kep = /^Kepala (.+)$/.exec(pic)
-  if (kep) return `Head of ${kep[1]}`
+  if (kep) {
+    const known = OPD_SHORT[(kep[1] ?? '').toLowerCase()]
+    const h = (known && headOf(known)) || (opdId && headOf(opdId))
+    return h || `Head of ${kep[1]}`
+  }
   return pic
+}
+
+/** a signer/sender title stored as plain text in the world (either language, or the kit's 'Kepala Daerah') → current language */
+const TITLES: readonly (readonly [string, string])[] = [
+  ['Kepala Daerah', 'Regional Head'],
+  ['Sekda', 'Regional Secretary'],
+  ['Bupati', 'Regent'],
+  [id.by.sekretariat, en.by.sekretariat],
+  [id.by['kepala-daerah'], en.by['kepala-daerah']],
+  [id.by['kepala-opd'], en.by['kepala-opd']],
+]
+export function byText(by: string, lang: Lang): string {
+  for (const [i, e] of TITLES) if (by === i || by === e) return lang === 'id' ? i : e
+  return by
 }

@@ -7,7 +7,7 @@
  * Ticket creation: a voice note or a photo report creates the ticket at once (complaint.created, source sapa-warga),
  * then the AI answers about that ticket; a typed report creates it when the AI's `ticket` card arrives.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useAiChat, registerScenario } from '../../demo-kit/ai/chat'
 import { PhoneFrame } from '../../demo-kit/frames'
@@ -15,16 +15,35 @@ import { Avatar, Icon, initialsOf } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import { clock, rows, useClock, useSession, useWorld, world, type Bi, type CitizenMessage, type ComplaintCategory, type WorldState } from '../../demo-kit/world'
 import {
-  PERSONA_KEYS, PHOTO_META, SLUG, SW, bookQueue, buildContext, categoryFromLabel, classifyReport, createComplaint, kecName, looksJawa, opdForCategory, opdShort,
-  personaCitizen, placeOf, reportCoord, slotLabel, summaryOf, urgencyOf, voiceSampleFor, type Created, type PersonaKey, type PhotoId, type SwContext,
+  PERSONA_KEYS, PHOTO_META, SLUG, SW, afterPaint, bookQueue, buildContext, categoryFromLabel, classifyReport, createComplaint, kecName, liveContext, looksJawa, opdForCategory, opdShort,
+  personaCitizen, placeOf, reportCoord, resolvePlace, slotLabel, summaryOf, urgencyOf, voiceSampleFor, type Created, type PersonaKey, type PhotoId, type SwContext,
 } from './model'
 import { Thread, emptyConv, type Conv, type MsgMeta, type ThreadActions } from './Thread'
 import { fill, useT } from './strings'
 
-const VoiceSheet = lazy(() => import('./VoiceSheet'))
-const AttachSheet = lazy(() => import('./Sheets').then((m) => ({ default: m.AttachSheet })))
-const FormSheet = lazy(() => import('./Sheets').then((m) => ({ default: m.FormSheet })))
-const SlotSheet = lazy(() => import('./Sheets').then((m) => ({ default: m.SlotSheet })))
+const loadVoice = () => import('./VoiceSheet')
+const loadSheets = () => import('./Sheets')
+const VoiceSheet = lazy(loadVoice)
+const AttachSheet = lazy(() => loadSheets().then((m) => ({ default: m.AttachSheet })))
+const FormSheet = lazy(() => loadSheets().then((m) => ({ default: m.FormSheet })))
+const SlotSheet = lazy(() => loadSheets().then((m) => ({ default: m.SlotSheet })))
+/** warm a sheet's chunk on intent (hover / focus / touch) so the first tap opens it at once */
+const warmVoice = () => void loadVoice().catch(() => undefined)
+const warmSheets = () => void loadSheets().catch(() => undefined)
+
+/** shown while a sheet's chunk is still on its way (cold first tap) */
+function SheetSkeleton({ label }: { label: string }) {
+  return (
+    <div className="dk-sw-sheet is-loading" role="status" aria-busy="true">
+      <span className="dk-sw-typing" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span>{label}</span>
+    </div>
+  )
+}
 
 /** the scenario chunk, registered once (input focus / first send) */
 let scenarioLoad: Promise<void> | null = null
@@ -43,7 +62,7 @@ export interface Staged {
   photo?: { id: PhotoId | 'own'; url?: string; title: Bi }
   loc?: boolean
 }
-type Sheet = null | { k: 'attach' } | { k: 'voice' } | { k: 'form'; serviceId: string } | { k: 'slots'; serviceId: string }
+type Sheet = null | { k: 'attach' } | { k: 'voice'; quick?: boolean } | { k: 'form'; serviceId: string } | { k: 'slots'; serviceId: string }
 
 export interface PhoneProps {
   persona: PersonaKey
@@ -51,6 +70,8 @@ export interface PhoneProps {
   convs: Map<PersonaKey, Conv>
   onCreated: (c: Created, from: Element | null) => void
   flat: boolean
+  /** mobile: switch to the console tab (offered after a report instead of switching on its own) */
+  toConsole: (() => void) | null
 }
 
 /* ------------------------------------------------------------------ quick chips per persona */
@@ -82,8 +103,10 @@ const STORY: Record<PersonaKey, 'personaSiti' | 'personaRaka' | 'personaDarmo'> 
 
 const EMPTY_MSGS: CitizenMessage[] = []
 
-function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRef }: {
+function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRef, onQuickScroll, notice }: {
   voiceRef: { current: VoiceFn | null }
+  onQuickScroll: (scrolled: boolean) => void
+  notice: ReactNode
   persona: PersonaKey
   convs: Map<PersonaKey, Conv>
   onCreated: PhoneProps['onCreated']
@@ -116,7 +139,8 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
     getContext: () => {
       const c = buildContext(world.get(), pack, persona, clock.get().minutes, just.current)
       just.current = null
-      return c
+      // Live: one language, short strings, every service within the 6 KB budget (the full context rides along)
+      return session.aiMode === 'live' ? liveContext(c) : c
     },
   })
   const { send: chatSend, prepare: chatPrepare } = chat
@@ -194,8 +218,10 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
           if (v.data.existing) return
           const d = v.data
           const cat: ComplaintCategory = typeof d.categoryId === 'string' ? (d.categoryId as ComplaintCategory) : categoryFromLabel(String(d.category ?? ''))
-          const kecId = typeof d.kecamatanId === 'string' && d.kecamatanId ? d.kecamatanId : c.kecamatanId
-          const desaId = typeof d.desaId === 'string' && d.desaId ? d.desaId : kecId === c.kecamatanId ? c.desaId : (s.region.kecamatan.find((k) => k.id === kecId)?.desa[0]?.id ?? c.desaId)
+          // Simulasi sends ids; Live sends place names (create_ticket.location) → resolve them against the region
+          const named = typeof d.kecamatanId === 'string' && d.kecamatanId ? null : resolvePlace(s, d.location, { kecamatanId: c.kecamatanId, desaId: c.desaId })
+          const kecId = named ? named.kecamatanId : String(d.kecamatanId)
+          const desaId = named ? named.desaId : typeof d.desaId === 'string' && d.desaId ? d.desaId : kecId === c.kecamatanId ? c.desaId : (s.region.kecamatan.find((k) => k.id === kecId)?.desa[0]?.id ?? c.desaId)
           const centre = s.region.kecamatan.find((k) => k.id === kecId)?.desa.find((x) => x.id === desaId)?.centroid
           const said = typeof d.text === 'string' ? d.text : (prevUser?.content ?? String(d.summary ?? ''))
           const jv = looksJawa(said)
@@ -277,14 +303,20 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       void ask(q)
       return
     }
-    // photo / location report
+    // photo / location report: clear the composer first (painted at once), create the ticket right after the paint
+    const ph = staged.photo
+    const hasLoc = !!staged.loc
+    setText('')
+    setStaged({})
+    afterPaint(() => reportNow(q, ph, hasLoc))
+  }
+  const reportNow = (q: string, ph: Staged['photo'], hasLoc: boolean) => {
     const s = world.get()
     const c = personaCitizen(s, persona)
     if (!c) return
-    const ph = staged.photo
     const caption = q || (ph && ph.id !== 'own' ? PHOTO_META[ph.id].caption[lang] : '')
     const cat = (ph && ph.id !== 'own' ? PHOTO_META[ph.id].category : null) ?? classifyReport(caption)
-    const loc = staged.loc ? { label: `${s.region.kecamatan.find((k) => k.id === c.kecamatanId)?.desa.find((d) => d.id === c.desaId)?.name ?? ''}, ${kecName(s, c.kecamatanId)}` } : undefined
+    const loc = hasLoc ? { label: `${s.region.kecamatan.find((k) => k.id === c.kecamatanId)?.desa.find((d) => d.id === c.desaId)?.name ?? ''}, ${kecName(s, c.kecamatanId)}` } : undefined
     const meta: MsgMeta = { ...(ph ? { photo: ph } : {}), ...(loc ? { loc } : {}) }
     let j: SwContext['justCreated'] = null
     if (cat) {
@@ -296,8 +328,6 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       j = justFrom(s, r, cat, 'wa', null)
       onCreated(r, composer.current)
     }
-    setText('')
-    setStaged({})
     void ask(caption || (lang === 'id' ? 'Saya kirim foto dan lokasi.' : 'I am sending a photo and my location.'), meta, j)
   }
 
@@ -315,8 +345,9 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   const greeting = useMemo(() => {
     const g = pack?.languages.samples.greetings[0]
     const reg = pack?.languages.regional[0]
-    if (citizen && citizen.lang !== 'id' && g && g.lang === reg) return { text: g.text, translation: lang === 'id' ? `${g.id} ${t.greetingId.split('. ').slice(1).join('. ')}` : `${g.en} ${t.greetingId.split('. ').slice(1).join('. ')}` }
-    return { text: t.greetingId, translation: null }
+    // the regional greeting with its own translation; the service hint is a separate line in the UI language
+    if (citizen && citizen.lang !== 'id' && g && g.lang === reg) return { text: g.text, translation: lang === 'id' ? g.id : g.en, hint: t.greetHint }
+    return { text: t.greetingId, translation: null, hint: null }
   }, [pack, citizen, lang, t])
 
   const tips = useMemo(() => {
@@ -326,7 +357,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   }, [persona, t])
   const quick = QUICK[persona]
   const onQuick = (q: Quick) => {
-    if (q.act === 'voice') openSheet({ k: 'voice' })
+    if (q.act === 'voice') openSheet({ k: 'voice', quick: true })
     else if (q.act === 'photo') {
       setStaged({ photo: { id: 'genangan', title: PHOTO_META.genangan.title }, loc: true })
       setText(PHOTO_META.genangan.caption[lang])
@@ -340,9 +371,24 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       <div ref={scroll} className="dk-sw-scroll">
         <Thread conv={{ ...conv, messages: chat.messages }} worldMsgs={worldById} greeting={greeting} tips={tips} actions={actions} scrollRef={scroll} />
       </div>
-      <div className="dk-sw-quick" role="group" aria-label={t.quick}>
+      {notice}
+      <div className="dk-sw-quick" role="group" aria-label={t.quick} onScroll={(e) => onQuickScroll(e.currentTarget.scrollLeft > 4)}>
         {quick.map((q, i) => (
-          <button key={i} type="button" className={`dk-sw-chip${q.act ? ' is-act' : ''}`} onClick={() => onQuick(q)} onFocus={prepare} data-sw={q.act ? `quick-${q.act}` : undefined} data-hotspot={persona === 'siti' && q.act === 'voice' ? 'voice' : undefined}>
+          <button
+            key={i}
+            type="button"
+            className={`dk-sw-chip${q.act ? ' is-act' : ''}`}
+            onClick={() => onQuick(q)}
+            onFocus={() => {
+              prepare()
+              if (q.act === 'voice') warmVoice()
+              else if (q.act === 'queue') warmSheets()
+            }}
+            onPointerEnter={q.act === 'voice' ? warmVoice : q.act === 'queue' ? warmSheets : undefined}
+            onTouchStart={q.act === 'voice' ? warmVoice : q.act === 'queue' ? warmSheets : undefined}
+            data-sw={q.act ? `quick-${q.act}` : undefined}
+            data-hotspot={persona === 'siti' && q.act === 'voice' ? 'voice' : undefined}
+          >
             {q.act === 'voice' && <Icon name="mic" size={14} />}
             {q.act === 'photo' && <Icon name="camera" size={14} />}
             {q.act === 'queue' && <Icon name="calendar" size={14} />}
@@ -373,7 +419,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
         </div>
       )}
       <form ref={composer} className="dk-sw-compose" onSubmit={submit} data-sw-origin="">
-        <button type="button" className="dk-sw-ibtn" aria-label={t.attach} title={t.attach} onClick={() => openSheet({ k: 'attach' })} data-sw="attach">
+        <button type="button" className="dk-sw-ibtn" aria-label={t.attach} title={t.attach} onClick={() => openSheet({ k: 'attach' })} onPointerEnter={warmSheets} onTouchStart={warmSheets} onFocus={warmSheets} data-sw="attach">
           <Icon name="camera" size={19} />
         </button>
         <label className="dk-sr" htmlFor={`dk-sw-in-${persona}`}>
@@ -394,7 +440,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
             <Icon name="send" size={18} />
           </button>
         ) : (
-          <button type="button" className="dk-sw-ibtn is-mic" aria-label={t.record} title={t.record} onClick={() => openSheet({ k: 'voice' })} data-sw="mic">
+          <button type="button" className="dk-sw-ibtn is-mic" aria-label={t.record} title={t.record} onClick={() => openSheet({ k: 'voice' })} onPointerEnter={warmVoice} onTouchStart={warmVoice} onFocus={warmVoice} data-sw="mic">
             <Icon name="mic" size={19} />
           </button>
         )}
@@ -407,7 +453,7 @@ type VoiceFn = (r: { text: string; source: 'mic' | 'sample'; lang: string }) => 
 
 /* ------------------------------------------------------------------ the phone */
 
-export function Phone({ persona, setPersona, convs, onCreated, flat }: PhoneProps) {
+export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }: PhoneProps) {
   const { lang } = useI18n()
   const t = useT()
   const shell = useShell()
@@ -418,12 +464,45 @@ export function Phone({ persona, setPersona, convs, onCreated, flat }: PhoneProp
   const [staged, setStaged] = useState<Staged>({})
   const openSheet = useCallback((s: Sheet) => setSheet(s), [])
   const voiceRef = useRef<VoiceFn | null>(null)
+  const [quickScrolled, setQuickScrolled] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const pick = (k: PersonaKey) => {
     if (k === persona) return
     setSheet(null)
     setStaged({})
+    setNotice(null)
+    setQuickScrolled(false)
     setPersona(k)
   }
+  /* persona radiogroup: one tab stop, arrows move the selection (ARIA radio pattern) */
+  const radios = useRef<HTMLDivElement>(null)
+  const onRadioKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'Home' ? -99 : e.key === 'End' ? 99 : 0
+    if (!step) return
+    e.preventDefault()
+    const i = PERSONA_KEYS.indexOf(persona)
+    const n = PERSONA_KEYS.length
+    const j = step === -99 ? 0 : step === 99 ? n - 1 : (i + step + n) % n
+    const k = PERSONA_KEYS[j]!
+    pick(k)
+    radios.current?.querySelector<HTMLElement>(`[data-sw="persona-${k}"]`)?.focus()
+  }
+  /* a report on mobile: stay on the phone (the reply and its translation are the point) and offer the console */
+  const created = useCallback(
+    (c: Created, from: Element | null) => {
+      onCreated(c, from)
+      if (flat) setNotice(c.code)
+    },
+    [onCreated, flat],
+  )
+  /* the "Mulai dari sini" hotspot rides on Siti's voice chip: hide it while a sheet covers the chips, while the chip
+     row is scrolled (the chip is clipped) or on another persona (kit Hotspot has no visibility test of its own) */
+  const hsOff = sheet !== null || quickScrolled || persona !== 'siti'
+  useEffect(() => {
+    const html = document.documentElement
+    html.toggleAttribute('data-sw-hs-off', hsOff)
+    return () => html.removeAttribute('data-sw-hs-off')
+  }, [hsOff])
   const cur = citizens[PERSONA_KEYS.indexOf(persona)]
   const body = (
     <div className="dk-sw-phone">
@@ -433,7 +512,7 @@ export function Phone({ persona, setPersona, convs, onCreated, flat }: PhoneProp
         </span>
         <span className="dk-sw-ph-id">
           <b>
-            {fill(t.account, { region })} <span className="dk-sw-tick" title={t.verified} aria-label={t.verified}><Icon name="check" size={10} strokeWidth={2.6} /></span>
+            {fill(t.account, { region })} <span className="dk-sw-tick" role="img" title={t.verified} aria-label={t.verified}><Icon name="check" size={10} strokeWidth={2.6} /></span>
           </b>
           <small>
             {t.official} · {t.via}
@@ -441,14 +520,14 @@ export function Phone({ persona, setPersona, convs, onCreated, flat }: PhoneProp
         </span>
         {cur && <Avatar name={cur.name} size={24} />}
       </header>
-      <div className="dk-sw-personas" role="radiogroup" aria-label={t.personaGroup}>
+      <div ref={radios} className="dk-sw-personas" role="radiogroup" aria-label={t.personaGroup} onKeyDown={onRadioKey}>
         {PERSONA_KEYS.map((k, i) => {
           const c = citizens[i]
           if (!c) return null
           const first = c.name.split(' ')[0] ?? c.name
           const title = k === 'siti' ? `Ibu ${first}` : k === 'darmo' ? `Pak ${first}` : first
           return (
-            <button key={k} type="button" role="radio" aria-checked={k === persona} className={`dk-sw-persona${k === persona ? ' is-on' : ''}`} onClick={() => pick(k)} data-sw={`persona-${k}`}>
+            <button key={k} type="button" role="radio" aria-checked={k === persona} tabIndex={k === persona ? 0 : -1} title={title} className={`dk-sw-persona${k === persona ? ' is-on' : ''}`} onClick={() => pick(k)} data-sw={`persona-${k}`}>
               <span className="dk-sw-pav" aria-hidden="true">
                 {initialsOf(c.name)}
               </span>
@@ -462,11 +541,41 @@ export function Phone({ persona, setPersona, convs, onCreated, flat }: PhoneProp
           <span className="dk-num">{fill(t.years, { n: cur.age })}</span> · {cur.address} · <b>{t[STORY[persona]]}</b>
         </p>
       )}
-      <Chat key={persona} persona={persona} convs={convs} onCreated={onCreated} openSheet={openSheet} staged={staged} setStaged={setStaged} voiceRef={voiceRef} />
+      <Chat
+        key={persona}
+        persona={persona}
+        convs={convs}
+        onCreated={created}
+        openSheet={openSheet}
+        staged={staged}
+        setStaged={setStaged}
+        voiceRef={voiceRef}
+        onQuickScroll={setQuickScrolled}
+        notice={
+          notice && toConsole ? (
+            <div className="dk-sw-notice" role="status">
+              <Icon name="checkCircle" size={16} />
+              <span>{fill(t.inConsole, { code: notice })}</span>
+              <button
+                type="button"
+                className="dk-sw-cbtn"
+                onClick={() => {
+                  setNotice(null)
+                  toConsole()
+                }}
+                data-sw="to-console"
+              >
+                {t.seeConsole}
+                <Icon name="arrowRight" size={14} />
+              </button>
+            </div>
+          ) : null
+        }
+      />
       {sheet && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetSkeleton label={t.loading} />}>
           {sheet.k === 'voice' ? (
-            <VoiceSheet persona={persona} pack={shell.pack} onClose={() => setSheet(null)} onResult={(r) => voiceRef.current?.(r)} />
+            <VoiceSheet persona={persona} pack={shell.pack} quick={!!sheet.quick} onClose={() => setSheet(null)} onResult={(r) => voiceRef.current?.(r)} />
           ) : sheet.k === 'attach' ? (
             <AttachSheet persona={persona} staged={staged} onStage={(s) => setStaged(s)} onClose={() => setSheet(null)} />
           ) : sheet.k === 'form' ? (

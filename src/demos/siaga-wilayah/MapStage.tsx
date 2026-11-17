@@ -1,17 +1,19 @@
 /**
  * siaga-wilayah/MapStage.tsx — the full map (MapView) with this product's layers, the layer switcher, legend,
- * Geo-AI insight card, the clicked-marker card and the procedural imagery hook. All layer data comes from the world
- * (rain cells, flood reports, alerts, facilities, harvest) or the region pack; the specs are memoised so MapView only
- * re-applies what changed.
+ * Geo-AI insight card and the clicked-marker card. All layer data comes from the world (rain cells, flood reports,
+ * alerts, facilities, harvest) or the region pack; the specs are memoised so MapView only re-applies what changed.
+ * "Citra satelit" is the kit `imagery` layer: Sentinel-2 cloudless 2016 by EOX (CC BY 4.0, listed in Sumber).
+ * On a narrow map (< 760 px: laptops with the guide open) the insight and the legend fold into chips so the river
+ * corridor where the flood grows stays visible.
  */
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { LayerToggle, MapLegend, MapView, alertZones, choropleth, facilityMarkers, pointMarkers, MAPC, type LegendItem, type MapLayer, type MapViewHandle, type MarkerItem } from '../../demo-kit/map'
 import { Icon, IconButton } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
-import { rows, shallowEqual, useSession, useWorld, world, type WorldState } from '../../demo-kit/world'
-import { loadRegionGeo } from '../../demo-kit/region/loader'
+import AppLink from '../../components/AppLink'
+import { rows, shallowEqual, useSession, useWorld, type WorldState } from '../../demo-kit/world'
 import { harvestValues } from '../../demo-kit/world/satu-daerah'
-import { confirmedIds, floodAlerts, floodReports, keyFacilities, clockText } from './data'
+import { confirmedIds, floodAlerts, floodReports, keyFacilities, clockText, productHref } from './data'
 import { S, fill, nf, useT, type SKey } from './strings'
 import { ensureDesa, forgetDesa, mapReady, mapRef, ui, useUi, type LayerId } from './ui'
 
@@ -22,12 +24,12 @@ const fmtDrop = (lang: 'id' | 'en') => (v: number) => (v > 0 ? `↓${nf(v, lang,
 export const MapStage = memo(function MapStage() {
   const { lang, t } = useT()
   const { pack, markMission } = useShell()
-  const { regionId } = useSession()
   const on = useUi((s) => s.layers)
   const crop = useUi((s) => s.crop)
   const metric = useUi((s) => s.metric)
   const sites = useUi((s) => s.sites)
   const selectedKec = useUi((s) => s.selectedKec)
+  const rainLive = useUi((s) => s.rainLive)
 
   /* ---------------------------------------------------------------- world → layer data */
   const rainT = useWorld(rainOf)
@@ -70,6 +72,7 @@ export const MapStage = memo(function MapStage() {
 
   const layers = useMemo<MapLayer[]>(() => {
     const L: MapLayer[] = [
+      { id: 'imagery', kind: 'imagery', visible: on.imagery, opacity: 0.92 },
       { id: 'kec', kind: 'kecamatan', visible: on.kec, labels: choro ? 'name+value' : 'name' },
       { id: 'desa', kind: 'desa', visible: on.desa },
       { id: 'rivers', kind: 'rivers', visible: on.rivers },
@@ -78,16 +81,20 @@ export const MapStage = memo(function MapStage() {
     if (choro) L.push(choro)
     L.push(
       { id: 'flood', kind: 'flood', visible: on.flood, hour: 0 },
-      { id: 'rain', kind: 'rain', visible: on.rain, cells, seed: 7 },
+      { id: 'rain', kind: 'rain', visible: on.rain, cells, seed: 7, animate: rainLive },
       { id: 'zones', kind: 'zones', visible: on.zones, zones },
       { id: 'facilities', kind: 'markers', visible: on.facilities, items: facItems },
       { id: 'changes', kind: 'markers', visible: on.changes, items: siteItems },
       { id: 'reports', kind: 'markers', visible: on.reports, items: reportItems, size: 'sm' },
     )
     return L
-  }, [on, choro, cells, zones, facItems, siteItems, reportItems])
+  }, [on, choro, cells, zones, facItems, siteItems, reportItems, rainLive])
 
-  /* ---------------------------------------------------------------- map handle + imagery */
+  // the map re-applies its layers in a deferred render: a switch / tab / scenario click paints first (INP), the map
+  // follows in the next frame
+  const mapLayers = useDeferredValue(layers)
+
+  /* ---------------------------------------------------------------- map handle + imagery mission */
   const onReady = useCallback((h: MapViewHandle) => {
     mapReady(h)
     const hour = ui.get().hour
@@ -96,65 +103,48 @@ export const MapStage = memo(function MapStage() {
       void ensureDesa()
     }
   }, [])
-  const imageryOn = on.imagery
-  const imageryUsed = useRef(false)
   useEffect(
     () => () => {
       mapRef.current = null
       forgetDesa()
-      if (imageryUsed.current) void import('./imagery').then((m) => m.resetImagery())
     },
     [],
   )
+  const imageryOn = on.imagery
   useEffect(() => {
-    if (!pack || (!imageryOn && !imageryUsed.current)) return
-    imageryUsed.current = true
-    let alive = true
-    if (imageryOn) {
-      markMission('imagery')
-      ui.set({ imageryBusy: true })
-    }
-    void (async () => {
-      const [{ setImagery, painterContext }, { changeSites }, geo] = await Promise.all([import('./imagery'), import('./sites'), loadRegionGeo(pack.id, { desa: false })])
-      if (!alive) return
-      const s = world.get()
-      const centroids: Record<string, [number, number]> = {}
-      const desa: { kecamatanId: string; centroid: [number, number] }[] = []
-      for (const k of s.region.kecamatan) {
-        centroids[k.id] = k.centroid
-        for (const d of k.desa) desa.push({ kecamatanId: k.id, centroid: d.centroid })
-      }
-      const sitesNow = changeSites(pack, geo, centroids)
-      if (!ui.get().sites.length) ui.set({ sites: sitesNow })
-      const ctx = painterContext(pack, geo, desa, sitesNow)
-      await setImagery(mapRef.current?.raw(), ctx, geo, imageryOn, window.matchMedia('(pointer: coarse)').matches)
-      if (alive) ui.set({ imageryBusy: false })
-    })()
-    return () => {
-      alive = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageryOn, pack, regionId])
+    if (imageryOn) markMission('imagery')
+  }, [imageryOn, markMission])
+
+  // narrow map (laptop + guide panel open): the overlays fold into chips
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setNarrow((e?.contentRect.width ?? 1000) < 760))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [pack])
 
   const onMarker = useCallback((layer: string, id: string) => ui.set({ picked: { layer, id } }), [])
   const onSelect = useCallback((id: string | null) => ui.set({ selectedKec: id }), [])
 
-  if (!pack) return <div className="dk-sw-map is-loading" />
+  if (!pack) return <div className="dk-sg-map is-loading" />
   return (
-    <div className="dk-sw-map">
-      <MapView regionId={pack.id} layers={layers} onReady={onReady} onMarker={onMarker} onSelect={onSelect} selectedId={selectedKec} ariaLabel={`${t('map')} · ${pack.shortName}`} className="dk-sw-mapview" />
+    <div className={`dk-sg-map${narrow ? ' is-narrow' : ''}`} ref={boxRef}>
+      <MapView regionId={pack.id} layers={mapLayers} onReady={onReady} onMarker={onMarker} onSelect={onSelect} selectedId={selectedKec} ariaLabel={`${t('map')} · ${pack.shortName}`} className="dk-sg-mapview" />
       <LayerMenu />
       <ImageryBadge />
-      <Insight />
+      <Insight narrow={narrow} />
       <Picked />
-      <Legend choro={choro} />
+      <Legend choro={choro} narrow={narrow} />
     </div>
   )
 })
 
 /* ------------------------------------------------------------------ layer switcher */
-const TOGGLES: { id: LayerId; label: SKey; hint?: SKey; icon: import('../../demo-kit/ui').IconName; swatch?: string }[] = [
-  { id: 'flood', label: 'lFlood', icon: 'water', swatch: '#4fd1ff' },
+const TOGGLES: { id: LayerId; label: SKey; hint?: SKey; icon: import('../../demo-kit/ui').IconName }[] = [
+  { id: 'flood', label: 'lFlood', icon: 'water' },
   { id: 'rain', label: 'lRain', icon: 'rain' },
   { id: 'reports', label: 'lReports', hint: 'lReportsHint', icon: 'chat' },
   { id: 'zones', label: 'lZones', icon: 'alert' },
@@ -194,17 +184,17 @@ function LayerMenu() {
     }
   }, [open])
   return (
-    <div className="dk-sw-layers" ref={boxRef}>
-      <button ref={btnRef} type="button" className="dk-sw-chipbtn" aria-expanded={open} aria-controls="dk-sw-layer-pop" onClick={() => ui.set({ layersOpen: !open })} data-sw="layers">
+    <div className="dk-sg-layers" ref={boxRef}>
+      <button ref={btnRef} type="button" className="dk-sg-chipbtn" aria-expanded={open} aria-controls="dk-sg-layer-pop" onClick={() => ui.set({ layersOpen: !open })} data-sw="layers">
         <Icon name="layers" size={16} />
         {t('layers')}
-        <span className="dk-sw-count dk-num">{count}</span>
+        <span className="dk-sg-count dk-num">{count}</span>
       </button>
       {open && (
-        <div id="dk-sw-layer-pop" className="dk-sw-layer-pop" role="dialog" aria-label={t('layersTitle')}>
+        <div id="dk-sg-layer-pop" className="dk-sg-layer-pop" role="dialog" aria-label={t('layersTitle')}>
           <LayerToggle
             title={t('layersTitle')}
-            items={TOGGLES.map((x) => ({ id: x.id, label: S[x.label][lang], hint: x.hint ? S[x.hint][lang] : undefined, icon: x.icon, swatch: x.swatch, checked: on[x.id] }))}
+            items={TOGGLES.map((x) => ({ id: x.id, label: S[x.label][lang], hint: x.hint ? S[x.hint][lang] : undefined, icon: x.icon, checked: on[x.id] }))}
             onChange={(id, v) => ui.layer(id as LayerId, v)}
           />
         </div>
@@ -216,19 +206,19 @@ function LayerMenu() {
 function ImageryBadge() {
   const { t } = useT()
   const on = useUi((s) => s.layers.imagery)
-  const busy = useUi((s) => s.imageryBusy)
   if (!on) return null
   return (
-    <p className="dk-sw-imgbadge" role="status">
-      {busy ? <span className="dk-sw-spin" aria-hidden="true" /> : <Icon name="globe" size={14} />}
-      {busy ? t('imageryLoading') : t('imageryBadge')}
+    <p className="dk-sg-imgbadge" role="status">
+      <Icon name="globe" size={14} />
+      {t('imageryBadge')}
     </p>
   )
 }
 
 /* ------------------------------------------------------------------ Geo-AI insight */
-function Insight() {
+function Insight({ narrow }: { narrow: boolean }) {
   const { lang, t } = useT()
+  const [open, setOpen] = useState(false)
   const impact = useUi((s) => s.impact6)
   const ran = useUi((s) => s.ran)
   const reports = useWorld(floodReports)
@@ -240,14 +230,21 @@ function Insight() {
   const inZone = new Set(impact.desa.map((d) => d.id))
   const hits = reports.filter((r) => inZone.has(r.desaId)).length
   const conf = confirmed.size ? fill(S.insightConf[lang], { n: confirmed.size }) : hits ? fill(S.insightReports[lang], { n: hits }) : ''
+  if (narrow && !open)
+    return (
+      <button type="button" className="dk-sg-chipbtn dk-sg-insight-chip" aria-expanded={false} onClick={() => setOpen(true)} data-sw="insight-chip">
+        <Icon name="spark" size={16} />
+        {t('insightChip', { n: nf(impact.desa.length, lang) })}
+      </button>
+    )
   return (
-    <aside className="dk-sw-insight" aria-label={t('insight')}>
-      <div className="dk-sw-picked-head">
-        <p className="dk-sw-insight-k">
+    <aside className={`dk-sg-insight${narrow ? ' is-open' : ''}`} aria-label={t('insight')}>
+      <div className="dk-sg-picked-head">
+        <p className="dk-sg-insight-k">
           <Icon name="spark" size={14} />
           {t('insight')}
         </p>
-        <IconButton icon="close" label={t('close')} size="sm" onClick={() => ui.set({ insightOff: true })} />
+        <IconButton icon="close" label={narrow ? t('fold') : t('close')} size="sm" onClick={() => (narrow ? setOpen(false) : ui.set({ insightOff: true }))} />
       </div>
       <p>{t('insightRun', { desa: nf(impact.desa.length, lang), kec: impact.kecamatanIds.length, first: first?.name ?? '—', onset: nf(first?.onset ?? 0, lang, 1), conf })}</p>
     </aside>
@@ -272,12 +269,24 @@ function Picked() {
   }, shallowEqual)
   const site = useUi((s) => (picked?.layer === 'changes' ? (s.sites.find((x) => x.id === picked.id) ?? null) : null))
   const { pack } = useShell()
+  const session = useSession()
+  const shown = !!picked && (!!item || !!site)
+  useEffect(() => {
+    if (!shown) return
+    const key = (e: KeyboardEvent) => {
+      // an open dialog / drawer / layer menu handles its own Escape first
+      if (e.key !== 'Escape' || document.querySelector('[aria-modal="true"], #dk-sg-layer-pop')) return
+      ui.set({ picked: null })
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [shown])
   if (!picked || (!item && !site)) return null
   const close = () => ui.set({ picked: null })
   const kecName = (id: string) => pack?.kecamatan.find((k) => k.id === id)?.name ?? id
   return (
-    <aside className="dk-sw-picked" aria-live="polite">
-      <div className="dk-sw-picked-head">
+    <aside className="dk-sg-picked" aria-live="polite">
+      <div className="dk-sg-picked-head">
         <strong>{site ? site.to[lang] : item!.title}</strong>
         <IconButton icon="close" label={t('close')} size="sm" onClick={close} />
       </div>
@@ -288,14 +297,19 @@ function Picked() {
       ) : (
         <>
           <p>{item!.sub}</p>
-          <p className="dk-sw-muted">
+          <p className="dk-sg-muted">
             {item!.at !== null ? `${clockText(item!.at, lang)} · ` : ''}Kec. {kecName(item!.kec)}
           </p>
           {item!.ok && (
-            <span className="dk-sw-okbadge">
+            <span className="dk-sg-okbadge">
               <Icon name="check" size={12} />
               {t('confirmed')}
             </span>
+          )}
+          {item!.kind === 'report' && (
+            <AppLink to={productHref('sapa-warga', session, picked.id)} className="dk-sg-link">
+              {t('openSapa')} →
+            </AppLink>
           )}
         </>
       )}
@@ -304,10 +318,11 @@ function Picked() {
 }
 
 /* ------------------------------------------------------------------ legend */
-function Legend({ choro }: { choro: ReturnType<typeof choropleth> | null }) {
+function Legend({ choro, narrow }: { choro: ReturnType<typeof choropleth> | null; narrow: boolean }) {
   const { lang, t } = useT()
   const on = useUi((s) => s.layers)
   const { size } = useShell()
+  const [open, setOpen] = useState(false)
   const items = (
     [
       on.flood && { id: 'flood', label: S.lFlood[lang], kind: 'water' },
@@ -320,5 +335,16 @@ function Legend({ choro }: { choro: ReturnType<typeof choropleth> | null }) {
     ] as (LegendItem | false)[]
   ).filter((x): x is LegendItem => !!x)
   if (size === 'sm' && !choro) return null
-  return <MapLegend className="dk-sw-legend" title={choro ? undefined : t('legend')} choropleth={choro} items={size === 'sm' || choro ? [] : items} />
+  if (narrow && !choro)
+    return (
+      <div className="dk-sg-legend-fold">
+        {open && <MapLegend className="dk-sg-legend is-fold" title={t('legend')} items={items} />}
+        <button type="button" className="dk-sg-chipbtn" aria-expanded={open} onClick={() => setOpen((o) => !o)} data-sw="legend-chip">
+          <Icon name={open ? 'close' : 'info'} size={16} />
+          {t('legend')}
+        </button>
+      </div>
+    )
+  return <MapLegend
+ className="dk-sg-legend" title={choro ? undefined : t('legend')} choropleth={choro} items={size === 'sm' || choro ? [] : items} />
 }

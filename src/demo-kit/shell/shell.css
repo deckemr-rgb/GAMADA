@@ -207,6 +207,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* wide bars: room for long role names ("Head of Regional Agency …"); fitBar still steps down to 104 px */
+.dk-topbar:is(.is-lg, .is-xl):not([data-tight]) .dk-pick-label {
+  max-width: 230px;
+}
 .dk-pick-chev {
   color: var(--dk-faint);
 }
@@ -707,9 +711,10 @@
   animation: dk-shell-pulse 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
 }
 .dk-hotspot-label {
+  /* placed by Hotspot.tsx (transform from the dot: below the target or above the dot, clamped to the viewport) */
   position: absolute;
-  right: -6px;
-  top: 16px;
+  left: 0;
+  top: 0;
   padding: 3px 8px;
   border-radius: var(--dk-r-chip);
   background: var(--c-teal);
@@ -1027,7 +1032,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 3;
+    /* above any canvas content that makes its own stacking context (maps, sticky panels) */
+    z-index: var(--dk-z-pop);
     width: auto;
     max-height: 74%;
     border-left: 0;

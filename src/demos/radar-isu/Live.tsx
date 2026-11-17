@@ -4,21 +4,24 @@
  * source radar-isu: the world raises ONE hoax.detected on the 6th post → toast to Meja Pimpinan) and, for the
  * Regional Head, an instruction to the Comms Office. Clarify and the AI analyst are lazy drawers.
  */
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { Button, Drawer, Kpi, KpiStrip, InsightCallout, Icon, LiveBadge, Segmented, motionMode } from '../../demo-kit/ui'
 import { BubbleChart, LineChart, type BubbleDatum } from '../../demo-kit/viz'
 import { clockWib, compact } from '../../demo-kit/viz/format'
 import { useLocation, useNavigate } from 'react-router'
 import { goTo } from '../../components/AppLink'
 import { demoHref, useShell } from '../../demo-kit/shell'
-import { clock, emit, getSession, isEvent, onEvent, useClock, useSession, useWorld, world, type Mention, type WorldState } from '../../demo-kit/world'
+import { clock, emit, getSession, isEvent, onEvent, rows, useSession, useWorld, world, type Mention, type WorldState } from '../../demo-kit/world'
 import { HoaxCard } from './HoaxCard'
 import { Stream } from './Stream'
-import { RADAR, burstPosts, hoaxPhase, radarKpis, sentimentIndex, streamOf, topicsOf, useNow, type SentRes } from './model'
+import { RADAR, afterPaint, burstPosts, hoaxPhase, negIssues, prefetchBurst, radarKpis, recoveryOf, sentimentIndex, signedIdx, streamOf, topicsOf, useNow, type SentRes } from './model'
 import { STR, fill, topicName, useStr } from './strings'
 
-const Clarify = lazy(() => import('./Clarify'))
-const Assistant = lazy(() => import('./Assistant'))
+const loadClarify = () => import('./Clarify')
+const loadAssistant = () => import('./Assistant')
+const Clarify = lazy(loadClarify)
+const Assistant = lazy(loadAssistant)
+const warmAssistant = () => void loadAssistant().catch(() => undefined)
 
 const selMentions = (s: WorldState) => s.mentions
 const selHoax = (s: WorldState) => s.hoaxAlerts
@@ -39,6 +42,31 @@ function useWide(ref: RefObject<HTMLElement | null>): boolean {
   return wide
 }
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
+/** keep the previous value while its signature is unchanged (the bubbles must not re-layout on every clock tick) */
+function useStable<T>(v: T, sig: (v: T) => string): T {
+  const ref = useRef<{ s: string; v: T } | null>(null)
+  const s = sig(v)
+  if (!ref.current || ref.current.s !== s) ref.current = { s, v }
+  return ref.current.v
+}
+/** clock speed while running, 0 when paused: a primitive, so Live does not re-render on every world minute */
+const runSpeed = () => {
+  const c = clock.get()
+  return c.running ? c.speed : 0
+}
+const useRunSpeed = () => useSyncExternalStore(clock.subscribe, runSpeed, runSpeed)
+const NARROW = '(max-width: 479px)'
+/** < 480 px viewport: short KPI captions */
+function useNarrow(): boolean {
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(NARROW).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW)
+    const on = () => setN(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return n
+}
 
 export interface LiveProps {
   onDeep: (keyword: string) => void
@@ -54,7 +82,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const role = session.role
   const head = role === 'kepala-daerah'
   const now = useNow()
-  const ck = useClock()
+  const speed = useRunSpeed()
   const mentions = useWorld(selMentions)
   const hoaxAlerts = useWorld(selHoax)
   const gauges = useWorld(selGauges)
@@ -68,12 +96,18 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const kpis = radarKpis(mentions, now)
   const [res, setRes] = useState<SentRes>('24h')
   const series = sentimentIndex(mentions, now, res)
-  const zoom = sentimentIndex(mentions, now, '3h')
-  const phase = useMemo(() => hoaxPhase({ mentions, hoaxAlerts, meta }, now), [mentions, hoaxAlerts, meta, now])
+  // stable while nothing in the scenario changed (the hoax card is memoised: no re-render on every world minute)
+  const phase = useStable(
+    useMemo(() => hoaxPhase({ mentions, hoaxAlerts, meta }, now), [mentions, hoaxAlerts, meta, now]),
+    (ph) => (ph.kind === 'idle' ? 'idle' : `${ph.kind}|${ph.posts.length}|${ph.kind === 'burst' ? '' : `${ph.alert.id}|${ph.alert.status}|${ph.alert.clarification?.at ?? ''}|${ph.alert.spreadPerHour}`}`),
+  )
   const stream = useMemo(() => streamOf(mentions, now, RADAR.streamLimit), [mentions, now])
   // bubbles move in 10-minute steps (a smooth glide, not a re-layout on every world minute at ×60)
   const nowQ = Math.floor(now / 10) * 10
-  const clusters = useMemo(() => topicsOf(mentions, nowQ, 24), [mentions, nowQ])
+  const clusters = useStable(
+    useMemo(() => topicsOf(mentions, nowQ, 24), [mentions, nowQ]),
+    (c) => c.map((x) => `${x.topic}:${x.count}:${x.score}:${Math.round(x.reach / 500)}`).join('|'),
+  )
   const bubbles = useMemo<BubbleDatum[]>(
     () =>
       clusters.slice(0, 10).map((c) => ({
@@ -85,13 +119,12 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
       })),
     [clusters, lang],
   )
-  const recovery = useMemo(() => {
-    if (phase.kind !== 'clarified' || !phase.alert.clarification) return null
-    const at = phase.alert.clarification.at
-    const sr = zoom[0] && zoom[0].at <= at ? zoom : sentimentIndex(mentions, now, '24h')
-    const before = [...sr].reverse().find((p) => p.at <= at)?.value ?? 0
-    return { before, after: sr[sr.length - 1]?.value ?? 0 }
-  }, [phase, zoom, mentions, now])
+  const clarAtR = phase.kind === 'clarified' ? (phase.alert.clarification?.at ?? null) : null
+  const recovery = useStable(
+    useMemo(() => (clarAtR === null ? null : recoveryOf(mentions, now, clarAtR)), [clarAtR, mentions, now]),
+    (r) => (r ? `${r.before}|${r.after}` : ''),
+  )
+  const negTop = negIssues(mentions, now)[0]
   // the moment a hoax is detected, zoom the sentiment chart to 3 h so the dip (and later the recovery) is visible
   const wasActive = useRef(phase.kind === 'active' || phase.kind === 'clarified')
   useEffect(() => {
@@ -121,14 +154,16 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
     const s = world.get()
     const start = Math.max(0, clock.get().minutes - 25)
     burst.current = { rest: [], facts: s.meta.facts }
+    // answer the click at once (busy state), even while the burst texts are still loading
+    setBursting(true)
     const posts = await burstPosts(s, start)
     if (!posts.length || world.get().meta.facts !== s.meta.facts) {
       burst.current = null
+      setBursting(false)
       return
     }
     const run = { rest: [...posts], facts: s.meta.facts }
     burst.current = run
-    setBursting(true)
     const gap = motionMode() === 'full' ? RADAR.burstGapMs : RADAR.burstGapReducedMs
     while (run.rest.length && (burst.current === run || burst.current === null) && world.get().meta.facts === run.facts) {
       emit('mention.created', run.rest.shift()!, 'radar-isu')
@@ -138,6 +173,16 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
       burst.current = null
       setBursting(false)
     }
+  }, [])
+  // warm the burst texts while the visitor reads the page (idle time), so the first post lands right after the click
+  useEffect(() => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(prefetchBurst, { timeout: 4000 })
+      return () => w.cancelIdleCallback?.(id)
+    }
+    const id = window.setTimeout(prefetchBurst, 2500)
+    return () => window.clearTimeout(id)
   }, [])
   // leaving mid-burst: post the rest at once (into the SAME world), so the hoax is still detected
   useEffect(
@@ -201,7 +246,11 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   )
 
   const tc = topic ? clusters.find((c) => c.topic === topic) : undefined
-  const topicItems = useMemo(() => (topic ? stream.filter((m) => m.topic === topic) : []), [stream, topic])
+  // the drawer lists exactly the mentions its count is made of (same 24 h window, newest first)
+  const topicItems = useMemo(
+    () => (topic ? rows(mentions).filter((m) => m.topic === topic && m.at <= nowQ && m.at >= nowQ - 1440).sort((a, b) => b.at - a.at) : []),
+    [mentions, nowQ, topic],
+  )
 
   /* ---------------------------------------------------------------- chart helpers */
   const markIdx = useMemo(() => {
@@ -216,20 +265,64 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         }
   }, [phase, series, t])
   const sentWord = kpis.sentiment <= -20 ? t.wBuruk : kpis.sentiment >= 20 ? t.wBaik : t.wNetral
-  const negTop = [...clusters].filter((c) => c.score < -0.2).sort((a, b) => b.count - a.count)[0]
   const sm = shell.size === 'sm'
+  const narrow = useNarrow()
   const wide = useWide(gridRef)
   const hoaxActive = phase.kind !== 'idle'
 
-  const onTrigger = useCallback(() => void trigger(), [trigger])
+  /* keyboard focus follows the hoax card: the pressed button unmounts when the phase changes (Picu → burst →
+     detected; Terbitkan closes the drawer whose opener is gone; "Lihat 30 menit" disappears after use) */
+  const wantFocus = useRef(false)
+  const pendingRecovery = clarAtR !== null && now < clarAtR + 30
+  useEffect(() => {
+    if (!wantFocus.current) return
+    const go = () => {
+      const card = hoaxRef.current
+      const a = document.activeElement
+      if (!card || (a && a !== document.body && !card.contains(a))) return
+      const el = card.querySelector<HTMLElement>('[data-ri-focus]')
+      if (!el || el === a) return
+      el.focus({ preventScroll: true })
+      if (phase.kind === 'active' || (phase.kind === 'clarified' && !pendingRecovery)) wantFocus.current = false
+    }
+    go()
+    const id = window.setTimeout(go, 450)
+    return () => window.clearTimeout(id)
+  }, [phase.kind, pendingRecovery, clarify])
+
+  const onTrigger = useCallback(() => {
+    wantFocus.current = true
+    void trigger()
+  }, [trigger])
+  const onClarify = useCallback((m: 'draft' | 'approve') => {
+    wantFocus.current = true
+    setClarify(m)
+  }, [])
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const gaugeId = gauge?.id ?? null
-  const onOpenSiaga = useCallback(() => void goTo(demoHref('siaga-wilayah', getSession(), gaugeId), navigate, pathname), [navigate, pathname, gaugeId])
-  const clarAt = phase.kind === 'clarified' ? (phase.alert.clarification?.at ?? null) : null
+  const go = useCallback(
+    (slug: 'siaga-wilayah' | 'meja-pimpinan') => {
+      const h = demoHref(slug, getSession())
+      void goTo(new URLSearchParams(window.location.search).get('controls') === 'all' ? `${h}&controls=all` : h, navigate, pathname)
+    },
+    [navigate, pathname],
+  )
+  // Siaga Wilayah has no arrival for a gauge id (kitHandoff): open its flood map without a dead ?focus=
+  const onOpenSiaga = useCallback(() => go('siaga-wilayah'), [go])
+  const onOpenMp = useCallback(() => go('meja-pimpinan'), [go])
   const onSkip = useCallback(() => {
-    if (clarAt !== null) clock.setTime(Math.min(1439, clarAt + 31))
-  }, [clarAt])
+    if (clarAtR === null) return
+    wantFocus.current = true
+    const to = Math.min(1439, clarAtR + 31)
+    afterPaint(() => clock.setTime(to))
+  }, [clarAtR])
+  // a detected hoax: fetch the clarification drawer while the visitor reads the card (the click then opens it at once)
+  useEffect(() => {
+    if (phase.kind !== 'active') return
+    const id = window.setTimeout(() => void loadClarify().catch(() => undefined), 300)
+    return () => window.clearTimeout(id)
+  }, [phase.kind])
+  // the kit KPI prefixes '+' to positive deltas itself: no plus sign here (else "++22")
   const fmtSent = useCallback((n: number) => `${n < 0 ? '−' : ''}${Math.abs(Math.round(n))}`, [])
   const fmtReach = useCallback((n: number) => compact(n, lang), [lang])
 
@@ -274,9 +367,8 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         xFormat={(x) => clockWib(Number(x), lang)}
         series={sentSeries}
         yDomain={[-100, 100]}
-        target={{ value: 0, label: t.netral }}
         {...(markIdx ? { marker: markIdx } : {})}
-        format={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}`}
+        format={signedIdx}
         height={sm ? 180 : 200}
         className="dk-ri-sentchart"
       />
@@ -284,11 +376,25 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
     [res, t, seed, sentX, sentSeries, markIdx, lang, sm],
   )
 
+  // re-rendered only when a figure changes (not on every world minute)
+  const { count: kCount, prev: kPrev, sentiment: kSent, negTopics: kNeg, reach: kReach } = kpis
+  const kpiStrip = useMemo(
+    () => (
+      <KpiStrip label={t.kpiLabel} className="dk-ri-kpis">
+        <Kpi label={t.kpiMentions} value={kCount} delta={kCount - kPrev} goodWhen="up" deltaLabel={narrow ? t.vsPrevShort : t.vsPrev} />
+        <Kpi hero label={t.kpiSentiment} value={kSent} format={fmtSent} caption={t.kpiSentimentCap} />
+        <Kpi label={t.kpiNegative} value={kNeg} caption={t.kpiNegativeCap} />
+        <Kpi label={t.kpiReach} value={kReach} format={fmtReach} caption={t.kpiReachCap} />
+      </KpiStrip>
+    ),
+    [t, kCount, kPrev, kSent, kNeg, kReach, narrow, fmtSent, fmtReach],
+  )
+
   const hoaxCard = (
-    <div ref={hoaxRef} className="dk-ri-col-hoax" data-hotspot="radar-start">
+    <div ref={hoaxRef} className="dk-ri-col-hoax">
       <HoaxCard
         phase={phase}
-        now={now}
+        pendingRecovery={pendingRecovery}
         role={role}
         damName={damName}
         gauge={gauge}
@@ -296,11 +402,14 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         bursting={bursting}
         instructed={instructed}
         onTrigger={onTrigger}
-        onClarify={setClarify}
+        onClarify={onClarify}
         onInstruct={instruct}
         onSkip={onSkip}
         onOpenSiaga={onOpenSiaga}
-        compactIdle={!wide && !hoaxActive}
+        onOpenMp={onOpenMp}
+        onPrefetch={prefetchBurst}
+        compactIdle={!sm && !wide && !hoaxActive}
+        rowIdle={sm && !hoaxActive}
       />
     </div>
   )
@@ -313,14 +422,21 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
           <p className="dk-ri-lead">{fill(t.liveLead, { r: region.shortName })}</p>
         </div>
         <div className="dk-ri-live-act">
-          {ck.running ? (
-            <LiveBadge label={fill(t.clockRunning, { x: ck.speed })} />
+          {speed ? (
+            <LiveBadge label={fill(t.clockRunning, { x: speed })} />
           ) : (
             <Button size="sm" variant="secondary" icon="play" onClick={() => clock.play()}>
               {t.clockPlay}
             </Button>
           )}
-          <Button size="sm" variant="secondary" icon="spark" onClick={() => setAsk((a) => ({ open: true, prompt: null, n: a.n + 1 }))}>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="spark"
+            onPointerEnter={warmAssistant}
+            onFocus={warmAssistant}
+            onClick={() => setAsk((a) => ({ open: true, prompt: null, n: a.n + 1 }))}
+          >
             {t.askAi}
           </Button>
         </div>
@@ -330,7 +446,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         <InsightCallout title={t.execTitle} className="dk-ri-exec">
           <p>
             {fill(t.execSent, {
-              v: `${kpis.sentiment > 0 ? '+' : kpis.sentiment < 0 ? '−' : ''}${Math.abs(kpis.sentiment)}`,
+              v: signedIdx(kpis.sentiment),
               w: sentWord,
             })}
           </p>
@@ -356,12 +472,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
       )}
 
       {sm && hoaxCard}
-      <KpiStrip label={t.kpiLabel} className="dk-ri-kpis">
-        <Kpi label={t.kpiMentions} value={kpis.count} delta={kpis.count - kpis.prev} goodWhen="up" deltaLabel={t.vsPrev} />
-        <Kpi hero label={t.kpiSentiment} value={kpis.sentiment} format={fmtSent} caption={t.kpiSentimentCap} />
-        <Kpi label={t.kpiNegative} value={kpis.negTopics} />
-        <Kpi label={t.kpiReach} value={kpis.reach} format={fmtReach} caption={t.kpiReachCap} />
-      </KpiStrip>
+      {!sm && kpiStrip}
 
       <div ref={gridRef} className="dk-ri-grid">
         {!sm && hoaxCard}
@@ -392,6 +503,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
           {sentEl}
         </div>
       </div>
+      {sm && kpiStrip}
       <p className="dk-ri-foot">
         <Icon name="info" size={14} /> {t.simNote}
       </p>

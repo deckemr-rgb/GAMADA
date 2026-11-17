@@ -101,8 +101,19 @@ function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLEle
     stack.push({ id, host: () => panel.current, close: () => closeRef.current() })
     if (stack.length === 1) document.addEventListener('keydown', onDocKey, true)
     applyInert()
+    // lenis.stop() reads the scroll position (a forced layout): run it after the open paint, not inside the
+    // interaction (INP). html overflow:hidden below already blocks native scrolling in the meantime.
     const lenis = getLenis()
-    lenis?.stop()
+    let stopped = false
+    let tm = 0
+    const raf = lenis
+      ? requestAnimationFrame(() => {
+          tm = window.setTimeout(() => {
+            stopped = true
+            lenis.stop()
+          }, 0)
+        })
+      : 0
     const html = document.documentElement
     const prevOverflow = html.style.overflow
     html.style.overflow = 'hidden'
@@ -114,9 +125,11 @@ function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLEle
       if (i >= 0) stack.splice(i, 1)
       if (!stack.length) document.removeEventListener('keydown', onDocKey, true)
       applyInert()
+      cancelAnimationFrame(raf)
+      clearTimeout(tm)
       if (!stack.length) {
         html.style.overflow = prevOverflow
-        lenis?.start()
+        if (stopped) lenis?.start()
       }
       if (opener && document.contains(opener)) opener.focus({ preventScroll: true })
     }
@@ -229,9 +242,16 @@ export interface DrawerProps {
   footer?: ReactNode
   /** px, default 420 (full width below 480 px) */
   width?: number
+  /** extra class on the overlay root (.dk-ov), for product-scoped styling */
+  className?: string
+  /**
+   * 'dim' (default) darkens the page behind; 'none' keeps the page undimmed (side-by-side demos) while the drawer
+   * stays modal (a click outside still closes it).
+   */
+  scrim?: 'dim' | 'none'
 }
 
-export function Drawer({ open, onClose, title, eyebrow, children, footer, width = 420 }: DrawerProps) {
+export function Drawer({ open, onClose, title, eyebrow, children, footer, width = 420, className, scrim: scrimMode = 'dim' }: DrawerProps) {
   const t = useUiStrings()
   const scrim = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -241,7 +261,7 @@ export function Drawer({ open, onClose, title, eyebrow, children, footer, width 
   if (!mounted) return null
   return (
     <Portal>
-      <div className="dk-ov dk-ov--drawer">
+      <div className={`dk-ov dk-ov--drawer${scrimMode === 'none' ? ' dk-ov--clear' : ''}${className ? ` ${className}` : ''}`}>
         <div ref={scrim} className="dk-ov-scrim" aria-hidden="true" onClick={onClose} />
         <div ref={panel} className="dk-drawer" style={{ width: `min(${width}px, 100vw)` }} role="dialog" aria-modal="true" aria-labelledby={`${ids}-t`} tabIndex={-1} onKeyDown={onKeyDown}>
           <header className="dk-ov-head">

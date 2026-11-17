@@ -6,7 +6,7 @@
  */
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, rows, type Bi, type ComplaintCategory, type Minutes, type WorldState } from '../../demo-kit/world'
-import { devOf, kecName, opdShort, weekChange } from './data'
+import { devOf, kecName, opdShort, riskRank, weekChange } from './data'
 import { topicLabel } from './strings'
 
 export type Metric = 'complaints' | 'sla_on_time' | 'ticket_backlog' | 'alerts' | 'mentions_negative' | 'procurement_risk' | 'sales' | 'prices' | 'econ_index' | 'action_items_overdue'
@@ -142,7 +142,7 @@ export function runQuery(s: WorldState, now: Minutes, spec: QuerySpec, lang: Lan
   switch (spec.metric) {
     case 'complaints': {
       const list = rows(s.complaints).filter((c) => (!catF || c.category === catF) && (!kecF.length || kecF.includes(c.kecamatanId)) && (!opdF || s.tickets.byId[c.ticketId]?.opdId === opdF))
-      const what = catF ? `${L(lang, CATEGORY_LABEL[catF]).toLowerCase()}` : ''
+      const what = catF ? (/^[A-Z]{2}/.test(L(lang, CATEGORY_LABEL[catF])) ? L(lang, CATEGORY_LABEL[catF]) : L(lang, CATEGORY_LABEL[catF]).toLowerCase()) : ''
       const title = lang === 'id' ? `Aduan${what ? ` ${what}` : ''}${spec.groupBy === 'kecamatan' ? ' per kecamatan' : spec.groupBy === 'category' ? ' per kategori' : spec.groupBy === 'opd' ? ' per OPD' : spec.groupBy === 'day' ? ' per hari' : ''}` : `${what ? `${what[0]!.toUpperCase()}${what.slice(1)} complaints` : 'Complaints'}${spec.groupBy === 'kecamatan' ? ' by district' : spec.groupBy === 'category' ? ' by category' : spec.groupBy === 'opd' ? ' by agency' : spec.groupBy === 'day' ? ' per day' : ''}`
       const unit = lang === 'id' ? `aduan, ${rangeText(spec.range, lang)} vs periode sebelumnya` : `complaints, ${rangeText(spec.range, lang)} vs the previous period`
       if (spec.groupBy === 'day') {
@@ -226,7 +226,8 @@ export function runQuery(s: WorldState, now: Minutes, spec: QuerySpec, lang: Lan
     }
     case 'procurement_risk': {
       const list = rows(s.procurements).filter((p) => p.status !== 'selesai' && (!opdF || p.opdId === opdF))
-      const r = list.map((p) => ({ id: p.id, label: `${p.code} · ${p.name[lang]}`, value: Math.round(p.riskScore ?? Math.max(0, devOf(p))) })).sort((a, b) => b.value - a.value).slice(0, 8)
+      // the riskiest first in the same order as the briefing (flagged by score, then emergency, then mark-up)
+      const r = [...list].sort((a, b) => riskRank(b) - riskRank(a)).map((p) => ({ id: p.id, label: `${p.code} · ${p.name[lang]}`, value: Math.round(p.riskScore ?? Math.max(0, devOf(p))) })).slice(0, 8)
       return res({ title: lang === 'id' ? 'Risiko paket pengadaan' : 'Procurement package risk', unit: lang === 'id' ? 'skor risiko, atau % HPS di atas pasar bila belum dianalisis' : 'risk score, or % above market when not analysed yet', rows: r })
     }
     case 'prices': {

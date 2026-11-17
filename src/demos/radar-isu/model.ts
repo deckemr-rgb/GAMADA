@@ -4,7 +4,7 @@
  * throttled world clock. No heavy imports: this file is part of the initial chunk.
  */
 import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
-import { WORLD, clock, rows } from '../../demo-kit/world'
+import { WORLD, clock, negativeIssues, rows } from '../../demo-kit/world'
 import type { EventMap, HoaxAlert, Mention, Table, WorldState } from '../../demo-kit/world'
 import type { DeepResult } from './deep-model'
 
@@ -12,10 +12,10 @@ import type { DeepResult } from './deep-model'
 export const RADAR = {
   /** real ms between React updates of the world clock (×60 = 60 world minutes per second) */
   clockThrottleMs: 250,
-  /** sentiment index: sample step and half-life of a mention's weight (world minutes) */
-  sentLookbackMin: 6 * 60,
-  /** weight of the neutral prior in the sentiment index (≈ one fresh mention of reach 30) */
-  sentPrior: 1.5,
+  /** sentiment index: how far back a mention still counts (world minutes) */
+  sentLookbackMin: 12 * 60,
+  /** weight of the slow baseline in the sentiment index (≈ one fresh mention of reach 10 000) */
+  sentPrior: 4,
   /** real ms between the posts of the "Picu skenario" burst (the stream fills live) */
   burstGapMs: 420,
   burstGapReducedMs: 120,
@@ -52,7 +52,7 @@ export function useNow(): number {
   return now
 }
 
-/* ------------------------------------------------------------------ sentiment index (step, half-life: SENT_RES) */
+/* ------------------------------------------------------------------ sentiment index (one index, two views) */
 
 export interface SentPoint {
   at: number
@@ -61,22 +61,31 @@ export interface SentPoint {
 
 const sentCache = new WeakMap<Table<Mention>, Map<string, SentPoint[]>>()
 
-/** chart resolutions: the 24 h overview and the 3 h zoom that shows a burst and its recovery minute by minute */
+/**
+ * Chart views of the ONE sentiment index: the 24 h overview (a sample every 15 min) and the 3 h zoom (every 5 min)
+ * that shows a burst and its recovery. Both use the same half-life and end on the same 5-minute sample, so the last
+ * point of either view is exactly the KPI value; every number quoted on screen (KPI, recovery, report, export, AI)
+ * comes from this one index.
+ */
 export const SENT_RES = {
-  '24h': { hours: 24, step: 15, tau: 45 },
-  '3h': { hours: 3, step: 5, tau: 20 },
+  '24h': { hours: 24, step: 15 },
+  '3h': { hours: 3, step: 5 },
 } as const
 export type SentRes = keyof typeof SENT_RES
+/** half-lives (world minutes): the fast term reacts to a burst / recovery, the slow baseline holds the mood */
+const SENT_TAU = 45
+const SENT_TAU_SLOW = 180
+const SENT_ALIGN = 5
 
 /**
- * Reach-weighted, recency-decayed sentiment index (−100…100) sampled every `step` world minutes over the last
- * `hours`. A small neutral prior (`RADAR.sentPrior`) lets quiet night hours drift back to 0 instead of holding the
- * last value. Reacts within minutes to a burst and to the recovery after a clarification (an hourly mean would hide
- * both). Memoised per mentions table + time + resolution.
+ * Reach-weighted, recency-decayed sentiment index (−100…100): a fast term (half-life 45 min) blended with a slow
+ * baseline (180 min) of the same mentions. Stateless per sample, so both views agree point for point; a quiet night
+ * keeps the recent mood instead of dropping to "neutral", and a lone post moves the line only part of the way.
+ * Memoised per mentions table + time + view.
  */
 export function sentimentIndex(mentions: Table<Mention>, now: number, res: SentRes = '24h'): SentPoint[] {
-  const { hours, step, tau } = SENT_RES[res]
-  const end = Math.floor(now / step) * step
+  const { hours, step } = SENT_RES[res]
+  const end = Math.floor(now / SENT_ALIGN) * SENT_ALIGN
   const key = `${end}|${res}`
   let byKey = sentCache.get(mentions)
   const hit = byKey?.get(key)
@@ -88,20 +97,56 @@ export function sentimentIndex(mentions: Table<Mention>, now: number, res: SentR
   for (let t = end - hours * 60; t <= end; t += step) {
     let w = 0
     let sum = 0
+    let w0 = 0
+    let sum0 = 0
     for (const m of list) {
       if (m.at > t) break
       const d = t - m.at
       if (d > RADAR.sentLookbackMin) continue
-      const k = Math.exp(-d / tau) * Math.log10(m.reach + 10)
+      const r = Math.log10(m.reach + 10)
+      const k = Math.exp(-d / SENT_TAU) * r
+      const k0 = Math.exp(-d / SENT_TAU_SLOW) * r
       w += k
       sum += k * m.score
+      w0 += k0
+      sum0 += k0 * m.score
     }
-    out.push({ at: t, value: Math.round((sum / (w + RADAR.sentPrior)) * 100) })
+    const base = w0 > 1e-6 ? sum0 / w0 : 0
+    const v = (sum + RADAR.sentPrior * base) / (w + RADAR.sentPrior)
+    out.push({ at: t, value: Math.round(v * 100) })
   }
   if (!byKey) sentCache.set(mentions, (byKey = new Map()))
   if (byKey.size > 48) byKey.clear()
   byKey.set(key, out)
   return out
+}
+
+/** the index at the clarification and now (recovery line, report, export): both read from the same 24 h index */
+export function recoveryOf(mentions: Table<Mention>, now: number, clarAt: number): { before: number; after: number } {
+  const series = sentimentIndex(mentions, now)
+  const z = sentimentIndex(mentions, now, '3h')
+  const sr = z[0] && z[0].at <= clarAt ? z : series
+  const before = [...sr].reverse().find((p) => p.at <= clarAt)?.value ?? 0
+  return { before, after: series[series.length - 1]?.value ?? 0 }
+}
+
+/** signed index for display: "+6", "−5", "0" (one minus sign everywhere) */
+export const signedIdx = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n))}`
+
+/* ------------------------------------------------------------------ negative issues (the ecosystem definition) */
+
+export interface NegIssue {
+  topic: string
+  /** negative mentions of the topic in the last 24 h */
+  count: number
+  reach: number
+}
+/**
+ * "Isu negatif" = a topic with negative mentions in the last 24 h, biggest by negative-mention count: the same kit
+ * selector Meja Pimpinan uses for its "Isu negatif" KPI and briefing, so both products name the same issue.
+ */
+export function negIssues(mentions: Table<Mention>, now: number): NegIssue[] {
+  return negativeIssues({ mentions } as WorldState, now)
 }
 
 /* ------------------------------------------------------------------ KPIs */
@@ -122,16 +167,11 @@ export function radarKpis(mentions: Table<Mention>, now: number): RadarKpis {
   let count = 0
   let prev = 0
   let reach = 0
-  const topic = new Map<string, { n: number; sum: number }>()
   for (const m of rows(mentions)) {
     if (m.at > now) continue
     if (m.at > now - 1440) {
       count++
       reach += m.reach
-      const g = topic.get(m.topic) ?? { n: 0, sum: 0 }
-      g.n++
-      g.sum += m.score
-      topic.set(m.topic, g)
     } else if (m.at > now - 2880) prev++
   }
   const series = sentimentIndex(mentions, now)
@@ -140,7 +180,7 @@ export function radarKpis(mentions: Table<Mention>, now: number): RadarKpis {
     prev,
     reach,
     sentiment: series[series.length - 1]?.value ?? 0,
-    negTopics: [...topic.values()].filter((g) => g.sum / g.n < -0.2).length,
+    negTopics: negIssues(mentions, now).length,
   }
   if (!byNow) kpiCache.set(mentions, (byNow = new Map()))
   if (byNow.size > 32) byNow.clear()
@@ -253,25 +293,48 @@ export function topicsOf(mentions: Table<Mention>, now: number, hours = 24): Clu
   return out
 }
 
-/** mentions up to `now`, newest first, at most `limit` */
+const streamCache = new WeakMap<Table<Mention>, { n: number; limit: number; out: Mention[] }>()
+/**
+ * mentions up to `now`, newest first, at most `limit`. Returns the SAME array while nothing new became visible (the
+ * world clock ticks many times a second at ×60: the stream must not re-render on every tick).
+ */
 export function streamOf(mentions: Table<Mention>, now: number, limit: number): Mention[] {
-  const out: Mention[] = []
-  for (const m of rows(mentions)) if (m.at <= now) out.push(m)
-  return out.sort((a, b) => b.at - a.at).slice(0, limit)
+  const vis: Mention[] = []
+  for (const m of rows(mentions)) if (m.at <= now) vis.push(m)
+  const hit = streamCache.get(mentions)
+  if (hit && hit.n === vis.length && hit.limit === limit) return hit.out
+  const out = vis.sort((a, b) => b.at - a.at).slice(0, limit)
+  streamCache.set(mentions, { n: vis.length, limit, out })
+  return out
 }
 
 /**
  * The false-narrative burst (spec P4 step 2) as mention.created payloads starting at `start` (empty once the rumor
  * exists). Same posts as world/satu-daerah `hoaxBurst`, built from world/scenario-texts.
  */
+const loadTexts = () => import('../../demo-kit/world/scenario-texts')
+/** warm the burst texts (hover / focus of the trigger, or idle time after mount): the click then answers at once */
+export function prefetchBurst(): void {
+  void loadTexts().catch(() => undefined)
+}
 export async function burstPosts(s: WorldState, start: number): Promise<EventMap['mention.created'][]> {
-  const { HOAX_OFFSETS, HOAX_SCENARIO, hoaxPost } = await import('../../demo-kit/world/scenario-texts')
+  const { HOAX_OFFSETS, HOAX_SCENARIO, hoaxPost } = await loadTexts()
   const rumor = s.meta.facts.hoax.rumor || HOAX_SCENARIO.rumor
   if (rows(s.mentions).some((m) => m.rumor === rumor)) return []
   const dam = s.meta.facts.hoax.damName || 'Bendungan'
   const kid = s.region.floodKecamatanIds[0] ?? s.region.kecamatan[0]?.id ?? ''
   const k = s.region.kecamatan.find((x) => x.id === kid)?.name ?? kid
   return HOAX_OFFSETS.map((_, i) => hoaxPost(i, start, dam, k, rumor))
+}
+
+/* ------------------------------------------------------------------ INP helpers */
+
+/**
+ * Run `fn` after the next paint: a click first shows its immediate result (drawer closing, toast, busy state), then
+ * the heavy world update (many reducers + a synchronous re-render of every subscriber) runs in its own task.
+ */
+export function afterPaint(fn: () => void): void {
+  window.requestAnimationFrame(() => window.setTimeout(fn, 0))
 }
 
 /* ------------------------------------------------------------------ lazy drawers */
@@ -288,7 +351,7 @@ export function useDeferredOpen(open: boolean, inside?: RefObject<HTMLElement | 
     if (!shown || !open || !inside) return
     const id = window.setTimeout(() => {
       const panel = inside.current?.closest<HTMLElement>('[role="dialog"]')
-      if (panel && !panel.contains(document.activeElement)) panel.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]')?.focus({ preventScroll: true })
+      if (panel && !panel.contains(document.activeElement)) (panel.querySelector<HTMLElement>('[data-autofocus]') ?? panel.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]'))?.focus({ preventScroll: true })
     }, 120)
     return () => window.clearTimeout(id)
   }, [shown, open, inside])

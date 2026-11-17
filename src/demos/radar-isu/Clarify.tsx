@@ -6,12 +6,12 @@
  * over the next 30 world minutes and the sentiment line turns up.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Chip, Drawer, Icon, Segmented, dropChips } from '../../demo-kit/ui'
+import { Button, Chip, Drawer, Icon, Segmented, Skeleton, dropChips } from '../../demo-kit/ui'
 import { useAiChat, type Structured } from '../../demo-kit/ai/chat'
 import { useShell } from '../../demo-kit/shell'
 import { clock, emit, useSession, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { radarCtx } from './ctx'
-import { useDeferredOpen } from './model'
+import { afterPaint, useDeferredOpen } from './model'
 import { clarification, type ClarificationData } from './clarify-text'
 import { CHANNELS, CHANNEL_LABEL, TONES, type Channel, type Tone } from './strings'
 import './scenario'
@@ -27,7 +27,7 @@ const S = {
       menenangkan: 'Menenangkan',
       informatif: 'Informatif',
     } as Record<Tone, string>,
-    drafting: 'AI menyusun klarifikasi…',
+    drafting: 'Menyusun draf klarifikasi…',
     steps: 'Langkah agent',
     press: 'Rilis pers',
     caption: 'Caption media sosial',
@@ -48,6 +48,8 @@ const S = {
     approveNote: 'Disusun oleh Humas/Diskominfo, menunggu persetujuan Anda.',
     error: 'Draf gagal disusun. Coba susun ulang.',
     prompt: (tone: string) => `Susun klarifikasi nada ${tone} untuk hoaks bendungan`,
+    simMark: '[SIMULASI DEMO GAMADA]',
+    tools: {} as Record<string, string>,
   },
   en: {
     titleDraft: 'Draft a clarification',
@@ -59,7 +61,7 @@ const S = {
       menenangkan: 'Reassuring',
       informatif: 'Informative',
     } as Record<Tone, string>,
-    drafting: 'The AI is drafting the clarification…',
+    drafting: 'Drafting the clarification…',
     steps: 'Agent steps',
     press: 'Press release',
     caption: 'Social media caption',
@@ -80,6 +82,12 @@ const S = {
     approveNote: 'Drafted by the Comms Office, awaiting your approval.',
     error: 'The draft failed. Try redrafting.',
     prompt: (tone: string) => `Draft a ${tone} clarification for the dam hoax`,
+    simMark: '[GAMADA DEMO SIMULATION]',
+    tools: {
+      'siaga_wilayah.tinggi_muka_air': 'Siaga Wilayah water level',
+      susun_klarifikasi: 'draft the clarification',
+      cek_hoaks: 'check hoaxes',
+    } as Record<string, string>,
   },
 }
 const TONE_WORD = {
@@ -97,7 +105,7 @@ function asClarification(st: Structured[]): ClarificationData | null {
   return d as ClarificationData
 }
 
-function CopyBtn({ text, label, done }: { text: string; label: string; done: string }) {
+function CopyBtn({ text, label, done, mark }: { text: string; label: string; done: string; mark: string }) {
   const [ok, setOk] = useState(false)
   useEffect(() => {
     if (!ok) return
@@ -110,7 +118,8 @@ function CopyBtn({ text, label, done }: { text: string; label: string; done: str
       variant="ghost"
       icon={ok ? 'check' : 'copy'}
       onClick={() => {
-        void navigator.clipboard?.writeText(text).then(
+        // a copied draft leaves the demo: it carries the simulation marker so it cannot pass as an official text
+        void navigator.clipboard?.writeText(`${mark}\n${text}`).then(
           () => setOk(true),
           () => setOk(false),
         )
@@ -167,13 +176,16 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
 
   const publish = () => {
     if (!alert || !draft || !channels.length) return
-    emit('clarification.published', { hoaxId: alert.id, tone, channels }, 'radar-isu')
+    const payload = { hoaxId: alert.id, tone, channels: [...channels] }
+    // the drawer closes and the toast shows in this frame; the world update (recovery mentions, every subscriber
+    // re-rendering) follows right after the paint
+    onClose()
     shell.toast({
-      title: fill(T.published, { n: channels.length }),
+      title: fill(T.published, { n: payload.channels.length }),
       tone: 'accent',
       icon: 'check',
     })
-    onClose()
+    afterPaint(() => emit('clarification.published', payload, 'radar-isu'))
   }
 
   const busy = chat.busy
@@ -212,7 +224,7 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
         </div>
 
         <div className="dk-ri-clar-ai" aria-live="polite" aria-busy={busy}>
-          {last?.status === 'thinking' && (
+          {busy && (
             <p className="dk-ri-think">
               <span className="dk-ri-dots" aria-hidden="true">
                 <i />
@@ -222,12 +234,12 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
               {T.drafting}
             </p>
           )}
-          {last && last.content && <p className="dk-ri-clar-ans">{last.content}</p>}
+          {!busy && last && last.content && <p className="dk-ri-clar-ans">{last.content}</p>}
           {!!last?.toolCalls?.length && (
             <ol className="dk-ri-steps" aria-label={T.steps}>
               {last.toolCalls.map((c) => (
                 <li key={c.id}>
-                  <Icon name="check" size={13} /> <code>{c.name}</code>
+                  <Icon name="check" size={13} /> {T.tools[c.name] ? <span>{T.tools[c.name]}</span> : <code>{c.name}</code>}
                   {c.ms ? <span className="dk-num"> · {c.ms} ms</span> : null}
                 </li>
               ))}
@@ -249,13 +261,40 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
           )}
         </div>
 
+        {busy && (
+          <div className="dk-ri-draft is-skel" aria-hidden="true">
+            <section className="dk-ri-draft-sec">
+              <header className="dk-ri-draft-h">
+                <h3 className="dk-ri-sec-t">{T.press}</h3>
+              </header>
+              <div className="dk-ri-press">
+                <Skeleton height={16} width="70%" />
+                <Skeleton lines={4} />
+              </div>
+            </section>
+            <section className="dk-ri-draft-sec">
+              <header className="dk-ri-draft-h">
+                <h3 className="dk-ri-sec-t">{T.caption}</h3>
+              </header>
+              <div className="dk-ri-caption">
+                <Skeleton lines={3} />
+              </div>
+            </section>
+            <section className="dk-ri-draft-sec">
+              <header className="dk-ri-draft-h">
+                <h3 className="dk-ri-sec-t">{T.infographic}</h3>
+              </header>
+              <Skeleton lines={3} height={28} />
+            </section>
+          </div>
+        )}
         {draft && !busy && (
           <div className="dk-ri-draft">
             {localDraft && <p className="dk-ri-note">{T.localDraft}</p>}
             <section className="dk-ri-draft-sec">
               <header className="dk-ri-draft-h">
                 <h3 className="dk-ri-sec-t">{T.press}</h3>
-                <CopyBtn text={draft.pressRelease} label={T.copy} done={T.copied} />
+                <CopyBtn text={draft.pressRelease} label={T.copy} done={T.copied} mark={T.simMark} />
               </header>
               <div className="dk-ri-press">{draft.pressRelease.split(/\n{2,}/).map((para, i) => (i === 0 ? <h4 key={i}>{para}</h4> : <p key={i}>{para}</p>))}</div>
             </section>
@@ -263,7 +302,7 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
               <header className="dk-ri-draft-h">
                 <h3 className="dk-ri-sec-t">{T.caption}</h3>
                 <span className="dk-ri-k dk-num">{fill(T.chars, { n: draft.socialCaption.length })}</span>
-                <CopyBtn text={draft.socialCaption} label={T.copy} done={T.copied} />
+                <CopyBtn text={draft.socialCaption} label={T.copy} done={T.copied} mark={T.simMark} />
               </header>
               <p className="dk-ri-caption">{draft.socialCaption}</p>
             </section>

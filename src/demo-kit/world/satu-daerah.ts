@@ -20,7 +20,7 @@ import type { RegionPack } from '../region/types'
 import { createParamSelector, createSelector, complaintKpi, slaOnTimePct, activeAlerts, negativeIssues, overdueActions, serviceIndex } from './selectors'
 import { CATEGORY_LABEL } from './labels'
 import { HOAX_OFFSETS, HOAX_SCENARIO, hoaxPost } from './scenario-texts'
-import { DAY_MIN, WORLD, distanceKm, offsetKm, ref, rows } from './util'
+import { DAY_MIN, WORLD, distanceKm, hhmm, offsetKm, ref, rows } from './util'
 
 const kecName = (s: WorldState, id: string) => s.region.kecamatan.find((k) => k.id === id)?.name ?? id
 const desaName = (s: WorldState, kec: string, desa: string) => s.region.kecamatan.find((k) => k.id === kec)?.desa.find((d) => d.id === desa)?.name ?? desa
@@ -230,9 +230,34 @@ export type BriefingItem = Briefing['items'][number] & {
  * The morning briefing assembled from the world (spec P2 step 1): ≥ 6 items, each tied to world data and to the
  * product it comes from. Emit `briefing.generated` with `items.map(({ title, source, refs }) => …)`.
  */
+/** Radar Isu topic ids in both languages (briefing, KPI captions, AI answers) */
+export const TOPIC_LABEL: Record<string, Bi> = {
+  banjir: { id: 'banjir', en: 'flooding' }, bansos: { id: 'bansos', en: 'social aid' }, harga: { id: 'harga', en: 'prices' },
+  'hoaks-bendungan': { id: 'hoaks bendungan', en: 'dam hoax' }, jalan: { id: 'jalan', en: 'roads' }, kesehatan: { id: 'kesehatan', en: 'health' },
+  kualitas: { id: 'kualitas', en: 'quality' }, layanan: { id: 'layanan', en: 'public services' }, pendidikan: { id: 'pendidikan', en: 'education' },
+  pengiriman: { id: 'pengiriman', en: 'delivery' }, sampah: { id: 'sampah', en: 'waste' }, stok: { id: 'stok', en: 'stock' }, umkm: { id: 'UMKM', en: 'small businesses' },
+}
+export const topicLabel = (topic: string, lang: 'id' | 'en'): string => TOPIC_LABEL[topic]?.[lang] ?? topic
+
+/**
+ * Change vs 7 days ago as a fraction (0.155 = +15.5 %). `history` holds daily closes EXCLUDING today, so 7 days ago
+ * is the 7th value from the end. Every product that quotes a weekly price change uses this one.
+ */
+export function weekChangeOf(price: number, history: readonly number[]): number {
+  const base = history[history.length - 7] ?? history[0] ?? price
+  return base > 0 ? (price - base) / base : 0
+}
+
 export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   const out: BriefingItem[] = []
-  const push = (source: ProductSlug, title: Bi, detail: Bi, refs: EntityRef[]) => out.push({ source, title, detail, refs, focus: refs[0]?.split(':')[1] ?? null })
+  // an item never links to the same record as an earlier one (e.g. "complaints today" and "flood reports" share one)
+  const used = new Set<EntityRef>()
+  const push = (source: ProductSlug, title: Bi, detail: Bi, refs0: EntityRef[]) => {
+    const free = refs0.length > 1 && refs0[0] && used.has(refs0[0]) ? refs0.find((r) => !used.has(r)) : undefined
+    const refs = free ? [free, ...refs0.filter((r) => r !== free)] : refs0
+    if (refs[0]) used.add(refs[0])
+    out.push({ source, title, detail, refs, focus: refs[0]?.split(':').slice(1).join(':') || null })
+  }
   // 1 · complaints today (Sapa Warga)
   const today = rows(s.complaints).filter((c) => c.at >= Math.floor(now / DAY_MIN) * DAY_MIN && c.at <= now)
   const cats = new Map<string, Complaint[]>()
@@ -271,7 +296,7 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   if (hoax) {
     push('radar-isu', { id: `Hoaks viral: ${hoax.claim.id}`, en: `Viral hoax: ${hoax.claim.en}` }, { id: `Skor hoaks ${Math.round(hoax.score * 100)}%, belum diklarifikasi`, en: `Hoax score ${Math.round(hoax.score * 100)}%, not clarified yet` }, [ref('hoaxAlerts', hoax.id)])
   } else if (neg) {
-    push('radar-isu', { id: `Isu negatif terbesar: ${neg.topic} (${neg.count} mention)`, en: `Top negative issue: ${neg.topic} (${neg.count} mentions)` }, { id: `Jangkauan ±${idNum(neg.reach)} akun dalam 24 jam`, en: `Reach ≈ ${enNum(neg.reach)} accounts in 24 h` }, [ref('mentions', neg.latest.id)])
+    push('radar-isu', { id: `Isu negatif terbesar: ${topicLabel(neg.topic, 'id')} (${neg.count} mention)`, en: `Top negative issue: ${topicLabel(neg.topic, 'en')} (${neg.count} mentions)` }, { id: `Jangkauan ±${idNum(neg.reach)} akun dalam 24 jam`, en: `Reach ≈ ${enNum(neg.reach)} accounts in 24 h` }, [ref('mentions', neg.latest.id)])
   }
   // 5 · risky procurement (Awas Belanja)
   const procs = rows(s.procurements).filter((p) => p.status !== 'selesai')
@@ -284,14 +309,21 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   // 6 · prices (Sinyal Pasar)
   const op = rows(s.marketOps).find((m) => m.stage === 'recommended')
   const anomaly = rows(s.prices).find((p) => p.anomaly)
-  const rise = rows(s.prices).map((p) => ({ p, d: p.history.length ? (p.price - (p.history[p.history.length - 8] ?? p.price)) / Math.max(1, p.history[p.history.length - 8] ?? p.price) : 0 })).sort((a, b) => b.d - a.d)[0]
+  // the single market × commodity with the largest true 7-day rise (an anomaly row wins, with its real change)
+  let rise: { p: (typeof s.prices.byId)[string]; d: number } | null = null
+  for (const p of rows(s.prices)) {
+    const d = weekChangeOf(p.price, p.history)
+    if (!rise || d > rise.d) rise = { p, d }
+  }
   if (op) push('sinyal-pasar', { id: `Rekomendasi operasi pasar: ${s.region.commodities.find((c) => c.id === op.commodityId)?.name.id ?? op.commodityId}`, en: `Market operation recommended: ${s.region.commodities.find((c) => c.id === op.commodityId)?.name.en ?? op.commodityId}` }, op.reason, [ref('marketOps', op.id)])
   else if (anomaly || rise) {
     const p = anomaly ?? rise!.p
     const c = s.region.commodities.find((x) => x.id === p.commodityId)?.name ?? { id: p.commodityId, en: p.commodityId }
     const m = s.markets.byId[p.marketId]?.name ?? p.marketId
-    const pct = Math.round((rise && rise.p === p ? rise.d : 0.12) * 100)
-    push('sinyal-pasar', { id: `Harga ${c.id.toLowerCase()} di ${m} naik ${pct}% sepekan`, en: `${c.en} at ${m} up ${pct}% in a week` }, { id: `Rp ${idNum(p.price)} per satuan (data simulasi)`, en: `Rp ${enNum(p.price)} per unit (simulated data)` }, [ref('prices', p.id)])
+    const pct = Math.round(weekChangeOf(p.price, p.history) * 1000) / 10
+    const fmtPct = (l: 'id' | 'en') => Math.abs(pct).toLocaleString(l === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: 1 })
+    push('sinyal-pasar', { id: `Harga ${c.id.toLowerCase()} di ${m} ${pct >= 0 ? 'naik' : 'turun'} ${fmtPct('id')}% sepekan`, en: `${c.en} at ${m} ${pct >= 0 ? 'up' : 'down'} ${fmtPct('en')}% in a week` },
+      { id: `Rp ${idNum(p.price)} per satuan${p.anomaly ? ', ditandai anomali' : ''} (data simulasi)`, en: `Rp ${enNum(p.price)} per unit${p.anomaly ? ', flagged as an anomaly' : ''} (simulated data)` }, [ref('prices', p.id)])
   }
   // 7 · overdue follow-ups (Naskah Pintar)
   const late = overdueActions(s, now)
@@ -304,6 +336,28 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   if (prog) {
     const docs = rows(s.documents).filter((d) => d.program === prog.kind)
     push('cek-berkas', { id: `Pendaftaran bansos banjir dibuka: ${docs.length} berkas masuk`, en: `Flood-aid registration open: ${docs.length} applications in` }, { id: `Kuota ${idNum(prog.quota)} KK`, en: `Quota ${enNum(prog.quota)} households` }, [ref('programs', prog.id)])
+  }
+  // 9 · economic index (Indeks Ekonomi) when an update arrived today (post-flood harvest, chain C10): lowest district
+  const dayStart = Math.floor(now / DAY_MIN) * DAY_MIN
+  const econ = new Map<EntityRef, Minutes>()
+  for (const id of s.auditLog.ids) {
+    const a = s.auditLog.byId[id]
+    const r = a?.entityRefs[0]
+    if (a && r && a.type === 'econ.updated' && a.at >= dayStart && a.at <= now && !econ.has(r)) econ.set(r, a.at)
+  }
+  const econRows = [...econ.entries()]
+    .map(([r, at]) => ({ r, at, row: s.econIndex.byId[r.split(':').slice(1).join(':')] }))
+    .filter((e): e is { r: EntityRef; at: Minutes; row: NonNullable<typeof e.row> } => !!e.row)
+    .sort((a, b) => a.row.index - b.row.index)
+  const low = econRows[0]
+  if (low) {
+    const k = kecName(s, low.row.kecamatanId)
+    const n = econRows.length
+    const at = hhmm(Math.max(...econRows.map((e) => e.at)))
+    push('indeks-ekonomi', n > 1
+      ? { id: `Indeks ekonomi diperbarui di ${n} kecamatan; terendah Kec. ${k}: ${idNum(low.row.index, 1)}`, en: `Economic index updated in ${n} districts; lowest ${k}: ${enNum(low.row.index, 1)}` }
+      : { id: `Indeks ekonomi Kec. ${k} diperbarui: ${idNum(low.row.index, 1)}`, en: `Economic index of ${k} updated: ${enNum(low.row.index, 1)}` },
+    { id: `100 = rata-rata 12 bulan; pukul ${at.replace(':', '.')} (data simulasi)`, en: `100 = 12-month average; at ${at} (simulated data)` }, [low.r])
   }
   return out
 }

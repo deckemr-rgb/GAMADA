@@ -3,11 +3,11 @@
  * (AskData: AI hook, scenario, query engine, charts) is fetched on the first sign of use (focus, hover, a chip, a
  * submit) and takes over with whatever was typed; a question asked before it arrived is sent as soon as it does.
  */
-import { lazy, startTransition, Suspense, useState, type FormEvent } from 'react'
+import { lazy, startTransition, Suspense, useRef, useState, type FormEvent } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { Button, Icon, Input } from '../../demo-kit/ui'
-import { useClock, useWorld } from '../../demo-kit/world'
-import { causeQuestion, risingCategory } from './data'
+import { useWorld } from '../../demo-kit/world'
+import { causeQuestion, risingCategory, useNow } from './data'
 import type { InstructionPreset } from './index'
 import { tr } from './strings'
 
@@ -26,8 +26,9 @@ export function AskBox(props: AskProps) {
   const [on, setOn] = useState(false)
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState<string | null>(null)
-  const [focused, setFocused] = useState(false)
-  const now = useClock().minutes
+  // is the stub's input still the place the viewer is typing? (read when the chat takes over, see AskData)
+  const focused = useRef(false)
+  const now = useNow(60)
   const q1 = causeQuestion(useWorld((s) => risingCategory(s, now)))
   // a transition: the stub (and the input being typed in) stays mounted until the chat chunk has arrived, then AskData
   // takes over with the current draft, focus and caret; a plain update would swap in the Suspense fallback, a NEW
@@ -68,7 +69,7 @@ export function AskBox(props: AskProps) {
           ask(draft)
         }}
       >
-        <Input value={draft} onChange={(e) => setDraft(e.target.value)} onFocus={() => { setFocused(true); wake() }} placeholder={tr('askPh', lang)} aria-label={tr('askLabel', lang)} />
+        <Input value={draft} onChange={(e) => setDraft(e.target.value)} onFocus={() => { focused.current = true; wake() }} onBlur={(e) => { if (e.relatedTarget) focused.current = false }} placeholder={tr('askPh', lang)} aria-label={tr('askLabel', lang)} />
         <Button type="submit" variant="primary" size="sm" icon="send" disabled={!draft.trim()}>
           {tr('askSend', lang)}
         </Button>

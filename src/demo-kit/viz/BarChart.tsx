@@ -109,6 +109,8 @@ export function BarChart(props: BarProps) {
   if (horizontal) {
     const maxLabel = Math.max(...data.map((d) => d.label.length), 4)
     const labelW = Math.min(Math.round(w * 0.38), Math.ceil(maxLabel * 6.6) + 12)
+    // characters that fit the label column (≈ 6 px each at 11 px); longer names are shortened, the tooltip keeps them
+    const fitChars = Math.max(6, Math.floor((labelW - 10) / 6))
     const valueW = props.valueLabels === false ? 8 : 64
     h = props.height ?? n * ROW + 26
     const sx = scaleLinear().domain([d0, d1]).range([labelW, Math.max(labelW + 20, w - valueW)])
@@ -136,7 +138,7 @@ export function BarChart(props: BarProps) {
             <g key={d.id ?? d.label}>
               <rect className={`dk-viz-barhit${hi === i ? ' is-on' : ''}`} x={0} y={i * ROW} width={w} height={ROW} rx={6} />
               <text x={labelW - 10} y={y + bh / 2 + 4} className={`t-end${hi === i ? ' t-strong' : ' t-muted'}`}>
-                {d.label.length > maxLabel ? `${d.label.slice(0, maxLabel - 1)}…` : d.label}
+                {d.label.length > fitChars ? `${d.label.slice(0, fitChars - 1).trimEnd()}…` : d.label}
               </text>
             </g>
           )

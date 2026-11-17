@@ -206,6 +206,74 @@ export const ACTION_TPL: Bi[] = [
   { id: 'Normalisasi saluran drainase pasar', en: 'Clean out the market drainage' },
 ]
 
+/**
+ * Follow-up tasks per agency (OPD id of the region pack). Pools are disjoint, so no task title repeats across
+ * agencies; an agency without its own pool draws from ACTION_TPL_GENERAL.
+ */
+export const ACTION_TPL_BY_OPD: Record<string, Bi[]> = {
+  pupr: [
+    { id: 'Inventarisasi titik genangan dan kebutuhan pompa', en: 'List waterlogging spots and pump needs' },
+    { id: 'Perbaiki tanggul yang retak', en: 'Repair the cracked embankment' },
+    { id: 'Laporkan progres perbaikan jalan', en: 'Report road-repair progress' },
+  ],
+  perkim: [
+    { id: 'Normalisasi saluran drainase permukiman', en: 'Clean out the housing-area drainage' },
+    { id: 'Data rumah rusak terdampak genangan', en: 'Record homes damaged by waterlogging' },
+  ],
+  bpbd: [
+    { id: 'Siapkan posko pengungsian sementara', en: 'Prepare a temporary shelter post' },
+    { id: 'Sosialisasi jalur evakuasi ke desa', en: 'Brief villages on evacuation routes' },
+    { id: 'Cek kesiapan perahu karet dan pelampung', en: 'Check rubber boats and life jackets' },
+  ],
+  dinsos: [
+    { id: 'Verifikasi data penerima bantuan', en: 'Verify aid recipient data' },
+    { id: 'Siapkan dapur umum untuk pengungsi', en: 'Set up a public kitchen for evacuees' },
+  ],
+  dinkes: [
+    { id: 'Buka pos kesehatan di posko pengungsian', en: 'Open a health post at the shelter' },
+    { id: 'Cek stok obat diare dan ISPA di puskesmas', en: 'Check diarrhoea and respiratory medicine at health centres' },
+  ],
+  disdik: [{ id: 'Data sekolah yang terendam dan rencana belajar sementara', en: 'List flooded schools and a temporary teaching plan' }],
+  dlh: [
+    { id: 'Tindak lanjuti aduan sampah di TPS', en: 'Follow up rubbish complaints at collection points' },
+    { id: 'Uji kualitas air sumur warga pascabanjir', en: 'Test residents’ well water after the flood' },
+  ],
+  dishub: [
+    { id: 'Pasang rambu jalur alternatif ruas tergenang', en: 'Put up detour signs for flooded roads' },
+    { id: 'Perbaiki lampu penerangan jalan yang padam', en: 'Fix the street lights that are out' },
+  ],
+  diskominfo: [
+    { id: 'Siarkan info banjir resmi di kanal pemkab', en: 'Publish official flood updates on government channels' },
+    { id: 'Pantau dan klarifikasi kabar bohong soal bendungan', en: 'Monitor and clarify false reports about the dam' },
+  ],
+  disperindag: [
+    { id: 'Susun jadwal operasi pasar', en: 'Draw up the market-operation schedule' },
+    { id: 'Koordinasi stok beras dengan distributor', en: 'Coordinate rice stocks with distributors' },
+    { id: 'Normalisasi saluran drainase pasar', en: 'Clean out the market drainage' },
+  ],
+  diskopumkm: [{ id: 'Rekap hasil pameran UMKM', en: 'Summarise the small-business fair results' }],
+  distan: [
+    { id: 'Cek sawah tergenang dan perkiraan gagal panen', en: 'Check flooded rice fields and expected crop loss' },
+    { id: 'Siapkan cadangan benih untuk tanam ulang', en: 'Prepare reserve seed for replanting' },
+  ],
+  dpmptsp: [
+    { id: 'Perbarui papan informasi layanan MPP', en: 'Update the service information board at the MPP' },
+    { id: 'Selesaikan antrean izin usaha yang tertunda', en: 'Clear the backlog of pending business permits' },
+  ],
+  disdukcapil: [{ id: 'Layani penggantian dokumen kependudukan yang rusak', en: 'Replace civil-registry documents damaged by water' }],
+  bappeda: [{ id: 'Susun usulan anggaran tanggap darurat', en: 'Draft the emergency-response budget proposal' }],
+  bapenda: [{ id: 'Kaji keringanan pajak bagi usaha terdampak', en: 'Review tax relief for affected businesses' }],
+  inspektorat: [{ id: 'Reviu pengadaan barang darurat', en: 'Review the emergency purchases' }],
+  ukpbj: [{ id: 'Siapkan dokumen pengadaan pompa darurat', en: 'Prepare the emergency pump procurement documents' }],
+  satpolpp: [{ id: 'Tertibkan lapak yang menutup saluran air', en: 'Clear stalls that block drainage channels' }],
+  'perumda-am': [{ id: 'Pulihkan pasokan air bersih di desa terdampak', en: 'Restore clean water supply in affected villages' }],
+  kecamatan: [{ id: 'Rekap laporan kerusakan dari kepala desa', en: 'Compile damage reports from village heads' }],
+}
+export const ACTION_TPL_GENERAL: Bi[] = [
+  { id: 'Laporkan progres tindak lanjut ke Sekda', en: 'Report follow-up progress to the Regional Secretary' },
+  { id: 'Perbarui data layanan di kanal pengaduan', en: 'Update service data on the complaint channel' },
+]
+
 export const PROCUREMENT_TPL: { n: Bi; hint: string[]; base: number; items: [string, string, number, string][] }[] = [
   { n: { id: 'Rehabilitasi Jalan Poros Desa', en: 'Village Main Road Rehabilitation' }, hint: ['pupr', 'pekerjaan umum'], base: 1_850_000_000, items: [['Aspal hotmix', 'Hotmix asphalt', 420, 'ton'], ['Agregat kelas A', 'Class A aggregate', 900, 'm3']] },
   { n: { id: 'Pengadaan Alat Kesehatan Puskesmas', en: 'Health Centre Medical Equipment' }, hint: ['dinkes', 'kesehatan'], base: 920_000_000, items: [['Tensimeter digital', 'Digital blood-pressure monitor', 60, 'unit'], ['Timbangan bayi', 'Baby scale', 40, 'unit']] },

@@ -409,7 +409,7 @@ for (const { label, pack } of packs) {
   ok(opdScorecard(s, lb[0]!.opdId, 740).trend.length === 30, 'opdScorecard: 30-day trend')
   const items = briefingItems(s, 740)
   ok(items.length >= 6 && new Set(items.map((x) => x.source)).size >= 6, `briefing: ${items.length} items from ${new Set(items.map((x) => x.source)).size} products`)
-  ok(items.every((x) => x.refs.every((rf) => { const [t, id] = rf.split(':'); return !!(s as unknown as Record<string, { byId: Record<string, unknown> }>)[t!]?.byId[id!] })), 'briefing: every ref points at a world entity')
+  ok(items.every((x) => x.refs.every((rf) => { const i = rf.indexOf(':'); const t = rf.slice(0, i); const id = rf.slice(i + 1); return !!(s as unknown as Record<string, { byId: Record<string, unknown> }>)[t!]?.byId[id!] })), 'briefing: every ref points at a world entity')
   ok(mentionsByHour(s, 740).length === 24 && topicClusters(s, 740).length > 0, 'mentionsByHour + topicClusters')
   ok(kpiStrip(s, 740) === kpiStrip(s, 740) && mentionsByHour(s, 740) === mentionsByHour(s, 740) && sentimentSeries(s, 740) === sentimentSeries(s, 740) && bansosBatch(s) === bansosBatch(s) && harvestValues(s, 'change') === harvestValues(s, 'change'), 'time-keyed selectors are memoised (safe in useWorld)')
   ok(actionBoard(s, 740).length > 0 && letterInbox(s)[0]?.status === 'masuk', 'actionBoard + letterInbox')

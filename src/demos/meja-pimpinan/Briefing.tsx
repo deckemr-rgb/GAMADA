@@ -10,15 +10,12 @@ import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { demoHref } from '../../demo-kit/shell'
 import { Button, Icon, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
-import { useSession, useWorld, type Briefing as BriefingT, type Minutes, type WorldState } from '../../demo-kit/world'
-import { briefingItems } from '../../demo-kit/world/satu-daerah'
-import { MP, refId, withControls } from './data'
+import { useSession, useWorld, type Briefing as BriefingT } from '../../demo-kit/world'
+import { MP, mpBriefingItems, refId, sameItems, useNow, withControls } from './data'
 import type { InstructionPreset } from './index'
 import { nf, tr, trf, type Bi } from './strings'
 
 const BriefingPlayer = lazy(() => import('./BriefingPlayer'))
-
-const whole = (s: WorldState) => s
 
 export interface ShownItem {
   title: Bi
@@ -28,9 +25,8 @@ export interface ShownItem {
   focus: string | null
 }
 
-export function Briefing({ briefing, now, assembling, fresh, onFreshDone, onCompose, onInstruct, onListened, leader }: {
+export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, onInstruct, onListened, leader, hotspot }: {
   briefing: BriefingT | null
-  now: Minutes
   assembling: string[] | null
   fresh: boolean
   onFreshDone: () => void
@@ -38,6 +34,8 @@ export function Briefing({ briefing, now, assembling, fresh, onFreshDone, onComp
   onInstruct?: (p: InstructionPreset) => void
   onListened: () => void
   leader: Bi
+  /** desktop: the start hint points at this panel's compose button (room for the hint under it) */
+  hotspot?: boolean
 }) {
   const { lang } = useI18n()
   const session = useSession()
@@ -45,10 +43,9 @@ export function Briefing({ briefing, now, assembling, fresh, onFreshDone, onComp
   const [active, setActive] = useState(-1)
   const listRef = useRef<HTMLOListElement>(null)
 
-  // current items (details + "updates since") — briefingItems is a plain function: recompute on world changes
-  const current = useWorld(whole)
-  const now5 = Math.floor(now / 5) * 5
-  const cur = useMemo(() => briefingItems(current, now5), [current, now5])
+  // current items (details + "updates since"), at 5-minute resolution; the panel re-renders only when an item changes
+  const now5 = useNow(5)
+  const cur = useWorld((s) => mpBriefingItems(s, now5), sameItems)
   const shown: ShownItem[] = useMemo(() => {
     if (!briefing) return []
     return briefing.items.map((it) => {
@@ -122,11 +119,18 @@ export function Briefing({ briefing, now, assembling, fresh, onFreshDone, onComp
                 </li>
               ))}
             </ul>
-            {onInstruct && (
-              <Button variant="primary" icon="spark" onClick={onCompose}>
-                {tr('compose', lang)}
-              </Button>
-            )}
+            {onInstruct &&
+              (hotspot ? (
+                <div className="dk-mp-cta--panel" data-hotspot="briefing">
+                  <Button variant="primary" icon="spark" onClick={onCompose}>
+                    {tr('compose', lang)}
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="primary" icon="spark" onClick={onCompose}>
+                  {tr('compose', lang)}
+                </Button>
+              ))}
           </div>
         ) : (
           <ol ref={listRef} className="dk-mp-items" aria-live="polite">

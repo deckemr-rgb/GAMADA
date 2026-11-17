@@ -273,6 +273,9 @@
   border-radius: var(--dk-r-input);
   background: var(--dk-bg);
   transition: background-color 120ms ease;
+  /* rows scrolled out of the 640 px list skip layout + paint (keeps a filter switch inside the INP budget) */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 108px;
 }
 .dk-ri-m > * {
   position: relative;
@@ -490,13 +493,29 @@
   color: var(--dk-text);
 }
 .dk-ri-hoax-fwd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.dk-ri-hoax-fwd-t {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--dk-muted);
+}
+/* spreader accounts: plain tags (not toggles) */
+.dk-ri-accs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--dk-accent);
+  padding: 0;
+  list-style: none;
+  font: 600 12px/1.5 var(--dk-font);
+  color: var(--dk-text);
 }
 .dk-ri-hoax-stats {
   display: grid;
@@ -523,6 +542,27 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  /* hugs its buttons: the "Mulai di sini" hotspot sits on this row's top-right corner */
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+}
+.dk-ri-hoax-act.is-empty {
+  display: none;
+}
+/* phones, idle: one row (icon + trigger), so the stream starts in the first screen */
+.dk-ri-hoax.is-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 10px 12px;
+}
+.dk-ri-hoax.is-row .dk-ri-hoax-act {
+  width: auto;
+  justify-self: stretch;
+}
+.dk-ri-hoax.is-row .dk-ri-hoax-cta {
+  flex: 1;
 }
 .dk-ri-hoax.is-compact {
   grid-template-columns: minmax(0, 1fr);
@@ -538,7 +578,7 @@
   .dk-ri-hoax.is-compact .dk-ri-hoax-note {
     grid-column: 1 / -1;
   }
-  .dk-ri-hoax.is-compact .dk-ri-hoax-cta {
+  .dk-ri-hoax.is-compact .dk-ri-hoax-act {
     justify-self: end;
   }
 }
@@ -616,7 +656,7 @@
 }
 .dk-ri-evid-link {
   justify-self: start;
-  margin-left: -8px;
+  margin-top: 2px;
 }
 .dk-ri-recov {
   display: grid;
@@ -927,17 +967,14 @@ html[data-dk-calm] .dk-ri-dots i,
 }
 .dk-ri-sugg .dk-btn {
   height: auto;
-  min-height: 32px;
+  min-height: 36px;
   white-space: normal;
   text-align: left;
 }
 .dk-ri-ask {
   display: flex;
   gap: 8px;
-  position: sticky;
-  bottom: 0;
-  padding-top: 6px;
-  background: var(--dk-s1);
+  width: 100%;
 }
 .dk-ri-ask .dk-input {
   flex: 1;
@@ -1182,21 +1219,44 @@ html[data-dk-calm] .dk-ri-dots i,
   color: var(--dk-muted);
 }
 .dk-ri-media li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  grid-template-areas: 'ic o n s';
   align-items: center;
-  flex-wrap: wrap;
   gap: 4px 8px;
   font-size: 13px;
   color: var(--dk-muted);
 }
+.dk-ri-media li > svg {
+  grid-area: ic;
+}
+.dk-ri-media li > .dk-ri-sent {
+  grid-area: s;
+  justify-self: end;
+}
 .dk-ri-media-o {
+  grid-area: o;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: 650;
   color: var(--dk-text);
 }
 .dk-ri-media-n {
-  margin-left: auto;
+  grid-area: n;
   font-size: 12px;
   color: var(--dk-faint);
+}
+/* narrow: every outlet on two rows (name / count + lean), the same rhythm for each */
+@container ri (max-width: 520px) {
+  .dk-ri-media li {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'ic o o'
+      '. n s';
+  }
+  .dk-ri-media-n {
+    justify-self: start;
+  }
 }
 .dk-ri-quotes li {
   padding: 8px 10px 8px 12px;
@@ -1408,8 +1468,54 @@ html[data-dk-calm] .dk-ri-dots i,
     width: var(--dk-target);
     height: var(--dk-target);
   }
+  /* product overrides must not undercut the kit's 44 px touch target */
+  .dk-ri-hoax-cta,
+  .dk-ri-sugg .dk-btn,
+  .dk-ri-hoax-fwd .dk-btn,
+  .dk-ri-evid-link {
+    min-height: var(--dk-target);
+  }
+  .dk-ri-deep .dk-input input,
+  .dk-ri-ask .dk-input input {
+    min-height: var(--dk-target);
+  }
+  /* channel toggles (kit chips are 26 px): full touch height on phones */
+  .dk-ri-chan .dk-chip {
+    height: auto;
+    min-height: var(--dk-target);
+  }
+  /* keyword chip "remove": a 44 px hit area around the 18 px glyph, without growing the chip */
+  .dk-ri-deep .dk-chip-x::after {
+    content: '';
+    position: absolute;
+    inset: -13px -6px -13px -8px;
+  }
   .dk-ri-filter .dk-seg-btn,
   .dk-ri-filter button {
     min-height: var(--dk-target);
   }
+}
+
+/* "Mulai di sini": the kit hangs its label under the dot, i.e. over the trigger's own text (the dot sits on the
+   button's top-right corner). On this product it hangs above the dot instead (kitHandoff: a `placement` option). */
+/* hotspot label placement: kit Hotspot `placement` (index.tsx hotspot export) */
+
+/* phones: a toast must not cover an open drawer's footer (channel chips + Publish) — while one is open on this
+   product, the stack moves to the top (kitHandoff: the kit toast host should do this for every drawer) */
+@media (max-width: 767px) {
+  body:has(.dk-ri):has(.dk-drawer) .dk-toasts--bottom-left,
+  body:has(.dk-ri):has(.dk-drawer) .dk-toasts--bottom-right {
+    top: 12px;
+    bottom: auto;
+  }
+}
+
+/* drafting: the three sections stand ready as skeletons with their headings */
+.dk-ri-draft.is-skel .dk-ri-press,
+.dk-ri-draft.is-skel .dk-ri-caption {
+  display: grid;
+  gap: 12px;
+}
+.dk-ri-draft.is-skel .dk-ri-press .dk-skel {
+  background: rgba(31, 26, 58, 0.14);
 }

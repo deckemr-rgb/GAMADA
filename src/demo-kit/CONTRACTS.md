@@ -309,7 +309,7 @@ Full briefs, the chain list and the do-not-touch list: `docs/build/tahap2-plan.m
 ### world/
 - New tables: `messages` (CitizenMessage: phone messages, one row per broadcast with `to: citizenId[]`), `facilities`
   (pack places + SIMULATED shelters, `origin: 'pack' | 'simulasi'`), `harvests` (simulated estimate per kecamatan ×
-  crop), `supplySignals`, `gauges` (simulated water levels at real places). `WORLD.version` = 2 (saved worlds regenerate).
+  crop), `supplySignals`, `gauges` (simulated water levels at real places). `WORLD.version` = 3 since the tahap-2 integration (saved worlds regenerate).
 - New fields: `Mention.rumor`, `HoaxAlert.rumor`, `Alert.confirmedBy`, `Alert.broadcast.desaIds`, `ActionItem.remindedAt`,
   `Procurement.{bids, winnerId, scheduleDays, spec, recommendation}`, `Harvest.ndviBase`,
   `WorldMeta.personas { siti, raka, darmo }` and `WorldMeta.facts` (SeedFacts: bansos counts, tampered doc, hoax dam +
@@ -353,3 +353,59 @@ Full briefs, the chain list and the do-not-touch list: `docs/build/tahap2-plan.m
 - `prompts/<slug>.ts` may declare product-owned tools with `customTools: [productTool(slug, name, zodSchema, desc)]`
   plus `customMocks`; the proxy serves them with the shared ones (kind `'<slug>/<name>'`). The site validates such a
   kind with `registerStructuredSchema(kind, { safeParse })` from `demo-kit/ai/chat` (no zod in the demo bundle needed).
+
+## Tahap 2 integration (2026-11-17): kit changes from the builders' handoffs
+
+All seven Satu Daerah products are `DEMO_READY`. API and behaviour changes:
+
+### shell/
+- `Hotspot` prop `placement?: 'auto' | 'below' | 'above'` (also on `DemoShell`'s `hotspot` object). The label is
+  placed against the target: `'auto'` (default) hangs it under the target's bottom edge when the viewport has room,
+  else above the dot; it never covers the target and is clamped inside the viewport. The ring hides while the
+  target's corner is clipped by a scroller or covered (a sheet, a drawer), and the target is re-queried when it
+  remounts (persona switch). Products no longer override `.dk-hotspot-label` in CSS.
+- `Mission.hideSm?: boolean`: a mission whose feature is not offered on a phone-sized shell is not listed, counted
+  or required there (Meja Pimpinan "Buka mode rapat").
+- The phone guide sheet sits at `--dk-z-pop`, above any canvas content that makes its own stacking context.
+- TopBar: at ≥ 1280 px the role label may use up to 230 px before `fitBar` tightens it.
+
+### ui/
+- `Drawer` props `className?` (on the `.dk-ov` root) and `scrim?: 'dim' | 'none'` ('none' keeps the page undimmed
+  for side-by-side demos; the drawer stays modal, a click outside still closes it).
+- Modal / Drawer: `lenis.stop()` now runs after the opening paint (it forces a layout), not inside the interaction.
+- `Kpi` prop `wrapLabel?` (label wraps instead of ellipsizing). The value never shrinks; the spark slot shrinks and
+  clips (`flex: 0 1 120px`).
+- `Inbox`: one `minmax(0, 1fr)` track, so a long nowrap title ellipsizes instead of widening the list.
+- `Kanban`: a card moved with the keyboard is scrolled into view once its FLIP has settled.
+- `Segmented` prop `onIntent?(value)` (pointer enter / focus / touch start on an option: preload that tab's chunk).
+
+### media/ · docs/ · viz/ · map/
+- `VoiceRecorder` prop `sampleWps?` (sample playback speed, default 2.3 words/s). The hold button and the sample
+  button are distinct elements, so a mic-denied release never "clicks" the sample.
+- `.dk-wave` is its own paint/compositing layer (progress updates no longer repaint the page root).
+- `DocViewer`: the OCR number marks sit outside their box (left margin), never over the text being read.
+- `BarChart` (horizontal): labels longer than the label column are shortened with "…" (full name in the tooltip).
+- `NetworkGraph`: the painted edge ignores pointer events; the hit line is 26 px wide on coarse pointers.
+- `MapView` prop `minHeight?: number | string` (default 320 px from CSS; e.g. 0 for a mini map in a fixed box).
+
+### world/
+- `ticket.statusChanged` to the status a ticket already has (e.g. a rating after 'selesai') keeps the first
+  `closedAt` and adds no duplicate history row.
+- `letter.dispositioned` may carry `number`, `from`, `subject`: the inbox identity of the letter (its scanned sample),
+  patched onto the letter so the audit log and other products name the same letter.
+- Cluster audit text names all three receivers ("→ Meja Pimpinan, Siaga Wilayah & Radar Isu"); the booking text uses
+  HH.MM in Indonesian.
+- Seed: follow-up tasks come from a per-agency pool (`ACTION_TPL_BY_OPD`, no title repeated across agencies); today's
+  flood meeting lists the speakers of the sample recording as participants.
+- `world/satu-daerah`: `weekChangeOf(price, history)` (true 7-day change; history excludes today), `TOPIC_LABEL` /
+  `topicLabel(topic, lang)`; `briefingItems` uses them, never links two items to the same record, and adds an
+  Indeks Ekonomi item when `econ.updated` arrived today.
+
+### CSS prefixes
+- Siaga Wilayah's prefix is `dk-sg-` (it shared `dk-sw-` with Sapa Warga; both stylesheets stay loaded after an
+  in-app navigation, so prefixes must be unique per product).
+
+### tests
+- `tests/e2e/tahap2/*.spec.ts`: per-product missions + §11 pass checks (1440 and 390), UI-driven cross-product chains,
+  a no-dead-controls crawler, region + language + role, and Live mode with a mocked SSE proxy (stream + 10 s
+  first-token fallback). Helpers in `tests/e2e/tahap2/helpers.ts` (`openDemo` pauses the world clock).

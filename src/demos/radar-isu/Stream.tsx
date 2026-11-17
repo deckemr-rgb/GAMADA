@@ -3,7 +3,7 @@
  * first, sentiment badge, topic, reach, hoax / suspicious-narrative tags. New rows slide in with the kit highlight;
  * one polite live region announces the newest mention. Each row can be sent to the AI analyst ("Nilai dengan AI").
  */
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { Icon, IconButton, Segmented, EmptyState, flashNewRow, type IconName } from '../../demo-kit/ui'
 import type { Mention } from '../../demo-kit/world'
 import { clockWib, compact } from '../../demo-kit/viz/format'
@@ -17,7 +17,7 @@ const KIND_ICON: Record<Mention['kind'], IconName> = {
   forum: 'users',
 }
 
-const Row = memo(function Row({ m, t, lang, onAssess }: { m: Mention; t: Strings; lang: 'id' | 'en'; onAssess: (m: Mention) => void }) {
+const Row = memo(function Row({ m, t, lang, onAssess, tab }: { m: Mention; t: Strings; lang: 'id' | 'en'; onAssess: (m: Mention) => void; tab: boolean }) {
   const kind = m.kind === 'berita' ? t.kindBerita : m.kind === 'sosmed' ? t.kindSosmed : t.kindForum
   // the rumour's own posts are flagged; the positive posts that answer it (same hoaxId, no rumour key) are not
   const flagged = !!m.rumor
@@ -25,7 +25,7 @@ const Row = memo(function Row({ m, t, lang, onAssess }: { m: Mention; t: Strings
   return (
     <li className={`dk-ri-m is-${m.sentiment}${flagged ? ' is-flag' : ''}`} data-id={m.id}>
       <div className="dk-ri-m-top">
-        <span className="dk-ri-m-kind" title={kind} aria-label={kind}>
+        <span className="dk-ri-m-kind" title={kind} role="img" aria-label={kind}>
           <Icon name={KIND_ICON[m.kind]} size={14} />
         </span>
         <span className="dk-ri-m-outlet">{m.outlet}</span>
@@ -42,7 +42,7 @@ const Row = memo(function Row({ m, t, lang, onAssess }: { m: Mention; t: Strings
         <span className="dk-ri-m-reach dk-num">{fill(t.reach, { n: compact(m.reach, lang) })}</span>
         {flagged && <span className="dk-ri-flag">{m.hoaxId ? t.hoaxTag : t.rumorTag}</span>}
         {related && <span className="dk-ri-flag is-related">{t.clarTag}</span>}
-        <IconButton icon="spark" size="sm" variant="quiet" label={`${t.assess}: ${m.outlet}`} className="dk-ri-m-ai" onClick={() => onAssess(m)} />
+        <IconButton icon="spark" size="sm" variant="quiet" label={`${t.assess}: ${m.outlet}`} className="dk-ri-m-ai" tabIndex={tab ? 0 : -1} onClick={() => onAssess(m)} />
       </div>
     </li>
   )
@@ -59,6 +59,30 @@ export const Stream = memo(function Stream({ items, initialFilter, onAssess }: {
   const ul = useRef<HTMLUListElement>(null)
   const seen = useRef<Set<string> | null>(null)
   const [said, setSaid] = useState('')
+  // a language switch must not leave the previous language in the live region
+  useEffect(() => setSaid(''), [lang])
+
+  /* one tab stop for the whole list (roving tabindex): ↑/↓/Home/End move between the rows' "assess" buttons */
+  const [active, setActive] = useState<string | null>(null)
+  const activeId = active && list.some((m) => m.id === active) ? active : (list[0]?.id ?? null)
+  const onKey = useCallback((e: KeyboardEvent<HTMLUListElement>) => {
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+    if (!keys.includes(e.key)) return
+    const btns = [...(ul.current?.querySelectorAll<HTMLButtonElement>('.dk-ri-m-ai') ?? [])]
+    const i = btns.indexOf(document.activeElement as HTMLButtonElement)
+    if (i < 0 || !btns.length) return
+    e.preventDefault()
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? btns.length - 1 : Math.max(0, Math.min(btns.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+    const next = btns[j]
+    if (!next) return
+    const id = next.closest<HTMLElement>('[data-id]')?.dataset.id
+    if (id) setActive(id)
+    next.focus()
+  }, [])
+  const onFocusIn = useCallback((e: FocusEvent<HTMLUListElement>) => {
+    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id
+    if (id) setActive(id)
+  }, [])
 
   // slide + highlight rows that were not there before (not on first paint, not when the filter changes)
   const lastFilter = useRef(filter)
@@ -115,11 +139,16 @@ export const Stream = memo(function Stream({ items, initialFilter, onAssess }: {
         {said}
       </p>
       {list.length ? (
-        <ul ref={ul} className="dk-ri-mlist">
-          {list.map((m) => (
-            <Row key={m.id} m={m} t={t} lang={lang} onAssess={onAssess} />
-          ))}
-        </ul>
+        <>
+          <p id="dk-ri-stream-keys" className="dk-sr">
+            {t.streamKeys}
+          </p>
+          <ul ref={ul} className="dk-ri-mlist" aria-describedby="dk-ri-stream-keys" onKeyDown={onKey} onFocus={onFocusIn}>
+            {list.map((m) => (
+              <Row key={m.id} m={m} t={t} lang={lang} onAssess={onAssess} tab={m.id === activeId} />
+            ))}
+          </ul>
+        </>
       ) : (
         <EmptyState compact art="inbox" title={t.streamEmpty} action={{ label: t.streamEmptyCta, onClick: () => onFilter('all') }} />
       )}

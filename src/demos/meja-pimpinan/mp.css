@@ -76,6 +76,7 @@
 }
 .dk-mp-right:has(.dk-mp-ask.is-active) > .dk-mp-cell--brief {
   flex: 0.75 1 0;
+  min-height: min(252px, 50%);
 }
 .dk-mp-right:has(.dk-mp-ask.is-active) > .dk-mp-cell--ask {
   flex: 1.8 1 0;
@@ -147,6 +148,7 @@
 
 /* ------------------------------------------------------------------ hoax banner */
 .dk-mp-hoax {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -194,6 +196,21 @@
   align-items: center;
   gap: 6px;
 }
+.dk-mp-hoax-x {
+  display: inline-flex;
+  flex: none;
+}
+/* on the wall screen the banner lies over the top of the map instead of pushing the 12-column grid down: text on
+   the full width (the detail and its "data simulasi" are not cut), actions on a row below, dismiss in the corner */
+.dk-mp-hoax.is-overlay {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 10px;
+  padding: 8px 48px 8px 10px;
+  border-color: color-mix(in srgb, var(--dk-danger) 70%, transparent);
+  background: color-mix(in srgb, var(--dk-danger) 16%, var(--dk-s1));
+  box-shadow: var(--dk-e2);
+}
 
 /* ------------------------------------------------------------------ KPIs */
 .dk-mp-kpis {
@@ -201,6 +218,26 @@
 }
 .dk-mp-kpis .dk-kpi {
   padding: 10px 14px;
+  container-type: inline-size;
+}
+.dk-mp-kpis .dk-kpi-val {
+  flex: none;
+}
+.dk-mp-kpis .dk-kpi-spark {
+  flex: 0 1 120px;
+  min-width: 0;
+  overflow: hidden;
+}
+/* the sparkline sizes itself to its box (ResizeObserver): let the box be whatever room is left beside the number */
+.dk-mp-kpis .dk-kpi-spark > .dk-viz-micro {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+}
+@container (max-width: 160px) {
+  .dk-mp-kpis .dk-kpi-spark {
+    display: none;
+  }
 }
 .dk-mp-kpis .dk-kpi-val {
   font-size: 22px;
@@ -291,16 +328,16 @@
 .dk-mp-maptools {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding-bottom: 2px;
-  scrollbar-width: none;
 }
 .dk-mp-maptools .dk-chip {
   flex: none;
 }
 .dk-mp-mapbox {
   position: relative;
+  isolation: isolate;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -318,21 +355,31 @@
   height: 60vh;
   min-height: 320px;
 }
-.dk-mp-insight {
+.dk-mp-mapover {
   position: absolute;
   top: 8px;
+  right: 56px;
   left: 8px;
   z-index: 5;
-  max-width: min(300px, calc(100% - 64px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.dk-mp-mapover > * {
+  pointer-events: auto;
+}
+.dk-mp-mapover > .dk-mp-hoax {
+  align-self: stretch;
+}
+.dk-mp-insight {
+  max-width: min(300px, 100%);
 }
 .dk-mp-insight .dk-insight {
   padding: 8px 10px;
 }
 .dk-mp-tipchip {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1320,7 +1367,7 @@
 }
 .dk-mp-mm-kpis li {
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 10px;
   padding: 22px 26px;
   border: 1px solid var(--dk-line);
@@ -1373,10 +1420,6 @@
   color: var(--dk-faint);
   font: 600 16px/1 var(--dk-font);
   font-style: normal;
-}
-.dk-mp-mm-chart {
-  max-width: 1100px;
-  font-size: 15px;
 }
 .dk-mp-mm-opd li {
   display: grid;
@@ -1547,13 +1590,30 @@
 }
 .dk-mp.is-phone .dk-mp-hoax {
   flex-wrap: wrap;
+  align-items: flex-start;
+  padding-right: 48px;
+}
+.dk-mp.is-phone .dk-mp-hoax-b {
+  flex-basis: calc(100% - 44px);
 }
 .dk-mp.is-phone .dk-mp-hoax-d {
+  display: block;
+  overflow: visible;
   white-space: normal;
 }
 .dk-mp.is-phone .dk-mp-hoax-a {
   flex-wrap: wrap;
   width: 100%;
+  margin-right: -38px;
+}
+.dk-mp.is-phone .dk-mp-hoax-x {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.dk-mp.is-phone .dk-mp-hoax-x .dk-ibtn {
+  width: var(--dk-target, 44px);
+  height: var(--dk-target, 44px);
 }
 .dk-mp.is-phone .dk-mp-kpis .dk-kpi {
   padding: 10px 12px;
@@ -1576,24 +1636,46 @@
 .dk-mp.is-phone .dk-mp-log {
   max-height: none;
 }
-.dk-mp.is-phone .dk-mp-lb-row {
-  grid-template-columns: 22px minmax(0, 1fr) 40px 28px 40px 28px 28px;
+.dk-mp.is-phone .dk-mp-lb-row,
+.dk-mp.is-phone .dk-mp-lb-keys {
+  grid-template-columns: 22px minmax(0, 1fr) 40px 30px 40px 32px 32px;
+}
+.dk-mp.is-phone .dk-mp-lb-keys {
+  padding: 6px 18px 2px 14px;
+  font-size: 9px;
+  letter-spacing: 0.02em;
 }
 .dk-mp.is-phone .dk-mp-insight {
-  right: 10px;
   max-width: none;
+}
+.dk-mp.is-phone .dk-mp-maptools {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin-block: -9px;
+  padding-block: 9px;
+  scrollbar-width: none;
+}
+.dk-mp.is-phone .dk-mp-maptools .dk-chip {
+  min-height: var(--dk-target, 44px);
+}
+.dk-mp.is-phone .dk-mp-opdpick .dk-select,
+.dk-mp.is-phone .dk-mp-opdpick select {
+  min-height: var(--dk-target, 44px);
 }
 .dk-mp.is-phone .dk-mp-insight .dk-insight {
   font-size: 12px;
 }
 @media (max-width: 400px) {
-  .dk-mp.is-phone .dk-mp-lb-bar,
-  .dk-mp.is-phone .dk-mp-lb-keys span:nth-child(2) {
+  /* no score bar: 6 columns, and the "score" key moves onto the score column (it spans bar + score on wider rows) */
+  .dk-mp.is-phone .dk-mp-lb-bar {
     display: none;
   }
   .dk-mp.is-phone .dk-mp-lb-row,
   .dk-mp.is-phone .dk-mp-lb-keys {
-    grid-template-columns: 22px minmax(0, 1fr) 28px 40px 28px 28px;
+    grid-template-columns: 22px minmax(0, 1fr) 30px 40px 32px 32px;
+  }
+  .dk-mp.is-phone .dk-mp-lb-keys span:nth-child(2) {
+    grid-column: 3 / 4;
   }
 }
 
@@ -1617,4 +1699,116 @@ html[data-dk-calm] .dk-mp-mm-bar span {
 }
 html[data-dk-calm] .dk-mp-asm-ok {
   opacity: 1;
+}
+
+/* meeting mode: complaints per district as large-type bars (fills the panel; thin bar = the week before) */
+.dk-mp-mm-chart {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+.dk-mp-mm-unit {
+  margin: 0;
+  color: var(--dk-faint);
+  font: 600 clamp(14px, 1.1vw, 18px) / 1.3 var(--dk-font);
+}
+.dk-mp-mm-bars {
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-mp-mm-bars li {
+  display: grid;
+  grid-template-columns: minmax(140px, 16%) minmax(0, 1fr) minmax(190px, 18%);
+  align-items: center;
+  gap: 20px;
+}
+.dk-mp-mm-bars p {
+  margin: 0;
+  overflow: hidden;
+  font: 600 clamp(18px, 1.6vw, 26px) / 1.2 var(--dk-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-mp-mm-hbar {
+  position: relative;
+  display: block;
+  height: clamp(18px, 2.4vh, 30px);
+}
+.dk-mp-mm-hbar span,
+.dk-mp-mm-hbar i {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-radius: 4px;
+  transform-origin: 0 50%;
+}
+.dk-mp-mm-hbar span {
+  top: 0;
+  bottom: 0;
+  background: var(--dk-accent);
+}
+.dk-mp-mm-hbar i {
+  bottom: -7px;
+  height: 4px;
+  background: var(--dk-muted);
+  opacity: 0.7;
+}
+.dk-mp-mm-bars strong {
+  font: 400 clamp(26px, 2.4vw, 40px) / 1 var(--dk-font-display);
+  text-align: right;
+}
+.dk-mp-mm-bars small {
+  display: block;
+  margin-top: 4px;
+  color: var(--dk-faint);
+  font: 600 clamp(13px, 1vw, 16px) / 1.2 var(--dk-font);
+}
+.dk-mp-mm-opd li.dk-mp-mm-gap {
+  min-height: 0;
+  padding-block: 0;
+  border: 0;
+  background: none;
+  color: var(--dk-faint);
+}
+.dk-mp-mm-opd li.dk-mp-mm-gap p {
+  color: var(--dk-faint);
+  font-size: clamp(14px, 1.1vw, 18px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dk-mp-hoax.is-overlay .dk-mp-hoax-b {
+  flex: 1 1 calc(100% - 50px);
+}
+.dk-mp-hoax.is-overlay .dk-mp-hoax-d {
+  display: block;
+  overflow: visible;
+}
+.dk-mp-hoax.is-overlay .dk-mp-hoax-a {
+  justify-content: flex-end;
+  width: 100%;
+  margin-right: -38px;
+}
+.dk-mp-hoax.is-overlay .dk-mp-hoax-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+/* desktop start hint: the anchor box starts 14 px above the button's bottom edge (the button hangs up out of it), so
+   the kit hotspot label, placed 16 px under the anchor's top, lands just under the button in the empty panel */
+.dk-mp-cta--panel {
+  display: grid;
+  width: max-content;
+  height: 14px;
+  margin: 26px 0 30px;
+}
+.dk-mp-cta--panel > .dk-btn {
+  height: 40px;
+  margin-top: -26px;
 }

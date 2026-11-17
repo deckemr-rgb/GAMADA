@@ -8,7 +8,7 @@ import { useI18n } from '../../lib/i18n'
 import { useAiChat, type ChatMessage } from '../../demo-kit/ai/chat'
 import { Button, Drawer, Icon, Textarea } from '../../demo-kit/ui'
 import { rows, useSession, world } from '../../demo-kit/world'
-import { canSend, swRole } from './data'
+import { canSend, draftLevel, swRole } from './data'
 import { geoContext } from './scenario'
 import { fill, type Bi } from './strings'
 import { ui } from './ui'
@@ -59,25 +59,25 @@ export default function AskAi() {
   const chips = chat.followUps.length ? chat.followUps : chat.messages.length ? [] : starters(L)
   return (
     <Drawer open onClose={() => ui.set({ aiOpen: false })} title={L('title')} eyebrow={L('eyebrow', { m: session.aiMode === 'live' ? L('live') : L('sim') })} width={440}>
-      <div className="dk-sw-ai">
-        <div className="dk-sw-ai-log" aria-live="polite">
-          <p className="dk-sw-ai-msg is-ai">{L('hello')}</p>
+      <div className="dk-sg-ai">
+        <div className="dk-sg-ai-log" aria-live="polite">
+          <p className="dk-sg-ai-msg is-ai">{L('hello')}</p>
           {chat.messages.map((m) => (
             <Msg key={m.id} m={m} L={L} canSend={canSend(role)} />
           ))}
           <div ref={endRef} />
         </div>
         {chips.length > 0 && (
-          <div className="dk-sw-chips">
+          <div className="dk-sg-chips">
             {chips.map((c) => (
-              <button key={c} type="button" className="dk-sw-qchip" onClick={() => ask(c)}>
+              <button key={c} type="button" className="dk-sg-qchip" onClick={() => ask(c)}>
                 {c}
               </button>
             ))}
           </div>
         )}
         <form
-          className="dk-sw-ai-form"
+          className="dk-sg-ai-form"
           onSubmit={(e) => {
             e.preventDefault()
             ask(text)
@@ -96,6 +96,7 @@ export default function AskAi() {
               }
             }}
             data-sw="ai-input"
+            data-autofocus=""
           />
           {chat.busy ? (
             <Button type="button" variant="secondary" icon="pause" onClick={chat.stop}>
@@ -121,12 +122,12 @@ function starters(L: (k: keyof typeof T, v?: Record<string, string | number>) =>
 }
 
 function Msg({ m, L, canSend: send }: { m: ChatMessage; L: (k: keyof typeof T) => string; canSend: boolean }) {
-  if (m.role === 'user') return <p className="dk-sw-ai-msg is-me">{m.content}</p>
+  if (m.role === 'user') return <p className="dk-sg-ai-msg is-me">{m.content}</p>
   const alert = m.structured?.find((x) => x.kind === 'alert')?.data as { level?: string; areas?: string[]; message?: string; channels?: string[] } | undefined
   return (
-    <div className="dk-sw-ai-msg is-ai" aria-busy={m.status === 'thinking' || m.status === 'streaming'}>
+    <div className="dk-sg-ai-msg is-ai" aria-busy={m.status === 'thinking' || m.status === 'streaming'}>
       {m.status === 'thinking' ? (
-        <span className="dk-sw-dots" aria-label={L('thinking')}>
+        <span className="dk-sg-dots" aria-label={L('thinking')}>
           <i />
           <i />
           <i />
@@ -135,15 +136,15 @@ function Msg({ m, L, canSend: send }: { m: ChatMessage; L: (k: keyof typeof T) =
         <p>{m.content}</p>
       )}
       {m.translation && (
-        <p className="dk-sw-fine">
+        <p className="dk-sg-fine">
           {L('translation')}: {m.translation}
         </p>
       )}
       {!!m.toolCalls?.length && (
-        <p className="dk-sw-steps">
-          <span className="dk-sw-sr">{L('steps')}: </span>
+        <p className="dk-sg-steps">
+          <span className="dk-sg-sr">{L('steps')}: </span>
           {m.toolCalls.map((c) => (
-            <span key={c.id} className="dk-sw-step">
+            <span key={c.id} className="dk-sg-step">
               <Icon name="zap" size={12} />
               {c.name}
               {c.ms ? ` · ${c.ms} ms` : ''}
@@ -152,9 +153,9 @@ function Msg({ m, L, canSend: send }: { m: ChatMessage; L: (k: keyof typeof T) =
         </p>
       )}
       {alert?.message && (
-        <div className="dk-sw-draft">
-          <p className="dk-sw-fslabel">
-            {L('draft')} · {(alert.level ?? '').toUpperCase()} · {(alert.areas ?? []).join(', ')}
+        <div className="dk-sg-draft">
+          <p className="dk-sg-fslabel">
+            {L('draft')} · LEVEL {draftLevel(alert)} · {(alert.areas ?? []).join(', ')}
           </p>
           <p>{alert.message}</p>
           {send && (
@@ -164,7 +165,7 @@ function Msg({ m, L, canSend: send }: { m: ChatMessage; L: (k: keyof typeof T) =
               icon="send"
               onClick={() =>
                 ui.set({
-                  draft: { level: alert.level === 'waspada' ? 1 : alert.level === 'siaga' ? 2 : 3, message: alert.message ?? '', channels: alert.channels ?? ['wa', 'sms'], areas: alert.areas ?? [] },
+                  draft: { level: draftLevel(alert), message: alert.message ?? '', channels: alert.channels ?? ['wa', 'sms'], areas: alert.areas ?? [] },
                   aiOpen: false,
                   broadcastOpen: true,
                 })
@@ -175,7 +176,7 @@ function Msg({ m, L, canSend: send }: { m: ChatMessage; L: (k: keyof typeof T) =
           )}
         </div>
       )}
-      {m.fellBack && <p className="dk-sw-fine">{L('fell')}</p>}
+      {m.fellBack && <p className="dk-sg-fine">{L('fell')}</p>}
     </div>
   )
 }

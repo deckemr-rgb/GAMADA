@@ -176,8 +176,11 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
       }
     }
     if (pendingFocus.current) {
-      el.querySelector<HTMLElement>(`[data-flip-id="${CSS.escape(pendingFocus.current)}"]`)?.focus({ preventScroll: true })
+      const card = el.querySelector<HTMLElement>(`[data-flip-id="${CSS.escape(pendingFocus.current)}"]`)
+      card?.focus({ preventScroll: true })
       pendingFocus.current = null
+      // once the FLIP has settled, bring the moved card into view (it may now sit in an off-screen column)
+      if (card) window.setTimeout(() => card.isConnected && card.scrollIntoView({ block: 'nearest', inline: 'nearest' }), DEMO.screen * 1000 + 40)
     }
     return () => {
       for (const k of kills) k()

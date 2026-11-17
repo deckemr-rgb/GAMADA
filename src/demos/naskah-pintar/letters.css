@@ -66,6 +66,15 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
+}
+.dk-np-lbox .dk-inbox-meta .dk-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 18px;
 }
 .dk-np-ldetail {
   display: grid;

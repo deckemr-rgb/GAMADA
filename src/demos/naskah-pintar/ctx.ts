@@ -5,7 +5,7 @@
 import type { ActionItem, Instruction, Letter, Meeting, Minutes, WorldState } from '../../demo-kit/world'
 import { DAY_MIN, hhmm } from '../../demo-kit/world/util'
 import type { CtxItem, NaskahCtx } from './ai'
-import { dueText, opdName } from './model'
+import { dueText, opdName, picLabel } from './model'
 
 type Lang = 'id' | 'en'
 
@@ -14,7 +14,7 @@ export function ctxItem(s: WorldState, a: ActionItem, now: Minutes, lang: Lang):
     id: a.id,
     title: a.title,
     opd: opdName(s, a.opdId, lang),
-    pic: a.pic,
+    pic: picLabel(a.pic, lang, a.opdId),
     due: dueText(a.dueAt, lang, s.day),
     late: a.status !== 'selesai' && a.dueAt < now,
     status: a.status,

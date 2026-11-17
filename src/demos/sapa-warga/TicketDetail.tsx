@@ -8,7 +8,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { Button, Drawer, Icon, InsightCallout, Select, SlaLabel, Stepper, StatusChip, Textarea, Timeline, type TimelineItem } from '../../demo-kit/ui'
-import { CATEGORY_LABEL, emit, hhmm, onEvent, useClock, useWorld, world, type Bi, type ComplaintCategory, type TicketStatus, type WorldState } from '../../demo-kit/world'
+import { CATEGORY_LABEL, DAY_MIN, emit, hhmm, onEvent, useClock, useWorld, world, worldDate, type Bi, type ComplaintCategory, type TicketStatus, type WorldState } from '../../demo-kit/world'
 import { duplicateCandidates } from '../../demo-kit/world/satu-daerah'
 import { Photo } from './photos'
 import { SLUG, SW, desaName, kecName, opdShort, type PhotoId } from './model'
@@ -20,6 +20,14 @@ const Speak = lazy(() => import('./Speak'))
 const PHOTO_OF: Partial<Record<ComplaintCategory, PhotoId>> = { banjir: 'genangan', 'jalan-rusak': 'lubang', pju: 'lampu' }
 const MERGE_RE = /^Digabung ke (SW-\d{4}-\d{3,5})/
 const AFTER_NOTE = 'Foto sesudah terlampir'
+
+/** "08.54" today, "22 Okt · 08.54" for an older ticket */
+function stamp(day: string, at: number, now: number, lang: 'id' | 'en'): string {
+  const time = hhmm(at).replace(':', '.')
+  if (Math.floor(at / DAY_MIN) === Math.floor(now / DAY_MIN)) return time
+  const date = worldDate(day, at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })
+  return `${date} · ${time}`
+}
 
 function useTicket(ticketId: string) {
   const ticket = useWorld((s) => s.tickets.byId[ticketId] ?? null)
@@ -64,7 +72,7 @@ function draftReply(s: WorldState, ticketId: string, lang: 'id' | 'en'): Bi {
   }
 }
 
-export default function TicketDetail({ ticketId, onClose, readOnly, persona }: { ticketId: string; onClose: () => void; readOnly: boolean; persona: boolean }) {
+export default function TicketDetail({ ticketId, open, onClose, readOnly, persona }: { ticketId: string; open: boolean; onClose: () => void; readOnly: boolean; persona: boolean }) {
   const { lang } = useI18n()
   const t = useT()
   const { minutes: now } = useClock()
@@ -73,6 +81,7 @@ export default function TicketDetail({ ticketId, onClose, readOnly, persona }: {
   const complaints = useWorld((s) => s.complaints)
   const tickets = useWorld((s) => s.tickets)
   const regionId = useWorld((s) => s.regionId)
+  const day = useWorld((s) => s.day)
   const place = useWorld((s) => (complaint ? `${desaName(s, complaint.kecamatanId, complaint.desaId)}, Kec. ${kecName(s, complaint.kecamatanId)}` : ''))
   const [opd, setOpd] = useState<string>('')
   const [after, setAfter] = useState(false)
@@ -155,7 +164,7 @@ export default function TicketDetail({ ticketId, onClose, readOnly, persona }: {
     <div className="dk-sw-dfoot">
       {sync && (
         <p className="dk-sw-sync" role="status">
-          <Icon name="checkCircle" size={14} /> {fill(t.phoneSynced, { ms: (sync.ms / 1000).toFixed(2).replace('.', lang === 'id' ? ',' : '.') })}
+          <Icon name="checkCircle" size={14} /> {fill(t.phoneSynced, { ms: sync.ms < 100 ? t.syncFast : (sync.ms / 1000).toFixed(1).replace('.', lang === 'id' ? ',' : '.') })}
         </p>
       )}
       {st === 'baru' && (
@@ -205,12 +214,12 @@ export default function TicketDetail({ ticketId, onClose, readOnly, persona }: {
 
   return (
     <Drawer
-      open
+      open={open}
       onClose={onClose}
       width={540}
       eyebrow={
         <>
-          <span className="dk-num">{complaint.code}</span> · {CHANNEL_LABEL[complaint.channel][lang]} · {hhmm(complaint.at).replace(':', '.')}
+          <span className="dk-num">{complaint.code}</span> · {CHANNEL_LABEL[complaint.channel][lang]} · {stamp(day, complaint.at, now, lang)}
         </>
       }
       title={`${cat[lang]} · ${place}`}
@@ -220,7 +229,7 @@ export default function TicketDetail({ ticketId, onClose, readOnly, persona }: {
         <Stepper steps={STATUS_ORDER.map((x) => STATUS_LABEL[x][lang])} current={STATUS_ORDER.indexOf(st)} label={t.status} />
         <div className="dk-sw-drow">
           <StatusChip label={STATUS_LABEL[st][lang]} tone={st === 'baru' ? 'new' : st === 'selesai' ? 'done' : 'neutral'} />
-          <SlaLabel minutesLeft={ticket.slaDueAt - now} done={st === 'selesai'} />
+          {st !== 'selesai' && <SlaLabel minutesLeft={ticket.slaDueAt - now} done={false} />}
           <span className="dk-sw-tag">{opdLabel}</span>
           <span className="dk-sw-tag">
             {t.urgency}: {URGENCY_LABEL[complaint.urgency][lang]}

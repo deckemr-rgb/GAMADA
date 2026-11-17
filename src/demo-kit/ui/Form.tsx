@@ -109,10 +109,12 @@ export interface SegmentedProps<V extends string> {
   label: string
   size?: 'sm' | 'md'
   className?: string
+  /** intent signal (pointer over, focus, touch start) for an option: e.g. preload that tab's lazy chunk */
+  onIntent?: (v: V) => void
 }
 
 /** Radio-group semantics: one tab stop, arrows move + select (WAI-ARIA radio group). */
-export function Segmented<V extends string>({ options, value, onChange, label, size = 'md', className }: SegmentedProps<V>) {
+export function Segmented<V extends string>({ options, value, onChange, label, size = 'md', className, onIntent }: SegmentedProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = options.findIndex((o) => o.value === value)
@@ -142,6 +144,9 @@ export function Segmented<V extends string>({ options, value, onChange, label, s
             role="radio"
             aria-checked={on}
             tabIndex={on ? 0 : -1}
+            onPointerEnter={onIntent ? () => onIntent(o.value) : undefined}
+            onFocus={onIntent ? () => onIntent(o.value) : undefined}
+            onTouchStart={onIntent ? () => onIntent(o.value) : undefined}
             aria-label={o.iconOnly ? o.label : undefined}
             title={o.iconOnly ? o.label : undefined}
             onClick={() => onChange(o.value)}

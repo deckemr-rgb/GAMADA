@@ -4,7 +4,7 @@
  * media leaning, key quotes, survey questions; XLSX + JSON export (lazy). Simulated data, labelled as such.
  * Opened directly by /tools/scrappulse → /demo/radar-isu?tab=analisis.
  */
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Button, Chip, Icon, Input, InsightCallout, Kpi, KpiStrip, Segmented, motionMode, dropChips } from '../../demo-kit/ui'
 import { LineChart } from '../../demo-kit/viz'
 import { compact, dateWib } from '../../demo-kit/viz/format'
@@ -202,7 +202,10 @@ export default function Deep() {
     )
     const step = (i: number) => {
       timer.current = window.setTimeout(() => {
-        setRun((cur) => (cur && cur.result === r ? { ...cur, stage: i } : cur))
+        // the last stage reveals every result card at once: render it as a transition (interruptible, INP)
+        const next = () => setRun((cur) => (cur && cur.result === r ? { ...cur, stage: i } : cur))
+        if (i === 9) startTransition(next)
+        else next()
         if (i < 9) step(i + 1)
         else {
           setDeepResult(r)

@@ -17,7 +17,9 @@ type RL = 'id' | 'en' | 'jv'
 /* ------------------------------------------------------------------ helpers */
 
 function w(ctx: Ctx): SwContext {
-  const x = (ctx.world ?? {}) as Partial<SwContext>
+  // a Live request carries the compact context; its non-enumerable `full` is what this Simulasi fallback reads
+  const raw = (ctx.world ?? {}) as Partial<SwContext> & { full?: SwContext }
+  const x: Partial<SwContext> = raw.full ?? raw
   return {
     region: x.region ?? 'Kabupaten',
     now: x.now ?? '08:00',
@@ -128,11 +130,13 @@ const JV_CAT: Partial<Record<ComplaintCategory, string>> = {
   banjir: 'banjir', 'jalan-rusak': 'dalan rusak', sampah: 'uwuh', pju: 'lampu dalan mati', 'air-bersih': 'toya resik', 'pohon-tumbang': 'wit ambruk', pungli: 'pungli', kesehatan: 'layanan kesehatan', sekolah: 'sekolah rusak',
 }
 
-function report(ctx: Ctx, cat: ComplaintCategory): SimResponse {
+function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
   const x = w(ctx)
   const rl = rlOf(ctx)
   const l: 'id' | 'en' = rl === 'jv' ? ctx.lang : rl
   const jc = x.justCreated
+  // a ticket the phone already created (photo / voice note) keeps its own category, whatever the caption matched
+  const cat: ComplaintCategory = jc?.category ?? matched
   const opd = jc?.opd ?? x.categoryOpd[cat] ?? 'OPD'
   const code = jc?.code ?? x.nextCode
   const hours = jc?.slaHours ?? SW.slaDays[cat] * 24
@@ -270,8 +274,8 @@ const intents: Intent<SwContext>[] = [
       const ctx = c as Ctx
       const x = w(ctx)
       const ans: Bi = {
-        id: `MPP ${x.region} melayani Senin–Jumat pukul 08.00–15.00. Hari ini sudah ada ${x.today.mppBookings} antrean terdaftar; sekitar ${x.today.queueAhead} orang dalam satu jam ke depan. Ambil antrean dari sini supaya tidak menunggu lama.`,
-        en: `The ${x.region} service mall is open Monday to Friday, 08.00–15.00. ${x.today.mppBookings} queue slots are booked today; about ${x.today.queueAhead} people in the next hour. Book a slot here to avoid waiting.`,
+        id: `Di demo ini MPP ${x.region} melayani Senin–Jumat pukul 08.00–15.00 (jam layanan contoh, simulasi; pastikan jadwal resmi sebelum datang). Hari ini sudah ada ${x.today.mppBookings} antrean terdaftar; ${x.today.queueAhead} orang terjadwal dalam satu jam ke depan. Ambil antrean dari sini supaya tidak menunggu lama.`,
+        en: `In this demo the ${x.region} service mall is open Monday to Friday, 08.00–15.00 (sample hours, simulated; check the official schedule before you go). ${x.today.mppBookings} queue slots are booked today; ${x.today.queueAhead} people are scheduled in the next hour. Book a slot here to avoid waiting.`,
       }
       return { ...say(ctx, ans, `MPP ${x.region} bikak Senin dumugi Jumat, jam 08.00 dumugi 15.00. Dinten menika sampun wonten ${x.today.mppBookings} antrean.`), followUps: chips(ctx, [CHIP.queue, CHIP.ktp]) }
     },
@@ -316,6 +320,7 @@ const intents: Intent<SwContext>[] = [
   rep('lapor-banjir', 'banjir', [
     'Mau lapor banjir di desa saya', 'Jalan depan rumah kebanjiran setinggi lutut', 'Air sungai meluap masuk ke rumah warga', 'Tanggul sungai bocor, air merembes',
     'I want to report a flood in my village', 'Our street is flooded after the heavy rain', 'The river embankment is leaking',
+    'The road is knee-deep in water', 'The yard is waterlogged, water keeps rising', 'Flooded road, motorbikes cannot pass',
     'Banyune munggah tekan omah, dalane kebanjiran', 'Tanggule kali bocor, banyune mrembes terus', 'Kampung kula kebanjiran wiwit wingi', 'Toya Bengawan sampun minggah',
   ]),
   rep('lapor-jalan-rusak', 'jalan-rusak', [
@@ -414,7 +419,7 @@ const intents: Intent<SwContext>[] = [
       const sv = x.services.find((s) => s.id === (key === 'raka' ? 'nib-oss' : 'ktp-el')) ?? x.services[0]
       const l: 'id' | 'en' = rlOf(ctx) === 'jv' ? ctx.lang : (rlOf(ctx) as 'id' | 'en')
       return {
-        ...say(ctx, { id: `Baik. Pilih jam datang di bawah untuk ${sv?.name.id ?? 'layanan'} di MPP ${x.region}. Slot 30 menit; sekitar ${x.today.queueAhead} orang mengantre dalam satu jam ke depan.`, en: `Sure. Pick a time below for ${sv?.name.en ?? 'the service'} at the ${x.region} service mall. 30-minute slots; about ${x.today.queueAhead} people are queued in the next hour.` }, 'Inggih. Mangga pilih jam rawuh ing ngandhap menika.'),
+        ...say(ctx, { id: `Baik. Pilih jam datang di bawah untuk ${sv?.name.id ?? 'layanan'} di MPP ${x.region}. Slot 30 menit; ${x.today.queueAhead} orang terjadwal dalam satu jam ke depan.`, en: `Sure. Pick a time below for ${sv?.name.en ?? 'the service'} at the ${x.region} service mall. 30-minute slots; ${x.today.queueAhead} people are scheduled in the next hour.` }, 'Inggih. Mangga pilih jam rawuh ing ngandhap menika.'),
         structured: { kind: 'sapa-warga/slot-pick', data: { serviceId: sv?.id ?? 'ktp-el', service: sv?.name[l] ?? '' } },
         toolCalls: [{ name: 'book_queue', input: { serviceId: sv?.id ?? '' }, output: { slots: SW.slotCount }, ms: 150 }],
       }

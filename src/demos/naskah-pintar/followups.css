@@ -19,10 +19,10 @@
 }
 .dk-np-kanban {
   grid-auto-columns: minmax(250px, 1fr);
-  max-height: clamp(380px, 66vh, 760px);
 }
+/* lanes scroll inside, so the board's own horizontal scrollbar stays above the fold */
 .dk-np-kanban .dk-kb-list {
-  max-height: clamp(320px, 58vh, 700px);
+  max-height: clamp(280px, 50vh, 620px);
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -323,4 +323,42 @@ html[data-dk-calm] .dk-np-pulse {
   .dk-np-fboard {
     transition: none;
   }
+}
+
+/* overdue is the number to act on: hero numeral, danger ink while above 0 */
+.dk-np-kpi-late .dk-kpi-val {
+  color: var(--dk-danger-ink);
+}
+
+/* agency board: previous / next lane, "Agencies 1–4 of 12", an edge fade where more lanes sit */
+.dk-np-laneboard {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.dk-np-lanenav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-np-laneboard.has-more::after,
+.dk-np-laneboard.has-less::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  z-index: 1;
+  width: 36px;
+  height: calc(100% - 44px);
+  pointer-events: none;
+}
+.dk-np-laneboard.has-more::after {
+  right: 0;
+  background: linear-gradient(to right, transparent, var(--dk-bg));
+}
+.dk-np-laneboard.has-less::before {
+  left: 0;
+  background: linear-gradient(to left, transparent, var(--dk-bg));
 }

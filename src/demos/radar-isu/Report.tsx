@@ -11,7 +11,7 @@ import { clockWib, compact, dateWib } from '../../demo-kit/viz/format'
 import { useShell } from '../../demo-kit/shell'
 import { clock, rows, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { useI18n } from '../../lib/i18n'
-import { hoaxPhase, radarKpis, sentimentIndex, useDeepResult, useNow } from './model'
+import { hoaxPhase, negIssues, radarKpis, recoveryOf, sentimentIndex, signedIdx, useDeepResult, useNow } from './model'
 import { CHANNEL_LABEL, TOPIC, type Channel } from './strings'
 
 const S = {
@@ -35,7 +35,7 @@ const S = {
     s6: '6. Rekomendasi',
     k1: 'Mention 24 jam',
     k2: 'Indeks sentimen',
-    k3: 'Topik negatif',
+    k3: 'Isu negatif',
     k4: 'Jangkauan',
     sum: 'Dalam 24 jam terakhir tercatat {n} mention (sebelumnya {p}) dengan indeks sentimen {v}. Topik terbesar adalah {top}; isu negatif terbesar {neg}.',
     sumNoNeg: 'tidak ada',
@@ -82,7 +82,7 @@ const S = {
     s6: '6. Recommendations',
     k1: 'Mentions, 24 h',
     k2: 'Sentiment index',
-    k3: 'Negative topics',
+    k3: 'Negative issues',
     k4: 'Reach',
     sum: 'In the last 24 hours there were {n} mentions (previously {p}) with a sentiment index of {v}. The biggest topic is {top}; the biggest negative issue is {neg}.',
     sumNoNeg: 'none',
@@ -110,7 +110,7 @@ const S = {
   },
 }
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (m, k: string) => (k in v ? String(v[k]) : m))
-const sg = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}`
+const sg = signedIdx
 
 const selMentions = (s: WorldState) => s.mentions
 const selHoax = (s: WorldState) => s.hoaxAlerts
@@ -158,7 +158,7 @@ export default function Report() {
       .sort((a, b) => b.n - a.n)
   }, [mentions, now])
   const name = (topic: string) => TOPIC[topic]?.[lang] ?? topic
-  const neg = [...topics].filter((x) => x.score < -0.2).sort((a, b) => b.n - a.n)[0]
+  const neg = negIssues(mentions, now)[0]
 
   const hoaxText = (() => {
     if (ph.kind !== 'active' && ph.kind !== 'clarified') return t.hoaxNone
@@ -171,14 +171,14 @@ export default function Report() {
       e: a.evidence?.[lang] ?? '',
     }
     if (ph.kind === 'active' || !a.clarification) return fill(t.hoaxOn, base)
-    const before = [...series].reverse().find((p) => p.at <= a.clarification!.at)?.value ?? 0
+    const rc = recoveryOf(mentions, now, a.clarification.at)
     return fill(t.hoaxDone, {
       ...base,
       ct: clockWib(a.clarification.at, lang),
       tone: t.tone[a.clarification.tone] ?? a.clarification.tone,
       ch: a.clarification.channels.map((c) => CHANNEL_LABEL[c as Channel]?.[lang] ?? c).join(', '),
-      a: sg(before),
-      b: sg(series[series.length - 1]?.value ?? 0),
+      a: sg(rc.before),
+      b: sg(rc.after),
     })
   })()
 

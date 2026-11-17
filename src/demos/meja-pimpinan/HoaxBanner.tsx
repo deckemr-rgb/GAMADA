@@ -13,7 +13,7 @@ import { findOpd, withControls } from './data'
 import type { InstructionPreset } from './index'
 import { nf, tr, trf } from './strings'
 
-export function HoaxBanner({ hoax, onClarify }: { hoax: HoaxAlert; onClarify?: (p: InstructionPreset) => void }) {
+export function HoaxBanner({ hoax, onClarify, overlay }: { hoax: HoaxAlert; onClarify?: (p: InstructionPreset) => void; overlay?: boolean }) {
   const { lang } = useI18n()
   const session = useSession()
   const [hidden, setHidden] = useState<string | null>(null)
@@ -34,7 +34,7 @@ export function HoaxBanner({ hoax, onClarify }: { hoax: HoaxAlert; onClarify?: (
     })
   }
   return (
-    <aside ref={ref} className="dk-mp-hoax" role="alert" aria-label={tr('hoaxTitle', lang)}>
+    <aside ref={ref} className={`dk-mp-hoax${overlay ? ' is-overlay' : ''}`} role="alert" aria-label={tr('hoaxTitle', lang)}>
       <span className="dk-mp-hoax-ic" aria-hidden="true">
         <Icon name="alert" size={18} />
       </span>
@@ -57,8 +57,10 @@ export function HoaxBanner({ hoax, onClarify }: { hoax: HoaxAlert; onClarify?: (
           {tr('hoaxOpen', lang)}
           <Icon name="arrowUpRight" size={12} />
         </AppLink>
-        <IconButton icon="close" size="sm" label={tr('dismiss', lang)} onClick={() => setHidden(hoax.id)} />
       </div>
+      <span className="dk-mp-hoax-x">
+        <IconButton icon="close" size="sm" label={tr('dismiss', lang)} onClick={() => setHidden(hoax.id)} />
+      </span>
     </aside>
   )
 }

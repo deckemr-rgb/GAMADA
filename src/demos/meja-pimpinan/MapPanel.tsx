@@ -3,17 +3,17 @@
  * density), disaster risk, active alerts (zones + rain cells), market prices and projects, an AI insight that flies
  * to the top district, and the legend. MapLibre itself loads in its own chunk (excluded from the demo budget).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
 import { Chip, Icon, IconButton, InsightCallout, Button } from '../../demo-kit/ui'
-import { CATEGORY_LABEL, DAY_MIN, rows, useWorld, type Minutes, type WorldState } from '../../demo-kit/world'
+import { CATEGORY_LABEL, DAY_MIN, rows, shallowEqual, useWorld, type Complaint, type Minutes, type WorldState } from '../../demo-kit/world'
 import { complaintsByKecamatan } from '../../demo-kit/world/satu-daerah'
 import {
   MapView, alertZones, resolveChoropleth, choropleth, countByKecamatan, heatPoints, marketMarkers, pointMarkers,
   type ChoroplethLayer, type MapLayer, type MapViewHandle, type MarkerItem,
 } from '../../demo-kit/map'
-import { devOf, projectPoints, weekChange } from './data'
+import { devOf, opdShort, projectPoints, useNow, weekChange } from './data'
 import { nf, tr, trf } from './strings'
 
 type Toggle = 'choro' | 'heat' | 'hazard' | 'zones' | 'markets' | 'projects'
@@ -40,18 +40,57 @@ function breaksOf(v: Record<string, number>): number[] {
 /** complaints of the last 7 days up to now */
 const week = (s: WorldState, now: Minutes) => rows(s.complaints).filter((c) => c.at > now - 7 * DAY_MIN && c.at <= now)
 
-export function MapPanel({ now, selected, onSelect, onReady, onFly, note, onNoteDone, phone }: {
-  now: Minutes
+/** lower-case a label for use mid-sentence, but keep acronyms ("PJU mati") */
+const lc = (t: string) => (/^[A-Z]{2}/.test(t) ? t : t.toLowerCase())
+
+/** keep the previous value while the new one is equal by content (a stable layer spec = no map re-apply) */
+function useStable<T>(v: T, eq: (a: T, b: T) => boolean): T {
+  const ref = useRef(v)
+  if (ref.current !== v && !eq(ref.current, v)) ref.current = v
+  return ref.current
+}
+
+/** the district with most complaints in 7 days (optionally only the categories an agency handles), with last week's
+ *  count and the dominant category */
+function topDistrict(s: WorldState, now: Minutes, cats: Set<string> | null) {
+  const cur = new Map<string, number>()
+  const prev = new Map<string, number>()
+  const byCat = new Map<string, Map<string, number>>()
+  const keep = (c: Complaint) => !cats || cats.has(c.category)
+  for (const c of rows(s.complaints)) {
+    if (!keep(c) || c.at > now) continue
+    if (c.at > now - 7 * DAY_MIN) {
+      cur.set(c.kecamatanId, (cur.get(c.kecamatanId) ?? 0) + 1)
+      const m = byCat.get(c.kecamatanId) ?? new Map<string, number>()
+      m.set(c.category, (m.get(c.category) ?? 0) + 1)
+      byCat.set(c.kecamatanId, m)
+    } else if (c.at > now - 14 * DAY_MIN) prev.set(c.kecamatanId, (prev.get(c.kecamatanId) ?? 0) + 1)
+  }
+  // the whole region: the kit's ranking (the chat and the briefing use it too, so ties resolve the same way)
+  const k0 = cats ? null : complaintsByKecamatan(s, now, 7)[0]
+  const top: [string, number] | undefined = cats ? [...cur.entries()].sort((a, b) => b[1] - a[1])[0] : k0 && k0.count ? [k0.kecamatanId, k0.count] : undefined
+  if (!top) return null
+  const cat = [...(byCat.get(top[0]) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] as keyof typeof CATEGORY_LABEL | undefined
+  return { kecamatanId: top[0], name: s.region.kecamatan.find((k) => k.id === top[0])?.name ?? top[0], count: top[1], prev: prev.get(top[0]) ?? 0, cat: cat ?? null }
+}
+
+export function MapPanel({ selected, onSelect, onReady, onFly, note, onNoteDone, opdId, overlay, phone }: {
   selected: string | null
   onSelect: (id: string | null) => void
   onReady: (h: MapViewHandle) => void
   onFly: (kecamatanId: string, reveal?: boolean) => void
   note: string | null
   onNoteDone: () => void
+  /** Kepala OPD view: the insight speaks about this agency's complaint categories */
+  opdId?: string | null
+  /** something drawn over the top of the map (the hoax banner on the wall screen) */
+  overlay?: ReactNode
   phone?: boolean
 }) {
   const { lang } = useI18n()
   const { pack } = useShell()
+  // the map works on hourly windows: the layers change when the data changes, not every world minute
+  const now = useNow(60)
   const [on, setOn] = useState<Record<Toggle, boolean>>({ choro: true, heat: false, hazard: false, zones: true, markets: false, projects: false })
   const complaints = useWorld((s) => s.complaints)
   const clusters = useWorld((s) => s.clusters)
@@ -59,25 +98,25 @@ export function MapPanel({ now, selected, onSelect, onReady, onFly, note, onNote
   const rain = useWorld((s) => s.rainCells)
   const prices = useWorld((s) => s.prices)
   const projects = useWorld(projectPoints)
-  const top = useWorld((s) => complaintsByKecamatan(s, now, 7)[0] ?? null)
-  const topCat = useWorld((s) => {
-    if (!top) return null
-    const by = new Map<string, number>()
-    for (const c of week(s, now)) if (c.kecamatanId === top.kecamatanId) by.set(c.category, (by.get(c.category) ?? 0) + 1)
-    const t = [...by.entries()].sort((a, b) => b[1] - a[1])[0]
-    return t ? (t[0] as keyof typeof CATEGORY_LABEL) : null
-  })
+  const opdCats = useWorld((s) => (opdId ? Object.entries(s.region.categoryOpd).filter(([, o]) => o === opdId).map(([c]) => c).join(',') : ''))
+  const opdName = useWorld((s) => (opdId ? opdShort(s, opdId) : ''))
+  const top = useWorld((s) => topDistrict(s, now, opdId ? new Set(opdCats.split(',').filter(Boolean)) : null), shallowEqual)
+  const topCat = top?.cat ?? null
 
   const weekList = useMemo(() => week({ complaints } as WorldState, now), [complaints, now])
-  const counts = useMemo(() => {
-    const c = countByKecamatan(weekList)
-    return Object.fromEntries((pack?.kecamatan ?? []).map((k) => [k.id, c[k.id] ?? 0])) as Record<string, number>
-  }, [weekList, pack])
+  const counts = useStable(
+    useMemo(() => {
+      const c = countByKecamatan(weekList)
+      return Object.fromEntries((pack?.kecamatan ?? []).map((k) => [k.id, c[k.id] ?? 0])) as Record<string, number>
+    }, [weekList, pack]),
+    shallowEqual,
+  )
   const choroSpec = useMemo(
     () => choropleth('choro', counts, { breaks: breaksOf(counts), title: { id: tr('lChoro', 'id'), en: tr('lChoro', 'en') }, unit: { id: tr('choroUnit', 'id'), en: tr('choroUnit', 'en') }, visible: on.choro, format: (v) => nf(lang, v) }),
     [counts, on.choro, lang],
   )
-  const heat = useMemo(() => heatPoints(weekList, (c) => (c.urgency === 'tinggi' ? 1 : c.urgency === 'sedang' ? 0.6 : 0.35)), [weekList])
+  const weekKey = useStable(weekList, (a, b) => a.length === b.length && a.every((x, i) => x === b[i]))
+  const heat = useMemo(() => heatPoints(weekKey, (c) => (c.urgency === 'tinggi' ? 1 : c.urgency === 'sedang' ? 0.6 : 0.35)), [weekKey])
   const clusterMarkers = useMemo(
     () => rows(clusters).map((c): MarkerItem => ({ id: c.id, coord: c.center, icon: c.category === 'banjir' ? 'water' : 'pin', label: `${tr('cluster', lang)} ${CATEGORY_LABEL[c.category][lang].toLowerCase()}`, detail: `${c.complaintIds.length} ${lang === 'id' ? 'aduan' : 'complaints'} · ${c.radiusKm} km`, tone: 'danger' })),
     [clusters, lang],
@@ -147,7 +186,8 @@ export function MapPanel({ now, selected, onSelect, onReady, onFly, note, onNote
         ))}
       </div>
       <div className="dk-mp-mapbox">
-        <MapView regionId={pack.id} layers={layers} selectedId={selected} onSelect={onSelect} onReady={onReady} className="dk-mp-mapview" ariaLabel={tr('mapAria', lang)} fullscreenButton={!phone} />
+        <div className={`dk-mp-mapover${overlay ? ' has-banner' : ''}`}>
+        {overlay}
         {(note || top) && tipHidden && (
           <button type="button" className="dk-mp-tipchip" onClick={() => setTipHidden(false)}>
             <Icon name="spark" size={14} />
@@ -172,11 +212,15 @@ export function MapPanel({ now, selected, onSelect, onReady, onFly, note, onNote
                   </span>
                 }
               >
-                {trf('insightTop', lang, { kec: top.name, n: top.count, p: top.prev, cat: topCat ? CATEGORY_LABEL[topCat][lang].toLowerCase() : '-' })}
+                {opdId
+                  ? trf('insightOpd', lang, { o: opdName, kec: top.name, n: top.count, p: top.prev, cat: topCat ? lc(CATEGORY_LABEL[topCat][lang]) : '-' })
+                  : trf('insightTop', lang, { kec: top.name, n: top.count, p: top.prev, cat: topCat ? lc(CATEGORY_LABEL[topCat][lang]) : '-' })}
               </InsightCallout>
             ) : null}
           </div>
         )}
+        </div>
+        <MapView regionId={pack.id} layers={layers} selectedId={selected} onSelect={onSelect} onReady={onReady} className="dk-mp-mapview" ariaLabel={tr('mapAria', lang)} fullscreenButton={!phone} />
         {on.choro && <Ramp spec={choroSpec} />}
       </div>
     </section>

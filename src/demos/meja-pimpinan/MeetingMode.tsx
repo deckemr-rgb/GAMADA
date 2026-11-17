@@ -7,12 +7,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG } from '../../content/products'
 import { Icon, IconButton, enterPanel, motionMode, type IconName } from '../../demo-kit/ui'
-import { hhmm, shallowEqual, useWorld, world, type Minutes } from '../../demo-kit/world'
-import { briefingItems, kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
-import { MP, todayEvents } from './data'
+import { hhmm, shallowEqual, useWorld, world } from '../../demo-kit/world'
+import { kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
+import { MP, mpBriefingItems, todayEvents, useNow } from './data'
 import { runQuery } from './query'
-import { QueryChart } from './QueryChart'
-import type { Bi } from './strings'
+import { nf, type Bi } from './strings'
 
 const M = {
   label: { id: 'Mode rapat', en: 'Meeting mode' },
@@ -42,10 +41,17 @@ const M = {
   live: { id: 'Butir dihitung langsung (briefing belum disusun)', en: 'Items computed live (briefing not composed yet)' },
   sim: { id: 'Data simulasi', en: 'Simulated data' },
   score: { id: 'skor', en: 'score' },
+  bottom: { id: 'Terbawah', en: 'Bottom' },
+  top: { id: 'Teratas', en: 'Top' },
+  prevWeek: { id: 'pekan lalu', en: 'last week' },
+  chartUnit: { id: 'aduan 7 hari terakhir per kecamatan; batang tipis = pekan sebelumnya', en: 'complaints in the last 7 days by district; thin bar = the week before' },
+  now: { id: 'Panel {n} dari {t}: {p}', en: 'Panel {n} of {t}: {p}' },
 }
 
-export default function MeetingMode({ onClose, onOpened, now, title, leader }: { onClose: () => void; onOpened: () => void; now: Minutes; title: string; leader: Bi }) {
+export default function MeetingMode({ onClose, onOpened, title, leader }: { onClose: () => void; onOpened: () => void; title: string; leader: Bi }) {
   const { lang } = useI18n()
+  const now = useNow(1)
+  const now5 = Math.floor(now / 5) * 5
   const root = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const [i, setI] = useState(0)
@@ -53,6 +59,8 @@ export default function MeetingMode({ onClose, onOpened, now, title, leader }: {
   const n = M.panels.length
   const fsOn = useRef(false)
 
+  // what opened meeting mode (read while rendering, before this overlay takes the focus)
+  const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null))
   useEffect(() => {
     onOpened()
     const el = root.current
@@ -67,6 +75,10 @@ export default function MeetingMode({ onClose, onOpened, now, title, leader }: {
     return () => {
       document.removeEventListener('fullscreenchange', onFs)
       if (document.fullscreenElement && fsOn.current) void document.exitFullscreen().catch(() => {})
+      // back to "Mode rapat" (or whatever opened it) once the overlay is really gone (a StrictMode re-run keeps it)
+      window.requestAnimationFrame(() => {
+        if (!el?.isConnected && opener?.isConnected) opener.focus({ preventScroll: true })
+      })
     }
     // once on open
   }, [])
@@ -121,11 +133,14 @@ export default function MeetingMode({ onClose, onOpened, now, title, leader }: {
         <p className="dk-mp-mm-clock dk-num">{hhmm(now)} WIB</p>
         <IconButton icon="close" label={M.exit[lang]} onClick={onClose} data-mm-focus="" />
       </header>
-      <div className="dk-mp-mm-stage" ref={stage} aria-live="polite">
+      <p className="dk-sr" aria-live="polite">
+        {M.now[lang].replace('{n}', String(i + 1)).replace('{t}', String(n)).replace('{p}', M.panels[i]![lang])}
+      </p>
+      <div className="dk-mp-mm-stage" ref={stage}>
         <h3 className="dk-mp-mm-t">
           <span className="dk-num">{i + 1}</span> {M.panels[i]![lang]}
         </h3>
-        {i === 0 ? <KpiPanel now={now} /> : i === 1 ? <BriefPanel now={now} /> : i === 2 ? <ChartPanel now={now} /> : i === 3 ? <OpdPanel now={now} /> : <EventsPanel />}
+        {i === 0 ? <KpiPanel now={now5} /> : i === 1 ? <BriefPanel now={now5} /> : i === 2 ? <ChartPanel now={now5} /> : i === 3 ? <OpdPanel now={now5} /> : <EventsPanel />}
       </div>
       <footer className="dk-mp-mm-f">
         <span className="dk-mp-mm-bar" aria-hidden="true">
@@ -147,7 +162,7 @@ export default function MeetingMode({ onClose, onOpened, now, title, leader }: {
   )
 }
 
-function KpiPanel({ now }: { now: Minutes }) {
+function KpiPanel({ now }: { now: number }) {
   const { lang } = useI18n()
   const k = useWorld((s) => kpiStrip(s, now), shallowEqual)
   const tiles: [Bi, string, string?][] = [
@@ -171,15 +186,15 @@ function KpiPanel({ now }: { now: Minutes }) {
   )
 }
 
-function BriefPanel({ now }: { now: Minutes }) {
+function BriefPanel({ now }: { now: number }) {
   const { lang } = useI18n()
   const stored = useWorld((s) => s.briefings.ids.map((id) => s.briefings.byId[id]!).find((b) => b.at >= 0) ?? null)
-  const items = useMemo(() => (stored ? stored.items : briefingItems(world.get(), now)), [stored, now])
+  const items = useMemo(() => (stored ? stored.items : mpBriefingItems(world.get(), now)), [stored, now])
   return (
     <>
       {!stored && <p className="dk-mp-meta">{M.live[lang]}</p>}
       <ol className="dk-mp-mm-brief">
-        {items.slice(0, 7).map((it, k) => (
+        {items.slice(0, 8).map((it, k) => (
           <li key={k}>
             <span className="dk-num">{k + 1}</span>
             <p>{it.title[lang]}</p>
@@ -194,24 +209,47 @@ function BriefPanel({ now }: { now: Minutes }) {
   )
 }
 
-function ChartPanel({ now }: { now: Minutes }) {
+function ChartPanel({ now }: { now: number }) {
   const { lang } = useI18n()
   const complaints = useWorld((s) => s.complaints)
   const res = useMemo(() => runQuery(world.get(), now, { metric: 'complaints', groupBy: 'kecamatan', range: '7d', chart: 'bar' }, lang), [complaints, now, lang])
+  const list = res.rows.slice(0, 8)
+  const max = Math.max(1, ...list.map((r) => Math.max(r.value, r.prev ?? 0)))
   return (
     <div className="dk-mp-mm-chart">
-      <QueryChart res={{ ...res, rows: res.rows.slice(0, 8) }} lang={lang} maxRows={8} height={Math.min(8, res.rows.length) * 46 + 30} />
+      <p className="dk-mp-mm-unit">{M.chartUnit[lang]}</p>
+      <ol className="dk-mp-mm-bars" aria-label={`${M.panels[2]![lang]}: ${list.map((r) => `${r.label} ${r.value}`).join(', ')}`}>
+        {list.map((r) => (
+          <li key={r.id}>
+            <p>{r.label}</p>
+            <span className="dk-mp-mm-hbar" aria-hidden="true">
+              <span style={{ transform: `scaleX(${r.value / max})` }} />
+              {(r.prev ?? 0) > 0 && <i style={{ transform: `scaleX(${(r.prev ?? 0) / max})` }} />}
+            </span>
+            <strong className="dk-num">
+              {nf(lang, r.value)} <small>{M.prevWeek[lang]} {nf(lang, r.prev ?? 0)}</small>
+            </strong>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
 
-function OpdPanel({ now }: { now: Minutes }) {
+function OpdPanel({ now }: { now: number }) {
   const { lang } = useI18n()
   const lb = useWorld((s) => opdLeaderboard(s, now))
-  const show = lb.length > 8 ? [...lb.slice(0, 5), ...lb.slice(-3)] : lb
+  const split = lb.length > 8
+  const show = split ? [...lb.slice(0, 5), ...lb.slice(-3)] : lb
   return (
     <ol className="dk-mp-mm-opd">
-      {show.map((r) => (
+      {show.map((r, k) => [
+        split && k === 5 ? (
+          <li key="gap" className="dk-mp-mm-gap" aria-hidden="true">
+            <span>…</span>
+            <p>{M.bottom[lang]}</p>
+          </li>
+        ) : null,
         <li key={r.opdId} className={r.score < 60 ? 'is-low' : ''}>
           <span className="dk-num">{lb.indexOf(r) + 1}</span>
           <p>{r.short}</p>
@@ -221,8 +259,8 @@ function OpdPanel({ now }: { now: Minutes }) {
           <strong className="dk-num">
             {r.score} <small>{M.score[lang]}</small>
           </strong>
-        </li>
-      ))}
+        </li>,
+      ])}
     </ol>
   )
 }

@@ -8,6 +8,7 @@
 import type { Intent, Lang, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import type { Bi } from '../../demo-kit/world'
 import type { CtxItem, NaskahCtx } from './ai'
+import { byText } from './strings'
 
 type Ctx = SimContext<unknown>
 
@@ -144,7 +145,7 @@ function classify(ctx: Ctx): SimResponse {
   }
   const sifat: Bi = l.sifat === 'segera' ? { id: 'segera', en: 'urgent' } : l.sifat === 'rahasia' ? { id: 'rahasia', en: 'confidential' } : { id: 'biasa', en: 'normal' }
   return {
-    text: T(lang, `${L(lang, CLS[l.cls])} dari ${l.from}, sifat ${sifat.id}. Ringkasan tiga baris dan draf disposisi siap diperiksa.`, `${L(lang, CLS[l.cls])} from ${l.from}, priority ${sifat.en}. A three-line summary and a disposition draft are ready.`),
+    text: T(lang, `${L(lang, CLS[l.cls])} dari ${l.from}, sifat ${sifat.id}. Ringkasan tiga baris dan draf disposisi siap diperiksa.`, `${L(lang, CLS[l.cls])} from ${byText(l.from, 'en')}, priority ${sifat.en}. A three-line summary and a disposition draft are ready.`),
     structured: { kind: 'classification', data: { letterClass: cls, nature: l.sifat, summary, sender: l.from, ...(l.due ? { deadline: l.due } : {}) } },
     toolCalls: [
       { name: 'ocr_surat', input: { nomor: l.number }, output: { kolom: 9 }, ms: 200 },
@@ -214,18 +215,20 @@ function lateList(ctx: Ctx): SimResponse {
       ? { text: 'Saiki ora ana tindak lanjut sing kasep, kabeh isih sesuai tenggat.', translation: 'Terjemahan: Saat ini tidak ada tindak lanjut yang lewat tenggat, semua masih sesuai tenggat.' }
       : { text: T(lang, 'Saat ini tidak ada tindak lanjut yang lewat tenggat. Semua masih tepat waktu.', 'Nothing is overdue right now. Everything is on time.') }
   }
-  const lines = b.lateItems.slice(0, 5).map((x) => itemLine(lang, x)).join('\n')
+  const shown = b.lateItems.slice(0, 5)
+  const more = b.late - shown.length
+  const lines = shown.map((x) => itemLine(lang, x)).join('\n') + (more > 0 ? `\n${T(lang, `…dan ${more} lainnya`, `…and ${more} more`)}` : '')
   if (jw)
     return {
       text: `Wonten ${b.late} tindak lanjut sing kasep tenggate:\n${b.lateItems
         .slice(0, 5)
         .map((x) => itemLine('id', x))
-        .join('\n')}\nSaged dikirimi pangeling-eling saking tab Tindak Lanjut.`,
+        .join('\n')}${more > 0 ? `\n…lan ${more} liyane` : ''}\nSaged dikirimi pangeling-eling saking tab Tindak Lanjut.`,
       translation: `Terjemahan: Ada ${b.late} tindak lanjut yang lewat tenggat. Pengingat bisa dikirim dari tab Tindak Lanjut.`,
       followUps: ['Kirim pengingat ke yang paling telat', 'OPD mana paling banyak tugas?'],
     }
   return {
-    text: T(lang, `Ada ${b.late} tindak lanjut lewat tenggat:\n${lines}\nKirim pengingat dari tab Tindak Lanjut.`, `${b.late} follow-ups are overdue:\n${lines}\nSend reminders from the Follow-ups tab.`),
+    text: T(lang, `Ada ${b.late} tindak lanjut lewat tenggat:\n${lines}\nKirim pengingat dari tab Tindak Lanjut.`, `${b.late} ${b.late === 1 ? 'follow-up is' : 'follow-ups are'} overdue:\n${lines}\nSend reminders from the Follow-ups tab.`),
     toolCalls: [{ name: 'query_action_items', input: { status: 'lewat_tenggat' }, output: { jumlah: b.late }, ms: 140 }],
     followUps: lang === 'id' ? ['OPD mana paling banyak tugas?', 'Apa yang jatuh tempo hari ini?'] : ['Which agency has the most tasks?', 'What is due today?'],
   }
@@ -238,7 +241,10 @@ function dueToday(ctx: Ctx): SimResponse {
   if (!b) return fallback(ctx)
   if (!b.todayItems.length) return { text: T(lang, `Tidak ada lagi tindak lanjut yang jatuh tempo hari ini setelah pukul ${w.now}.`, `Nothing else is due today after ${w.now}.`) }
   return {
-    text: T(lang, `${b.dueToday} tindak lanjut jatuh tempo hari ini:\n`, `${b.dueToday} follow-ups are due today:\n`) + b.todayItems.slice(0, 5).map((x) => itemLine(lang, x)).join('\n'),
+    text:
+      T(lang, `${b.dueToday} tindak lanjut jatuh tempo hari ini:\n`, `${b.dueToday} ${b.dueToday === 1 ? 'follow-up is' : 'follow-ups are'} due today:\n`) +
+      b.todayItems.slice(0, 5).map((x) => itemLine(lang, x)).join('\n') +
+      (b.dueToday > Math.min(5, b.todayItems.length) ? `\n${T(lang, `…dan ${b.dueToday - Math.min(5, b.todayItems.length)} lainnya`, `…and ${b.dueToday - Math.min(5, b.todayItems.length)} more`)}` : ''),
     toolCalls: [{ name: 'query_action_items', input: { tenggat: 'hari_ini' }, output: { jumlah: b.dueToday }, ms: 140 }],
     followUps: lang === 'id' ? ['Tindak lanjut apa yang lewat tenggat?'] : ['Which follow-ups are overdue?'],
   }
@@ -277,7 +283,7 @@ function pendingLetters(ctx: Ctx): SimResponse {
     }
   const list = l.pendingList
     .slice(0, 4)
-    .map((x) => `- ${L(lang, x.subject)} (${x.from})`)
+    .map((x) => `- ${L(lang, x.subject)} (${byText(x.from, lang === 'en' ? 'en' : 'id')})`)
     .join('\n')
   return {
     text: l.pending

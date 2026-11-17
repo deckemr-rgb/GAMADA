@@ -7,7 +7,7 @@ import type { LngLat, Minutes, Table, TableKey } from './types'
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
   /** bump when the generated shape changes → persisted worlds are regenerated */
-  version: 2,
+  version: 3,
   /** max entities per table (oldest dropped) */
   maxPerTable: 5000,
   /** max reaction chain depth (0 = emitted directly) */

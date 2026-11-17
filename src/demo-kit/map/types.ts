@@ -180,6 +180,8 @@ export interface MapViewProps {
   /** default: fit the region bbox */
   initialView?: { center: LngLat; zoom: number }
   className?: string
+  /** CSS min-height of the map box (default 320px; e.g. 0 or '180px' for a mini map inside a fixed-size wrapper) */
+  minHeight?: number | string
   ariaLabel?: string
   /** selected kecamatan (outline + raised fill) */
   selectedId?: string | null

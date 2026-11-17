@@ -39,7 +39,7 @@ export interface DemoShellProps {
   /** "Coba ini" missions (3–6); omit to hide the guide */
   missions?: readonly Mission[]
   /** element to ring first ("click here"): a selector, or selector + label */
-  hotspot?: string | { target: string; label?: Bi | string; id?: string }
+  hotspot?: string | { target: string; label?: Bi | string; id?: string; placement?: 'auto' | 'below' | 'above' }
   /** split products: two views side by side (tabs below 768 px) */
   splitTabs?: SplitStageProps
   /** 'page' fills the viewport (100dvh, /demo/:slug); 'contained' fills its parent (showcase, /produk) */
@@ -500,7 +500,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
         </div>
         {boot === 'ready' && hs && !rewinding && !(size === 'sm' && guideOpen) && (
           <Suspense fallback={null}>
-            <Hotspot key={`${hs.target}:${epoch}`} target={hs.target} id={hs.id ?? `${slug}:${hs.target}`} label={bi(hs.label, lang)} root={() => canvasRef.current} />
+            <Hotspot key={`${hs.target}:${epoch}`} target={hs.target} id={hs.id ?? `${slug}:${hs.target}`} label={bi(hs.label, lang)} placement={hs.placement} root={() => canvasRef.current} />
           </Suspense>
         )}
         <EventToastStack product={slug} toasts={toasts} push={push} dismiss={dismiss} epoch={epoch} />

@@ -945,7 +945,9 @@ export interface EventMap {
   'actionItem.statusChanged': { actionItemId: string; status: ActionItem['status'] }
   /** "Kirim pengingat" to the person in charge (preview of a WA message) */
   'actionItem.reminded': { actionItemId: string; channel: 'wa'; text?: Bi }
-  'letter.dispositioned': { letterId?: string; subject?: Bi; to: string[]; note: Bi; by?: string; instructionId?: string }
+  /** number / from / subject (optional): the identity the inbox shows for this letter (e.g. its scanned sample), so
+   *  the audit log and other products name the same letter */
+  'letter.dispositioned': { letterId?: string; subject?: Bi; number?: string; from?: string; to: string[]; note: Bi; by?: string; instructionId?: string }
   /* Radar Isu */
   'hoax.detected': { id?: string; claim: Bi; score: number; spreadPerHour: number; accounts: string[]; evidence?: Bi | null; topic: string; rumor?: string }
   'clarification.published': { hoaxId: string; tone: 'tegas' | 'menenangkan' | 'informatif'; channels: string[] }

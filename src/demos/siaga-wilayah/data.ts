@@ -2,7 +2,8 @@
  * siaga-wilayah/data.ts — memoised world reads of this product (pure; safe inside useWorld) and the small scenario
  * helpers the eager screen needs. Everything numeric here is SIMULATED (seeded world) and labelled so in the UI.
  */
-import { rows, type Alert, type Complaint, type DemoSession, type Facility, type WorldState, type WaterGauge } from '../../demo-kit/world'
+import { emit, ref, rows, world, type Alert, type Complaint, type DemoSession, type Facility, type WorldState, type WaterGauge } from '../../demo-kit/world'
+import type { FloodImpact } from '../../demo-kit/map'
 import { demoHref } from '../../demo-kit/shell'
 import type { ProductSlug, RoleId } from '../../content/products'
 
@@ -73,7 +74,77 @@ export function clockText(min: number, lang: 'id' | 'en'): string {
   return lang === 'id' ? `${hh}.${mm}` : `${hh}:${mm}`
 }
 
+/**
+ * Kecamatan hit by the flood, in two severity tiers: "berat" = an active warning zone or ≥ 40 % of its desa flooded in
+ * the +6 h model, "sedang" = ≥ 5 flooded desa. Without a model run: the scenario's first flood kecamatan is "berat",
+ * the rest "sedang".
+ */
+export function floodTiers(s: WorldState, impact6: FloodImpact | null): { heavy: string[]; moderate: string[] } {
+  const alertKec = new Set(floodAlerts(s).flatMap((a) => a.kecamatanIds))
+  const hit = new Map<string, number>()
+  for (const d of impact6?.desa ?? []) hit.set(d.kecamatanId, (hit.get(d.kecamatanId) ?? 0) + 1)
+  if (!hit.size && !alertKec.size) {
+    const [first, ...rest] = s.region.floodKecamatanIds
+    return { heavy: first ? [first] : [], moderate: rest }
+  }
+  const heavy: string[] = []
+  const moderate: string[] = []
+  for (const k of s.region.kecamatan) {
+    const n = hit.get(k.id) ?? 0
+    const share = n / Math.max(1, k.desa.length)
+    if (alertKec.has(k.id) || share >= 0.4) heavy.push(k.id)
+    else if (n >= 5) moderate.push(k.id)
+  }
+  return { heavy, moderate }
+}
+/** simulated harvest drop per tier (%); cabai / bawang merah drop ×1.2 in the world reducer */
+export const TIER_DROP = { heavy: 34, moderate: 16 } as const
+
+/** switch the harvest scenario: "pasca" emits harvest.updated per severity tier (source siaga-wilayah); "normal" resets */
+export function setHarvestScenario(to: 'normal' | 'pasca', impact6: FloodImpact | null): void {
+  if ((to === 'pasca') === harvestPasca(world.get()) || harvestPending) return
+  harvestPending = true
+  // the world runs the reactions (econ, supply) synchronously: let the click paint first (INP)
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      harvestPending = false
+      applyHarvestScenario(to, impact6)
+    }, 0),
+  )
+}
+let harvestPending = false
+function applyHarvestScenario(to: 'normal' | 'pasca', impact6: FloodImpact | null): void {
+  const s = world.get()
+  if ((to === 'pasca') === harvestPasca(s)) return
+  if (to === 'pasca') {
+    const alert = floodAlerts(s)[0]
+    const cause = alert ? ref('alerts', alert.id) : null
+    const { heavy, moderate } = floodTiers(s, impact6)
+    if (heavy.length) emit('harvest.updated', { scenario: 'pasca-banjir', kecamatanIds: heavy, dropPct: TIER_DROP.heavy, cause }, 'siaga-wilayah')
+    if (moderate.length) emit('harvest.updated', { scenario: 'pasca-banjir', kecamatanIds: moderate, dropPct: TIER_DROP.moderate, cause }, 'siaga-wilayah')
+  } else {
+    const ids = [...new Set(rows(s.harvests).filter((h) => h.scenario === 'pasca-banjir').map((h) => h.kecamatanId))]
+    emit('harvest.updated', { scenario: 'normal', kecamatanIds: ids }, 'siaga-wilayah')
+  }
+}
+
+/** warning level of an AI draft: "LEVEL n" in the text wins (the structured enum stops at "awas" = 3) */
+export function draftLevel(a: { level?: string; message?: string }): 1 | 2 | 3 | 4 {
+  const m = /LEVEL\s*([1-4])/i.exec(a.message ?? '')
+  if (m) return Number(m[1]) as 1 | 2 | 3 | 4
+  if (/darurat|emergency/i.test(`${a.level ?? ''} ${a.message ?? ''}`)) return 4
+  return a.level === 'waspada' ? 1 : a.level === 'siaga' ? 2 : 3
+}
+
+/** every warning text that leaves this demo is marked as a simulation (it must never pass for a real BPBD message) */
+export const SIM_MARK = { id: '[SIMULASI DEMO]', en: '[DEMO SIMULATION]' } as const
+export function withSimMark(text: string, lang: 'id' | 'en'): string {
+  const t = text.trim()
+  return /simulasi|simulation/i.test(t.slice(0, 40)) ? t : `${SIM_MARK[lang]} ${t}`
+}
+
 /** link to another product's demo with this session (keeps ?controls=all while products are not DEMO_READY yet) */
+
 export function productHref(slug: ProductSlug, s: DemoSession, focus?: string | null): string {
   const h = demoHref(slug, s, focus)
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('controls') === 'all' ? `${h}&controls=all` : h

@@ -32,10 +32,12 @@ const ID = {
   kpiMentions: 'Mention 24 jam',
   kpiSentiment: 'Indeks sentimen',
   kpiSentimentCap: '−100 sangat negatif · +100 sangat positif',
-  kpiNegative: 'Topik bernada negatif',
+  kpiNegative: 'Isu negatif',
+  kpiNegativeCap: 'topik dengan mention negatif',
   kpiReach: 'Perkiraan jangkauan',
   kpiReachCap: 'akun (simulasi)',
   vsPrev: 'vs 24 jam sebelumnya',
+  vsPrevShort: 'vs kemarin',
 
   // stream
   streamTitle: 'Aliran mention',
@@ -56,6 +58,7 @@ const ID = {
   clarTag: 'Terkait klarifikasi',
   assess: 'Nilai dengan AI',
   newMention: 'Mention baru dari {o}, {s}.',
+  streamKeys: 'Panah atas/bawah untuk berpindah antar-mention.',
 
   // sentiment words
   positif: 'Positif',
@@ -71,7 +74,7 @@ const ID = {
   sentRange: 'Rentang grafik sentimen',
   r24: '24 jam',
   r3: '3 jam',
-  sentUnit: 'indeks −100…100, rata-rata tertimbang jangkauan',
+  sentUnit: 'indeks −100…100 · 0 = netral · tertimbang jangkauan',
   sentSeries: 'Indeks sentimen',
   markHoax: 'Hoaks terdeteksi',
   markClar: 'Klarifikasi terbit',
@@ -113,7 +116,8 @@ const ID = {
   skip30: 'Lihat 30 menit ke depan',
   hoaxVolume: 'Unggahan hoaks baru sejak klarifikasi: {n}',
   forwardedMp: 'Diteruskan ke Meja Pimpinan',
-  openSiaga: 'Buka data di Siaga Wilayah',
+  openMp: 'Lihat di Meja Pimpinan',
+  openSiaga: 'Buka peta banjir di Siaga Wilayah',
 
   tone_tegas: 'tegas',
   tone_menenangkan: 'menenangkan',
@@ -122,7 +126,7 @@ const ID = {
   // executive (kepala daerah)
   execTitle: 'Ringkasan untuk pimpinan',
   execSent: 'Sentimen publik saat ini {v} ({w}).',
-  execTop: 'Isu negatif terbesar: {t} ({n} mention).',
+  execTop: 'Isu negatif terbesar: {t} ({n} mention negatif).',
   execHoaxOn: 'Hoaks aktif: “{c}”. Perlu klarifikasi resmi.',
   execHoaxDone: 'Hoaks “{c}” sudah diklarifikasi pukul {t}.',
   execHoaxNone: 'Tidak ada hoaks aktif.',
@@ -132,7 +136,7 @@ const ID = {
 
   // topic drawer
   topicEyebrow: 'Klaster topik',
-  topicStats: '{n} mention · jangkauan {r} · sentimen {s}',
+  topicStats: '{n} mention 24 jam · jangkauan {r} · sentimen {s}',
   topicMentions: 'Mention dalam klaster',
   topicDeep: 'Analisis mendalam topik ini',
   topicAsk: 'Tanya AI tentang topik ini',
@@ -165,10 +169,12 @@ const EN: Strings = {
   kpiMentions: 'Mentions, 24 h',
   kpiSentiment: 'Sentiment index',
   kpiSentimentCap: '−100 very negative · +100 very positive',
-  kpiNegative: 'Topics leaning negative',
+  kpiNegative: 'Negative issues',
+  kpiNegativeCap: 'topics with negative mentions',
   kpiReach: 'Estimated reach',
   kpiReachCap: 'accounts (simulated)',
   vsPrev: 'vs previous 24 h',
+  vsPrevShort: 'vs yesterday',
 
   streamTitle: 'Mention stream',
   streamMeta: 'fictional outlets & accounts',
@@ -188,6 +194,7 @@ const EN: Strings = {
   clarTag: 'About the clarification',
   assess: 'Assess with AI',
   newMention: 'New mention from {o}, {s}.',
+  streamKeys: 'Arrow up/down moves between mentions.',
 
   positif: 'Positive',
   netral: 'Neutral',
@@ -201,7 +208,7 @@ const EN: Strings = {
   sentRange: 'Sentiment chart range',
   r24: '24 h',
   r3: '3 h',
-  sentUnit: 'index −100…100, reach-weighted average',
+  sentUnit: 'index −100…100 · 0 = neutral · reach-weighted',
   sentSeries: 'Sentiment index',
   markHoax: 'Hoax detected',
   markClar: 'Clarification out',
@@ -242,7 +249,8 @@ const EN: Strings = {
   skip30: 'Jump 30 minutes ahead',
   hoaxVolume: 'New hoax posts since the clarification: {n}',
   forwardedMp: 'Forwarded to Meja Pimpinan',
-  openSiaga: 'Open the data in Siaga Wilayah',
+  openMp: 'View in Meja Pimpinan',
+  openSiaga: 'Open the flood map in Siaga Wilayah',
 
   tone_tegas: 'firm',
   tone_menenangkan: 'reassuring',
@@ -250,7 +258,7 @@ const EN: Strings = {
 
   execTitle: 'Summary for the Regional Head',
   execSent: 'Public sentiment is {v} right now ({w}).',
-  execTop: 'Biggest negative issue: {t} ({n} mentions).',
+  execTop: 'Biggest negative issue: {t} ({n} negative mentions).',
   execHoaxOn: 'Active hoax: “{c}”. An official clarification is needed.',
   execHoaxDone: 'The “{c}” hoax was clarified at {t}.',
   execHoaxNone: 'No active hoax.',
@@ -259,7 +267,7 @@ const EN: Strings = {
   wBuruk: 'leaning negative',
 
   topicEyebrow: 'Topic cluster',
-  topicStats: '{n} mentions · reach {r} · sentiment {s}',
+  topicStats: '{n} mentions in 24 h · reach {r} · sentiment {s}',
   topicMentions: 'Mentions in the cluster',
   topicDeep: 'Deep-analyse this topic',
   topicAsk: 'Ask the AI about this topic',

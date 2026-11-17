@@ -38,6 +38,8 @@ export interface KpiProps {
   target?: number
   /** extra line under the value */
   caption?: string
+  /** let a long label wrap onto a second line instead of ellipsizing (narrow KPI grids) */
+  wrapLabel?: boolean
   className?: string
 }
 
@@ -48,7 +50,7 @@ export function deltaMeaning(delta: number, goodWhen: 'up' | 'down' = 'up'): Del
   return (delta > 0) === (goodWhen === 'up') ? 'good' : 'bad'
 }
 
-export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaFormat, goodWhen = 'up', deltaLabel, hero, spark, target, caption, className }: KpiProps) {
+export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaFormat, goodWhen = 'up', deltaLabel, hero, spark, target, caption, wrapLabel, className }: KpiProps) {
   const { lang } = useI18n()
   const t = useUiStrings()
   const root = useRef<HTMLDivElement>(null)
@@ -108,7 +110,7 @@ export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaForm
   const srText = `${label}: ${fmt(value)}${unit ? ` ${unit}` : ''}${delta !== undefined ? `, ${deltaText} ${deltaLabel ?? t.vsYesterday}` : ''}${target ? `, ${t.target} ${fmt(target)}` : ''}`
 
   return (
-    <div ref={root} className={`dk-kpi${hero ? ' is-hero' : ''}${className ? ` ${className}` : ''}`} role="group" aria-label={srText}>
+    <div ref={root} className={`dk-kpi${hero ? ' is-hero' : ''}${wrapLabel ? ' is-wrap' : ''}${className ? ` ${className}` : ''}`} role="group" aria-label={srText}>
       <span className="dk-kpi-flash" ref={flashRef} aria-hidden="true" />
       <span className="dk-kpi-label" aria-hidden="true">
         {label}

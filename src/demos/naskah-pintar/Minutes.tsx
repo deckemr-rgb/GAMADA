@@ -8,7 +8,7 @@ import { gsap } from 'gsap'
 import { useI18n } from '../../lib/i18n'
 import { Badge, Icon, StatusChip, flashNewRow, motionMode } from '../../demo-kit/ui'
 import { useWorld, type WorldState } from '../../demo-kit/world'
-import { CLIP, NP, SCRIPT, SPEAKER_FIRST, dueText, existingAction, opdName, picLabel } from './model'
+import { CLIP, NP, SCRIPT, SPEAKER_FIRST, dueText, existingAction, opdName, picLabel, type ScriptLine } from './model'
 import type { NpNav } from './index'
 import { useStr } from './strings'
 
@@ -25,6 +25,8 @@ interface Props {
   nav: NpNav
   /** fly new follow-ups into their lane (only while the meeting plays) */
   animate: boolean
+  /** discussion points (point 1 carries the world's river report) */
+  topics: ScriptLine[]
 }
 
 const LANES = [...new Set(SCRIPT.actions.map((a) => a.opdId))]
@@ -35,7 +37,7 @@ function statuses(s: WorldState, meetingId: string | null): string {
   return SCRIPT.actions.map((a) => existingAction(s, meetingId, a.text)?.status ?? '-').join('|')
 }
 
-export const Minutes = memo(function Minutes({ reached, writing, meetingId, summary, summaryMode, summaryBusy, liveCheck, colors, nav, animate }: Props) {
+export const Minutes = memo(function Minutes({ reached, writing, meetingId, summary, summaryMode, summaryBusy, liveCheck, colors, nav, animate, topics: allTopics }: Props) {
   const S = useStr()
   const { lang } = useI18n()
   const day = useWorld((s) => s.day)
@@ -53,7 +55,7 @@ export const Minutes = memo(function Minutes({ reached, writing, meetingId, summ
 
   const people = SPEAKER_FIRST.filter((p) => p.seg <= reached)
   const agenda = SCRIPT.agenda.filter((x) => x.seg <= reached)
-  const topics = SCRIPT.topics.filter((x) => x.seg <= reached)
+  const topics = allTopics.filter((x) => x.seg <= reached)
   const decisions = SCRIPT.decisions.filter((x) => x.seg <= reached)
   const actions = SCRIPT.actions.filter((x) => x.seg <= reached)
   const label = new Map(CLIP.speakers.map((sp) => [sp.id, sp.label[lang]]))
@@ -188,7 +190,7 @@ export const Minutes = memo(function Minutes({ reached, writing, meetingId, summ
                         {mine && <Badge tone="accent">{S.nYourUnit}</Badge>}
                       </span>
                       <span role="cell" data-label={S.nPic}>
-                        {picLabel(a.pic, lang)}
+                        {picLabel(a.pic, lang, a.opdId)}
                       </span>
                       <span role="cell" data-label={S.nDue} className="dk-num">
                         {dueText(a.dueAt, lang, day)}
@@ -259,7 +261,7 @@ function flyCard(host: HTMLElement, from: HTMLElement, to: HTMLElement, text: st
 }
 
 /** one lane per agency of the meeting's follow-ups (targets of the flying cards); opens the board on that agency */
-export function Lanes({ reached, nav }: { reached: number; nav: NpNav }) {
+export const Lanes = memo(function Lanes({ reached, nav }: { reached: number; nav: NpNav }) {
   const S = useStr()
   const { lang } = useI18n()
   const laneNames = useWorld((s) => LANES.map((id) => opdName(s, id, lang, true)).join('|')).split('|')
@@ -295,4 +297,4 @@ export function Lanes({ reached, nav }: { reached: number; nav: NpNav }) {
       </div>
     </div>
   )
-}
+})

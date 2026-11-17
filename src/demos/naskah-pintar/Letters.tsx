@@ -10,10 +10,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
 import { Badge, Button, Chip, EmptyState, Icon, Inbox, Segmented, StatusChip, useElementWidth, type InboxItem } from '../../demo-kit/ui'
-import { DAY_MIN, emit, setSession, useClock, useWorld, world, type Letter, type WorldState } from '../../demo-kit/world'
+import { DAY_MIN, emit, setSession, useClock, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { letterInbox } from '../../demo-kit/world/satu-daerah'
-import { LETTERS } from '../../demo-kit/docs/samples/letters'
-import type { LetterMeta, SampleDoc } from '../../demo-kit/docs/types'
+import type { SampleDoc } from '../../demo-kit/docs/types'
 import { DocViewer, type DocViewerBox } from '../../demo-kit/docs/DocViewer'
 import { DispositionStamp } from '../../demo-kit/docs/Stamp'
 import { pct } from '../../demo-kit/docs/measure'
@@ -22,47 +21,17 @@ import { hashString } from '../../demo-kit/world/prng'
 import { PaperFrame } from '../../demo-kit/frames'
 import { structuredOf, useNaskahAi, type ClassOut, type DispoOut } from './ai'
 import { buildCtx } from './ctx'
+import { metaOf, rowsOf, sampleMap, type Row } from './inbox'
 import { clockText, dueText, opdName, resolveOpd, signer, NP, type NpRole } from './model'
 import type { NpNav } from './index'
-import { opdLabel, useStr, type NpDict } from './strings'
+import { byText, opdLabel, useStr, type NpDict } from './strings'
 import './letters.css'
 
 type Lang = 'id' | 'en'
 
-/* ------------------------------------------------------------------ letter ↔ sample image */
-
-/** the recent world letters are shown as the kit's sample letters (same kind first), stable across status changes */
-function sampleMap(letters: Letter[]): Map<string, SampleDoc> {
-  const recent = letters.filter((l) => l.receivedAt >= -DAY_MIN && !l.instructionId && l.kind !== 'nota-dinas').sort((a, b) => a.receivedAt - b.receivedAt || a.id.localeCompare(b.id))
-  const free = [...LETTERS]
-  const out = new Map<string, SampleDoc>()
-  for (const l of recent) {
-    if (!free.length) break
-    let i = free.findIndex((d) => d.meta.kind === 'letter' && d.meta.cls === l.kind)
-    if (i < 0) i = 0
-    out.set(l.id, free.splice(i, 1)[0]!)
-  }
-  return out
-}
-const metaOf = (d: SampleDoc | undefined): LetterMeta | null => (d && d.meta.kind === 'letter' ? d.meta : null)
-
-interface Row {
-  letter: Letter
-  doc: SampleDoc | undefined
-  subject: { id: string; en: string }
-  from: string
-  number: string
-  sifat: string
-  kind: string
-}
-
-function rowsOf(letters: Letter[], map: Map<string, SampleDoc>): Row[] {
-  return letters.map((l) => {
-    const doc = map.get(l.id)
-    const m = metaOf(doc)
-    return { letter: l, doc, subject: m?.subject ?? l.subject, from: m?.from ?? l.from, number: m?.number ?? l.number, sifat: m?.sifat ?? l.sifat, kind: l.instructionId ? 'nota-dinas' : (m?.cls ?? l.kind) }
-  })
-}
+/** where the disposition stamp lands on a sample letter (% of the page): the empty lower-left area beside the
+ *  signature block, clear of the letter text, the signature and the seal */
+const STAMP = { x: 30, y: 80, w: 38 } as const
 
 /** ISO date of a letter deadline → world minutes (16:00 that day), never in the past */
 function dueMinutes(day: string, iso: string | null, now: number): number {
@@ -93,16 +62,21 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set())
   const list = useMemo(() => {
     if (opdRole && nav.myOpd) return rows.filter((r) => r.letter.disposition?.to.includes(nav.myOpd!)).sort((a, b) => (b.letter.disposition?.at ?? 0) - (a.letter.disposition?.at ?? 0))
+    // a letter approved here keeps its place (newest first) instead of dropping to the end of the list
+    if (filter === 'pending') return rows.filter((r) => r.letter.status === 'masuk' || kept.has(r.letter.id)).sort((a, b) => b.letter.receivedAt - a.letter.receivedAt)
+    // "Semua": a memo that just arrived from the Regional Head leads the list
     const fresh = (r: Row) => !!r.letter.instructionId && r.letter.receivedAt >= now - 120
-    const base = filter === 'pending' ? rows.filter((r) => r.letter.status === 'masuk' || fresh(r) || kept.has(r.letter.id)) : rows
-    return [...base.filter(fresh), ...base.filter((r) => !fresh(r))]
+    return [...rows.filter(fresh), ...rows.filter((r) => !fresh(r))]
   }, [rows, filter, opdRole, nav.myOpd, now, kept])
   useEffect(() => {
     if (sel && !kept.has(sel)) setKept((k) => new Set(k).add(sel))
   }, [sel]) // eslint-disable-line react-hooks/exhaustive-deps
-  // desktop: open the first letter so the screen is never empty
+  // desktop: open a letter so the screen is never empty: the newest urgent crooked scan first (the "wow" letter)
   useEffect(() => {
-    if (!sel && !compact && list[0]) setSel(list[0].letter.id)
+    if (sel || compact || !list[0]) return
+    const scan = list.filter((r) => r.doc?.scan && r.letter.status === 'masuk')
+    const pick = scan.find((r) => r.sifat === 'segera') ?? scan[0] ?? list[0]
+    setSel(pick.letter.id)
   }, [sel, compact, list])
   // keep the selected letter in view inside the inbox (arrivals from the banner / a toast)
   useEffect(() => {
@@ -118,13 +92,15 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
   // arrival with a focus (banner, cross-product toast)
   useEffect(() => {
     if (!focusLetter) return
-    setFilter('pending')
+    const l = world.get().letters.byId[focusLetter]
+    setFilter(l && l.status !== 'masuk' ? 'all' : 'pending')
     setKept((k) => new Set(k).add(focusLetter))
     setSel(focusLetter)
     setShowDetail(true)
   }, [focusLetter, focusKey])
 
   const selected = rows.find((r) => r.letter.id === sel) ?? (compact ? undefined : list[0])
+  const keep = (id: string) => setKept((k) => (k.has(id) ? k : new Set(k).add(id)))
   const changeFilter = (f: 'pending' | 'all') => {
     setFilter(f)
     setKept(new Set(sel ? [sel] : []))
@@ -134,7 +110,7 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
   const items: InboxItem[] = list.map((r) => ({
     id: r.letter.id,
     title: r.subject[lang],
-    preview: `${r.from} · ${r.number}`,
+    preview: `${byText(r.from, lang)} · ${r.number}`,
     time: r.letter.receivedAt >= 0 ? clockText(r.letter.receivedAt, lang) : dueText(r.letter.receivedAt, lang, day).replace(/\s\d{1,2}[.:]\d{2}$/, ''),
     unread: r.letter.status === 'masuk',
     icon: r.kind === 'nota-dinas' ? 'stamp' : 'doc',
@@ -203,7 +179,7 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
                 {S.lBack}
               </Button>
             )}
-            <LetterDetail key={selected.letter.id} row={selected} nav={nav} compact={compact} />
+            <LetterDetail key={selected.letter.id} row={selected} nav={nav} compact={compact} onApproved={keep} />
           </div>
         )}
       </div>
@@ -228,7 +204,7 @@ interface Draft {
   pristine: boolean
 }
 
-function LetterDetail({ row, nav, compact }: { row: Row; nav: NpNav; compact: boolean }) {
+function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav; compact: boolean; onApproved: (id: string) => void }) {
   const S = useStr()
   const { lang } = useI18n()
   const shell = useShell()
@@ -298,7 +274,8 @@ function LetterDetail({ row, nav, compact }: { row: Row; nav: NpNav; compact: bo
     const note = draft.pristine
       ? { id: `${meta.disposition.instruction.id} ${meta.disposition.note.id}`, en: `${meta.disposition.instruction.en} ${meta.disposition.note.en}` }
       : { id: `${draft.instruction} ${draft.note}`.trim(), en: `${draft.instruction} ${draft.note}`.trim() }
-    emit('letter.dispositioned', { letterId: letter.id, subject: meta.subject, to: draft.to, note, by }, 'naskah-pintar')
+    onApproved(letter.id)
+    emit('letter.dispositioned', { letterId: letter.id, subject: meta.subject, number: meta.number, from: meta.from, to: draft.to, note, by }, 'naskah-pintar')
     const title = draft.pristine ? meta.disposition.instruction : { id: draft.instruction, en: draft.instruction }
     const due = dueMinutes(s.day, meta.due, now)
     const ids: string[] = []
@@ -310,13 +287,13 @@ function LetterDetail({ row, nav, compact }: { row: Row; nav: NpNav; compact: bo
     setMade(ids)
     setEditing(false)
     const names = draft.to.map((o) => opdName(s, o, lang)).join(', ')
-    shell.toast({ title: S.lToastTitle, body: S.lToastBody(names), tone: 'accent', icon: 'stamp', action: { label: S.lSeeTasks, onClick: () => nav.go('tindak', { itemId: ids[0] }) } })
+    shell.toast({ title: S.lToastTitle, body: S.lToastBody(names), tone: 'accent', icon: 'stamp', action: { label: S.lSeeTasks, onClick: () => nav.go('tindak', { itemId: ids[0], opdIds: draft.to }) } })
   }
 
   const disposition = letter.disposition
   const stampTo = (disposition?.to ?? draft?.to ?? []).map((o) => opdLabel(opds.find((x) => x.id === o), o, lang)).join(', ')
   const stampLines = disposition
-    ? [`${S.lTo}: ${stampTo}`, disposition.note[lang], `${longDate(day, lang)} · ${disposition.by}`]
+    ? [`${S.lTo}: ${stampTo}`, disposition.note[lang], `${longDate(day, lang)} · ${byText(disposition.by, lang)}`]
     : []
   const height = compact ? 'clamp(300px, 56vh, 480px)' : 'clamp(420px, 62vh, 640px)'
 
@@ -327,28 +304,28 @@ function LetterDetail({ row, nav, compact }: { row: Row; nav: NpNav; compact: bo
       <DocViewer
         doc={doc}
         boxes={boxes}
-        revealBoxes={run > 0}
+        revealBoxes={run > 0 && !disposition}
         replay={run}
         onReveal={(c) => setN(c)}
         deskew={deskew || letter.status === 'didisposisi'}
         height={height}
         label={`${S.cls[row.kind] ?? ''} ${row.number}`}
         toolbar={
-          canAct ? (
-            <Button size="sm" variant={run > 0 ? 'quiet' : 'primary'} icon={run > 0 ? 'refresh' : 'spark'} onClick={read} busy={reading || (run > 0 && !aiDone)} data-np="read">
-              {run > 0 ? S.lReread : S.lRead}
+          canAct && run > 0 ? (
+            <Button size="sm" variant="quiet" icon="refresh" onClick={read} busy={reading || !aiDone} data-np="read">
+              {S.lReread}
             </Button>
           ) : undefined
         }
       >
-        <DispositionStamp show={!!disposition} heading={S.lStamp} lines={stampLines} x={66} y={doc.id.includes('undangan') ? 70 : 64} />
+        <DispositionStamp show={!!disposition} heading={S.lStamp} lines={stampLines} x={STAMP.x} y={STAMP.y} width={STAMP.w} />
       </DocViewer>
 
       <aside className="dk-np-lside" aria-live="polite">
         <dl className="dk-np-lmeta">
           <div>
             <dt>{S.lFrom}</dt>
-            <dd>{row.from}</dd>
+            <dd>{byText(row.from, lang)}</dd>
           </div>
           <div>
             <dt>{S.lNumber}</dt>
@@ -361,7 +338,7 @@ function LetterDetail({ row, nav, compact }: { row: Row; nav: NpNav; compact: bo
         </dl>
 
         {disposition ? (
-          <DispositionDone S={S} lang={lang} by={disposition.by} at={disposition.at} to={stampTo} note={disposition.note[lang]} made={made.length} onTasks={() => nav.go('tindak', made[0] ? { itemId: made[0] } : { opdId: disposition.to[0] })} opdNote={nav.role === 'kepala-opd'} />
+          <DispositionDone S={S} lang={lang} by={byText(disposition.by, lang)} at={disposition.at} to={stampTo} note={disposition.note[lang]} made={made.length} onTasks={() => nav.go('tindak', made[0] ? { itemId: made[0], opdIds: disposition.to } : { opdId: disposition.to[0], opdIds: disposition.to })} opdNote={nav.role === 'kepala-opd'} />
         ) : !canAct ? (
           <p className="dk-np-muted">{S.lOpdView}</p>
         ) : run === 0 ? (
@@ -596,12 +573,12 @@ function ArchiveLetter({ row, S, lang, day, opds, nav }: { row: Row; S: NpDict; 
             {longDate(day, lang)} · {dueText(letter.receivedAt, lang, day)}
           </p>
           <p className="dk-np-afoot">{S.oFoot}</p>
-          {d && <DispositionStamp show heading={S.lStamp} lines={[`${S.lTo}: ${to}`, `${longDate(day, lang)} · ${d.by}`]} x={70} y={90} width={46} />}
+          {d && <DispositionStamp show heading={S.lStamp} lines={[`${S.lTo}: ${to}`, `${longDate(day, lang)} · ${byText(d.by, lang)}`]} x={70} y={90} width={46} />}
         </div>
       </PaperFrame>
       <aside className="dk-np-lside">
         {d ? (
-          <DispositionDone S={S} lang={lang} by={d.by} at={d.at} to={to} note={d.note[lang]} made={0} onTasks={() => nav.go('tindak', { opdId: d.to[0] })} opdNote={nav.role === 'kepala-opd'} />
+          <DispositionDone S={S} lang={lang} by={byText(d.by, lang)} at={d.at} to={to} note={d.note[lang]} made={0} onTasks={() => nav.go('tindak', { opdId: d.to[0], opdIds: d.to })} opdNote={nav.role === 'kepala-opd'} />
         ) : (
           <p className="dk-np-muted">{S.lStatus.masuk}</p>
         )}

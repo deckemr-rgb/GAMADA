@@ -5,20 +5,19 @@
  * At the end: meeting.transcribed + an AI summary (Simulasi / Live) + "Format tata naskah dinas" (PaperFrame, lazy).
  * "Rekam / ketik rapat" opens the recorder (lazy): Web Speech or a typed transcript → AI minutes → saved tasks.
  */
-import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { gsap } from 'gsap'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
-import { Badge, Button, Icon, Segmented, StatusChip } from '../../demo-kit/ui'
+import { Badge, Button, Icon, Segmented, StatusChip, motionMode } from '../../demo-kit/ui'
 import { emit, useClock, useWorld, world, type Meeting as MeetingRec } from '../../demo-kit/world'
 import { Waveform } from '../../demo-kit/media/Waveform'
-import { usePlayback } from '../../demo-kit/media/usePlayback'
-import { mmss } from '../../demo-kit/media/playback'
+import { createPlayback, mmss, type ClipSegment, type Playback, type PlaybackMode } from '../../demo-kit/media/playback'
 import { CATEGORICAL_HEX } from '../../demo-kit/viz/palette'
 import { structuredOf, useNaskahAi, type MinutesOut } from './ai'
 import { buildCtx } from './ctx'
 import { Lanes, Minutes } from './Minutes'
-import { CLIP, SCRIPT, SEGS_FAST, SEGS_VOICE, SUMMARY, clockText, dueText, existingAction, opdIdIn, sampleMeeting, transcriptText, type ScriptAction } from './model'
+import { CLIP, SCRIPT, SUMMARY, clockText, dueText, existingAction, meetingFacts, opdIdIn, sampleMeeting, segmentsWith, topicsWith, transcriptText, type ScriptAction } from './model'
 import type { NpNav } from './index'
 import { useStr } from './strings'
 
@@ -29,6 +28,30 @@ const LAST = CLIP.segments.length - 1
 
 type Run = 'idle' | 'playing' | 'done'
 
+/** what this tab renders from the playback: segment / play state only. The kit hook also re-renders on every word,
+ *  which this view never shows (the read-out and the waveform read the time on the ticker). */
+interface PbSnap {
+  seg: number
+  playing: boolean
+  ended: boolean
+  mode: PlaybackMode
+}
+function usePlaybackSegs(segments: ClipSegment[], lang: string, tts: boolean): { pb: Playback; state: PbSnap } {
+  const pb = useMemo(() => createPlayback(segments, lang, { tts }), [segments, lang, tts])
+  useEffect(() => () => pb.destroy(), [pb])
+  const last = useRef<{ pb: Playback; snap: PbSnap } | null>(null)
+  const get = useCallback(() => {
+    const st = pb.getState()
+    const c = last.current
+    if (c && c.pb === pb && c.snap.seg === st.seg && c.snap.playing === st.playing && c.snap.ended === st.ended && c.snap.mode === st.mode) return c.snap
+    const snap = { seg: st.seg, playing: st.playing, ended: st.ended, mode: st.mode }
+    last.current = { pb, snap }
+    return snap
+  }, [pb])
+  const state = useSyncExternalStore(pb.subscribe, get, get)
+  return { pb, state }
+}
+
 export function Meeting({ nav }: { nav: NpNav }) {
   const S = useStr()
   const { lang } = useI18n()
@@ -36,8 +59,12 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const meeting = useWorld(sampleMeeting)
   const now = useClock().minutes
   const [speed, setSpeed] = useState<'fast' | 'voice'>('fast')
-  const segs = speed === 'fast' ? SEGS_FAST : SEGS_VOICE
-  const { pb, state } = usePlayback(segs, CLIP.lang, { tts: speed === 'voice' })
+  /* the river report is read from the world once per meeting (frozen: replays and the official minutes agree) */
+  const facts = useMemo(() => meetingFacts(world.get(), meeting?.id, now), [meeting?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const clip = useMemo(() => segmentsWith(facts), [facts])
+  const topics = useMemo(() => topicsWith(facts), [facts])
+  const segs = speed === 'fast' ? clip.fast : clip.voice
+  const { pb, state } = usePlaybackSegs(segs, CLIP.lang, speed === 'voice')
   const [run, setRun] = useState<Run>(() => (meeting?.transcribed ? 'done' : 'idle'))
   const [reached, setReached] = useState(() => (meeting?.transcribed ? LAST : -1))
   const [recorder, setRecorder] = useState(false)
@@ -48,6 +75,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const ai = useNaskahAi()
   const [aiAsked, setAiAsked] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
   const timeRef = useRef<HTMLSpanElement>(null)
   const hsRef = useRef<HTMLSpanElement>(null)
   const resume = useRef<{ seg: number; playing: boolean } | null>(null)
@@ -98,11 +126,11 @@ export function Meeting({ nav }: { nav: NpNav }) {
     void ai.ask(
       lang === 'id' ? 'Buat notulen dan tindak lanjut dari transkrip rapat ini' : 'Draft the minutes and action items from this meeting transcript',
       buildCtx(s, now, lang, 'minutes', {
-        meeting: { title: CLIP.title[lang], transcript: transcriptText(lang), sample: true },
+        meeting: { title: CLIP.title[lang], transcript: transcriptText(lang, clip.voice), sample: true },
         minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: a.pic, due: dueText(a.dueAt, lang, s.day) })) },
       }),
     )
-  }, [ai, lang, now])
+  }, [ai, lang, now, clip])
 
   const finish = useCallback(() => {
     reveal(LAST)
@@ -145,9 +173,13 @@ export function Meeting({ nav }: { nav: NpNav }) {
     const el = timeRef.current
     if (!el) return
     const k = speed === 'fast' ? 3 : 1
+    let shown = ''
     const write = () => {
-      // a finished (or skipped-to-the-end) meeting reads as the full length
-      el.textContent = mmss((runRef.current === 'done' && !pb.getState().playing ? pb.duration : pb.getState().time) * k)
+      // a finished (or skipped-to-the-end) meeting reads as the full length; the text node changes once a second
+      const t = mmss((runRef.current === 'done' && !pb.getState().playing ? pb.duration : pb.getState().time) * k)
+      if (t === shown) return
+      shown = t
+      el.textContent = t
     }
     write()
     if (!state.playing) return
@@ -175,6 +207,9 @@ export function Meeting({ nav }: { nav: NpNav }) {
     ai.reset()
     pb.toSegment(0)
     pb.play()
+    // phones: the transcript and minutes sit below the player; follow the meeting there
+    if (shell.size === 'sm')
+      requestAnimationFrame(() => gridRef.current?.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' }))
   }
   const onPlay = () => {
     // retire the first-action hotspot (its capture listener only reacts to clicks on the anchor itself)
@@ -225,7 +260,8 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const summaryText = aiAsked && ai.last ? ai.last.content : run === 'done' ? (meeting?.summary?.[lang] ?? SUMMARY[lang]) : ''
   const progress = useCallback(() => (runRef.current === 'done' && !pb.getState().playing ? 1 : pb.duration ? pb.getState().time / pb.duration : 0), [pb])
   const dur = pb.duration * (speed === 'fast' ? 3 : 1)
-  const curStart = state.seg >= 0 ? (CLIP.segments[state.seg]?.start ?? 0) : 0
+  const curStart = state.seg >= 0 ? (segs[state.seg]?.start ?? 0) : 0
+  const earlyAt = status === 'terjadwal' && meeting && now < meeting.at ? meeting.at : null
 
   return (
     <div className="dk-np-meeting">
@@ -235,7 +271,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
             {S.mTitleHint} · {clockText(meeting?.at ?? 540, lang)} · {S.mPlace}
           </span>
           <h2>{(meeting?.title ?? CLIP.title)[lang]}</h2>
-          <p className="dk-np-lead">{S.mLead}</p>
+          <p className="dk-np-lead">{status === 'selesai' ? S.mLead.selesai(SCRIPT.actions.length) : earlyAt !== null ? S.mEarly(clockText(earlyAt, lang)) : S.mLead[status]}</p>
         </div>
         <div className="dk-np-mmeta">
           <StatusChip label={S.mStatus[status]} tone={status === 'selesai' ? 'done' : status === 'berlangsung' ? 'new' : 'neutral'} />
@@ -290,7 +326,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
         active={state.playing}
         height={40}
         label={S.mTimeline}
-        valueText={`${mmss(curStart)} ${S.mOf} ${mmss(CLIP.segments[LAST]?.end ?? 0)}`}
+        valueText={`${mmss(curStart)} ${S.mOf} ${mmss(segs[LAST]?.end ?? 0)}`}
         onSeek={seekFrac}
         className="dk-np-wave"
       />
@@ -306,7 +342,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
           <Recorder onClose={() => setRecorder(false)} sampleMeetingId={meeting?.id} />
         </Suspense>
       ) : (
-        <div className="dk-np-mgrid">
+        <div ref={gridRef} className="dk-np-mgrid">
           <section className={`dk-np-card dk-np-transcript${transcriptOpen ? '' : ' is-collapsed'}`} aria-label={S.mTranscript}>
             <header className="dk-np-card-h">
               <h3>
@@ -323,7 +359,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
                 <p className="dk-np-empty">{S.mTranscriptEmpty}</p>
               ) : (
                 <ol ref={listRef} className="dk-np-lines">
-                  {CLIP.segments.slice(0, seg + 1).map((line, i) => {
+                  {clip.voice.slice(0, seg + 1).map((line, i) => {
                     const cur = run === 'playing' && i === state.seg
                     return (
                       <li key={line.id} data-seg={i} className={cur ? 'is-cur' : undefined}>
@@ -352,6 +388,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
             colors={color}
             nav={nav}
             animate={run === 'playing'}
+            topics={topics}
           />
           <section className="dk-np-card dk-np-lanescard">
             <Lanes reached={seg} nav={nav} />
@@ -360,7 +397,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
       )}
       {official && (
         <Suspense fallback={null}>
-          <OfficialMinutes open={official} onClose={() => setOfficial(false)} meetingId={meeting?.id ?? null} summary={summaryText || SUMMARY[lang]} />
+          <OfficialMinutes open={official} onClose={() => setOfficial(false)} meetingId={meeting?.id ?? null} summary={summaryText || SUMMARY[lang]} topics={topics} />
         </Suspense>
       )}
     </div>

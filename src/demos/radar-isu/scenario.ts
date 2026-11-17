@@ -44,8 +44,9 @@ const noData = (lang: L): SimResponse => ({
   text: lang === 'id' ? 'Data pantauan belum termuat. Coba lagi sebentar lagi.' : 'Monitoring data has not loaded yet. Please try again in a moment.',
 })
 
+/** the biggest negative issue: the same definition as the KPI, the exec summary, the report and Meja Pimpinan */
 function top(x: RadarCtx) {
-  return [...x.topics].sort((a, b) => a.score - b.score).find((t) => t.score < -0.2) ?? null
+  return x.negIssues[0] ?? null
 }
 
 /** Basa Jawa question → a short Javanese opener (krama where it addresses the user) + its translation line */
@@ -168,6 +169,12 @@ const intents: Intent<RadarCtx>[] = [
       'give me the public opinion summary',
       'isu apa wae dina iki',
       'piye kahanane isu saiki',
+      'isu apa yang paling ramai hari ini',
+      'topik paling ramai',
+      'apa yang paling banyak dibicarakan',
+      'what is the busiest topic',
+      'what are people talking about most',
+      'isu sing paling rame',
     ],
     respond: (ctx) => {
       const x = w(ctx)
@@ -180,13 +187,13 @@ const intents: Intent<RadarCtx>[] = [
           ? [
               `Pukul ${tm(x.now, lang)}: ${nf(x.kpis.mentions24h, lang)} mention dalam 24 jam (sebelumnya ${nf(x.kpis.prev24h, lang)}), indeks sentimen ${signed(x.kpis.sentimentIndex, lang)} (${word(x.kpis.sentimentIndex, lang)}).`,
               t ? `- Topik terbesar: ${t.label.id} (${t.count} mention).` : '',
-              n ? `- Isu negatif terbesar: ${n.label.id} (${n.count} mention, skor ${nf(n.score, lang, 2)}).` : '',
+              n ? `- Isu negatif terbesar: ${n.label.id} (${n.count} mention negatif).` : '',
               `- ${hoaxLine(x, lang)}`,
             ]
           : [
               `At ${x.now}: ${nf(x.kpis.mentions24h, lang)} mentions in 24 h (previously ${nf(x.kpis.prev24h, lang)}), sentiment index ${signed(x.kpis.sentimentIndex, lang)} (${word(x.kpis.sentimentIndex, lang)}).`,
               t ? `- Biggest topic: ${t.label.en} (${t.count} mentions).` : '',
-              n ? `- Biggest negative issue: ${n.label.en} (${n.count} mentions, score ${nf(n.score, lang, 2)}).` : '',
+              n ? `- Biggest negative issue: ${n.label.en} (${n.count} negative mentions).` : '',
               `- ${hoaxLine(x, lang)}`,
             ]
       return jvWrap(
@@ -214,7 +221,7 @@ const intents: Intent<RadarCtx>[] = [
     examples: [
       'isu negatif terbesar',
       'topik apa yang paling banyak dikeluhkan',
-      'keluhan paling ramai',
+      'keluhan terbanyak',
       'isu paling buruk hari ini',
       'top negative issue',
       'what are people complaining about most',
@@ -229,7 +236,7 @@ const intents: Intent<RadarCtx>[] = [
       const n = top(x)
       if (!n)
         return {
-          text: lang === 'id' ? 'Tidak ada topik yang rata-ratanya negatif dalam 24 jam terakhir.' : 'No topic averages negative in the last 24 hours.',
+          text: lang === 'id' ? 'Tidak ada mention negatif dalam 24 jam terakhir.' : 'No negative mentions in the last 24 hours.',
           followUps: lang === 'id' ? ['Ringkas isu hari ini'] : ["Summarise today's issues"],
         }
       return jvWrap(
@@ -237,12 +244,12 @@ const intents: Intent<RadarCtx>[] = [
         {
           text:
             lang === 'id'
-              ? `Isu negatif terbesar adalah **${n.label.id}**: ${n.count} mention, jangkauan ±${nf(n.reach, lang)} akun, skor sentimen ${nf(n.score, lang, 2)}. Saran: siapkan informasi resmi yang menjawab keluhan ini dan pantau ulang dalam 3 jam.`
-              : `The biggest negative issue is **${n.label.en}**: ${n.count} mentions, reach ≈ ${nf(n.reach, lang)} accounts, sentiment score ${nf(n.score, lang, 2)}. Suggestion: prepare official information that answers it and re-check in 3 hours.`,
+              ? `Isu negatif terbesar adalah **${n.label.id}**: ${n.count} mention negatif (dari ${n.total} mention topik ini), jangkauan negatif ±${nf(n.reach, lang)} akun, skor rata-rata topik ${nf(n.score, lang, 2)}. Saran: siapkan informasi resmi yang menjawab keluhan ini dan pantau ulang dalam 3 jam.`
+              : `The biggest negative issue is **${n.label.en}**: ${n.count} negative mentions (of ${n.total} on this topic), negative reach ≈ ${nf(n.reach, lang)} accounts, topic mean score ${nf(n.score, lang, 2)}. Suggestion: prepare official information that answers it and re-check in 3 hours.`,
           toolCalls: [
             {
               name: 'klaster_topik',
-              input: { urut: 'sentimen' },
+              input: { urut: 'mention_negatif' },
               output: { topik: n.topic, mention: n.count },
             },
           ],

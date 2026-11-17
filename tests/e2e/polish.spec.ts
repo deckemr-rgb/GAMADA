@@ -48,7 +48,7 @@ test('NEW-3: EN then ID clicked while the EN chunk is still loading ends in ID (
 test('interim preview panel: ?t=09:15 shows as 09.15, no controls inside, no region or world download', async ({ page, errors }) => {
   const json: string[] = []
   page.on('request', (r) => /\.json$/.test(new URL(r.url()).pathname) && json.push(new URL(r.url()).pathname))
-  await page.goto('/demo/siaga-wilayah?role=kepala-daerah&t=09:15&off=preloader')
+  await page.goto('/demo/indeks-ekonomi?role=kepala-daerah&t=09:15&off=preloader')
   await settle(page)
   const panel = page.locator('.dk-ph-try')
   await expect(panel).toBeVisible()
@@ -61,7 +61,7 @@ test('interim preview panel: ?t=09:15 shows as 09.15, no controls inside, no reg
   // the interim shell needs neither the region pack nor geometry
   expect(json).toEqual([])
   // English: same panel, English copy and time format
-  await page.goto('/demo/siaga-wilayah?role=kepala-daerah&t=09:15&lang=en&off=preloader')
+  await page.goto('/demo/indeks-ekonomi?role=kepala-daerah&t=09:15&lang=en&off=preloader')
   await settle(page)
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(panel.getByRole('heading', { name: 'What you will be able to try' })).toBeVisible()

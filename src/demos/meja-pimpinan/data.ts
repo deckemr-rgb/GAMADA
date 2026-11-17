@@ -3,12 +3,14 @@
  * useWorld). Everything reads the simulated world; nothing here invents numbers of its own except the simulated
  * project locations, which say so.
  */
+import { useSyncExternalStore } from 'react'
 import { PRODUCT_BY_SLUG, isProductSlug, type ProductSlug } from '../../content/products'
 import type { IconName } from '../../demo-kit/ui'
 import {
-  CATEGORY_LABEL, DAY_MIN, createParamSelector, createSelector, rows,
-  type AuditEntry, type Bi, type ComplaintCategory, type EntityRef, type EventType, type Minutes, type WorldState,
+  CATEGORY_LABEL, DAY_MIN, clock, createParamSelector, createSelector, rows,
+  type AuditEntry, type Bi, type ComplaintCategory, type EntityRef, type EventType, type Minutes, type PricePoint, type Procurement, type WorldState,
 } from '../../demo-kit/world'
+import { briefingItems, weekChangeOf, type BriefingItem } from '../../demo-kit/world/satu-daerah'
 
 /* ------------------------------------------------------------------ constants (module-local) */
 export const MP = {
@@ -125,18 +127,65 @@ export const risingCategory = createParamSelector((s) => [s.complaints], (now: M
   const top = [...d.entries()].filter(([k]) => k !== 'lainnya').sort((a, b) => b[1] - a[1])[0]
   return top && top[1] > 0 ? top[0] : 'jalan-rusak'
 })
+/** a label mid-sentence: lower case, but acronyms stay ("PJU mati", not "pju mati") */
+export const lcLabel = (t: string): string => (/^[A-Z]{2}/.test(t) ? t : t.toLowerCase())
 export const causeQuestion = (c: ComplaintCategory): Bi => ({
-  id: `Kenapa aduan ${CATEGORY_LABEL[c].id.toLowerCase()} naik minggu ini?`,
-  en: `Why are ${CATEGORY_LABEL[c].en.toLowerCase()} complaints up this week?`,
+  id: `Kenapa aduan ${lcLabel(CATEGORY_LABEL[c].id)} naik minggu ini?`,
+  en: `Why are ${lcLabel(CATEGORY_LABEL[c].en)} complaints up this week?`,
 })
 
-export function devOf(p: { hps: number; items: { qty: number; marketPrice: number }[] }): number {
+/** % the cost estimate (HPS) sits above the market price, item by item (the same formula as the kit's briefing) */
+export function devOf(p: { items: { qty: number; marketPrice: number; hpsPrice: number }[] }): number {
   const market = p.items.reduce((a, i) => a + i.qty * i.marketPrice, 0)
-  return market > 0 ? ((p.hps - market) / market) * 100 : 0
+  const hps = p.items.reduce((a, i) => a + i.qty * i.hpsPrice, 0)
+  return market > 0 ? ((hps - market) / market) * 100 : 0
 }
-export function weekChange(price: number, history: number[]): number {
-  const base = history[history.length - 7] ?? history[0] ?? price
-  return base > 0 ? (price - base) / base : 0
+/** change vs 7 days ago; `history` holds daily closes EXCLUDING today, so 7 days ago is the 7th from the end */
+export const weekChange = (price: number, history: number[]): number => weekChangeOf(price, history)
+/** the single market x commodity with the largest 7-day rise (briefing, map, suggestions and chat all name this one) */
+export function topRiser(s: WorldState): { p: PricePoint; d: number } | null {
+  let best: { p: PricePoint; d: number } | null = null
+  for (const p of rows(s.prices)) {
+    const d = weekChange(p.price, p.history)
+    if (!best || d > best.d) best = { p, d }
+  }
+  return best
+}
+/** the riskiest active package, in the kit briefing's order: flagged by risk score, else an emergency one, else the
+ *  highest mark-up over market. Briefing, suggestions and chat name the same package. */
+export function riskiestProcurement(s: WorldState): Procurement | null {
+  const procs = rows(s.procurements).filter((p) => p.status !== 'selesai')
+  return procs.filter((p) => p.flagged).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0))[0] ?? procs.find((p) => p.emergency) ?? [...procs].sort((a, b) => devOf(b) - devOf(a))[0] ?? null
+}
+/** sort key for a package list that starts with riskiestProcurement's choice */
+export function riskRank(p: Procurement): number {
+  return p.flagged ? 2000 + (p.riskScore ?? 0) : p.emergency ? 1000 : devOf(p)
+}
+
+/* ------------------------------------------------------------------ the briefing as Meja Pimpinan shows it */
+
+
+/**
+ * The briefing as Meja Pimpinan shows it: the kit's briefingItems, which now carries the corrections first made here
+ * (true 7-day price change via weekChangeOf, EN topic labels, distinct record per item, Indeks Ekonomi item).
+ */
+export function mpBriefingItems(s: WorldState, now: Minutes): BriefingItem[] {
+  return briefingItems(s, now)
+}
+/** same items (titles, details, links) => same value, so a panel does not re-render for unrelated world changes */
+export const sameItems = (a: BriefingItem[], b: BriefingItem[]): boolean =>
+  a.length === b.length && a.every((x, i) => x.title.id === b[i]!.title.id && x.detail.id === b[i]!.detail.id && x.refs[0] === b[i]!.refs[0])
+
+/* ------------------------------------------------------------------ clock at a coarse step */
+
+/**
+ * The world minute rounded down to `step` minutes. A component re-renders only when that value changes, so panels
+ * that need the time of day at 5- or 60-minute resolution do not re-render every world minute (the canvas root does
+ * not subscribe to the clock at all).
+ */
+export function useNow(step = 1): Minutes {
+  const get = () => Math.floor(clock.get().minutes / step) * step
+  return useSyncExternalStore(clock.subscribe, get, get)
 }
 
 /* ------------------------------------------------------------------ map: simulated project locations */
@@ -163,11 +212,11 @@ const SHOWN: Partial<Record<EventType, IconName>> = {
   'actionItem.reminded': 'bell', 'actionItem.statusChanged': 'kanban', 'hoax.detected': 'alert', 'clarification.published': 'shield',
   'rain.forecast': 'rain', 'flood.alert': 'water', 'alert.broadcast': 'bell', 'flood.confirmed': 'checkCircle',
   'procurement.created': 'package', 'procurement.flagged': 'flag', 'procurement.recommended': 'doc', 'eligibility.opened': 'users',
-  'harvest.updated': 'sun', 'price.anomaly': 'trendUp', 'market.operation': 'cart', 'supply.signal': 'truck',
+  'harvest.updated': 'sun', 'econ.updated': 'chart', 'price.anomaly': 'trendUp', 'market.operation': 'cart', 'supply.signal': 'truck',
 }
 const TONE: Partial<Record<EventType, 'accent' | 'warn' | 'danger' | 'done'>> = {
   'hoax.detected': 'danger', 'flood.alert': 'danger', 'complaint.clustered': 'warn', 'procurement.flagged': 'warn', 'price.anomaly': 'warn',
-  'instruction.issued': 'accent', 'briefing.generated': 'accent', 'clarification.published': 'done', 'flood.confirmed': 'warn', 'ticket.statusChanged': 'done',
+  'econ.updated': 'warn', 'instruction.issued': 'accent', 'briefing.generated': 'accent', 'clarification.published': 'done', 'flood.confirmed': 'warn', 'ticket.statusChanged': 'done',
 }
 
 export interface EventRow {

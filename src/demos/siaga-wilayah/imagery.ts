@@ -1,15 +1,14 @@
 /**
- * siaga-wilayah/imagery.ts — "Citra satelit (simulasi)": a PROCEDURAL satellite-like rendering of the real region
- * (owner decision: no real satellite provider). Loaded lazily, the first time the imagery layer or the Lingkungan
- * comparator is used.
+ * siaga-wilayah/imagery.ts — the Lingkungan before/after comparator's pictures: a PROCEDURAL satellite-like rendering
+ * of a crop of the real region (labelled "simulasi"; the map's "Citra satelit" toggle is the real Sentinel-2 2016
+ * mosaic, kit `imagery` layer). Loaded lazily with the Lingkungan tab.
  *
  * Land cover comes from the real kecamatan polygons (pack flood / landslide risk steer rice paddies vs teak forest),
  * seeded value noise and a rotated paddy-parcel grid; the real rivers, reservoirs and roads are stroked on top and
  * village settlements (roofs + home gardens) are scattered around the real desa centroids. The "after" variant
  * applies the SIMULATED land-use changes of sites.ts. Every view that shows it says "simulasi".
  *
- * The region picture is painted in row slices (no long task) into a canvas that the map shows as a MapLibre canvas
- * source under the boundaries (layer id `sw-img`, added through MapViewHandle.raw()).
+ * Pictures are painted in row slices (no long task).
  */
 import type { RegionGeo, RegionPack } from '../../demo-kit/region/types'
 import type { ChangeSite, LngLat } from './sites'
@@ -18,15 +17,10 @@ export type Variant = 'before' | 'after'
 
 /* ------------------------------------------------------------------ constants (module-local) */
 const IMG = {
-  /** region canvas width (px) on fine pointers / coarse pointers */
-  width: 1600,
-  widthCoarse: 1100,
   /** kecamatan lookup raster width (px) */
   lookupW: 900,
   /** rows painted per slice before yielding */
   rowsPerSlice: 90,
-  /** raster opacity of the map layer */
-  opacity: 0.94,
 } as const
 
 /* ------------------------------------------------------------------ noise */
@@ -393,66 +387,10 @@ function inSite(c: Ctx, p: LngLat): boolean {
   return false
 }
 
-/** View of the whole region bbox at the imagery resolution. */
-export function regionView(c: Ctx, coarse: boolean): View {
-  const [W, S, E, N] = c.bbox
-  const w = coarse ? IMG.widthCoarse : IMG.width
-  return { bbox: c.bbox, w, h: Math.round((w * ((N - S) * c.ky)) / ((E - W) * c.kx)) }
-}
-
 /** View of a crop around `center`, `kmW` wide, at `w` × `h` px. */
 export function cropView(c: Ctx, center: LngLat, kmW: number, w: number, h: number): View {
   const kmH = (kmW * h) / w
   const dLon = kmW / 2 / c.kx
   const dLat = kmH / 2 / c.ky
   return { bbox: [center[0] - dLon, center[1] - dLat, center[0] + dLon, center[1] + dLat], w, h }
-}
-
-/* ------------------------------------------------------------------ map layer */
-interface MapLike {
-  getLayer(id: string): unknown
-  getSource(id: string): unknown
-  addSource(id: string, src: unknown): void
-  addLayer(layer: unknown, before?: string): void
-  removeLayer(id: string): void
-  removeSource(id: string): void
-  setLayoutProperty(id: string, k: string, v: unknown): void
-}
-const LAYER = 'sw-img'
-const SOURCE = 'sw-img-src'
-let installedFor: RegionGeo | null = null
-let painting: { geo: RegionGeo; job: Promise<HTMLCanvasElement | null>; signal: { cancelled: boolean } } | null = null
-
-/** Show / hide the procedural imagery on the map (paints once per region; later toggles only flip visibility). */
-export async function setImagery(raw: unknown, c: Ctx, geo: RegionGeo, on: boolean, coarse: boolean): Promise<void> {
-  const map = raw as MapLike | null
-  if (!map) return
-  if (!on) {
-    if (map.getLayer(LAYER)) map.setLayoutProperty(LAYER, 'visibility', 'none')
-    return
-  }
-  if (installedFor === geo && map.getLayer(LAYER)) {
-    map.setLayoutProperty(LAYER, 'visibility', 'visible')
-    return
-  }
-  if (painting?.geo !== geo) {
-    if (painting) painting.signal.cancelled = true
-    const signal = { cancelled: false }
-    painting = { geo, signal, job: paint(c, regionView(c, coarse), 'after', signal) }
-  }
-  const cv = await painting.job
-  if (!cv || painting?.geo !== geo) return
-  if (map.getLayer(LAYER)) map.removeLayer(LAYER)
-  if (map.getSource(SOURCE)) map.removeSource(SOURCE)
-  const [W, S, E, N] = c.bbox
-  map.addSource(SOURCE, { type: 'canvas', canvas: cv, animate: false, coordinates: [[W, N], [E, N], [E, S], [W, S]] })
-  map.addLayer({ id: LAYER, type: 'raster', source: SOURCE, paint: { 'raster-opacity': IMG.opacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, map.getLayer('dk-mask-fill') ? 'dk-mask-fill' : undefined)
-  installedFor = geo
-}
-
-/** forget the installed layer (map unmounted) */
-export function resetImagery(): void {
-  installedFor = null
-  if (painting) painting.signal.cancelled = true
-  painting = null
 }

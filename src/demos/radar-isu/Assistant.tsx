@@ -4,7 +4,7 @@
  * Structured answers render as cards: post assessment ('sentiment'), clarification package ('clarification'),
  * topic analysis ('analysis'). New answers are announced politely.
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Drawer, Icon, Input } from '../../demo-kit/ui'
 import { useAiChat, type ChatMessage, type Structured } from '../../demo-kit/ai/chat'
 import { clock, useSession, world } from '../../demo-kit/world'
@@ -43,6 +43,7 @@ const S = {
     you: 'Anda',
     ai: 'Analis AI',
     empty: 'Mulai dengan salah satu pertanyaan di bawah.',
+    tools: {} as Record<string, string>,
   },
   en: {
     title: 'Radar Isu AI analyst',
@@ -74,6 +75,17 @@ const S = {
     you: 'You',
     ai: 'AI analyst',
     empty: 'Start with one of the questions below.',
+    tools: {
+      baca_pantauan: 'read the monitor',
+      klaster_topik: 'topic clusters',
+      nilai_mention: 'assess the post',
+      cek_hoaks: 'check hoaxes',
+      susun_klarifikasi: 'draft the clarification',
+      deret_sentimen: 'sentiment series',
+      gabung_sumber: 'join sources',
+      analisis_topik: 'analyse the topic',
+      'siaga_wilayah.tinggi_muka_air': 'Siaga Wilayah water level',
+    } as Record<string, string>,
   },
 }
 
@@ -187,7 +199,7 @@ function Msg({ m, t, onOpenClarify }: { m: ChatMessage; t: T; onOpenClarify?: ((
         <ol className="dk-ri-steps">
           {m.toolCalls.map((c) => (
             <li key={c.id}>
-              <Icon name="check" size={13} /> <code>{c.name}</code>
+              <Icon name="check" size={13} /> {t.tools[c.name] ? <span>{t.tools[c.name]}</span> : <code>{c.name}</code>}
             </li>
           ))}
         </ol>
@@ -230,16 +242,34 @@ export default function Assistant({
     getContext: () => radarCtx(world.get(), clock.get().minutes),
   })
   const [text, setText] = useState('')
+  const input = useRef<HTMLInputElement>(null)
   const { send } = chat
   useEffect(() => {
     if (open && prompt) void send(prompt)
   }, [open, prompt, promptKey, send])
 
+  /* the kit drawer body is the scroller: keep the newest answer in view while it streams, unless the visitor has
+     scrolled up to read an older one */
   const log = useRef<HTMLOListElement>(null)
+  const stick = useRef(true)
   useEffect(() => {
-    const el = log.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [chat.messages])
+    if (!shown) return
+    const sc = bodyRef.current?.closest<HTMLElement>('.dk-drawer-body')
+    if (!sc) return
+    const on = () => {
+      stick.current = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 48
+    }
+    sc.addEventListener('scroll', on, { passive: true })
+    return () => sc.removeEventListener('scroll', on)
+  }, [shown])
+  const lastUser = [...chat.messages].reverse().find((m) => m.role === 'user')?.id
+  useEffect(() => {
+    stick.current = true
+  }, [lastUser])
+  useLayoutEffect(() => {
+    const sc = bodyRef.current?.closest<HTMLElement>('.dk-drawer-body')
+    if (sc && stick.current) sc.scrollTop = sc.scrollHeight
+  }, [chat.messages, chat.followUps, shown])
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -262,7 +292,27 @@ export default function Assistant({
     : undefined
 
   return (
-    <Drawer open={shown} onClose={onClose} title={t.title} eyebrow={t.eyebrow} width={480}>
+    <Drawer
+      open={shown}
+      onClose={onClose}
+      title={t.title}
+      eyebrow={t.eyebrow}
+      width={480}
+      footer={
+        <form className="dk-ri-ask" onSubmit={submit}>
+          <Input value={text} onChange={(e) => setText(e.target.value)} onFocus={chat.prepare} placeholder={t.placeholder} aria-label={t.input} maxLength={600} data-autofocus="" ref={input} />
+          {chat.busy ? (
+            <Button type="button" variant="secondary" icon="pause" onClick={chat.stop}>
+              {t.stop}
+            </Button>
+          ) : (
+            <Button type="submit" variant="primary" icon="send" disabled={!text.trim()}>
+              {t.send}
+            </Button>
+          )}
+        </form>
+      }
+    >
       <div ref={bodyRef} className="dk-ri-chat">
         {visible.length ? (
           <ol ref={log} className="dk-ri-log" aria-live="polite" aria-relevant="additions text">
@@ -276,24 +326,22 @@ export default function Assistant({
         {!!chips.length && (
           <div className="dk-ri-chips dk-ri-sugg">
             {chips.map((c) => (
-              <Button key={c} size="sm" variant="secondary" onClick={() => void chat.send(c)} disabled={chat.busy}>
+              <Button
+                key={c}
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  // the chips are replaced by follow-ups: keep keyboard focus in the drawer (the question field)
+                  input.current?.focus({ preventScroll: true })
+                  void chat.send(c)
+                }}
+                disabled={chat.busy}
+              >
                 {c}
               </Button>
             ))}
           </div>
         )}
-        <form className="dk-ri-ask" onSubmit={submit}>
-          <Input value={text} onChange={(e) => setText(e.target.value)} onFocus={chat.prepare} placeholder={t.placeholder} aria-label={t.input} maxLength={600} />
-          {chat.busy ? (
-            <Button type="button" variant="secondary" icon="pause" onClick={chat.stop}>
-              {t.stop}
-            </Button>
-          ) : (
-            <Button type="submit" variant="primary" icon="send" disabled={!text.trim()}>
-              {t.send}
-            </Button>
-          )}
-        </form>
       </div>
     </Drawer>
   )

@@ -5,6 +5,9 @@
   position: relative;
   width: 100%;
   min-width: 0;
+  /* per-frame progress / bar updates repaint this small layer only, never the page's root layer */
+  contain: layout paint;
+  will-change: transform;
 }
 .dk-wave svg {
   display: block;

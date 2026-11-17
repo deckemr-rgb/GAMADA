@@ -6,7 +6,8 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { FloodImpact, MapViewHandle } from '../../demo-kit/map'
-import type { Harvest } from '../../demo-kit/world'
+import { motionMode } from '../../demo-kit/ui'
+import { world, type Harvest } from '../../demo-kit/world'
 import type { ChangeSite } from './sites'
 
 export type TabId = 'alerts' | 'forecast' | 'agri' | 'env'
@@ -28,8 +29,6 @@ export interface UiState {
   site: string | null
   /** Lingkungan: the simulated change sites (computed once the tab opens) */
   sites: ChangeSite[]
-  /** procedural imagery is being rendered */
-  imageryBusy: boolean
   selectedKec: string | null
   /** clicked map marker (layer + item) */
   picked: { layer: string; id: string } | null
@@ -48,6 +47,8 @@ export interface UiState {
   insightOff: boolean
   /** an AI-drafted warning waiting to be opened in the broadcast dialog */
   draft: AlertDraft | null
+  /** the rain drifts (ambient repaint): before the first run, during playback / scrubbing and 15 s after */
+  rainLive: boolean
 }
 
 export interface AlertDraft {
@@ -83,7 +84,6 @@ const initial = (): UiState => ({
   metric: 'estimate',
   site: null,
   sites: [],
-  imageryBusy: false,
   selectedKec: null,
   picked: null,
   broadcastOpen: false,
@@ -95,6 +95,7 @@ const initial = (): UiState => ({
   flash: null,
   insightOff: false,
   draft: null,
+  rainLive: true,
 })
 
 let state: UiState = initial()
@@ -147,9 +148,50 @@ const impactCache = new Map<number, FloodImpact>()
 export function impactAt(hours: number): FloodImpact | null {
   const hit = impactCache.get(hours)
   if (hit) return hit
-  const v = mapRef.current?.floodImpact(hours) ?? null
+  const raw = mapRef.current?.floodImpact(hours) ?? null
+  const v = raw ? spreadPeople(raw) : null
   if (v) impactCache.set(hours, v)
   return v
+}
+
+/** seeded 0…1 from an id (FNV-1a) */
+function hash01(id: string): number {
+  let h = 2166136261
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619)
+  return ((h >>> 0) % 10007) / 10007
+}
+let weightsOf: { region: unknown; w: Map<string, number> } | null = null
+/**
+ * The kit model spreads a kecamatan's population EVENLY over its desa, so every fully flooded desa of one kecamatan
+ * shows the same head-count. Re-spread it with a seeded weight per desa (0.45…1.55, mean 1 within the kecamatan, so
+ * the kecamatan total is unchanged) and recompute the total from the rows (HUD, Prediksi and AI read the same object).
+ */
+function spreadPeople(i: FloodImpact): FloodImpact {
+  const region = world.get().region
+  if (weightsOf?.region !== region) {
+    const w = new Map<string, number>()
+    for (const k of region.kecamatan) {
+      const raw = k.desa.map((d) => 0.45 + 1.1 * hash01(d.id))
+      const mean = raw.reduce((a, b) => a + b, 0) / Math.max(1, raw.length)
+      k.desa.forEach((d, j) => w.set(d.id, raw[j]! / (mean || 1)))
+    }
+    weightsOf = { region, w }
+  }
+  const w = weightsOf.w
+  const desa = i.desa.map((d) => ({ ...d, people: Math.round(d.people * (w.get(d.id) ?? 1)) }))
+  return { ...i, desa, people: desa.reduce((n, d) => n + d.people, 0) }
+}
+
+/**
+ * Phones: the panel sits BELOW the map, so a panel control that acts on the map (fly, pick, layer) would change
+ * something off-screen. Bring the map into view first (no-op on wider layouts, where the map is beside the panel).
+ */
+export function revealMap(): void {
+  const el = document.querySelector<HTMLElement>('.dk-sg.is-sm .dk-sg-map')
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  if (r.top >= -8 && r.top < window.innerHeight * 0.25) return
+  el.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
 }
 export function clearImpactCache(): void {
   impactCache.clear()
@@ -187,4 +229,19 @@ export function withMap(fn: (h: MapViewHandle) => void): void {
 export function mapReady(h: MapViewHandle): void {
   mapRef.current = h
   for (const fn of pending.splice(0)) fn(h)
+}
+
+/**
+ * Idle cost: the rain's ambient drift repaints the whole map every frame. After the forecast ran it drifts only while
+ * the scrubber moves and for RAIN_HOLD_MS after, then holds still (no repaint loop while people read the panels).
+ */
+const RAIN_HOLD_MS = 15000
+let rainTimer: ReturnType<typeof setTimeout> | null = null
+export function rainActivity(): void {
+  if (!state.rainLive) ui.set({ rainLive: true })
+  if (rainTimer) clearTimeout(rainTimer)
+  rainTimer = setTimeout(() => {
+    rainTimer = null
+    if (state.ran) ui.set({ rainLive: false })
+  }, RAIN_HOLD_MS)
 }

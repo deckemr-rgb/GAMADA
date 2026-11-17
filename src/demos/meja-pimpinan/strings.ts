@@ -63,6 +63,8 @@ export const S = {
   insight: { id: 'Wawasan AI', en: 'AI insight' },
   insightTop: { id: '{kec} paling banyak aduan 7 hari terakhir ({n}, sebelumnya {p}). Kategori teratas: {cat}.', en: '{kec} has the most complaints in the last 7 days ({n}, previously {p}). Top category: {cat}.' },
   insightAct: { id: 'Lihat {kec}', en: 'Show {kec}' },
+  insightOpd: { id: 'Untuk {o}: {kec} paling banyak aduan 7 hari terakhir ({n}, sebelumnya {p}). Kategori teratas: {cat}.', en: 'For {o}: {kec} has the most complaints in the last 7 days ({n}, previously {p}). Top category: {cat}.' },
+  lbKeys: { id: 'panah atas/bawah untuk berpindah, Enter membuka scorecard', en: 'up/down arrows to move, Enter opens the scorecard' },
   cluster: { id: 'Klaster', en: 'Cluster' },
   projectSim: { id: 'lokasi simulasi', en: 'simulated location' },
   priceWeek: { id: 'sepekan', en: 'in a week' },

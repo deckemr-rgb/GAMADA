@@ -16,7 +16,7 @@ import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { clock, emit, rows, settled, useSession, world, type AuditEntry } from '../../demo-kit/world'
 import { alertRecipients, floodScenarioAlert, zoneCitizens } from '../../demo-kit/world/satu-daerah'
-import { clockText, floodAlerts, productHref } from './data'
+import { clockText, draftLevel, floodAlerts, productHref, withSimMark } from './data'
 import { draftAlert, geoContext } from './scenario'
 import { fill, nf, type Bi } from './strings'
 import { ui, useUi } from './ui'
@@ -48,13 +48,16 @@ const T = {
   aiBusy: { id: 'AI menyusun…', en: 'AI is drafting…' },
   aiDone: { id: 'Draf AI diterapkan · mode {m}', en: 'AI draft applied · {m} mode' },
   aiFell: { id: 'AI Live sedang sibuk, beralih ke Simulasi', en: 'Live AI is busy, switched to Simulation' },
-  preview: { id: 'Pratinjau WhatsApp', en: 'WhatsApp preview' },
-  official: { id: 'BPBD {r} (resmi)', en: 'BPBD {r} (official)' },
+  preview: { id: 'Pratinjau {c}', en: '{c} preview' },
+  official: { id: 'BPBD {r} · akun demo (simulasi)', en: 'BPBD {r} · demo account (simulated)' },
+  smsFrom: { id: 'SMS dari BPBD-{r} · demo (simulasi)', en: 'SMS from BPBD-{r} · demo (simulated)' },
+  minOne: { id: 'Minimal satu kanal harus aktif.', en: 'At least one channel must stay on.' },
   recipients: { id: 'Penerima', en: 'Recipients' },
   rcptSum: { id: '{o} pejabat wilayah (jabatan, nomor fiktif) + {c} warga terdaftar Sapa Warga', en: '{o} local officials (titles, fictional numbers) + {c} residents registered in Sapa Warga' },
   more: { id: '+{n} penerima lain', en: '+{n} more recipients' },
   cancel: { id: 'Batal', en: 'Cancel' },
   send: { id: 'Kirim peringatan', en: 'Send warning' },
+  approve: { id: 'Setujui & kirim', en: 'Approve & send' },
   sending: { id: 'Mengirim…', en: 'Sending…' },
   needArea: { id: 'Pilih minimal satu kecamatan.', en: 'Pick at least one district.' },
   sentTitle: { id: 'Peringatan terkirim', en: 'Warning sent' },
@@ -77,7 +80,6 @@ const afterPaint = () => new Promise<void>((r) => requestAnimationFrame(() => se
 type Level = 1 | 2 | 3 | 4
 const CHANNELS = ['wa', 'sms', 'sirine', 'radio', 'media-sosial'] as const
 type Channel = (typeof CHANNELS)[number]
-const LV: Record<string, Level> = { waspada: 1, siaga: 2, awas: 3 }
 
 export default function Broadcast() {
   const { lang } = useI18n()
@@ -106,6 +108,8 @@ export default function Broadcast() {
   const [channels, setChannels] = useState<Channel[]>(() => (draft?.channels.filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c)) ?? ['wa', 'sms']))
   const [edited, setEdited] = useState<string | null>(draft?.message || null)
   const [stage, setStage] = useState<'compose' | 'sending' | 'done'>('compose')
+  const [chHint, setChHint] = useState(false)
+  const kd = session.role === 'kepala-daerah'
   const [result, setResult] = useState<{ alertId: string; follow: AuditEntry[]; phones: number; sitiMsg: string | null; messageId: string | null } | null>(null)
   useEffect(() => ui.set({ draft: null }), [])
 
@@ -122,6 +126,8 @@ export default function Broadcast() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, names.join('|'), onsetH])
   const message = edited ?? template[lang]
+  /** what actually leaves the demo: always marked as a simulation */
+  const outgoing = withSimMark(message, lang)
 
   /* ---------------------------------------------------------------- AI drafting (sim scenario or Live proxy) */
   const chat = useAiChat('siaga-wilayah', {
@@ -132,7 +138,8 @@ export default function Broadcast() {
       const a = m.structured?.find((x) => x.kind === 'alert')?.data as { level?: string; message?: string; channels?: string[] } | undefined
       if (!a?.message) return
       setEdited(a.message.slice(0, 600))
-      if (a.level && LV[a.level] && !(level === 4 && a.level === 'awas')) setLevel(LV[a.level]!)
+      // the structured enum stops at "awas": the "LEVEL n" in the text decides (a level-4 draft stays level 4)
+      setLevel(draftLevel(a))
       const ch = (a.channels ?? []).filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c))
       if (ch.length) setChannels(ch)
     },
@@ -160,7 +167,9 @@ export default function Broadcast() {
       alertId = e.payload.id!
       evs.push(e.id)
     }
-    const msg: Bi = edited ? { id: lang === 'id' ? edited : template.id, en: lang === 'en' ? edited : template.en } : template
+    const msg: Bi = edited
+      ? { id: withSimMark(lang === 'id' ? edited : template.id, 'id'), en: withSimMark(lang === 'en' ? edited : template.en, 'en') }
+      : { id: withSimMark(template.id, 'id'), en: withSimMark(template.en, 'en') }
     const b = emit('alert.broadcast', { alertId, channels, recipients: officials.length + citizens.length, desaIds, message: msg }, 'siaga-wilayah')
     evs.push(b.id)
     await settled()
@@ -194,7 +203,7 @@ export default function Broadcast() {
           {L('cancel')}
         </Button>
         <Button variant={level >= 3 ? 'danger' : 'primary'} icon="send" onClick={() => void send()} busy={stage === 'sending'} disabled={!kec.length || !channels.length || !message.trim()} data-sw="bc-send">
-          {stage === 'sending' ? L('sending') : L('send')}
+          {stage === 'sending' ? L('sending') : kd ? L('approve') : L('send')}
         </Button>
       </>
     )
@@ -202,11 +211,11 @@ export default function Broadcast() {
   return (
     <Modal open onClose={close} title={stage === 'done' ? L('sentTitle') : L('title')} description={stage === 'done' ? undefined : L('desc')} size="lg" footer={footer} dismissable={stage !== 'sending'}>
       {stage === 'done' && result ? (
-        <Sent L={L} lang={lang} officials={officials} result={result} message={message} session={session} region={s0.region.shortName} sm={size === 'sm'} />
+        <Sent L={L} lang={lang} officials={officials} result={result} message={outgoing} session={session} region={s0.region.shortName} sm={size === 'sm'} />
       ) : (
-        <div className="dk-sw-bc">
-          <div className="dk-sw-bc-form">
-            <fieldset className="dk-sw-fs">
+        <div className="dk-sg-bc">
+          <div className="dk-sg-bc-form">
+            <fieldset className="dk-sg-fs">
               <legend>{L('level')}</legend>
               <Segmented<`${Level}`>
                 label={L('level')}
@@ -218,10 +227,10 @@ export default function Broadcast() {
                 options={[1, 2, 3, 4].map((n) => ({ value: `${n}` as `${Level}`, label: L(`l${n}` as 'l1') }))}
               />
             </fieldset>
-            <fieldset className="dk-sw-fs">
+            <fieldset className="dk-sg-fs">
               <legend>{L('area')}</legend>
-              <p className="dk-sw-fine">{L('suggested')}</p>
-              <div className="dk-sw-chips" role="group" aria-label={L('area')}>
+              <p className="dk-sg-fine">{L('suggested')}</p>
+              <div className="dk-sg-chips" role="group" aria-label={L('area')}>
                 {[...new Set([...suggested, ...kec])].map((id) => (
                   <Chip
                     key={id}
@@ -247,7 +256,7 @@ export default function Broadcast() {
                 }}
                 options={[{ value: '', label: L('addPick') }, ...s0.region.kecamatan.filter((k) => !suggested.includes(k.id) && !kec.includes(k.id)).map((k) => ({ value: k.id, label: k.name }))]}
               />
-              {!kec.length && <p className="dk-sw-err">{L('needArea')}</p>}
+              {!kec.length && <p className="dk-sg-err">{L('needArea')}</p>}
               {hitDesa.length > 0 && (
                 <Segmented
                   label={L('scope')}
@@ -261,57 +270,76 @@ export default function Broadcast() {
                 />
               )}
             </fieldset>
-            <fieldset className="dk-sw-fs">
+            <fieldset className="dk-sg-fs">
               <legend>{L('channels')}</legend>
-              <div className="dk-sw-chips" role="group" aria-label={L('channels')}>
-                {CHANNELS.map((c) => (
-                  <Chip key={c} selected={channels.includes(c)} onToggle={() => setChannels((x) => (x.includes(c) ? (x.length > 1 ? x.filter((y) => y !== c) : x) : [...x, c]))}>
-                    {L(`ch_${c}` as 'ch_wa')}
-                  </Chip>
-                ))}
+              <div className="dk-sg-chips" role="group" aria-label={L('channels')}>
+                {CHANNELS.map((c) => {
+                  const on = channels.includes(c)
+                  const last = on && channels.length === 1
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`dk-chip dk-chip--neutral${on ? ' is-selected' : ''}`}
+                      aria-pressed={on}
+                      aria-disabled={last || undefined}
+                      aria-describedby={last ? 'sw-bc-minone' : undefined}
+                      onClick={() => {
+                        if (last) return setChHint(true)
+                        setChHint(false)
+                        setChannels((x) => (on ? x.filter((y) => y !== c) : [...x, c]))
+                      }}
+                    >
+                      <span>{L(`ch_${c}` as 'ch_wa')}</span>
+                    </button>
+                  )
+                })}
               </div>
+              <p id="sw-bc-minone" className={chHint ? 'dk-sg-err' : 'dk-sg-fine'} aria-live="polite">
+                {channels.length === 1 ? L('minOne') : ''}
+              </p>
             </fieldset>
-            <div className="dk-sw-fs">
-              <div className="dk-sw-msghead">
+            <div className="dk-sg-fs">
+              <div className="dk-sg-msghead">
                 <label htmlFor="sw-bc-msg">{L('message')}</label>
                 <Button size="sm" variant="secondary" icon="spark" onClick={askAi} onFocus={chat.prepare} onPointerEnter={chat.prepare} busy={chat.busy} data-sw="bc-ai">
                   {chat.busy ? L('aiBusy') : L('ai')}
                 </Button>
               </div>
               <Textarea id="sw-bc-msg" rows={size === 'sm' ? 6 : 5} maxLength={600} value={message} onChange={(e) => setEdited(e.target.value)} />
-              <p className="dk-sw-fine" aria-live="polite">
+              <p className="dk-sg-fine" aria-live="polite">
                 {L('chars', { n: message.length })}
                 {aiState === 'done' && ` · ${L('aiDone', { m: aiMsg?.mode === 'live' ? L('live') : L('sim') })}`}
                 {aiMsg?.fellBack && ` · ${L('aiFell')}`}
               </p>
             </div>
           </div>
-          <div className="dk-sw-bc-side">
-            <p className="dk-sw-fslabel">{L('preview')}</p>
-            <div className="dk-sw-wa">
-              <p className="dk-sw-wa-from">
-                <Icon name="shield" size={14} />
-                {L('official', { r: s0.region.shortName })}
+          <div className="dk-sg-bc-side">
+            <p className="dk-sg-fslabel">{L('preview', { c: L(`ch_${channels.includes('wa') ? 'wa' : (channels[0] ?? 'wa')}` as 'ch_wa') })}</p>
+            <div className={`dk-sg-wa${channels.includes('wa') ? '' : ' is-sms'}`}>
+              <p className="dk-sg-wa-from">
+                <Icon name={channels.includes('wa') ? 'shield' : 'phone'} size={14} />
+                {channels.includes('wa') ? L('official', { r: s0.region.shortName }) : L('smsFrom', { r: s0.region.shortName.toUpperCase() })}
               </p>
-              <p className="dk-sw-wa-bubble">
-                {message}
-                <span className="dk-sw-wa-time dk-num">{clockText(clock.get().minutes, lang)}</span>
+              <p className="dk-sg-wa-bubble">
+                {outgoing}
+                <span className="dk-sg-wa-time dk-num">{clockText(clock.get().minutes, lang)}</span>
               </p>
             </div>
-            <p className="dk-sw-fslabel">
+            <p className="dk-sg-fslabel">
               {L('recipients')} · {nf(officials.length + citizens.length, lang)}
             </p>
-            <p className="dk-sw-fine">{L('rcptSum', { o: nf(officials.length, lang), c: nf(citizens.length, lang) })}</p>
-            <ul className="dk-sw-rcpts">
+            <p className="dk-sg-fine">{L('rcptSum', { o: nf(officials.length, lang), c: nf(citizens.length, lang) })}</p>
+            <ul className="dk-sg-rcpts">
               {officials.slice(0, 6).map((r) => (
                 <li key={r.id}>
                   <Icon name={r.kind === 'camat' ? 'building' : 'user'} size={14} />
                   <span>{r.title[lang]}</span>
-                  <span className="dk-num dk-sw-muted">{r.phone}</span>
+                  <span className="dk-num dk-sg-muted">{r.phone}</span>
                 </li>
               ))}
             </ul>
-            {officials.length > 6 && <p className="dk-sw-fine">{L('more', { n: officials.length - 6 + citizens.length })}</p>}
+            {officials.length > 6 && <p className="dk-sg-fine">{L('more', { n: officials.length - 6 + citizens.length })}</p>}
           </div>
         </div>
       )}
@@ -345,12 +373,23 @@ function Sent({
   const sentRef = useCountUp<HTMLSpanElement>(total, { format: (n) => nf(Math.round(n), lang) })
   const readRef = useCountUp<HTMLSpanElement>(read, { format: (n) => nf(Math.round(n), lang) })
   const siti = world.get().citizens.byId[world.get().meta.personas.siti]
-  const products = [...new Map(result.follow.filter((a) => a.source !== 'siaga-wilayah' && a.source !== 'clock' && a.source !== 'tour' && a.source !== 'user').map((a) => [a.source as ProductSlug, a])).values()]
+  // one row per product: its FIRST follow-up (causal order), linked to the entity that follow-up created
+  const products: AuditEntry[] = []
+  for (const a of result.follow) {
+    if (a.source === 'siaga-wilayah' || a.source === 'clock' || a.source === 'tour' || a.source === 'user') continue
+    if (!products.some((p) => p.source === a.source)) products.push(a)
+  }
+  const focusOf = (a: AuditEntry): string | null => {
+    const own = result.follow.filter((x) => x.source === a.source).flatMap((x) => x.entityRefs)
+    // the product's own entity (not the alert / complaint it reacted to)
+    const pick = own.find((r) => !r.startsWith('alerts:') && !r.startsWith('complaints:') && !r.startsWith('citizens:')) ?? own[0]
+    return pick?.split(':')[1] ?? null
+  }
   void region
   return (
-    <div className="dk-sw-bc is-sent">
-      <div className="dk-sw-bc-form">
-        <p className="dk-sw-ticks" aria-live="polite">
+    <div className="dk-sg-bc is-sent">
+      <div className="dk-sg-bc-form">
+        <p className="dk-sg-ticks" aria-live="polite">
           <span>
             <Icon name="check" size={14} /> <span ref={sentRef} className="dk-num">0</span> {L('delivered')}
           </span>
@@ -359,49 +398,50 @@ function Sent({
             <Icon name="check" size={14} /> <span ref={readRef} className="dk-num">0</span> {L('read')}
           </span>
         </p>
-        <ul className="dk-sw-rcpts is-sent">
+        <ul className="dk-sg-rcpts is-sent">
           {officials.slice(0, sm ? 5 : 8).map((r, i) => (
             <li key={r.id} style={{ ['--d' as string]: `${i * 90}ms` }}>
               <Icon name={r.kind === 'camat' ? 'building' : 'user'} size={14} />
               <span>{r.title[lang]}</span>
-              <span className="dk-sw-tick" aria-label={i < Math.round(officials.length * 0.82) && read ? L('read') : L('delivered')}>
+              <span className="dk-sg-tick" aria-label={i < Math.round(officials.length * 0.82) && read ? L('read') : L('delivered')}>
                 <Icon name="check" size={13} />
                 {read > 0 && i < Math.round(officials.length * 0.82) && <Icon name="check" size={13} />}
               </span>
             </li>
           ))}
         </ul>
-        <h3 className="dk-sw-h">
+        <h3 className="dk-sg-h">
           <Icon name="share" size={16} />
           {L('chain')}
         </h3>
-        <ul className="dk-sw-chain">
+        <ul className="dk-sg-chain">
           {products.map((a) => (
             <li key={a.id}>
               <Icon name={PRODUCT_BY_SLUG[a.source as ProductSlug]?.icon ?? 'dot'} size={14} />
               <span>
                 <strong>{PRODUCT_BY_SLUG[a.source as ProductSlug]?.name ?? a.source}</strong> · {a.summary[lang]}
               </span>
-              <AppLink to={productHref(a.source as ProductSlug, session, a.entityRefs[0]?.split(':')[1] ?? null)} className="dk-sw-link">
+              <AppLink to={productHref(a.source as ProductSlug, session, focusOf(a))} className="dk-sg-link">
+
                 {L('open')} →
               </AppLink>
             </li>
           ))}
         </ul>
       </div>
-      <div className="dk-sw-bc-side">
-        <p className="dk-sw-fslabel">{L('phone')}</p>
-        <div className="dk-sw-wa is-phone">
-          <p className="dk-sw-wa-from">
+      <div className="dk-sg-bc-side">
+        <p className="dk-sg-fslabel">{L('phone')}</p>
+        <div className="dk-sg-wa is-phone">
+          <p className="dk-sg-wa-from">
             <Icon name="phone" size={14} />
             {siti && result.sitiMsg ? `${siti.gender === 'P' ? 'Ibu' : 'Bpk.'} ${siti.name} · ${siti.address}` : L('viaWa')}
           </p>
-          <p className="dk-sw-wa-bubble is-in">
+          <p className="dk-sg-wa-bubble is-in">
             {result.sitiMsg ?? message}
-            <span className="dk-sw-wa-time dk-num">{clockText(clock.get().minutes, lang)}</span>
+            <span className="dk-sg-wa-time dk-num">{clockText(clock.get().minutes, lang)}</span>
           </p>
         </div>
-        <AppLink to={productHref('sapa-warga', session, result.messageId)} className="dk-sw-link">
+        <AppLink to={productHref('sapa-warga', session, result.messageId)} className="dk-sg-link">
           {L('openSapa')} →
         </AppLink>
       </div>

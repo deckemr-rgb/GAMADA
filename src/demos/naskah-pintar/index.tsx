@@ -30,10 +30,18 @@ const preloadFollow = () => void import('./FollowUps').catch(() => undefined)
 
 export type NpTab = 'rapat' | 'surat' | 'tindak'
 
+export interface NpFocus {
+  letterId?: string
+  itemId?: string
+  opdId?: string
+  opdIds?: readonly string[]
+}
+
 /** shared navigation between the tabs (lanes → board, banner → memo, toasts → tab) */
 export interface NpNav {
   tab: NpTab
-  go: (tab: NpTab, focus?: { letterId?: string; itemId?: string; opdId?: string }) => void
+  /** focus: a letter, an item and/or agencies (opdIds: every agency to bring to the front of the board) */
+  go: (tab: NpTab, focus?: NpFocus) => void
   role: NpRole
   /** the agency of the "Kepala OPD" role (null for the other roles) */
   myOpd: string | null
@@ -64,7 +72,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
   const [tab, setTab] = useState<NpTab>('rapat')
   const [opdPick, setOpdPick] = useState<string>(NP.defaultOpd)
   const myOpd = role === 'kepala-opd' ? opdPick : null
-  const [focus, setFocus] = useState<{ letterId?: string; itemId?: string; opdId?: string; n: number }>({ n: 0 })
+  const [focus, setFocus] = useState<NpFocus & { n: number }>({ n: 0 })
   const [askOpen, setAskOpen] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const c = useWorld((s) => counts(s, now, myOpd), shallowEqual)
@@ -101,13 +109,15 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
     clearFocus()
   }, [shellFocus, focusKind, focusLetterOfInstr, go, clearFocus])
 
+  /* phones: short labels without icons so the three tabs fit 326 px without scrolling */
+  const sm = shell.size === 'sm'
   const items = useMemo(
     () => [
-      { id: 'rapat' as const, label: S.tabMeeting, icon: 'mic' as const },
-      { id: 'surat' as const, label: S.tabLetters, icon: 'inbox' as const, badge: c.pending },
-      { id: 'tindak' as const, label: S.tabFollow, icon: 'kanban' as const, badge: c.late },
+      { id: 'rapat' as const, label: sm ? S.tabShort.rapat : S.tabMeeting, ...(sm ? {} : { icon: 'mic' as const }) },
+      { id: 'surat' as const, label: sm ? S.tabShort.surat : S.tabLetters, ...(sm ? {} : { icon: 'inbox' as const }), badge: c.pending },
+      { id: 'tindak' as const, label: sm ? S.tabShort.tindak : S.tabFollow, ...(sm ? {} : { icon: 'kanban' as const }), badge: c.late },
     ],
-    [S, c.pending, c.late],
+    [S, c.pending, c.late, sm],
   )
   const opdOptions = useMemo(() => opds.map((o) => ({ value: o.id, label: opdLabel(o, o.id, lang) })), [opds, lang])
   const path = `naskah-pintar/${tab === 'rapat' ? 'rapat' : tab === 'surat' ? 'surat-masuk' : 'tindak-lanjut'}`
@@ -137,7 +147,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
                 {S.instrOpen}
               </Button>
             )}
-            <Button size="sm" variant="quiet" icon="kanban" onClick={() => go('tindak', { itemId: instr.actionItemIds[0] })} onPointerEnter={preloadFollow}>
+            <Button size="sm" variant="quiet" icon="kanban" onClick={() => go('tindak', { itemId: instr.actionItemIds[0], opdIds: instr.opdIds })} onPointerEnter={preloadFollow}>
               {S.instrTasks}
             </Button>
             <IconButton icon="close" label={S.dismiss} size="sm" onClick={() => setBanner(null)} />
@@ -150,7 +160,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
         className="dk-np-frame"
         actions={
           <span className="dk-np-actions">
-            {role === 'kepala-opd' && (
+            {role === 'kepala-opd' && shell.size !== 'sm' && (
               <label className="dk-np-unit">
                 <span>{S.myUnit}</span>
                 <Select value={opdPick} onChange={(e) => setOpdPick(e.target.value)} options={opdOptions} aria-label={S.myUnit} />
@@ -167,15 +177,21 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
         }
       >
         <div className="dk-np-tabs" onPointerOver={(e) => {
-          const t = (e.target as HTMLElement).closest('[role=tab]')?.textContent ?? ''
-          if (t.includes(S.tabLetters)) preloadLetters()
-          else if (t.includes(S.tabFollow)) preloadFollow()
+          const t = (e.target as HTMLElement).closest('[role=tab]')?.id ?? ''
+          if (t.endsWith('-t-surat')) preloadLetters()
+          else if (t.endsWith('-t-tindak')) preloadFollow()
         }}>
-          <Tabs items={items} value={tab} onChange={setTab} label={S.tabsLabel}>
-            <p className="dk-np-rolenote">
+          <Tabs items={items} value={tab} onChange={setTab} label={S.tabsLabel} fill={sm}>
+            <div className="dk-np-rolenote">
               <Icon name="user" size={14} />
-              {S.roleNote[role]}
-            </p>
+              <span>{S.roleNote[role]}</span>
+              {role === 'kepala-opd' && shell.size === 'sm' && (
+                <label className="dk-np-unit is-inline">
+                  <span>{S.myUnit}</span>
+                  <Select value={opdPick} onChange={(e) => setOpdPick(e.target.value)} options={opdOptions} aria-label={S.myUnit} />
+                </label>
+              )}
+            </div>
             <div hidden={tab !== 'rapat'}>
               <Meeting nav={nav} />
             </div>
@@ -186,7 +202,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
             )}
             {tab === 'tindak' && (
               <Suspense fallback={fallback}>
-                <FollowUps nav={nav} focusItem={focus.itemId ?? null} focusOpd={focus.opdId ?? null} focusKey={focus.n} />
+                <FollowUps nav={nav} focusItem={focus.itemId ?? null} focusOpd={focus.opdId ?? null} focusOpds={focus.opdIds ?? null} focusKey={focus.n} />
               </Suspense>
             )}
           </Tabs>

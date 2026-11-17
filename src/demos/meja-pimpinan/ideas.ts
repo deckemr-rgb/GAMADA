@@ -5,8 +5,8 @@
 import type { ProductSlug } from '../../content/products'
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, overdueActions, rows, ref, type Bi, type EntityRef, type Minutes, type WorldState } from '../../demo-kit/world'
-import { briefingItems, complaintsByKecamatan, instructionIdeas, kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
-import { MP, desaName, devOf, findOpd, kecName, opdShort, refId, weekChange } from './data'
+import { complaintsByKecamatan, instructionIdeas, kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
+import { MP, desaName, findOpd, kecName, mpBriefingItems, opdShort, refId, riskiestProcurement, topRiser } from './data'
 
 /* ------------------------------------------------------------------ "Beri instruksi" ideas */
 
@@ -54,12 +54,12 @@ export function leaderIdeas(s: WorldState, now: Minutes): Idea[] {
     add({ text: { id: `Siagakan posko banjir dan pantau muka air ${river.name} tiap jam`, en: `Put flood posts on standby and monitor the ${river.name} water level hourly` }, opdIds: [bpbd], refs: [ref('gauges', river.id)], source: 'siaga-wilayah' })
   // risky procurement not analysed yet
   const insp = findOpd(s, 'inspektorat')
-  const proc = rows(s.procurements).filter((p) => p.status !== 'selesai').sort((a, b) => (b.riskScore ?? devOf(b)) - (a.riskScore ?? devOf(a)))[0]
+  const proc = riskiestProcurement(s)
   if (proc && insp)
     add({ text: { id: `Reviu HPS paket "${proc.name.id}" sebelum kontrak ditandatangani`, en: `Review the cost estimate of "${proc.name.en}" before the contract is signed` }, opdIds: [insp, ...(findOpd(s, 'ukpbj') ? [findOpd(s, 'ukpbj')!] : [])], refs: [ref('procurements', proc.id)], source: 'awas-belanja' })
   // biggest weekly price rise
   const dag = findOpd(s, 'disperindag')
-  const rise = rows(s.prices).map((p) => ({ p, d: weekChange(p.price, p.history) })).sort((a, b) => b.d - a.d)[0]
+  const rise = topRiser(s)
   if (rise && dag && rise.d > 0.05) {
     const c = s.region.commodities.find((x) => x.id === rise.p.commodityId)?.name ?? { id: rise.p.commodityId, en: rise.p.commodityId }
     const m = s.markets.byId[rise.p.marketId]?.name ?? rise.p.marketId
@@ -132,7 +132,7 @@ export function askContext(s: WorldState, now: Minutes, lang: Lang, leader: stri
     time: `${String(Math.floor(now / 60)).padStart(2, '0')}:${String(now % 60).padStart(2, '0')}`,
     lang,
     kpi: kpiStrip(s, now),
-    briefing: briefingItems(s, now).map((b) => ({ source: b.source, title: b.title[lang] })),
+    briefing: mpBriefingItems(s, now).map((b) => ({ source: b.source, title: b.title[lang] })),
     complaintsByKecamatan7d: complaintsByKecamatan(s, now, 7).slice(0, 10).map((k) => ({ kecamatan: k.name, count: k.count, prev: k.prev })),
     topCategories7d: [...cats.entries()].map(([k, v]) => ({ category: CATEGORY_LABEL[k as keyof typeof CATEGORY_LABEL]?.[lang] ?? k, ...v })).sort((a, b) => b.count - a.count).slice(0, 6),
     opd: opdLeaderboard(s, now).map((o) => ({ opd: o.short, score: o.score, slaPct: o.slaPct, open: o.openTickets, late: o.actionsLate })),

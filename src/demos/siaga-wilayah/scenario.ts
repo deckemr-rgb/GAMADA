@@ -128,8 +128,8 @@ export function draftAlert(g: GeoCtx, lang: Lang, level: 1 | 2 | 3 | 4 = 3, area
   }[level][lang]
   const message =
     lang === 'id'
-      ? `[PERINGATAN DINI BANJIR · LEVEL ${level} ${lv}] BPBD ${g.region}: air ${river} diperkirakan meluap ${when} di ${area}. ${act} Darurat: 112. Info resmi hanya dari BPBD.`
-      : `[FLOOD EARLY WARNING · LEVEL ${level} ${lv}] BPBD ${g.region}: ${g.river ? `the ${river}` : river} is expected to overflow ${when} in ${area}. ${act} Emergency: 112. Official info only from BPBD.`
+      ? `[SIMULASI DEMO] [PERINGATAN DINI BANJIR · LEVEL ${level} ${lv}] BPBD ${g.region}: air ${river} diperkirakan meluap ${when} di ${area}. ${act} Darurat: 112. Info resmi hanya dari BPBD.`
+      : `[DEMO SIMULATION] [FLOOD EARLY WARNING · LEVEL ${level} ${lv}] BPBD ${g.region}: ${g.river ? `the ${river}` : river} is expected to overflow ${when} in ${area}. ${act} Emergency: 112. Official info only from BPBD.`
   return { level: level >= 3 ? 'awas' : level === 2 ? 'siaga' : 'waspada', areas: kec, message: message.slice(0, 600), channels: level >= 3 ? ['wa', 'sms', 'sirine'] : ['wa', 'sms'] }
 }
 

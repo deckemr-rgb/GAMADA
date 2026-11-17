@@ -9,26 +9,34 @@
  * Lazy: chat (+ scenario + query engine + charts), scorecard, instruction dialog, meeting mode, phone view,
  * briefing voice and the Kepala OPD task list load on the user action that needs them.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import type { DemoCanvasProps } from '../registry'
 import type { ProductSlug } from '../../content/products'
 import { useShell, type Mission } from '../../demo-kit/shell'
-import { clock, emit, isEvent, rows, useClock, useSession, useWorld, world, type EntityRef, type WorldState } from '../../demo-kit/world'
-import { briefingItems } from '../../demo-kit/world/satu-daerah'
+import { clock, emit, isEvent, rows, useSession, useWorld, world, type EntityRef, type WorldState } from '../../demo-kit/world'
 import { WallScreenFrame } from '../../demo-kit/frames'
 import { Button, LiveBadge, LoadingText, Select, Tabs, motionMode, useElementWidth } from '../../demo-kit/ui'
 import type { MapViewHandle } from '../../demo-kit/map'
-import { Kpis } from './Kpis'
-import { MapPanel } from './MapPanel'
-import { Briefing } from './Briefing'
-import { Leaderboard } from './Leaderboard'
-import { Events } from './Events'
-import { AskBox } from './AskBox'
+import { Kpis as KpisP } from './Kpis'
+import { MapPanel as MapPanelP } from './MapPanel'
+import { Briefing as BriefingP } from './Briefing'
+import { Leaderboard as LeaderboardP } from './Leaderboard'
+import { Events as EventsP } from './Events'
+import { AskBox as AskBoxP } from './AskBox'
 import { HoaxBanner } from './HoaxBanner'
-import { MP, desaName } from './data'
+import { MP, desaName, mpBriefingItems, useNow } from './data'
 import { leaderTitle, nf, tr, trf, type Bi } from './strings'
 import './mp.css'
+
+/* the panels re-render from their own world / clock subscriptions; opening or closing a dialog, the assembling
+   moment or a toast arrival re-renders only the canvas root (INP: a root render no longer re-renders the wall) */
+const Kpis = memo(KpisP)
+const MapPanel = memo(MapPanelP)
+const Briefing = memo(BriefingP)
+const Leaderboard = memo(LeaderboardP)
+const Events = memo(EventsP)
+const AskBox = memo(AskBoxP)
 
 const InstructionDialog = lazy(() => import('./InstructionDialog'))
 const Scorecard = lazy(() => import('./Scorecard'))
@@ -79,6 +87,8 @@ export const missions: readonly Mission[] = [
     label: { id: 'Buka mode rapat', en: 'Open meeting mode' },
     hint: { id: 'Tombol "Mode rapat": layar penuh, huruf besar, panel berganti tiap 15 detik.', en: 'The "Meeting mode" button: full screen, large type, panels rotate every 15 seconds.' },
     hintSm: { id: 'Mode rapat untuk layar ruang rapat: buka demo ini di tablet atau komputer (lebar ≥ 768 px).', en: 'Meeting mode is for the meeting-room screen: open this demo on a tablet or computer (≥ 768 px wide).' },
+    // the button is not rendered below 768 px: phones list and complete 4 of 4
+    hideSm: true,
   },
 ]
 
@@ -95,6 +105,12 @@ const latestBriefing = (s: WorldState) => {
 }
 const activeHoax = (s: WorldState) => rows(s.hoaxAlerts).find((h) => h.status === 'aktif') ?? null
 
+/** the time in the header: the only part of the first screen that re-renders every world minute */
+function NowText() {
+  const now = useNow(1)
+  return <span className="dk-num">{`${String(Math.floor(now / 60)).padStart(2, '0')}.${String(now % 60).padStart(2, '0')}`}</span>
+}
+
 /* ------------------------------------------------------------------ canvas */
 
 export default function MejaPimpinan({ product }: DemoCanvasProps) {
@@ -102,7 +118,6 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const shell = useShell()
   const session = useSession()
   const role = session.role
-  const now = useClock().minutes
   const rootRef = useRef<HTMLDivElement>(null)
   const width = useElementWidth(rootRef)
   const phone = shell.size === 'sm'
@@ -118,7 +133,12 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const isOpd = role === 'kepala-opd'
   const isSekda = role === 'sekretariat'
   const regionType = shell.pack?.type
-  const leader = leaderTitle(regionType)
+  const leader = useMemo(() => leaderTitle(regionType), [regionType])
+  const { markMission } = shell
+  const onFreshDone = useCallback(() => setFresh(false), [])
+  const onListened = useCallback(() => markMission('listen'), [markMission])
+  const onAnswered = useCallback(() => markMission('ask'), [markMission])
+  const onNoteDone = useCallback(() => setNote(null), [])
   const opdList = useWorld((s) => s.region.opd)
   const [opdScope, setOpdScope] = useState<string>(() => opdList.find((o) => o.id === 'pupr')?.id ?? opdList[0]?.id ?? '')
   const briefing = useWorld(latestBriefing)
@@ -154,11 +174,11 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   useEffect(() => () => void (timer.current && window.clearTimeout(timer.current)), [])
   const compose = useCallback(() => {
     if (assembling) return
-    const items = briefingItems(world.get(), clock.get().minutes)
+    const items = mpBriefingItems(world.get(), clock.get().minutes)
     const sources = [...new Set(items.map((i) => i.source))]
     const finish = () => {
       timer.current = null
-      const fresh = briefingItems(world.get(), clock.get().minutes)
+      const fresh = mpBriefingItems(world.get(), clock.get().minutes)
       emit('briefing.generated', { items: fresh.map(({ title, source, refs }) => ({ title, source, refs })) }, 'meja-pimpinan')
       setAssembling(null)
       setFresh(true)
@@ -205,7 +225,6 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
 
   const canInstruct = !isOpd
   const dateText = useMemo(() => new Date(`${day}T00:00:00`).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), [day, lang])
-  const time = `${String(Math.floor(now / 60)).padStart(2, '0')}.${String(now % 60).padStart(2, '0')}`
   const sub = isOpd ? `${tr('opdView', lang)} · ${opdList.find((o) => o.id === opdScope)?.short ?? ''}` : isSekda ? `${tr('sekdaFor', lang)} ${leader[lang]}` : `${tr('forLeader', lang)} ${leader[lang]}`
   const composeLabel = briefing ? tr('recompose', lang) : isSekda ? tr('composeSekda', lang) : tr('compose', lang)
 
@@ -222,7 +241,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
         </p>
         <h2 className="dk-mp-title">{tr('title', lang)}</h2>
         <p className="dk-mp-sub">
-          {sub} · {dateText} · <span className="dk-num">{time}</span> WIB
+          {sub} · {dateText} · <NowText /> WIB
           {phone && ` · ${tr('simData', lang)}`}
         </p>
       </div>
@@ -254,7 +273,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
               </Button>
             </div>
           ) : (
-            <Button variant="primary" size="sm" icon="spark" onClick={compose} busy={!!assembling} data-hotspot="briefing">
+            <Button variant="primary" size="sm" icon="spark" onClick={compose} busy={!!assembling} data-hotspot={briefing ? 'briefing' : undefined}>
               {composeLabel}
             </Button>
           ))}
@@ -264,37 +283,38 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
 
   const briefingPanel = isOpd ? (
     <Suspense fallback={<LoadingText>{tr('loading', lang)}</LoadingText>}>
-      <OpdTasks opdId={opdScope} now={now} />
+      <OpdTasks opdId={opdScope} />
     </Suspense>
   ) : (
     <Briefing
       briefing={briefing}
-      now={now}
       assembling={assembling}
       fresh={fresh}
-      onFreshDone={() => setFresh(false)}
+      onFreshDone={onFreshDone}
       onCompose={compose}
       onInstruct={canInstruct ? openInstruct : undefined}
-      onListened={() => shell.markMission('listen')}
+      onListened={onListened}
       leader={leader}
+      hotspot={!phone}
     />
   )
-  const leaderboard = <Leaderboard now={now} onOpen={openScorecard} sortDefault={isSekda ? 'late' : 'score'} highlight={isOpd ? opdScope : null} />
+  const leaderboard = <Leaderboard onOpen={openScorecard} sortDefault={isSekda ? 'late' : 'score'} highlight={isOpd ? opdScope : null} />
   const events = <Events />
-  const ask = <AskBox onFly={flyTo} onInstruct={openInstruct} onAnswered={() => shell.markMission('ask')} leader={leader[lang]} />
+  const ask = <AskBox onFly={flyTo} onInstruct={openInstruct} onAnswered={onAnswered} leader={leader[lang]} />
 
+  const hoaxBanner = useMemo(() => (hoax ? <HoaxBanner hoax={hoax} onClarify={canInstruct ? openInstruct : undefined} overlay={wall} /> : null), [hoax, canInstruct, openInstruct, wall])
   const top = (
     <div className="dk-mp-top">
       {header}
-      {hoax && <HoaxBanner hoax={hoax} onClarify={canInstruct ? openInstruct : undefined} />}
+      {!wall && hoaxBanner}
     </div>
   )
 
   const body = phone ? (
     <div className="dk-mp-phone">
       {top}
-      <Kpis now={now} role={role} opdId={opdScope} compact />
-      <MapPanel now={now} selected={selKec} onSelect={setSelKec} onReady={onMapReady} onFly={flyTo} note={note} onNoteDone={() => setNote(null)} phone />
+      <Kpis role={role} opdId={opdScope} compact />
+      <MapPanel selected={selKec} onSelect={setSelKec} onReady={onMapReady} onFly={flyTo} note={note} onNoteDone={onNoteDone} opdId={isOpd ? opdScope : null} phone />
       <div ref={tabsRef} className="dk-mp-tabs">
       <Tabs<MobileTab>
         fill
@@ -316,8 +336,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
     <WallScreenFrame label={tr('wallLabel', lang)} caption={tr('wallCaption', lang)} className={`dk-mp-wall${wall ? '' : ' is-stack'}`}>
       <div className={`dk-mp-screen${wall ? ' is-wall' : ' is-stack'}`}>
         {top}
-        <Kpis now={now} role={role} opdId={opdScope} />
-        <MapPanel now={now} selected={selKec} onSelect={setSelKec} onReady={onMapReady} onFly={flyTo} note={note} onNoteDone={() => setNote(null)} />
+        <Kpis role={role} opdId={opdScope} />
+        <MapPanel selected={selKec} onSelect={setSelKec} onReady={onMapReady} onFly={flyTo} note={note} onNoteDone={onNoteDone} opdId={isOpd ? opdScope : null} overlay={wall ? hoaxBanner : null} />
         <div className="dk-mp-right">
           <div className="dk-mp-cell dk-mp-cell--brief">{briefingPanel}</div>
           <div className="dk-mp-cell dk-mp-cell--ask">{ask}</div>
@@ -332,14 +352,13 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
     <div ref={rootRef} className={`dk-mp${phone ? ' is-phone' : ''}`} data-product={product} data-role={role}>
       {body}
       <Suspense fallback={null}>
-        {dlg?.kind === 'instruct' && <InstructionDialog open onClose={close} preset={dlg.preset} now={now} />}
-        {dlg?.kind === 'scorecard' && <Scorecard open onClose={close} opdId={dlg.opdId} now={now} onInstruct={canInstruct ? (opdIds) => openInstruct({ opdIds }) : undefined} />}
+        {dlg?.kind === 'instruct' && <InstructionDialog open onClose={close} preset={dlg.preset} />}
+        {dlg?.kind === 'scorecard' && <Scorecard open onClose={close} opdId={dlg.opdId} onInstruct={canInstruct ? (opdIds) => openInstruct({ opdIds }) : undefined} />}
         {dlg?.kind === 'phone' && <PhoneBriefing open onClose={close} onCompose={canInstruct ? compose : undefined} onInstruct={canInstruct ? () => openInstruct() : undefined} leader={leader} />}
         {dlg?.kind === 'meeting' && !phone && (
           <MeetingMode
             onClose={close}
             onOpened={() => shell.markMission('meeting')}
-            now={now}
             title={`${tr('title', lang)} · ${regionName}`}
             leader={leader}
           />

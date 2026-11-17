@@ -63,7 +63,16 @@ export const DEMO_STAGE: Record<EcoOrInti, 2 | 3 | 4> = {
 }
 
 /** true once a product's real sandbox is registered (flip per product when its line above changes). */
-export const DEMO_READY: Partial<Record<ProductSlug, true>> = {}
+export const DEMO_READY: Partial<Record<ProductSlug, true>> = {
+  // tahap 2 · Satu Daerah (integrated 2026-11-17)
+  'sapa-warga': true,
+  'meja-pimpinan': true,
+  'naskah-pintar': true,
+  'radar-isu': true,
+  'siaga-wilayah': true,
+  'awas-belanja': true,
+  'cek-berkas': true,
+}
 
 const cache = new Map<ProductSlug, LazyExoticComponent<ComponentType<DemoCanvasProps>>>()
 

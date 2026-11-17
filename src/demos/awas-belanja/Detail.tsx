@@ -295,7 +295,7 @@ function Head({
           busy={running}
           aria-disabled={running || undefined}
           data-ab="analyse"
-          data-hotspot={analysed ? undefined : 'ab-start'}
+          data-hotspot={analysed || running ? undefined : 'ab-start'}
         >
           {running ? t.analysing : analysed ? t.reanalyse : t.analyse}
         </Button>

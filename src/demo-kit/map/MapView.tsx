@@ -69,7 +69,7 @@ interface FpsWindow {
 }
 
 export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
-  const { regionId, layers, onReady, interactive = true, initialView, className, ariaLabel, selectedId, onSelect, onMarker, fullscreenButton, ref } = props
+  const { regionId, layers, onReady, interactive = true, initialView, className, ariaLabel, selectedId, onSelect, onMarker, fullscreenButton, minHeight, ref } = props
   const { lang } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -325,7 +325,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   }
 
   return (
-    <div ref={rootRef} className={`dk-map${full ? ' is-full' : ''}${className ? ` ${className}` : ''}`} role="region" aria-label={label} aria-busy={status === 'loading'}>
+    <div ref={rootRef} className={`dk-map${full ? ' is-full' : ''}${className ? ` ${className}` : ''}`} role="region" aria-label={label} aria-busy={status === 'loading'} style={minHeight !== undefined ? { minHeight } : undefined}>
       {/* DOM order = tab order: corner controls → Sumber → map canvas → basemap attribution (all overlays are
           absolutely positioned, so this does not change the picture) */}
       {interactive && status === 'ready' && (
