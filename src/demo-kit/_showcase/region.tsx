@@ -1,8 +1,8 @@
 /**
  * /lab/_kit showcase section for the "region" module — owned by the region builder.
  * Renders the Bojonegoro pack: SVG map of the 28 kecamatan (no MapLibre — that is the map module, wave 2)
- * with rivers, reservoirs, roads, markets, landmarks and the DERIVED flood zone; the BPS stats block with its
- * source line; sectors + staple prices; and the Basa Jawa complaint templates with a Jawa / ID / EN toggle.
+ * with rivers, reservoirs, roads, markets, landmarks and the DERIVED flood zone; the SIMULATED stats block with its
+ * source line; simulated sectors + staple base prices; and the Basa Jawa complaint templates with a Jawa / ID / EN toggle.
  * ?static=1 renders final states (no draw-in).
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
@@ -38,6 +38,8 @@ const T = {
   markets: { id: 'Pasar', en: 'Markets' },
   landmarks: { id: 'Landmark', en: 'Landmarks' },
   people: { id: 'jiwa', en: 'people' },
+  code: { id: 'Kode', en: 'Code' },
+  simulated: { id: 'simulasi', en: 'simulated' },
   floodRisk: { id: 'Risiko banjir', en: 'Flood risk' },
   slideRisk: { id: 'Risiko longsor', en: 'Landslide risk' },
   derived: { id: 'turunan, simulasi', en: 'derived, simulated' },
@@ -46,12 +48,12 @@ const T = {
   mainSector: { id: 'Sektor utama', en: 'Main sector' },
   clear: { id: 'Tutup detail', en: 'Close details' },
   pickHint: { id: 'Pilih kecamatan di peta untuk melihat desa, risiko, dan sektor utamanya.', en: 'Pick a district on the map to see its villages, risks and main sector.' },
-  stats: { id: 'Statistik publik', en: 'Public statistics' },
+  stats: { id: 'Statistik wilayah (simulasi)', en: 'Regional statistics (simulated)' },
   population: { id: 'Penduduk 2025', en: 'Population 2025' },
   households: { id: 'Keluarga (pemilik KK)', en: 'Families (KK holders)' },
   area: { id: 'Luas wilayah', en: 'Land area' },
   units: { id: 'Kecamatan · desa/kel.', en: 'Districts · villages' },
-  economy: { id: 'Struktur ekonomi (PDRB 2025)', en: 'Economic structure (GRDP 2025)' },
+  economy: { id: 'Struktur ekonomi (PDRB, simulasi)', en: 'Economic structure (GRDP, simulated)' },
   prices: { id: 'Harga dasar simulasi', en: 'Simulated base prices' },
   templates: { id: 'Template aduan bahasa daerah', en: 'Regional-language complaint templates' },
   all: { id: 'Semua', en: 'All' },
@@ -413,7 +415,7 @@ function KecDetail({ kec, lang, onClose }: { kec: RegionPack['kecamatan'][number
       <div className="dk-rg-detail-h">
         <div>
           <strong className="dk-rg-detail-name">{kec.name}</strong>
-          <span className="dk-rg-muted dk-rg-small"> · BPS {kec.code} · {nf.format(kec.population)} {T.people[lang]} · {kec.desa.length} {T.villages[lang]}{kel ? ` (${kel} ${T.kelurahan[lang]})` : ''}</span>
+          <span className="dk-rg-muted dk-rg-small"> · {T.code[lang]} {kec.kemendagri ?? kec.code} · {nf.format(kec.population)} {T.people[lang]} ({T.simulated[lang]}) · {kec.desa.length} {T.villages[lang]}{kel ? ` (${kel} ${T.kelurahan[lang]})` : ''}</span>
         </div>
         <button type="button" className="dk-rg-close" onClick={onClose} aria-label={T.clear[lang]}>×</button>
       </div>
@@ -435,12 +437,11 @@ function KecDetail({ kec, lang, onClose }: { kec: RegionPack['kecamatan'][number
 
 function StatsCard({ pack, lang }: { pack: RegionPack; lang: Lang }) {
   const nf = new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB')
-  const nf2 = new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const desa = pack.kecamatan.reduce((a, k) => a + k.desa.length, 0)
   const items: [Bi, string][] = [
     [T.population, nf.format(pack.stats.population)],
     [T.households, nf.format(pack.stats.households)],
-    [T.area, `${nf2.format(pack.stats.area_km2)} km²`],
+    [T.area, `${nf.format(pack.stats.area_km2)} km²`],
     [T.units, `${pack.kecamatan.length} · ${desa}`],
   ]
   return (

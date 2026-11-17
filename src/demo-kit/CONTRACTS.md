@@ -31,7 +31,9 @@ Already written by the integrator (read-only unless you own them):
   buttons, touch targets ≥ 44px below 768px, `aria-live="polite"` for new events and AI answers.
 - No dead controls: a visible control must change something real. Out of scope ⇒ do not render it.
 - Every person, company, media outlet, account, vendor, bank and transaction is FICTIONAL and generated from the
-  seed. Real: region geography, place names, public statistics (with source). Officials by title only.
+  seed. Real (open licence, attributed): region geography, place names, Kemendagri kecamatan codes. Statistics
+  (population, households, PDRB shares) and prices are SIMULATED and must be labelled "simulasi" in the UI, never
+  presented as official figures (owner decision 2026-11-17). Officials by title only.
 - No new npm dependencies beyond: maplibre-gl, d3-scale, d3-shape, d3-array, idb-keyval, zod,
   @tanstack/react-table (site) and hono, @hono/node-server, @anthropic-ai/sdk, zod (server/ai-proxy only).
 

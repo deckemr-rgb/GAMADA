@@ -202,7 +202,7 @@ export function regionText(pack: RegionPack, lang: Lang) {
     template: (t: Template, mode: 'regional' | 'translation' = 'translation') => (mode === 'regional' ? t.text : t.translation[lang]),
     kecamatanName: (id: string) => pack.kecamatan.find((k) => k.id === id)?.name ?? id,
     /** short attribution line for a map corner: every distinct licence, de-duplicated */
-    attribution: [...new Set(pack.sources.filter((s) => /ODbL|CC BY|BPS/.test(s.license)).map((s) => (/ODbL/.test(s.license) ? '© OpenStreetMap contributors' : s.license.startsWith('CC BY') ? `HDX COD-AB (${s.license})` : 'BPS')))].join(' · '),
+    attribution: [...new Set(pack.sources.filter((s) => /ODbL|CC BY/.test(s.license)).map((s) => (/ODbL/.test(s.license) ? '© OpenStreetMap contributors' : `HDX COD-AB (${s.license})`)))].join(' · '),
   }
 }
 export type RegionText = ReturnType<typeof regionText>

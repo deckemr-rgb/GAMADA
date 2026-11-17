@@ -347,3 +347,13 @@ Semua usulan tahap 0 disetujui:
 - Prioritas: prompt ekosistem dulu. Fase 3–7 prompt GATRA cukup menjadi halaman studi kasus `/karya` tanpa membangun ulang demonya.
 - `PROMPT-VSCODE-PRODUK-E2E.md` **dihapus** dan digantikan oleh ekosistem 17 produk (masih bisa dipulihkan dari commit `99398dc`). Spesifikasi di `docs/products/` disimpan hanya sebagai bahan tulisan studi kasus `/karya`, bukan untuk dibangun.
 - Tarif pajak Pajak Beres diriset di tahap 3, lalu sumbernya dikonfirmasi pemilik.
+
+### Tambahan 17 November 2026: kebijakan data
+
+- Kata pemilik: "Semuanya simulasi dan demonstrasi yang menunjukkan kekuatan atau fitur-fitur AI, jadi datanya tidak harus real; simulasi tidak apa-apa, yang penting relevan."
+- Harga pangan sepenuhnya simulasi. Panel Harga Pangan tidak dipakai.
+- Statistik wilayah (penduduk, rumah tangga, PDRB) dibulatkan dan dilabeli "angka simulasi", bukan statistik resmi. Pertanyaan lisensi BPS dan Panel Harga dianggap selesai.
+- Data nyata hanya yang berlisensi terbuka: batas wilayah (HDX, CC BY-IGO), OSM (ODbL), nama tempat, dan kode kecamatan Kemendagri.
+- Batas 180 KB per demo menghitung JS dan data JSON.
+- Dukungan bahasa Indonesia dan Inggris setara.
+- Tampilan sementara untuk demo yang belum dibangun disusun oleh agent: panel "Yang akan bisa Anda coba".

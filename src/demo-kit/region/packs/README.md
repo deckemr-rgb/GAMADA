@@ -11,7 +11,8 @@ One folder per region, all **build output** (do not edit by hand):
 | `desa.json` | desa/kelurahan polygons (`FeatureCollection`, canonical GeoJSON) | tools, tests, the lab |
 | `desa.min.json` | the same polygons as shared arcs, decodes to exactly `desa.json` | only when the desa layer is needed (~22 KB gzip; was 57) |
 
-Rebuild them from public data (the build works offline from the cache; fetch only when the cache is missing):
+Rebuild them from public geography plus the simulated figures in `tools/region/data/` (the build works offline from
+the cache; fetch only when the cache is missing):
 
 ```sh
 node tools/region/fetch-bojonegoro.mjs     # raw downloads → tools/region/.cache/bojonegoro/ (git-ignored)
@@ -40,20 +41,20 @@ Packs are validated at build time; the loader zod-parses only in dev, so zod is 
 | Kecamatan (28) + desa/kelurahan (430) boundaries | [HDX COD-AB Indonesia](https://data.humdata.org/dataset/cod-ab-idn) (BPS / OCHA ROAP), admin3 + admin4. The script streams only those two entries out of the remote ZIP with HTTP Range requests. | CC BY-IGO | 2020 (valid_on) |
 | Kelurahan status (11, Kec. Bojonegoro) | id.wikipedia.org/wiki/Bojonegoro,_Bojonegoro | CC BY-SA (facts) | 2026 |
 | Kemendagri (Dukcapil) code per kecamatan (`kecamatan[].kemendagri`, e.g. Kalitidu `35.22.16`; used for NIK / No. KK digits, not the BPS `code`) | id.wikipedia.org/wiki/Kabupaten_Bojonegoro (table citing Permendagri 72/2019), spot-checked in the build | CC BY-SA (facts) | 2026 |
-| Population per kecamatan (2025), area, altitude, KK holders, GRDP distribution | [BPS Kabupaten Bojonegoro, *Kabupaten Bojonegoro Dalam Angka 2026*](https://bojonegorokab.bps.go.id/id/publication/2026/02/27/2c966ce987c74364e80b2bad/kabupaten-bojonegoro-dalam-angka-2026.html), Tabel 1.1.1, 1.1.2, 3.1.1, 3.1.2, 12.3 | BPS notice (p. 3 of the PDF): may be cited with attribution; *"Dilarang mereproduksi dan/atau menggandakan sebagian atau seluruh isi buku ini untuk tujuan komersial tanpa izin tertulis dari Badan Pusat Statistik Kabupaten Bojonegoro."* GAMADA cites single figures only. **Owner question:** ask BPS Bojonegoro for written permission, or keep citing single figures. | 2026 (data 2025) |
+| Population per kecamatan, total population, households (KK holders), land area, max altitude per kecamatan, economic sector shares | **Simulated figures** in `tools/region/data/sim-bojonegoro.mjs` (*angka simulasi berskala realistis*): populations rounded to 100 per kecamatan / 1,000 in total, households to 1,000, area to whole km², altitude to 5 m, sector shares to whole percent summing to 100. Labelled in the pack and the UI as *"Angka simulasi untuk demo, dibulatkan dari skala data publik; bukan statistik resmi"*; skala mengacu ke publikasi BPS Kab. Bojonegoro (dikutip, dibulatkan). | GAMADA simulation, not official statistics | 2026 (stands for 2025) |
 | Rivers, reservoirs, main roads, markets, landmarks | OpenStreetMap via the Overpass API | ODbL 1.0, © OpenStreetMap contributors | 2026 |
-| Staple base prices, shown as **harga dasar simulasi** | Reference: [Panel Harga Pangan, Badan Pangan Nasional](https://panelharga.badanpangan.go.id/) (consumer level; Kab. Bojonegoro where reported, otherwise the Jawa Timur average) | *Acuan publik, lisensi menunggu konfirmasi pemilik.* **Owner question:** confirm Panel Harga may be used as the reference; if not, replace them with purely simulated base prices. | 2026 |
-| Flood zone + `riskFlood` / `riskLandslide` | **Derived by `build-bojonegoro.mjs`**: distance to the Bengawan Solo × a low-lying factor (BPS altitude). This is a simulated risk zone, **not an official BNPB map**. | Derived from the sources above | 2026 |
+| Staple base prices, shown as **harga dasar simulasi** | **Simulated** in `tools/region/data/sim-bojonegoro.mjs`: plausible consumer prices for a Javanese regency in 2026, chosen by GAMADA and rounded to Rp 50/100. The world simulation adds market offsets and daily noise on top. Not official prices and not market observations. | GAMADA simulation | 2026 |
+| Flood zone + `riskFlood` / `riskLandslide` | **Derived by `build-bojonegoro.mjs`**: distance to the Bengawan Solo × a low-lying factor (simulated max altitude per kecamatan). This is a simulated risk zone, **not an official BNPB map**. | Derived from the sources above | 2026 |
 | `opd`, `services`, `languages.samples`, `mainSector` | Editorial content in `tools/region/content/bojonegoro.mjs`: common nomenclature, a *general summary* of national requirements, and fictional Basa Jawa complaints | GAMADA editorial | — |
 
 Notes
-- The BPS PDF has outlined glyphs, so there is no extractable text. The figures were transcribed into
-  `tools/region/data/bps-bojonegoro-dda2026.mjs` by reading the rendered pages. The build cross-checks area and
-  population against the Wikipedia table that cites the same publication, and fails on any mismatch.
-- Population per kecamatan is published in thousands (2 decimals), so their sum differs from the published
-  total (1.367,98 thousand) by about 40 people.
-- `stats.households` is the number of family-card (KK) holders (Disdukcapil). BPS does not publish a household
-  count in this edition.
+- Owner decision 2026-11-17: every demo is a simulation that shows what the AI can do, so statistics and prices
+  only have to be relevant, not real. Real geography and names stay real: HDX COD-AB boundaries (CC BY-IGO),
+  OSM features (ODbL) and the Kemendagri kecamatan codes (needed for specimen NIK / No. KK digits).
+- The simulated kecamatan populations are rounded one by one, so their sum (1,368,200) differs from the rounded
+  total (1,368,000) by 200 people. `validate.mjs` allows 0.5 %.
+- `stats.households` stands for family-card (KK) holders.
+- `validate.mjs` fails when the stats, economy or prices sources are not labelled *simulasi*.
 - Geometry is simplified with a topology-aware Douglas-Peucker (shared kecamatan/desa borders are simplified once
   and re-used, so neighbours stay gap-free), then quantised to 4 decimals (≈ 11 m). Rounding maps equal vertices
   to equal vertices, so shared borders stay identical (validate: same count of shared edges as before).

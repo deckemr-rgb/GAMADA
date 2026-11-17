@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * build-bojonegoro.mjs — turn the raw public data in tools/region/.cache/bojonegoro/ (see fetch-bojonegoro.mjs)
- * plus the hand-written content in tools/region/content/ into
+ * build-bojonegoro.mjs — turn the raw public geography in tools/region/.cache/bojonegoro/ (see fetch-bojonegoro.mjs),
+ * the simulated statistics + base prices in tools/region/data/sim-bojonegoro.mjs and the hand-written content in
+ * tools/region/content/ into
  *   src/demo-kit/region/packs/bojonegoro/pack.json      (RegionPack, canonical: tools, tests, lab)
  *   src/demo-kit/region/packs/bojonegoro/pack.min.json  (same pack, compact desa columns: what the browser fetches)
  *   src/demo-kit/region/packs/bojonegoro/geo.json       (RegionGeo without desa: kecamatan, rivers, roads, hazards)
@@ -20,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import {
   simplifyTopology, douglasPeucker, roundLine, roundPt, round, centroid, pointInGeom, areaKm2, distToLine, bboxOf, ringArea, projector, quantizeFC,
 } from './lib/geo.mjs'
-import { DDA, KECAMATAN as BPS_KEC, TOTALS, PDRB_2025 } from './data/bps-bojonegoro-dda2026.mjs'
+import { SIM, KECAMATAN as SIM_KEC, TOTALS, SECTORS, PRICES } from './data/sim-bojonegoro.mjs'
 import { encodePack } from './encode-geo.mjs'
 import { KELURAHAN, OPD, SERVICES, GREETINGS, COMPLAINTS } from './content/bojonegoro.mjs'
 
@@ -56,7 +57,7 @@ const CFG = {
 }
 
 const rd = (f) => JSON.parse(readFileSync(join(CACHE, f), 'utf8'))
-for (const f of ['hdx-adm3.geojson', 'hdx-adm4.geojson', 'osm-rivers.json', 'osm-roads.json', 'osm-pois.json', 'osm-named.json', 'prices.json', 'wiki-bojonegoro.txt']) {
+for (const f of ['hdx-adm3.geojson', 'hdx-adm4.geojson', 'osm-rivers.json', 'osm-roads.json', 'osm-pois.json', 'osm-named.json', 'wiki-bojonegoro.txt']) {
   if (!existsSync(join(CACHE, f))) throw new Error(`missing ${f} — run: node tools/region/fetch-bojonegoro.mjs`)
 }
 const log = (...a) => console.log('[build]', ...a)
@@ -66,14 +67,14 @@ const slug = (s) =>
 /* ---------------------------------------------------------------- 1. admin boundaries (HDX COD-AB) */
 const adm3 = rd('hdx-adm3.geojson')
 const adm4 = rd('hdx-adm4.geojson')
-/** HDX spelling → BPS (Dalam Angka) spelling */
+/** HDX spelling → the spelling used in data/sim-bojonegoro.mjs */
 const KEC_ALIAS = { 'Kepoh Baru': 'Kepohbaru', Sumberejo: 'Sumberrejo' }
 const kecName = (n) => KEC_ALIAS[n] ?? n
 const kecFeats = adm3.features.filter((f) => f.properties.adm3_name !== 'Perairan')
 const waterFeat = adm3.features.find((f) => f.properties.adm3_name === 'Perairan')
 if (kecFeats.length !== 28) throw new Error(`expected 28 kecamatan, got ${kecFeats.length}`)
-const bpsNames = new Set(BPS_KEC.map((r) => r[0]))
-for (const f of kecFeats) if (!bpsNames.has(kecName(f.properties.adm3_name))) throw new Error(`unknown kecamatan ${f.properties.adm3_name}`)
+const simNames = new Set(SIM_KEC.map((r) => r[0]))
+for (const f of kecFeats) if (!simNames.has(kecName(f.properties.adm3_name))) throw new Error(`unknown kecamatan ${f.properties.adm3_name}`)
 log(`kecamatan: 28 ✓ (+ "Perairan" water unit)`)
 
 const desaFeats = adm4.features.filter((f) => f.properties.adm4_name !== 'Perairan')
@@ -89,33 +90,25 @@ const kecOf = (p) => {
   return i < 0 ? undefined : slug(kecName(kecFeats[i].properties.adm3_name))
 }
 
-/* ---------------------------------------------------------------- 2. cross-check BPS transcription vs Wikipedia */
-/** kecamatan name (BPS spelling) → Kemendagri code "35.22.xx", filled from the wiki table below */
+/* ---------------------------------------------------------------- 2. Kemendagri kecamatan codes (Wikipedia table) */
+/** kecamatan name → Kemendagri code "35.22.xx", filled from the wiki table below */
 const KEMENDAGRI = {}
 {
   const wiki = readFileSync(join(CACHE, 'wiki-bojonegoro.txt'), 'utf8')
-  // row: | 35.22.xx || [[X, Bojonegoro|X]] ||align="right"| area || pop2010 || pop2020 || pop2025 || seat || villages || post
-  const cell = (c) => c.replace(/^[^|]*\|(?!\|)/, '').trim()
+  // row: | 35.22.xx || [[X, Bojonegoro|X]] || … (only the code and the name are read)
   const rows = wiki
     .split('\n')
     .filter((l) => /^\|\s*35\.22\.\d+\s*\|\|/.test(l))
     .map((l) => l.split('||'))
-    .map((c) => [c[0].replace(/^\|/, '').trim(), (c[1].match(/\|([^\]]+)\]\]/) ?? [])[1], cell(c[2]), cell(c[5])])
+    .map((c) => [c[0].replace(/^\|/, '').trim(), (c[1].match(/\|([^\]]+)\]\]/) ?? [])[1]])
   const W_ALIAS = { Kadewan: 'Kedewan' }
-  let checked = 0
-  for (const [code, n, area, pop] of rows) {
+  for (const [code, n] of rows) {
     const name = W_ALIAS[n] ?? n
+    if (!simNames.has(name)) throw new Error(`wiki row ${n} is not a known kecamatan`)
     KEMENDAGRI[name] = code
-    const b = BPS_KEC.find((r) => r[0] === name || (name === 'Sumberrejo' && r[0] === 'Sumberrejo'))
-    if (!b) throw new Error(`wiki row ${n} not in transcription`)
-    if (Math.abs(b[1] - Number(area)) > 0.005) throw new Error(`area mismatch ${name}: ${b[1]} vs wiki ${area}`)
-    if (Math.abs(b[4] * 1000 - Number(pop.replace(/,/g, ''))) > 5) throw new Error(`population mismatch ${name}: ${b[4]} vs wiki ${pop}`)
-    checked++
   }
-  if (checked !== 28) throw new Error(`wiki cross-check matched ${checked}/28 rows (table layout changed?)`)
-  log('BPS transcription cross-checked against Wikipedia (28/28 rows) ✓')
-  // Kemendagri (Dukcapil) codes: the first column of the same table (Permendagri 72/2019). They differ from the
-  // BPS codes (Kalitidu = 35.22.16 vs BPS 3522200) and are what NIK / No. KK digits 1-6 use.
+  // Kemendagri (Dukcapil) codes: the first column of the table (Permendagri 72/2019). They differ from the
+  // BPS statistical area codes (Kalitidu = 35.22.16 vs BPS 3522200) and are what NIK / No. KK digits 1-6 use.
   const codes = Object.values(KEMENDAGRI)
   if (codes.length !== 28 || new Set(codes).size !== 28 || !codes.every((c) => /^35\.22\.\d{2}$/.test(c))) throw new Error(`kemendagri codes: expected 28 unique 35.22.xx, got ${codes.join(', ')}`)
   // spot checks against the published list (Kalitidu, Bojonegoro, Trucuk, Kasiman, Malo)
@@ -134,7 +127,7 @@ const topo = simplifyTopology(
 )
 log(`topology: ${topo.stats.arcs} arcs, ${topo.stats.junctions} junctions, ${topo.stats.ringsDropped} tiny rings dropped`)
 
-const BPS_BY = Object.fromEntries(BPS_KEC.map((r) => [r[0], r]))
+const SIM_BY = Object.fromEntries(SIM_KEC.map((r) => [r[0], r]))
 const kecGeoOut = []
 const kecPack = []
 topo.layers.kec.forEach((f) => {
@@ -436,7 +429,8 @@ log(`markets: ${markets.length}, landmarks: ${landmarks.length} (${Object.entrie
 
 /* ---------------------------------------------------------------- 7. derived flood zone (simulation) */
 const bengawanLines = bengawan.lines
-const altByKec = Object.fromEntries(BPS_KEC.map((r) => [slug(r[0]), { min: r[2], max: r[3] }]))
+/** approx. max altitude per kecamatan (simulated, rounded to 5 m) */
+const altByKec = Object.fromEntries(SIM_KEC.map((r) => [slug(r[0]), { max: r[2] }]))
 const lowFactor = (kecId) => {
   const a = altByKec[kecId]
   if (!a) return 0.5
@@ -543,43 +537,18 @@ const floodKecamatanIds = kecPack
   .map((k) => k.id)
 log(`flood-prone (derived): ${floodKecamatanIds.join(', ')}`)
 
-/* ---------------------------------------------------------------- 8. prices (Panel Harga Badan Pangan) */
-const prices = rd('prices.json')
-const COMMODITIES = [
-  ['beras-medium', 'Beras medium', 'Medium rice', 'kg', 'Beras Medium'],
-  ['cabai-rawit', 'Cabai rawit merah', 'Red bird\'s-eye chilli', 'kg', 'Cabai Rawit Merah'],
-  ['cabai-merah', 'Cabai merah keriting', 'Curly red chilli', 'kg', 'Cabai Merah Keriting'],
-  ['bawang-merah', 'Bawang merah', 'Shallot', 'kg', 'Bawang Merah'],
-  ['bawang-putih', 'Bawang putih bonggol', 'Garlic', 'kg', 'Bawang Putih Bonggol'],
-  ['minyak-goreng', 'Minyak goreng kemasan', 'Packaged cooking oil', 'liter', 'Minyak Goreng Kemasan'],
-  ['gula-pasir', 'Gula pasir', 'Granulated sugar', 'kg', 'Gula Konsumsi'],
-  ['telur-ayam', 'Telur ayam ras', 'Chicken eggs', 'kg', 'Telur Ayam Ras'],
-  ['daging-ayam', 'Daging ayam ras', 'Broiler chicken meat', 'kg', 'Daging Ayam Ras'],
-]
-const priceOf = (rows, name) => {
-  const r = (rows ?? []).find((x) => x.name === name)
-  if (!r) return null
-  const v = r.today || r.yesterday
-  return v > 0 ? { v, date: r.today ? 'today' : r.yesterday_date } : null
-}
-let priceDate = null
-const priceLevel = { city: 0, province: 0, missing: 0 }
-const commodities = COMMODITIES.map(([id, nid, nen, unit, panel]) => {
-  const c = priceOf(prices.city?.data, panel)
-  const p = c ?? priceOf(prices.province?.data, panel)
-  if (c) priceLevel.city++
-  else if (p) priceLevel.province++
-  else priceLevel.missing++
-  if (p?.date && p.date !== 'today') priceDate = p.date
-  return { id, name: { id: nid, en: nen }, unit, basePrice: p ? Math.round(p.v / 50) * 50 : 0 }
+/* ---------------------------------------------------------------- 8. prices (simulated base prices) */
+const commodities = PRICES.map(([id, nid, nen, unit, price]) => {
+  if (!(price > 0) || price % 50) throw new Error(`price ${id}: ${price} must be > 0 and a multiple of Rp 50`)
+  return { id, name: { id: nid, en: nen }, unit, basePrice: price }
 })
-if (priceLevel.missing) throw new Error(`no price for ${priceLevel.missing} commodities — panel unreachable? use "harga dasar simulasi"`)
-log(`prices: ${priceLevel.city} kabupaten-level, ${priceLevel.province} Jawa Timur-level (${priceDate})`)
+log(`prices: ${commodities.length} simulated base prices`)
 
-/* ---------------------------------------------------------------- 9. economy sectors (BPS Tabel 12.3) */
-const BIG = PDRB_2025.filter((r) => r[3] >= 3)
-const sectors = BIG.map((r) => ({ name: { id: r[1], en: r[2] }, share: r[3] })).sort((a, b) => b.share - a.share)
-sectors.push({ name: { id: 'Lainnya', en: 'Other' }, share: round(100 - BIG.reduce((a, r) => a + r[3], 0), 2) })
+/* ---------------------------------------------------------------- 9. economy sectors (simulated, whole percent) */
+const sectors = SECTORS.map(([nid, nen, share]) => ({ name: { id: nid, en: nen }, share })).sort((a, b) => b.share - a.share)
+const sectorSum = sectors.reduce((a, x) => a + x.share, 0)
+if (!sectors.every((x) => Number.isInteger(x.share)) || sectorSum > 100) throw new Error(`sector shares must be whole percent with Σ ≤ 100 (got ${sectorSum})`)
+sectors.push({ name: { id: 'Lainnya', en: 'Other' }, share: 100 - sectorSum })
 
 /* ---------------------------------------------------------------- 10. main sector per kecamatan (editorial) */
 const MAIN_SECTOR = {
@@ -608,26 +577,20 @@ for (const k of kecPack) {
 }
 const center = [round(cx / ca, 4), round(cy / ca, 4)]
 
-const BPS_URL = DDA.url
-/**
- * The publication's own notice (page 3 of the PDF): "Dilarang mereproduksi dan/atau menggandakan sebagian atau
- * seluruh isi buku ini untuk tujuan komersial tanpa izin tertulis dari Badan Pusat Statistik Kabupaten Bojonegoro."
- * GAMADA only cites individual figures (facts) with attribution and reproduces no table or page.
- * OPEN QUESTION for the owner: ask BPS Bojonegoro for written permission, or keep citing single figures only.
- */
-const BPS_LICENSE = 'Ketentuan BPS: boleh dikutip dengan menyebut sumber; dilarang mereproduksi/menggandakan untuk tujuan komersial tanpa izin tertulis BPS Kabupaten Bojonegoro'
-const BPS_USE = 'Dipakai sebagai kutipan angka individual, bukan reproduksi tabel; izin tertulis BPS menunggu keputusan pemilik.'
+/** simulated figures (owner decision 2026-11-17): labelled as simulation wherever they surface */
+const SIM_URL = 'tools/region/data/sim-bojonegoro.mjs'
+const SIM_LICENSE = 'Angka simulasi GAMADA (bukan statistik resmi)'
 const HDX = 'https://data.humdata.org/dataset/cod-ab-idn'
 const OSM = 'https://www.openstreetmap.org/copyright'
 const kecamatan = kecPack
   .map((k) => {
-    const b = BPS_BY[k.name]
+    const b = SIM_BY[k.name]
     return {
       id: k.id,
       name: k.name,
       code: k.code,
       kemendagri: KEMENDAGRI[k.name],
-      population: Math.round(b[4] * 1000),
+      population: b[1],
       centroid: k.centroid,
       riskFlood: riskFlood[k.id],
       riskLandslide: riskLandslide[k.id],
@@ -648,11 +611,11 @@ const pack = {
   zoom: CFG.zoom,
   bbox,
   stats: {
-    population: Math.round(TOTALS.population_thousand * 1000),
-    households: TOTALS.kk,
+    population: TOTALS.population,
+    households: TOTALS.households,
     area_km2: TOTALS.area_km2,
-    year: DDA.dataYear,
-    source: `BPS Kabupaten Bojonegoro, ${DDA.title} (data ${DDA.dataYear}; Tabel 1.1.1, 3.1.1, 3.1.2). Rumah tangga = jumlah pemilik Kartu Keluarga (Disdukcapil).`,
+    year: SIM.year,
+    source: `${SIM.label}. Rumah tangga = pemilik Kartu Keluarga. Skala mengacu ke publikasi BPS Kab. Bojonegoro (dikutip, dibulatkan).`,
   },
   kecamatan,
   rivers: rivers.map((r) => ({ id: slug(r.name), name: r.name })),
@@ -661,7 +624,7 @@ const pack = {
   economy: {
     sectors,
     commodities,
-    source: `Sektor: BPS, ${DDA.title} Tabel 12.3 (distribusi PDRB ADHB ${DDA.dataYear}, angka sangat sementara). Harga dasar simulasi, mengacu ke Panel Harga Badan Pangan, tingkat konsumen ${priceDate ?? ''} (Kab. Bojonegoro bila tersedia, selain itu rata-rata Jawa Timur); acuan publik, lisensi menunggu konfirmasi pemilik.`,
+    source: 'Struktur sektor (persen bulat) dan harga dasar: angka simulasi untuk demo, berskala wajar untuk kabupaten di Jawa tahun 2026; bukan statistik atau harga resmi.',
   },
   opd: OPD,
   services: SERVICES,
@@ -682,18 +645,18 @@ const pack = {
   sources: [
     { layer: 'kecamatan', name: 'HDX COD-AB Indonesia — batas kecamatan (adm3)', url: HDX, license: 'CC BY-IGO', year: 2020, note: 'BPS / OCHA ROAP; disederhanakan (Douglas-Peucker topologis, 4 desimal) oleh tools/region/build-bojonegoro.mjs. Kode Kemendagri per kecamatan: id.wikipedia.org/wiki/Kabupaten_Bojonegoro (Permendagri 72/2019)' },
     { layer: 'desa', name: 'HDX COD-AB Indonesia — batas desa/kelurahan (adm4)', url: HDX, license: 'CC BY-IGO', year: 2020, note: '430 desa/kelurahan + kawasan hutan; status kelurahan dari id.wikipedia.org/wiki/Bojonegoro,_Bojonegoro' },
-    { layer: 'stats', name: `BPS Kabupaten Bojonegoro — ${DDA.title}`, url: BPS_URL, license: BPS_LICENSE, year: DDA.year, note: `Luas, penduduk per kecamatan (proyeksi 2025), pemilik KK, ketinggian wilayah, distribusi PDRB. ${BPS_USE}` },
-    { layer: 'economy', name: 'BPS — distribusi PDRB ADHB menurut lapangan usaha 2025', url: BPS_URL, license: BPS_LICENSE, year: DDA.dataYear, note: `angka sangat sementara. ${BPS_USE}` },
-    { layer: 'prices', name: 'Harga dasar simulasi — acuan publik: Panel Harga Pangan, Badan Pangan Nasional', url: 'https://panelharga.badanpangan.go.id/', license: 'Acuan publik, lisensi menunggu konfirmasi pemilik', year: 2026, note: `harga dasar simulasi untuk demo, bukan harga resmi; acuan harga konsumen ${priceDate}; ${priceLevel.city} komoditas tingkat kabupaten, ${priceLevel.province} rata-rata Jawa Timur; dibulatkan ke Rp 50` },
+    { layer: 'stats', name: 'Angka simulasi berskala realistis: penduduk per kecamatan, KK, luas, ketinggian', url: SIM_URL, license: SIM_LICENSE, year: SIM.year, note: `${SIM.label}. Penduduk dibulatkan ke 100 (kecamatan) / 1.000 (total), KK ke 1.000, luas ke km² bulat, ketinggian maksimum ke 5 m; ${SIM.attribution}.` },
+    { layer: 'economy', name: 'Struktur ekonomi simulasi (persen bulat, Σ 100)', url: SIM_URL, license: SIM_LICENSE, year: SIM.year, note: `${SIM.label}` },
+    { layer: 'prices', name: 'Harga dasar simulasi', url: SIM_URL, license: SIM_LICENSE, year: 2026, note: 'harga dasar simulasi untuk demo, dipilih tim GAMADA agar wajar untuk kabupaten di Jawa tahun 2026, dibulatkan ke Rp 50/100; bukan harga resmi. Dunia simulasi menambah selisih per pasar dan fluktuasi harian.' },
     { layer: 'rivers', name: 'OpenStreetMap — sungai & waduk', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026 },
     { layer: 'roads', name: 'OpenStreetMap — jalan trunk/primary/secondary', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026 },
     { layer: 'landmarks', name: 'OpenStreetMap — pasar, kantor, RS, puskesmas, sekolah, bendungan', url: OSM, license: 'ODbL 1.0 · © OpenStreetMap contributors', year: 2026, note: 'sampel sekolah: satu SMP/SMA/SMK negeri per kecamatan' },
-    { layer: 'hazards.flood', name: 'Zona risiko banjir turunan', url: 'tools/region/build-bojonegoro.mjs', license: 'Turunan dari HDX (CC BY-IGO), OSM (ODbL), BPS', year: 2026, note: `${DERIVED_NOTE}. Jarak ke Bengawan Solo × faktor dataran rendah (ketinggian BPS Tabel 1.1.2); riskFlood/riskLandslide per kecamatan dari derivasi yang sama` },
-    { layer: 'mainSector', name: 'Sektor utama per kecamatan', url: 'tools/region/build-bojonegoro.mjs', license: 'Konten editorial GAMADA', note: 'ringkasan editorial, bukan data BPS per kecamatan' },
+    { layer: 'hazards.flood', name: 'Zona risiko banjir turunan', url: 'tools/region/build-bojonegoro.mjs', license: 'Turunan dari HDX (CC BY-IGO) dan OSM (ODbL)', year: 2026, note: `${DERIVED_NOTE}. Jarak ke Bengawan Solo × faktor dataran rendah (ketinggian maksimum simulasi per kecamatan); riskFlood/riskLandslide per kecamatan dari derivasi yang sama` },
+    { layer: 'mainSector', name: 'Sektor utama per kecamatan', url: 'tools/region/build-bojonegoro.mjs', license: 'Konten editorial GAMADA', note: 'ringkasan editorial (simulasi), bukan statistik per kecamatan' },
     { layer: 'opd', name: 'Daftar OPD (nomenklatur umum)', url: 'tools/region/content/bojonegoro.mjs', license: 'Konten editorial GAMADA', note: 'nomenklatur umum perangkat daerah, bukan SOTK resmi Pemkab Bojonegoro' },
     { layer: 'services', name: 'Layanan & persyaratan', url: 'tools/region/content/bojonegoro.mjs', license: 'Konten editorial GAMADA', note: 'ringkasan umum persyaratan nasional; cek ketentuan resmi sebelum dipakai' },
     { layer: 'languages', name: 'Sapaan & template aduan Basa Jawa (Bojonegoroan)', url: 'tools/region/content/bojonegoro.mjs', license: 'Konten editorial GAMADA', note: 'contoh fiktif untuk demo; nama tempat nyata' },
-    { layer: 'umkmCount', name: 'TODO: jumlah UMKM belum ditemukan di sumber publik yang terbaca', url: 'https://bojonegorokab.bps.go.id', license: '-', note: 'field economy.umkmCount sengaja dikosongkan' },
+    { layer: 'umkmCount', name: 'TODO: jumlah UMKM belum diisi', url: 'tools/region/build-bojonegoro.mjs', license: '-', note: 'field economy.umkmCount sengaja dikosongkan; bila dibutuhkan, isi dengan angka simulasi' },
   ],
 }
 if (!pack.scenario.damLandmarkId) delete pack.scenario.damLandmarkId

@@ -53,8 +53,8 @@ const T = {
   choro: { id: 'Aduan per 1.000 KK', en: 'Complaints per 1,000 households' },
   choroUnit: { id: 'aduan / 1.000 KK (data simulasi)', en: 'complaints / 1,000 households (simulated)' },
   choroNote: {
-    id: 'KK per kecamatan ∝ penduduk (BPS 2025). Kecamatan dengan < 3 aduan disembunyikan (ambang anonimitas).',
-    en: 'Households per district ∝ population (BPS 2025). Districts with < 3 complaints are hidden (anonymity threshold).',
+    id: 'KK per kecamatan ∝ penduduk (angka simulasi). Kecamatan dengan < 3 aduan disembunyikan (ambang anonimitas).',
+    en: 'Households per district ∝ population (simulated figures). Districts with < 3 complaints are hidden (anonymity threshold).',
   },
   kec: { id: 'Batas kecamatan', en: 'District boundaries' },
   desa: { id: 'Batas desa/kelurahan', en: 'Village boundaries' },

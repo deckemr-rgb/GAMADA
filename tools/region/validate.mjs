@@ -146,8 +146,11 @@ for (const id of ids) {
       const bad = raw?.match(/-?\d+\.\d{5,}/g)
       if (bad) err(`${f} has ${bad.length} coordinates with > 4 decimals (e.g. ${bad[0]})`)
     }
-    // licence wording must quote the actual BPS notice, not "free use"
-    for (const x of pack.sources) if (/BPS/.test(x.license) && /bebas dipakai/i.test(x.license)) err(`sources.${x.layer}: BPS licence misquoted ("bebas dipakai")`)
+    // statistics, sectors and prices are simulated (owner decision 2026-11-17): say so, and never present them as
+    // official figures or as taken from a price panel
+    for (const x of pack.sources) if (['stats', 'economy', 'prices'].includes(x.layer) && !/simulasi/i.test(`${x.name} ${x.license} ${x.note ?? ''}`)) err(`sources.${x.layer}: must be labelled as simulasi`)
+    for (const [where, txt] of [['stats.source', pack.stats.source], ['economy.source', pack.economy.source]]) if (!/simulasi/i.test(txt)) err(`${where} must say "simulasi"`)
+    if (/panel\s*harga|badan\s*pangan|panelharga/i.test(packRaw)) err('pack cites a price panel; staple prices are simulated base prices')
     // every layer attributed
     const layers = new Set(pack.sources.map((x) => x.layer))
     for (const l of ['kecamatan', 'stats', 'rivers', 'landmarks', 'hazards.flood', 'prices']) if (!layers.has(l)) err(`sources: missing layer "${l}"`)

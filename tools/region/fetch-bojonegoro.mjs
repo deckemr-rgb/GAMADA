@@ -4,13 +4,15 @@
  * tools/region/.cache/bojonegoro/ (git-ignored). Re-runnable; skips files already present
  * unless --force. Then run build-bojonegoro.mjs to produce pack.json + geo.json.
  *
- *   node tools/region/fetch-bojonegoro.mjs [--force] [--only=hdx|osm|prices|bps]
+ *   node tools/region/fetch-bojonegoro.mjs [--force] [--only=hdx|osm|wiki]
  *
  * Sources (see src/demo-kit/region/packs/README.md for licences):
  *   - HDX COD-AB Indonesia (BPS / OCHA, CC BY-IGO): admin3 (kecamatan) + admin4 (desa/kelurahan) polygons,
  *     read straight out of the remote ZIP with HTTP Range requests (only the needed entries are streamed).
  *   - OpenStreetMap via Overpass API (ODbL): rivers, roads, markets, landmarks.
- *   - Panel Harga Badan Pangan (prices) and BPS Kabupaten Bojonegoro (statistics): best effort.
+ *   - Wikipedia (CC BY-SA, facts): the kecamatan table, read only for the Kemendagri codes (NIK digits).
+ * Statistics and staple prices are NOT fetched: they are simulated figures in data/sim-bojonegoro.mjs
+ * (owner decision 2026-11-17).
  */
 import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -128,52 +130,16 @@ nwr["name"~"Pacal|Gongseng|Pemkab Bojonegoro|Pemerintah Kabupaten Bojonegoro|Alu
 out tags center;`)
 }
 
-/** Panel Harga Badan Pangan — public JSON behind panelharga.badanpangan.go.id (consumer level = 3).
- *  Kab. Bojonegoro = city_id 247 in province_id 15 (Jawa Timur); province-level answer is the fallback
- *  for commodities the kabupaten enumerator did not report that day. */
-export const PANGAN_API = 'https://api-panelhargav2.badanpangan.go.id/api/front/harga-pangan-informasi'
-async function prices() {
-  if (!need('prices.json')) return log('prices: cached')
-  const urls = {
-    city: `${PANGAN_API}?province_id=15&city_id=247&level_harga_id=3`,
-    province: `${PANGAN_API}?province_id=15&city_id=&level_harga_id=3`,
-  }
-  const got = { fetched: new Date().toISOString() }
-  for (const [k, u] of Object.entries(urls)) {
-    const res = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': 'region-pack-builder/1.0' } })
-    const j = await res.json()
-    got[k] = { url: u, status: res.status, data: j.data ?? null }
-    log(`prices: ${k} → HTTP ${res.status}, ${(j.data ?? []).length} rows`)
-  }
-  writeFileSync(out('prices.json'), JSON.stringify(got))
-}
-
-/** BPS "Kabupaten Bojonegoro Dalam Angka 2026" (Katalog 1102001.3522). The PDF's text is outlined (vector
- *  glyphs), so the figures the pack uses were transcribed by hand into data/bps-bojonegoro-dda2026.mjs;
- *  this step keeps the PDF for audit and fetches the Wikipedia table (which cites the same publication)
- *  as a machine-readable cross-check that build-bojonegoro.mjs verifies against the transcription. */
-export const BPS_DDA_PAGE =
-  'https://bojonegorokab.bps.go.id/id/publication/2026/02/27/2c966ce987c74364e80b2bad/kabupaten-bojonegoro-dalam-angka-2026.html'
+/** Wikipedia raw wikitext of the kabupaten article: its kecamatan table carries the Kemendagri code per
+ *  kecamatan (Permendagri 72/2019), which build-bojonegoro.mjs reads for NIK / No. KK digits. */
 export const WIKI_RAW = 'https://en.wikipedia.org/w/index.php?title=Bojonegoro_Regency&action=raw'
-async function bps() {
-  if (need('bps-dda2026.pdf')) {
-    const html = await (await fetch(BPS_DDA_PAGE, { headers: { 'User-Agent': 'Mozilla/5.0 region-pack-builder/1.0' } })).text()
-    const m = html.match(/https:\/\/webapi\.bps\.go\.id\/download\.php\?f=[A-Za-z0-9_=-]+/)
-    if (!m) log('bps: no download link on the publication page (layout changed?) — skip PDF')
-    else {
-      const res = await fetch(m[0], { headers: { 'User-Agent': 'Mozilla/5.0 region-pack-builder/1.0' } })
-      const buf = Buffer.from(await res.arrayBuffer())
-      writeFileSync(out('bps-dda2026.pdf'), buf)
-      log(`bps: DDA 2026 PDF → ${(buf.length / 1e6).toFixed(1)} MB`)
-    }
-  } else log('bps: PDF cached')
-  if (need('wiki-bojonegoro.txt')) {
-    const t = await (await fetch(WIKI_RAW, { headers: { 'User-Agent': 'region-pack-builder/1.0' } })).text()
-    writeFileSync(out('wiki-bojonegoro.txt'), t)
-    log(`bps: wikipedia cross-check table → ${t.length} B`)
-  } else log('bps: wikipedia cached')
+async function wiki() {
+  if (!need('wiki-bojonegoro.txt')) return log('wiki: cached')
+  const t = await (await fetch(WIKI_RAW, { headers: { 'User-Agent': 'region-pack-builder/1.0' } })).text()
+  writeFileSync(out('wiki-bojonegoro.txt'), t)
+  log(`wiki: kecamatan table → ${t.length} B`)
 }
 
-const steps = { hdx, osm, prices, bps }
+const steps = { hdx, osm, wiki }
 for (const [k, fn] of Object.entries(steps)) if (!ONLY || ONLY === k) await fn()
 log('done →', CACHE)
