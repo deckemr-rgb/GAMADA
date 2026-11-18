@@ -50,8 +50,10 @@ export const R_SALE_LEDGER = react('sale→ledger', 'sale.created', (e, s) => {
     if (!sale) return []
     let cost = 0
     for (const it of sale.items) cost += it.qty * (s.products.byId[it.productId]?.cost ?? 0)
-    const cashAcc = sale.payment === 'tunai' ? 'Kas' : 'Bank'
-    const lines = [{ account: cashAcc, debit: sale.total, credit: 0 }, { account: 'Pendapatan Penjualan', debit: 0, credit: sale.total }]
+    // cash goes to Kas, QRIS / transfer to Bank (split payments split the debit)
+    const pays = sale.payments ?? [{ method: sale.payment, amount: sale.total }]
+    const kas = pays.reduce((a, x) => a + (x.method === 'tunai' ? x.amount : 0), 0)
+    const lines = [...(kas ? [{ account: 'Kas', debit: kas, credit: 0 }] : []), ...(sale.total - kas ? [{ account: 'Bank', debit: sale.total - kas, credit: 0 }] : []), { account: 'Pendapatan Penjualan', debit: 0, credit: sale.total }]
     if (cost > 0) lines.push({ account: 'HPP', debit: cost, credit: 0 }, { account: 'Persediaan', debit: 0, credit: cost })
     return [fu('ledger.posted', { businessId: sale.businessId, memo: { id: `Penjualan ${sale.code}`, en: `Sale ${sale.code}` }, lines, source: 'sale', refId: sale.id, needsReview: false, confidence: 0.99 }, 'pajak-beres')]
 })

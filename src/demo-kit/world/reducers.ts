@@ -247,7 +247,9 @@ export const REDUCERS: ReducerMap = {
   },
   'supplier.replied': (s, e) => ({
     ...s,
-    purchaseOrders: patch(s.purchaseOrders, e.payload.poId, (po) => ({ ...po, status: 'dibalas', reply: { at: e.at, message: e.payload.message, eta: e.payload.eta ?? null } })),
+    purchaseOrders: patch(s.purchaseOrders, e.payload.poId, (po) => ({
+      ...po, status: po.status === 'diterima' ? po.status : 'dibalas', reply: { at: e.at, message: e.payload.message, eta: e.payload.eta ?? null, ...(e.payload.tpl != null ? { tpl: e.payload.tpl } : {}) },
+    })),
   }),
 
   /* ---------------------------------------------------------------- Pajak Beres */
@@ -265,11 +267,18 @@ export const REDUCERS: ReducerMap = {
   },
 
   /* ---------------------------------------------------------------- Juara Jualan · Kenal Mitra */
-  'call.scored': (s, e) => ({ ...s, calls: patch(s.calls, e.payload.callId, (c) => ({ ...c, score: e.payload.score, criteria: e.payload.criteria ?? c.criteria })) }),
-  'coaching.assigned': (s, e) => ({
-    ...s,
-    coachings: upsert(s.coachings, { id: must(e.payload.id, 'coaching id'), agentId: e.payload.agentId, focus: e.payload.focus, callId: e.payload.callId ?? null, at: e.at, status: 'baru' }),
-  }),
+  // 'call.scored' and 'tender.matched' are reduced by the Usaha Pintar world module (world/up/reducers-up.ts)
+  'coaching.assigned': (s, e) => {
+    const p = e.payload
+    const agent = s.agentsSales.byId[p.agentId]
+    return {
+      ...s,
+      coachings: upsert(s.coachings, {
+        id: must(p.id, 'coaching id'), agentId: p.agentId, focus: p.focus, callId: p.callId ?? null, at: e.at, status: 'baru',
+        examples: p.examples ?? [], baseline: p.baseline ?? agent?.baseline ?? 0, focusKeys: p.focusKeys ?? [],
+      }),
+    }
+  },
   'partner.verified': (s, e) => {
     const p = e.payload
     let next: WorldState = {
@@ -280,14 +289,24 @@ export const REDUCERS: ReducerMap = {
     if (p.subjectKind === 'candidate') {
       next = { ...next, candidates: patch(next.candidates, p.subjectId, (c) => ({ ...c, score: p.score ?? c.score, status: p.result === 'lolos' ? 'shortlist' : p.result === 'ditolak' ? 'ditolak' : c.status })) }
     }
+    // the open Kenal Mitra request of this subject closes (a CV batch closes the opening's request)
+    const vr = next.verificationRequests
+    const open = vr.ids.filter((id) => {
+      const r = vr.byId[id]
+      return !!r && r.status !== 'selesai' && r.kind === p.kind && (r.subjectId === p.subjectId || (p.kind === 'cv' && r.subjectKind === 'candidate'))
+    })
+    if (open.length) next = { ...next, verificationRequests: patchMany(vr, open, (r) => ({ ...r, status: 'selesai', verificationId: `VF-${e.id}` })) }
     return next
   },
 
   /* ---------------------------------------------------------------- TenderPilot · Katalog Lokal */
-  'tender.matched': (s, e) => ({ ...s, tenders: patch(s.tenders, e.payload.tenderId, (t) => ({ ...t, matches: { ...t.matches, [e.payload.businessId]: e.payload.probability } })) }),
   'bid.submitted': (s, e) => ({
     ...s,
-    bids: upsert(s.bids, { id: must(e.payload.id, 'bid id'), tenderId: e.payload.tenderId, businessId: e.payload.businessId, price: e.payload.price, at: e.at, status: 'terkirim' }),
+    bids: upsert(s.bids, {
+      id: must(e.payload.id, 'bid id'), tenderId: e.payload.tenderId, businessId: e.payload.businessId, price: e.payload.price, at: e.at, status: 'terkirim',
+      ...(e.payload.pages ? { pages: e.payload.pages } : {}), ...(e.payload.docSections ? { docSections: e.payload.docSections } : {}),
+      ...(s.tenders.byId[e.payload.tenderId]?.hps ? { hps: s.tenders.byId[e.payload.tenderId]!.hps } : {}),
+    }),
   }),
   'need.created': (s, e) => {
     const p = e.payload

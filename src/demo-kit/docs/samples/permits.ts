@@ -179,3 +179,4 @@ export const PERMITS: SampleDoc[] = [
 
 export const DOMISILI_ISSUED = '2026-11-09'
 
+export { kybSpecimens, type KybSubject } from './kyb'

@@ -18,6 +18,7 @@ import { coreCovers } from './engine-scope'
 import { createEvent } from './events'
 import { nextId, type Seq } from './ids'
 import { WORLD, beginBatch, endBatch, upsert } from './util'
+import { extVersion, extensions } from './ext'
 
 export interface Handlers {
   reducers: ReducerMap
@@ -29,6 +30,44 @@ export interface Handlers {
 }
 
 export const CORE: Handlers = { reducers: CORE_REDUCERS, reactions: CORE_REACTIONS, describe: describeCore, covers: coreCovers }
+
+const merged = new WeakMap<Handlers, { v: number; h: Handlers }>()
+/**
+ * `base` + every registered extension (world/ext.ts): extension reducers for types the base does not reduce (a
+ * duplicate throws), extension reactions after the base ones (registration order), extension audit texts first
+ * (they describe only their own types). Cached per extension version.
+ */
+export function withExtensions(base: Handlers): Handlers {
+  const v = extVersion()
+  const hit = merged.get(base)
+  if (hit && hit.v === v) return hit.h
+  const xs = extensions()
+  let h = base
+  if (xs.length) {
+    const reducers: Record<string, unknown> = { ...base.reducers }
+    for (const x of xs)
+      for (const [k, fn] of Object.entries(x.reducers)) {
+        if (k in reducers) throw new Error(`world ext ${x.id}: duplicate reducer for ${k}`)
+        reducers[k] = fn
+      }
+    h = {
+      reducers: reducers as ReducerMap,
+      reactions: [...base.reactions, ...xs.flatMap((x) => x.reactions)],
+      describe: (e, s) => {
+        for (const x of xs) {
+          const d = x.describe(e, s)
+          if (d) return d
+        }
+        return base.describe(e, s)
+      },
+      covers: base.covers,
+    }
+  }
+  merged.set(base, { v, h })
+  return h
+}
+/** the core handlers + the registered extensions (what the store runs) */
+export const coreHandlers = (): Handlers => withExtensions(CORE)
 
 export interface CoreBatchResult {
   state: WorldState

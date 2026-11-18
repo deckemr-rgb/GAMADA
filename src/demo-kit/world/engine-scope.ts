@@ -6,6 +6,7 @@
  * other type). The world self-test checks that the core handlers of these types are the full ones.
  */
 import type { EventType } from './types'
+import { extCovers } from './ext'
 
 export const CORE_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'complaint.created', 'mention.created', 'price.updated', 'sale.created', 'ledger.posted', 'score.updated', 'procurement.flagged',
@@ -13,7 +14,7 @@ export const CORE_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
 
 /** true when the core pipeline can process `e` exactly as the full one would */
 export function coreCovers(e: { type: EventType; payload: unknown }): boolean {
-  if (!CORE_EVENT_TYPES.has(e.type)) return false
+  if (!CORE_EVENT_TYPES.has(e.type)) return extCovers(e.type)
   // a post of the false-narrative burst can raise hoax.detected (Radar Isu's reaction lives in the full pipeline);
   // that reaction returns nothing for a post without `rumor`, so plain mentions stay in the core
   return !(e.type === 'mention.created' && (e.payload as { rumor?: unknown }).rumor)

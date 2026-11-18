@@ -30,6 +30,7 @@ import { TABLE_KEYS, WORLD, distanceKm, offsetKm, rows } from '../util'
 import type { Seq } from '../ids'
 import { nikRegion, nikRegions, parseNik } from '../../docs/nik'
 import { isProductSlug } from '../../../content/products'
+import { runUpSelftest } from './up.selftest'
 
 let failures = 0
 let passes = 0
@@ -96,7 +97,7 @@ for (const { label, pack } of packs) {
   ok(c.businesses === 120, `120 businesses (${c.businesses})`)
   ok(c.products >= 350 && c.products <= 450, `~400 SKUs (${c.products})`)
   ok(c.outlets === 3, '3 outlets for the shop')
-  ok(c.candidates === 200, '200 candidates')
+  ok(c.candidates === 0 && c.calls === 0 && c.staff === 0, 'Usaha Pintar tables come from the lazy extension (empty in the core world)')
   ok(c.markets === pack.markets.length, 'markets from pack')
   ok(c.prices === pack.markets.length * pack.economy.commodities.length, 'prices = markets × commodities')
   ok(c.econIndex === pack.kecamatan.length * 12, 'econ index = kecamatan × 12 months')
@@ -692,6 +693,9 @@ await (async () => {
   ok(natAt.length === n1, `rewind + jump again emits nothing twice (${natAt.length - n1} extra)`)
   off3()
 })()
+
+/* ------------------------------------------------------------------ 6. tahap 3: the Usaha Pintar module */
+await runUpSelftest(ok, section, packs)
 
 console.log(`\n${failures ? '✗' : '✓'} ${passes} passed, ${failures} failed`)
 exit(failures ? 1 : 0)

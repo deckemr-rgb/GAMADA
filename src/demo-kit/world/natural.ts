@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from 'react'
 import { clock } from './clock'
 import { emit, world } from './store'
+import type { AnyFollowUp, WorldState } from './types'
 
 /* ------------------------------------------------------------------ constants */
 /** expected events per world minute at rhythm 1.0 */
@@ -22,6 +23,25 @@ export const NATURAL = {
   /** while a flood alert is active, flood complaints in flood kecamatan are this much likelier */
   floodBoost: 4,
 }
+
+/* ------------------------------------------------------------------ ecosystem sources + boosts */
+
+/** extra natural generators (ecosystem world modules, e.g. Usaha Pintar's natural-up): pure (state, minute) → events,
+ *  run after the core generator in registration order */
+type NaturalSource = (s: WorldState, minute: number) => AnyFollowUp[]
+const sources = new Map<string, NaturalSource>()
+export function registerNaturalSource(id: string, fn: NaturalSource): void {
+  sources.set(id, fn)
+}
+/** multiplier on a natural rhythm while a page wants more of it (e.g. sales ×3 on a shop demo); 1 = normal */
+const boosts: Record<string, number> = {}
+export function setNaturalBoost(kind: 'sale', factor: number): () => void {
+  boosts[kind] = factor
+  return () => {
+    if (boosts[kind] === factor) delete boosts[kind]
+  }
+}
+export const naturalBoost = (kind: 'sale'): number => boosts[kind] ?? 1
 
 /* ------------------------------------------------------------------ runtime switch */
 
@@ -61,7 +81,9 @@ const SLICE = 60
 function run(g: typeof import('./natural-gen'), minute: number) {
   if (minute <= mark) return
   mark = minute
-  for (const o of g.naturalEventsAt(world.get(), minute)) emit(o.type, o.payload as never, o.source, { at: minute, ...(o.origin ? { origin: o.origin } : {}) })
+  const outs = g.naturalEventsAt(world.get(), minute)
+  for (const fn of sources.values()) outs.push(...fn(world.get(), minute))
+  for (const o of outs) emit(o.type, o.payload as never, o.source, { at: minute, ...(o.origin ? { origin: o.origin } : {}) })
 }
 const idle = (fn: () => void) => {
   const w = globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }

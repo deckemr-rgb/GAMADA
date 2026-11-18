@@ -8,16 +8,16 @@
  */
 import type { RegionPack } from '../region/types'
 import type {
-  ActionItem, Alert, AuditEntry, Bi, Bid, Bidder, BizScore, Booking, BrandMention, Business, Call, Candidate, CatalogNeed, Chat,
-  Citizen, Coaching, Complaint, ComplaintCategory, DocumentRec, EconIndex, LedgerEntry, Letter, LngLat, LoanApp, Market, Match,
-  Meeting, Mention, Minutes, Order, Outlet, PricePoint, Procurement, Product, PurchaseOrder, RegionRef, Sale, SaleItem, SalesAgent,
-  SalesDay, ScoreFactor, StockLevel, Supplier, TableKey, TaxItem, Tender, Ticket, TicketStatus, Verification, WorldState,
+  ActionItem, Alert, AuditEntry, Bi, Bidder, BizScore, Booking, Business, CatalogNeed,
+  Citizen, Complaint, ComplaintCategory, DocumentRec, EconIndex, LedgerEntry, Letter, LngLat, LoanApp, Market, Match,
+  Meeting, Mention, Minutes, Order, Outlet, PricePoint, Procurement, Product, PurchaseOrder, RegionRef, Sale, SaleItem,
+  SalesDay, ScoreFactor, StockLevel, Supplier, TableKey, TaxItem, Ticket, TicketStatus, Verification, WorldState,
   Facility, Harvest, WaterGauge, SeedFacts,
 } from './types'
 import {
-  ACTION_TPL_BY_OPD, ACTION_TPL_GENERAL, AGENT_TEAMS, BIZ_KINDS, BIZ_WORDS, BRAND_TEXT, CALL_CUSTOMERS, CANDIDATE_ROLES, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
+  ACTION_TPL_BY_OPD, ACTION_TPL_GENERAL, BIZ_KINDS, BIZ_WORDS, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
   CATEGORY_SLA_DAYS, COMPANY_WORDS, COMPETITOR_BRANDS, COMPLAINT_TEXT, COMPLAINT_WEIGHTS, complaintRouting, fillComplaint, mentionText, NAMES, LENDERS, LETTER_TPL, MEDIA_OUTLETS,
-  MEETING_PARTICIPANTS, MEETING_TPL, MENTION_TEXT, PROCUREMENT_TPL, SHOP_NAMES, SKILLS, SKUS, SOCIAL_HANDLES, TENDER_TPL,
+  MEETING_PARTICIPANTS, MEETING_TPL, MENTION_TEXT, PROCUREMENT_TPL, SHOP_NAMES, SKUS, SOCIAL_HANDLES,
   PUMP_HISTORY, SPLIT_PACKAGES, PERSONAS,
   type SkuRow,
 } from './catalog'
@@ -65,6 +65,17 @@ function minuteOn(rng: Rng, dayOffset: number, fromH = 0, toH = 23, until?: numb
   return dayOffset * DAY_MIN + Math.max(0, m)
 }
 const roundTo = (n: number, step: number): number => Math.round(n / step) * step
+/** a company name never repeats a word ("Panca Panca Catur" → "Panca Tirta Catur"): a repeat takes the next unused
+ *  COMPANY_WORDS entry (no extra random draw, so every other stream stays the same) */
+export function uniqueWords(name: string): string {
+  const seen = new Set<string>()
+  return name.split(' ').map((w) => {
+    let x = w
+    for (let i = COMPANY_WORDS.indexOf(w) + 1; seen.has(x.toLowerCase()); i++) x = COMPANY_WORDS[i % COMPANY_WORDS.length]!
+    seen.add(x.toLowerCase())
+    return x
+  }).join(' ')
+}
 
 function buildRegion(pack: RegionPack, rng: Rng): RegionRef {
   const categoryOpd = {} as Record<ComplaintCategory, string>
@@ -454,7 +465,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   /* ---------------------------------------------------------------- bidders + procurements */
   const rp = S('procurement')
   const bidders: Bidder[] = []
-  const company = (r: Rng) => `${r.pick(COMPANY_WORDS)} ${r.pick(COMPANY_WORDS)}${r.chance(0.4) ? ' ' + r.pick(COMPANY_WORDS) : ''}`
+  const company = (r: Rng) => uniqueWords(`${r.pick(COMPANY_WORDS)} ${r.pick(COMPANY_WORDS)}${r.chance(0.4) ? ' ' + r.pick(COMPANY_WORDS) : ''}`)
   const bnamer = makeNamer(rp, pack.languages.regional)
   // documentation address ranges (RFC 5737), never a real or private network; same three draws as before, and no
   // two independent bidders ever share an address by accident
@@ -571,7 +582,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     const mk = markets.filter((m) => m.kecamatanId === pl.kecamatanId)
     const base = { 'toko-bangunan': 160, kelontong: 45, 'warung-makan': 38, 'kedai-kopi': 22, katering: 55, konveksi: 70, kerajinan: 30, tani: 50, bengkel: 40, jasa: 60, percetakan: 35, 'olahan-pangan': 28 }[k.kind]
     const firstName = owner.name.split(' ')[0] ?? owner.name
-    const nm = k.kind === 'warung-makan' || k.kind === 'katering' ? `${rz.pick(k.names)} ${owner.gender === 'P' ? 'Bu' : 'Pak'} ${firstName}` : `${rz.pick(k.names)} ${rz.pick(BIZ_WORDS)}`
+    const nm = k.kind === 'warung-makan' || k.kind === 'katering' ? `${rz.pick(k.names)} ${owner.gender === 'P' ? 'Bu' : 'Pak'} ${firstName}` : uniqueWords(`${rz.pick(k.names)} ${rz.pick(BIZ_WORDS)}`)
     businesses.push({
       id: nid('businesses'), name: nm, kind: k.kind, sector: k.sector, ownerName: owner.name, kecamatanId: pl.kecamatanId, desaId: pl.desaId, coord: pl.coord,
       marketId: mk.length && (k.kind === 'kelontong' || k.kind === 'toko-bangunan') ? rz.pick(mk).id : null,
@@ -822,52 +833,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   taxItems.push({ id: nid('taxItems'), businessId: shop.id, kind: 'pph21', period: monthOf(day, 0), dueAt: daysUntil(`${monthOf(day, 1)}-15`) * DAY_MIN, amount: null, status: 'perlu-hitung' })
   taxItems.push({ id: nid('taxItems'), businessId: shop.id, kind: 'pbb', period: `${year}-08`, dueAt: daysUntil(`${year}-08-31`) * DAY_MIN, amount: 1_284_000, status: 'dibayar' })
 
-  /* ---------------------------------------------------------------- sales team (Juara Jualan) */
-  const ra = S('sales-team')
-  const anamer = makeNamer(ra, pack.languages.regional)
-  const industries: Call['industry'][] = ['toko-bangunan', 'multifinance', 'asuransi']
-  const agentsSales: SalesAgent[] = []
-  industries.forEach((ind, i) => {
-    for (let k = 0; k < 3; k++) {
-      const base = ra.int(58, 84)
-      const r = () => clamp(Math.round(base + ra.normal(0, 9)), 30, 98)
-      agentsSales.push({ id: nid('agentsSales'), name: anamer().name, team: AGENT_TEAMS[i]!, industry: ind, baseline: base, radar: { salam: r(), gali: r(), keberatan: r(), penawaran: r(), closing: r(), kepatuhan: r() } })
-    }
-  })
-  const calls: Call[] = Array.from({ length: GEN.calls }, () => minuteOn(ra, -ra.int(0, 14), 8, 16, now)).sort((a, b) => a - b).map((at) => {
-    const ag = ra.pick(agentsSales)
-    const scored = ra.chance(0.85) || at < -DAY_MIN
-    const sc = clamp(Math.round(ag.baseline + ra.normal(0, 11)), 22, 98)
-    const c = () => clamp(Math.round(sc + ra.normal(0, 10)), 10, 100)
-    const flags: string[] = []
-    if (sc < 60) flags.push(ra.pick(['keberatan-tidak-dijawab', 'lupa-salam', 'janji-berlebihan', 'tidak-closing']))
-    return {
-      id: nid('calls'), agentId: ag.id, industry: ag.industry, channel: ag.industry === 'toko-bangunan' && ra.chance(0.5) ? 'wa' : 'telepon', customer: ra.pick(CALL_CUSTOMERS), at,
-      durationSec: ra.int(90, 720), score: scored ? sc : null, criteria: scored ? { salam: c(), gali: c(), keberatan: c(), penawaran: c(), closing: c(), kepatuhan: c() } : null, flags,
-    } satisfies Call
-  })
-  const coachings: Coaching[] = agentsSales.filter((a) => a.baseline < 66).slice(0, 3).map((a) => ({
-    id: nid('coachings'), agentId: a.id, focus: [{ id: 'Jawab keberatan harga dengan nilai', en: 'Answer price objections with value' }, { id: 'Gali kebutuhan sebelum menawarkan', en: 'Probe needs before offering' }],
-    callId: calls.find((c) => c.agentId === a.id)?.id ?? null, at: -ra.int(2, 9) * DAY_MIN, status: 'latihan' as const,
-  }))
-  const chats: Chat[] = Array.from({ length: 18 }, (_, i) => {
-    const kinds = [
-      { product: 'sapa-warga' as const, ch: 'wa' as const, p: { id: 'Terima kasih, aduan sudah kami terima.', en: 'Thank you, we have received your report.' } },
-      { product: 'toko-autopilot' as const, ch: 'wa' as const, p: { id: 'Stok semen besok dikirim ya, Pak.', en: 'Cement stock ships tomorrow, sir.' } },
-      { product: 'juara-jualan' as const, ch: 'wa' as const, p: { id: 'Untuk renovasi dapur butuh berapa sak semen?', en: 'How many bags of cement for a kitchen renovation?' } },
-    ]
-    const k = kinds[i % kinds.length]!
-    return { id: nid('chats'), channel: k.ch, product: k.product, withName: anamer().name, preview: k.p, at: minuteOn(ra, -ra.int(0, 3), 7, 20, now), unread: ra.chance(0.3) ? ra.int(1, 3) : 0 }
-  }).sort((a, b) => a.at - b.at)
-
-  /* ---------------------------------------------------------------- candidates (Kenal Mitra CV) */
-  const rk = S('candidates')
-  const knamer = makeNamer(rk, pack.languages.regional)
-  const candidates: Candidate[] = Array.from({ length: GEN.candidates }, () => ({
-    id: nid('candidates'), name: knamer().name, role: rk.pick(CANDIDATE_ROLES), years: Math.max(0, Math.round(rk.normal(3, 2.6))),
-    education: rk.weighted([['SMA/SMK', 55], ['D3', 15], ['S1', 27], ['S2', 3]] as const), skills: rk.sample(SKILLS, rk.int(2, 4)),
-    kecamatanId: rk.weighted(popW), score: null, status: 'baru' as const,
-  }))
+  // the sales team, calls, chats, coachings and candidates are Usaha Pintar data: world/up/seed-up.ts (lazy)
 
   /* ---------------------------------------------------------------- verifications + documents */
   const rv = S('documents')
@@ -907,35 +873,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   regDocs.sort((a, b) => a.at - b.at)
   for (const d of regDocs) documents.push({ ...d, id: nid('documents') })
 
-  /* ---------------------------------------------------------------- brand mentions (Pantau Merek) */
-  const rr = S('brand')
-  const brandMentions: BrandMention[] = Array.from({ length: GEN.brandMentions }, () => minuteOn(rr, -rr.int(0, 30), 6, 22, now)).sort((a, b) => a - b).map((at) => {
-    const t = rr.pick(BRAND_TEXT)
-    const sc = t.s + rr.normal(0, 0.1)
-    const channel = rr.weighted([['marketplace', 30], ['instagram', 20], ['x', 10], ['tiktok', 10], ['ulasan-peta', 30]] as const)
-    return {
-      id: nid('brandMentions'), at, brand: rr.chance(0.7) ? shop.id : rr.pick(COMPETITOR_BRANDS), channel, author: `${rr.pick(SOCIAL_HANDLES)}${rr.int(1, 99)}`, text: t.t,
-      sentiment: sc < -0.2 ? 'negatif' : sc > 0.2 ? 'positif' : 'netral', topic: t.topic,
-      rating: channel === 'marketplace' || channel === 'ulasan-peta' ? (sc > 0.2 ? rr.int(4, 5) : sc < -0.2 ? rr.int(1, 3) : 3) : null, reply: null,
-    } satisfies BrandMention
-  })
-
-  /* ---------------------------------------------------------------- tenders + bids (TenderPilot) */
-  const rt = S('tenders')
-  const tenders: Tender[] = Array.from({ length: 16 }, (_, i) => ({ i, at: -rt.int(1, 45) * DAY_MIN + rt.int(8, 15) * 60 })).sort((a, b) => a.at - b.at).map(({ i, at }) => {
-    const t = TENDER_TPL[i % TENDER_TPL.length]!
-    const open = now - at < 14 * DAY_MIN
-    const value = roundTo(t.base * rt.float(0.7, 1.4), 1_000_000)
-    return {
-      id: nid('tenders'), code: `${year}-T${pad(rt.int(100, 999), 3)}`, title: t.t, opdId: rt.pick(region.opd).id, kbli: t.kbli, value, kecamatanId: rt.weighted(popW),
-      publishedAt: at, deadlineAt: at + rt.int(10, 21) * DAY_MIN, status: open ? 'dibuka' : rt.chance(0.5) ? 'selesai' : 'evaluasi', emergency: false, competitors: rt.int(3, 14),
-      matches: t.kbli === '46634' ? { [shop.id]: round(rt.float(0.35, 0.82), 2) } : {}, needId: null,
-    } satisfies Tender
-  })
-  const bids: Bid[] = tenders.filter((t) => t.status !== 'dibuka' && t.matches[shop.id] !== undefined).slice(0, 6).map((t) => ({
-    id: nid('bids'), tenderId: t.id, businessId: shop.id, price: roundTo(t.value * rt.float(0.86, 0.98), 100_000), at: t.publishedAt + rt.int(2, 8) * DAY_MIN,
-    status: t.status === 'selesai' ? (rt.chance(0.45) ? 'menang' : 'kalah') : 'terkirim',
-  }))
+  // brand mentions, tenders and bids: world/up/seed-up.ts (lazy)
 
   /* ---------------------------------------------------------------- catalog needs, matches, orders (Katalog Lokal) */
   const rg = S('katalog')
@@ -1183,14 +1121,25 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     suppliers: tableFrom(rev(suppliers)),
     ledger: tableFrom(ledger, byAt),
     taxItems: tableFrom(rev(taxItems)),
-    calls: tableFrom(calls, byAt),
-    chats: tableFrom(chats, byAt),
-    agentsSales: tableFrom(rev(agentsSales)),
-    coachings: tableFrom(coachings, byAt),
-    candidates: tableFrom(rev(candidates)),
-    brandMentions: tableFrom(brandMentions, byAt),
-    tenders: tableFrom(tenders, (t) => t.publishedAt),
-    bids: tableFrom(bids, byAt),
+    // Usaha Pintar tables: filled by the lazy extension (world/up/seed-up.ts)
+    calls: emptyTable(),
+    chats: emptyTable(),
+    agentsSales: emptyTable(),
+    coachings: emptyTable(),
+    candidates: emptyTable(),
+    brandMentions: emptyTable(),
+    tenders: emptyTable(),
+    bids: emptyTable(),
+    staff: emptyTable(),
+    shifts: emptyTable(),
+    promos: emptyTable(),
+    cashShifts: emptyTable(),
+    posNotices: emptyTable(),
+    bankImports: emptyTable(),
+    roleplays: emptyTable(),
+    verificationRequests: emptyTable(),
+    brandAlerts: emptyTable(),
+    brandAnnouncements: emptyTable(),
     catalogNeeds: tableFrom(catalogNeeds, byAt),
     matches: tableFrom(matches, byAt),
     orders: tableFrom(orders, byAt),

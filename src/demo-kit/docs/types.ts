@@ -10,7 +10,7 @@ export type Bi = { id: string; en: string }
 /** Box in document units (viewBox). Extracted boxes are the same box in % of the page. */
 export type Box = { x: number; y: number; w: number; h: number }
 
-export type SampleKind = 'letter' | 'ktp' | 'kk' | 'nib' | 'domisili' | 'house' | 'nota' | 'faktur' | 'mutasi' | 'cv'
+export type SampleKind = 'letter' | 'ktp' | 'kk' | 'nib' | 'domisili' | 'house' | 'nota' | 'faktur' | 'mutasi' | 'cv' | 'npwp' | 'akta' | 'lokasi'
 
 export type FontKind = 'sans' | 'serif' | 'mono' | 'hand'
 
@@ -131,12 +131,18 @@ export interface PersonMeta {
 }
 
 export interface BusinessMeta {
-  kind: 'nib'
+  /** 'npwp' / 'akta' / 'lokasi': the KYB specimens of samples/kyb.ts */
+  kind: 'nib' | 'npwp' | 'akta' | 'lokasi'
   nib: string
   name: string
   owner: string
   kbli: string
   edited: boolean
+  npwp?: string
+  akta?: string
+  address?: string
+  /** [lng, lat] of the location photo */
+  gps?: [number, number]
 }
 
 export interface HouseMeta {

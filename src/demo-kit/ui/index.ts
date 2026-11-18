@@ -40,3 +40,8 @@ export { Tooltip, Menu, type TooltipProps, type MenuItem, type MenuProps } from 
 export { formatSla, formatSlaClock, SLA_WARN_MIN, type SlaTone, type SlaResult } from './sla'
 export { UI_STRINGS, useUiStrings, fmtNum } from './strings'
 export * from './motion'
+// tahap 3 (Usaha Pintar): own modules, outside the always-loaded demo-core group
+export { ChatThread, ChatComposer, type ChatMessage, type ChatThreadProps, type ChatComposerProps } from './Chat'
+export { MoneyInput, type MoneyInputProps } from './MoneyInput'
+export { MonthCalendar, icsFor, type CalendarEvent, type MonthCalendarProps } from './MonthCalendar'
+export { flyBetween } from './fly'

@@ -15,3 +15,4 @@ export {
   type NikParts, type NikKecamatan,
 } from './nik'
 export { textWidth, runBox, wrap } from './measure'
+export { TextDiff, diffWords, type TextDiffProps, type DiffPart } from './TextDiff'

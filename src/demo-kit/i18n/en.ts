@@ -100,6 +100,8 @@ export const en: DemoDict = {
   splitConsole: 'Officer console',
   splitViews: 'Views',
   loading: 'Preparing the demo world…',
+  upLoading: 'Preparing the business data…',
+  simChip: 'Simulated data',
   loadError: 'The demo world failed to load.',
   retry: 'Try again',
   hotspotHint: 'Start here',

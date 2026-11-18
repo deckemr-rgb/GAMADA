@@ -6,10 +6,11 @@
 import { runBox } from '../measure'
 import { dmy, longDate } from '../nik'
 import { hashString, makeRng } from '../../world/prng'
-import type { LineItem, MutasiMeta, MutasiRow, ReceiptMeta, SampleDoc } from '../types'
+import type { Bi, LineItem, MutasiMeta, MutasiRow, ReceiptMeta, SampleDoc } from '../types'
 import { DocBuilder, INK, MUTED } from './builder'
 
-export const FICTIONAL_BANK = 'Bank Arta Kencana'
+/** fictional bank (renamed from 'Bank Arta Kencana', which collided with the multifinance 'Arta Kencana Finance') */
+export const FICTIONAL_BANK = 'Bank Wiyata Sentosa'
 export const BUYER = 'Warung Makan Bu Tini'
 
 /** "1.250.000" */
@@ -24,25 +25,44 @@ const NOTA_ITEMS: LineItem[] = [
   { name: 'Kuas 3 inci', qty: 2, unit: 'pcs', price: 9000 },
 ]
 
-function makeNota(edit: boolean): SampleDoc {
+/** what a nota shows (a supplier's invoice to the shop, or a shop receipt) */
+export interface NotaInput {
+  merchant: string
+  address: string
+  number: string
+  /** ISO date and 'HH:MM' */
+  date: string
+  time: string
+  cashier: string
+  items: LineItem[]
+  /** cash handed over (default: the total rounded up to Rp 50.000) */
+  cash?: number
+  journal?: ReceiptMeta['journal']
+  /** edited variant: Rp added to the printed total (default ≈ 10 %) */
+  editDelta?: number
+}
+/** a thermal-paper nota: `crumple` (creases, default on), `tilt` (degrees), `edited` (total overwritten + tamper truth) */
+export function notaDoc(n: NotaInput, opts: { id?: string; crumple?: boolean; tilt?: number; edited?: boolean } = {}): SampleDoc {
+  const edit = !!opts.edited
+  const NOTA_ITEMS = n.items
   const W = 380
   const b = new DocBuilder(W, 900, { font: 'mono', size: 14, fill: '#2a2833' })
   const total = NOTA_ITEMS.reduce((s, i) => s + i.qty * i.price, 0)
-  const printed = edit ? total + 60000 : total
-  const cash = 500000
+  const printed = edit ? total + (n.editDelta ?? Math.max(10_000, Math.round((total * 0.1) / 5000) * 5000)) : total
+  const cash = n.cash ?? Math.ceil(total / 50_000) * 50_000
   const L = 22
   const R = W - 22
   const rule = (y: number) => b.text(W / 2, y, '-'.repeat(32), { anchor: 'middle', fill: '#6b6878' })
 
-  b.field('merchant', { id: 'Nama toko', en: 'Store name' }, 'TB SUMBER MAKMUR', W / 2, 54, { size: 20, weight: 700, anchor: 'middle' })
-  b.text(W / 2, 76, 'Jl. Raya Kapas, Bojonegoro', { anchor: 'middle', size: 12.5 })
+  b.field('merchant', { id: 'Nama toko', en: 'Store name' }, n.merchant.toUpperCase(), W / 2, 54, { size: n.merchant.length > 22 ? 16 : 20, weight: 700, anchor: 'middle' })
+  b.text(W / 2, 76, n.address, { anchor: 'middle', size: 12.5 })
   b.text(W / 2, 94, 'toko fiktif · demo GAMADA', { anchor: 'middle', size: 11, fill: '#6b6878' })
   rule(116)
   b.text(L, 140, 'No   :')
-  b.field('nomor', { id: 'Nomor nota', en: 'Receipt number' }, '0458/XI/26', L + 72, 140)
+  b.field('nomor', { id: 'Nomor nota', en: 'Receipt number' }, n.number, L + 72, 140)
   b.text(L, 160, 'Tgl  :')
-  b.field('tanggal', { id: 'Tanggal', en: 'Date' }, '2026-11-16 14:21', L + 72, 160, {}, { shown: `${dmy('2026-11-16')} 14:21` })
-  b.text(L, 180, 'Kasir: Rina')
+  b.field('tanggal', { id: 'Tanggal', en: 'Date' }, `${n.date} ${n.time}`, L + 72, 160, {}, { shown: `${dmy(n.date)} ${n.time}` })
+  b.text(L, 180, `Kasir: ${n.cashier}`)
   rule(202)
   let y = 228
   NOTA_ITEMS.forEach((it, i) => {
@@ -72,7 +92,7 @@ function makeNota(edit: boolean): SampleDoc {
   b.text(W / 2, y + 70, 'tidak dapat ditukar', { anchor: 'middle', size: 12 })
   b.fieldBox('metode', { id: 'Metode bayar', en: 'Payment method' }, 'Tunai', runBox(tunai))
   b.h = y + 96
-  b.over({ t: 'creases', seed: edit ? 7 : 3, count: 6 })
+  if (opts.crumple !== false) b.over({ t: 'creases', seed: edit ? 7 : 3, count: 6 })
 
   if (edit) {
     b.tamper.push({
@@ -85,31 +105,37 @@ function makeNota(edit: boolean): SampleDoc {
 
   const meta: ReceiptMeta = {
     kind: 'nota',
-    merchant: 'TB Sumber Makmur',
-    number: '0458/XI/26',
-    date: '2026-11-16',
+    merchant: n.merchant,
+    number: n.number,
+    date: n.date,
     items: NOTA_ITEMS,
     total,
     printedTotal: printed,
-    journal: {
-      debit: 'Beban perbaikan & pemeliharaan',
-      credit: 'Kas',
-      amount: total,
-      memo: { id: 'Bahan renovasi dapur · TB Sumber Makmur', en: 'Kitchen renovation materials · TB Sumber Makmur' },
-    },
+    journal: n.journal ?? { debit: 'Persediaan', credit: 'Utang Usaha', amount: total, memo: { id: `Pembelian · ${n.merchant}`, en: `Purchase · ${n.merchant}` } },
     edited: edit,
   }
+  const flat = opts.crumple === false
   return b.build({
-    id: edit ? 'nota-tb-edit' : 'nota-tb',
+    id: opts.id ?? `nota-${n.number.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-')}${edit ? '-edit' : ''}`,
     kind: 'nota',
     extractKind: 'invoice',
-    title: edit ? { id: 'Nota belanja · total diubah', en: 'Shop receipt · total altered' } : { id: 'Nota belanja toko bangunan', en: 'Hardware-store receipt' },
-    caption: edit ? { id: 'Angka total ditimpa', en: 'Total overwritten' } : { id: 'Foto HP · kusut dan miring', en: 'Phone photo · crumpled and tilted' },
+    title: edit ? { id: `Nota ${n.merchant} · total diubah`, en: `${n.merchant} receipt · total altered` } : { id: `Nota ${n.merchant}`, en: `${n.merchant} receipt` },
+    caption: edit ? { id: 'Angka total ditimpa', en: 'Total overwritten' } : flat ? { id: 'Foto HP', en: 'Phone photo' } : { id: 'Foto HP · kusut dan miring', en: 'Phone photo · crumpled and tilted' },
     bg: 'thermal',
-    scan: { rotate: edit ? 5 : -7, rotX: 20, rotY: edit ? 8 : -10, scale: 0.9, noise: 0.45, shade: 0.55 },
+    scan: { rotate: opts.tilt ?? (edit ? 5 : -7), rotX: flat ? 6 : 20, rotY: edit ? 8 : -10, scale: 0.9, noise: 0.45, shade: flat ? 0.25 : 0.55 },
     specimen: false,
     meta,
   })
+}
+
+/** the fixed sample (lab, Cek Berkas): a hardware-store receipt */
+const NOTA_TB: NotaInput = {
+  merchant: 'TB Sumber Makmur', address: 'Jl. Raya Kapas, Bojonegoro', number: '0458/XI/26', date: '2026-11-16', time: '14:21', cashier: 'Rina', items: NOTA_ITEMS, cash: 500000, editDelta: 60000,
+  journal: { debit: 'Beban perbaikan & pemeliharaan', credit: 'Kas', amount: NOTA_ITEMS.reduce((s, i) => s + i.qty * i.price, 0), memo: { id: 'Bahan renovasi dapur · TB Sumber Makmur', en: 'Kitchen renovation materials · TB Sumber Makmur' } },
+}
+function makeNota(edit: boolean): SampleDoc {
+  const d = notaDoc(NOTA_TB, { id: edit ? 'nota-tb-edit' : 'nota-tb', edited: edit })
+  return { ...d, title: edit ? { id: 'Nota belanja · total diubah', en: 'Shop receipt · total altered' } : { id: 'Nota belanja toko bangunan', en: 'Hardware-store receipt' } }
 }
 
 /* ------------------------------------------------------------------ faktur */
@@ -121,24 +147,47 @@ const FAKTUR_ITEMS: LineItem[] = [
   { name: 'Telur ayam ras', qty: 5, unit: 'kg', price: 29000 },
 ]
 
+/** what a supplier invoice shows */
+export interface FakturInput {
+  seller: string
+  sellerLine: string
+  sellerAddress: string
+  number: string
+  date: string
+  due: string
+  buyer: string
+  buyerAddress: string
+  items: LineItem[]
+  ship: number
+  account: string
+}
+const FAKTUR_KTS: FakturInput = {
+  seller: 'CV Karya Tirta Sentosa', sellerLine: 'Distributor bahan pangan · perusahaan fiktif untuk demo', sellerAddress: 'Kawasan Pergudangan Kapas, Bojonegoro', number: 'INV/KTS/2611/0457',
+  date: '2026-11-14', due: '2026-11-28', buyer: BUYER, buyerAddress: 'Ledok Kulon, Bojonegoro', items: FAKTUR_ITEMS, ship: 25000, account: '7781004521',
+}
 function makeFaktur(): SampleDoc {
+  return fakturDoc(FAKTUR_KTS, 'faktur-kts')
+}
+/** a digital supplier invoice (non-VAT seller: no VAT line) */
+export function fakturDoc(f: FakturInput, id?: string): SampleDoc {
+  const FAKTUR_ITEMS = f.items
   const W = 840
   const H = 1188
   const b = new DocBuilder(W, H, { font: 'sans', size: 14, fill: INK })
   const sub = FAKTUR_ITEMS.reduce((s, i) => s + i.qty * i.price, 0)
-  const ship = 25000
+  const ship = f.ship
   const total = sub + ship
 
   b.shape({ t: 'rect', x: 0, y: 0, w: W, h: 10, fill: '#2f5d62' })
-  b.field('penjual', { id: 'Penjual', en: 'Seller' }, 'CV Karya Tirta Sentosa', 64, 82, { size: 24, weight: 700 })
-  b.text(64, 106, 'Distributor bahan pangan · perusahaan fiktif untuk demo', { size: 12.5, fill: MUTED })
-  b.text(64, 124, 'Kawasan Pergudangan Kapas, Bojonegoro', { size: 12.5, fill: MUTED })
+  b.field('penjual', { id: 'Penjual', en: 'Seller' }, f.seller, 64, 82, { size: 24, weight: 700 })
+  b.text(64, 106, f.sellerLine, { size: 12.5, fill: MUTED })
+  b.text(64, 124, f.sellerAddress, { size: 12.5, fill: MUTED })
   b.text(W - 64, 82, 'FAKTUR', { size: 30, weight: 700, anchor: 'end', ls: 0.08, fill: '#2f5d62' })
 
   const meta2: [string, string, string, string?][] = [
-    ['No. Faktur', 'INV/KTS/2611/0457', 'nomor'],
-    ['Tanggal', '2026-11-14', 'tanggal', longDate('2026-11-14')],
-    ['Jatuh tempo', '2026-11-28', 'jatuh_tempo', longDate('2026-11-28')],
+    ['No. Faktur', f.number, 'nomor'],
+    ['Tanggal', f.date, 'tanggal', longDate(f.date)],
+    ['Jatuh tempo', f.due, 'jatuh_tempo', longDate(f.due)],
   ]
   meta2.forEach(([k, v, key, shown], i) => {
     const y = 112 + i * 22
@@ -148,8 +197,8 @@ function makeFaktur(): SampleDoc {
 
   b.shape({ t: 'rect', x: 64, y: 196, w: 330, h: 92, fill: '#f0ede4', r: 6 })
   b.text(80, 220, 'Ditagihkan kepada', { size: 12, fill: MUTED })
-  b.field('pembeli', { id: 'Pembeli', en: 'Buyer' }, BUYER, 80, 244, { weight: 700, size: 16 })
-  b.text(80, 266, 'Ledok Kulon, Bojonegoro', { size: 13 })
+  b.field('pembeli', { id: 'Pembeli', en: 'Buyer' }, f.buyer, 80, 244, { weight: 700, size: f.buyer.length > 30 ? 13 : 16 })
+  b.text(80, 266, f.buyerAddress, { size: 13 })
 
   /* table */
   const tx = [64, 440, 540, 640]
@@ -188,7 +237,7 @@ function makeFaktur(): SampleDoc {
   b.field('total', { id: 'Total tagihan', en: 'Invoice total' }, String(total), W - 76, y, { anchor: 'end', weight: 700, size: 18 }, { shown: `Rp ${idr(total)}` })
   y += 60
   b.text(64, y, 'Pembayaran melalui transfer ke:', { size: 13, fill: MUTED })
-  b.field('rekening', { id: 'Rekening tujuan', en: 'Pay-to account' }, `${FICTIONAL_BANK} 7781004521`, 64, y + 22, { weight: 600 }, { shown: `${FICTIONAL_BANK} (fiktif) · 7781 0045 21 · a.n. CV Karya Tirta Sentosa` })
+  b.field('rekening', { id: 'Rekening tujuan', en: 'Pay-to account' }, `${FICTIONAL_BANK} ${f.account}`, 64, y + 22, { weight: 600 }, { shown: `${FICTIONAL_BANK} (fiktif) · ${f.account.replace(/(\d{4})(\d{4})(\d+)/, '$1 $2 $3')} · a.n. ${f.seller}` })
   b.text(64, y + 52, 'Penjual bukan Pengusaha Kena Pajak: faktur ini tidak memungut PPN.', { size: 12.5, fill: MUTED, italic: true })
   b.text(W - 120, y + 110, 'Hormat kami,', { anchor: 'middle', size: 13 })
   b.shape({ t: 'signature', x: W - 190, y: y + 118, w: 140, h: 56, seed: 57 })
@@ -198,26 +247,26 @@ function makeFaktur(): SampleDoc {
 
   const meta: ReceiptMeta = {
     kind: 'faktur',
-    merchant: 'CV Karya Tirta Sentosa',
-    number: 'INV/KTS/2611/0457',
-    date: '2026-11-14',
-    items: [...FAKTUR_ITEMS, { name: 'Ongkos kirim', qty: 1, unit: 'kali', price: ship }],
+    merchant: f.seller,
+    number: f.number,
+    date: f.date,
+    items: [...FAKTUR_ITEMS, ...(ship ? [{ name: 'Ongkos kirim', qty: 1, unit: 'kali', price: ship }] : [])],
     total,
     printedTotal: total,
     journal: {
       debit: 'Persediaan bahan baku',
       credit: 'Utang usaha',
       amount: total,
-      memo: { id: 'Bahan pangan · jatuh tempo 28 Nov', en: 'Food supplies · due 28 Nov' },
+      memo: { id: `Faktur ${f.seller} · jatuh tempo ${longDate(f.due)}`, en: `Invoice ${f.seller} · due ${f.due}` },
     },
     edited: false,
   }
   return b.build({
-    id: 'faktur-kts',
+    id: id ?? `faktur-${f.number.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-')}`,
     kind: 'faktur',
     extractKind: 'invoice',
-    title: { id: 'Faktur pemasok bahan pangan', en: 'Food-supplier invoice' },
-    caption: { id: 'CV Karya Tirta Sentosa · PDF digital', en: 'CV Karya Tirta Sentosa · digital PDF' },
+    title: id === 'faktur-kts' ? { id: 'Faktur pemasok bahan pangan', en: 'Food-supplier invoice' } : { id: `Faktur ${f.seller}`, en: `${f.seller} invoice` },
+    caption: { id: `${f.seller} · PDF digital`, en: `${f.seller} · digital PDF` },
     bg: 'paper',
     specimen: false,
     meta,
@@ -294,8 +343,23 @@ function toCsv(rows: MutasiRow[]): string {
   return [head, ...rows.map((r) => `${r.date},"${r.desc}",${r.debit},${r.credit},${r.balance}`)].join('\n')
 }
 
+/** a world bank-statement row (world/usaha-pintar mutasiRows): signed amount, running balance, status */
+export interface StatementRow { date: string; desc: string; amount: number; balance: number; status?: 'cocok' | 'baru' | 'tinjau'; category?: string; reviewReason?: Bi }
+/** a bank statement of `rows` (40 for Pajak Beres): bank = FICTIONAL_BANK unless given, holder = the account name */
+export function mutasiDoc(input: StatementRow[], opts: { bank?: string; holder: string; account?: string; period?: string; id?: string }): SampleDoc {
+  const rows: MutasiRow[] = input.map((r) => ({
+    date: r.date, desc: r.desc, debit: r.amount < 0 ? -r.amount : 0, credit: r.amount > 0 ? r.amount : 0, balance: r.balance,
+    category: r.category ?? (r.status === 'cocok' ? CATS.sales : r.status === 'tinjau' ? CATS.unknown : ''), review: r.status === 'tinjau', ...(r.reviewReason ? { reviewReason: r.reviewReason } : {}),
+  }))
+  const first = input[0]
+  const opening = first ? first.balance - first.amount : 0
+  return statementDoc(rows, opening, { bank: opts.bank ?? FICTIONAL_BANK, holder: opts.holder.toUpperCase(), account: opts.account ?? '7781 0039 66', period: opts.period ?? `${dmy(input[0]?.date ?? '2026-11-01')} – ${dmy(input[input.length - 1]?.date ?? '2026-11-16')}`, id: opts.id ?? 'mutasi-world' })
+}
 function makeMutasi(): SampleDoc {
   const { rows, opening } = makeMutasiRows()
+  return statementDoc(rows, opening, { bank: FICTIONAL_BANK, holder: 'WARUNG MAKAN BU TINI', account: '7781 0039 66', period: '01/11/2026 – 16/11/2026', id: 'mutasi-arta-kencana' })
+}
+function statementDoc(rows: MutasiRow[], opening: number, o: { bank: string; holder: string; account: string; period: string; id: string }): SampleDoc {
   const W = 900
   const rowH = 21
   const top = 250
@@ -304,13 +368,13 @@ function makeMutasi(): SampleDoc {
   const closing = rows[rows.length - 1]?.balance ?? opening
 
   b.shape({ t: 'rect', x: 0, y: 0, w: W, h: 64, fill: '#24325f' })
-  b.field('bank', { id: 'Bank', en: 'Bank' }, FICTIONAL_BANK, 40, 42, { size: 22, weight: 700, fill: '#ffffff' })
+  b.field('bank', { id: 'Bank', en: 'Bank' }, o.bank, 40, 42, { size: 22, weight: 700, fill: '#ffffff' })
   b.text(W - 40, 40, 'bank fiktif · demo GAMADA', { size: 12, anchor: 'end', fill: '#c9d2f0' })
   b.text(40, 104, 'MUTASI REKENING', { size: 16, weight: 700, ls: 0.06 })
   const info: [string, string, string, string?][] = [
-    ['No. Rekening', '7781 0039 66', 'rekening'],
-    ['Nama', 'WARUNG MAKAN BU TINI', 'pemilik'],
-    ['Periode', '01/11/2026 – 16/11/2026', 'periode'],
+    ['No. Rekening', o.account, 'rekening'],
+    ['Nama', o.holder, 'pemilik'],
+    ['Periode', o.period, 'periode'],
   ]
   info.forEach(([k, v, key], i) => {
     b.text(40, 136 + i * 22, k, { fill: MUTED })
@@ -344,21 +408,21 @@ function makeMutasi(): SampleDoc {
 
   const meta: MutasiMeta = {
     kind: 'mutasi',
-    bank: FICTIONAL_BANK,
-    account: '7781003966',
-    holder: 'WARUNG MAKAN BU TINI',
-    period: '2026-11-01/2026-11-16',
+    bank: o.bank,
+    account: o.account.replace(/\s/g, ''),
+    holder: o.holder,
+    period: `${rows[0]?.date ?? ''}/${rows[rows.length - 1]?.date ?? ''}`,
     opening,
     closing,
     rows,
     csv: toCsv(rows),
   }
   return b.build({
-    id: 'mutasi-arta-kencana',
+    id: o.id,
     kind: 'mutasi',
     extractKind: 'document',
     title: { id: 'Mutasi rekening (CSV)', en: 'Bank statement (CSV)' },
-    caption: { id: '40 transaksi · 1–16 November 2026', en: '40 transactions · 1–16 November 2026' },
+    caption: { id: `${rows.length} transaksi · ${o.period}`, en: `${rows.length} transactions · ${o.period}` },
     bg: 'sheet',
     specimen: false,
     meta,

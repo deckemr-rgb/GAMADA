@@ -180,8 +180,6 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       return { summary: { id: `Supplier membalas PO: “${e.payload.message.id}”`, en: `Supplier replied to PO: “${e.payload.message.en}”` }, refs: [ref('purchaseOrders', e.payload.poId)] }
     case 'tax.ready':
       return { summary: { id: `Pajak ${e.payload.period} siap untuk ${bizName(s, e.payload.businessId)}`, en: `Tax for ${e.payload.period} ready for ${bizName(s, e.payload.businessId)}` }, refs: [ref('businesses', e.payload.businessId), ...(e.payload.taxItemIds ?? []).map((t) => ref('taxItems', t))] }
-    case 'call.scored':
-      return { summary: { id: `Percakapan ${e.payload.callId} dinilai ${e.payload.score}`, en: `Conversation ${e.payload.callId} scored ${e.payload.score}` }, refs: [ref('calls', e.payload.callId)] }
     case 'coaching.assigned': {
       const a = s.agentsSales.byId[e.payload.agentId]?.name ?? e.payload.agentId
       return { summary: { id: `Coaching ditugaskan ke ${a}`, en: `Coaching assigned to ${a}` }, refs: [ref('coachings', e.payload.id ?? ''), ref('agentsSales', e.payload.agentId)] }
@@ -190,12 +188,6 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const name = e.payload.subjectKind === 'business' ? bizName(s, e.payload.subjectId) : e.payload.subjectKind === 'candidate' ? s.candidates.byId[e.payload.subjectId]?.name ?? e.payload.subjectId : e.payload.subjectId
       const table = e.payload.subjectKind === 'business' ? 'businesses' : e.payload.subjectKind === 'candidate' ? 'candidates' : e.payload.subjectKind === 'citizen' ? 'citizens' : 'documents'
       return { summary: { id: `${e.payload.kind.toUpperCase()} ${name}: ${e.payload.result}`, en: `${e.payload.kind.toUpperCase()} ${name}: ${e.payload.result}` }, refs: [ref(table, e.payload.subjectId), ref('verifications', `VF-${e.id}`)] }
-    }
-    case 'brand.alert':
-      return { summary: { id: `Lonjakan keluhan "${e.payload.topic}" ${pct(e.payload.deltaPct)} untuk ${bizName(s, e.payload.businessId)}`, en: `Spike in "${e.payload.topic}" complaints ${pct(e.payload.deltaPct)} for ${bizName(s, e.payload.businessId)}` }, refs: [ref('businesses', e.payload.businessId)] }
-    case 'tender.matched': {
-      const t = s.tenders.byId[e.payload.tenderId]
-      return { summary: { id: `Tender cocok: ${t?.title.id ?? e.payload.tenderId} (${Math.round(e.payload.probability * 100)}%)`, en: `Matching tender: ${t?.title.en ?? e.payload.tenderId} (${Math.round(e.payload.probability * 100)}%)` }, refs: [ref('tenders', e.payload.tenderId), ref('businesses', e.payload.businessId)] }
     }
     case 'bid.submitted':
       return { summary: { id: `Penawaran ${fmtRp(e.payload.price)} dikirim oleh ${bizName(s, e.payload.businessId)}`, en: `Bid of ${fmtRp(e.payload.price)} submitted by ${bizName(s, e.payload.businessId)}` }, refs: [ref('bids', e.payload.id ?? ''), ref('tenders', e.payload.tenderId)] }

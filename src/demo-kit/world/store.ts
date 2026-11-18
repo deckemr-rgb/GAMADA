@@ -16,6 +16,7 @@ import { clock } from './clock'
 import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted } from './persist'
 import { TABLE_KEYS, WORLD, emptyTable } from './util'
 import { coreCovers } from './engine-scope'
+import { applyExtensions } from './ext'
 import type { Seq } from './ids'
 
 export type WorldStatus = 'idle' | 'loading' | 'ready'
@@ -90,9 +91,26 @@ export function preloadWorldEngine(): void {
   loadFull().catch(() => {})
 }
 const coreOnly = () => queue.every(coreCovers)
+
+/* Ecosystem gate (world/eco.ts installs it): an event of an ecosystem whose world module is not loaded yet (e.g. a
+   flood alert on a Satu Daerah page reaches Usaha Pintar) waits, queued in order, until that module is in. */
+type Gate = (types: ReadonlySet<string>) => Promise<void> | null
+let gate: Gate | null = null
+/** @internal world/eco.ts */
+export function _setEventGate(g: Gate): void {
+  gate = g
+}
 /* decided in a microtask, once the synchronous emits of this tick are queued (so one batch = one notify), and again
    after a download (an event outside the core set may have been emitted meanwhile) */
 function drain() {
+  const wait = gate && queue.length ? gate(new Set(queue.map((e) => e.type))) : null
+  if (wait) {
+    wait.then(drain, (err: unknown) => {
+      scheduled = false
+      console.error('[world] ecosystem module failed to load', err)
+    })
+    return
+  }
   if (full || (core && coreOnly())) return flush()
   ;(coreOnly() ? loadCore() : loadFull()).then(drain, (err: unknown) => {
     // keep the queue; the next emit retries the download
@@ -145,7 +163,7 @@ function flush() {
   scheduled = false
   const batch = queue
   queue = []
-  const p = full ? { run: full.processWith, h: full.FULL } : core ? { run: core.processWith, h: core.CORE } : null
+  const p = full ? { run: full.processWith, h: full.fullHandlers() } : core ? { run: core.processWith, h: core.coreHandlers() } : null
   if (batch.length && !p) queue = batch
   else if (batch.length && p) {
     const r = p.run(p.h, current, seq, batch, (err, e) => console.error(`[world] ${e.type} failed`, err))
@@ -224,8 +242,10 @@ export function onEvent<K extends EventType>(type: K | '*', fn: (e: WorldEvent<K
 }
 
 function install(state: WorldState, clockMinutes: number) {
-  current = state
-  seq = { ...state.meta.seq }
+  // registered ecosystem extensions patch the world once (world/ext.ts); deterministic, so a generated world and a
+  // restored one end up identical
+  current = applyExtensions(state, pack)
+  seq = { ...current.meta.seq }
   queue = []
   clock.reset(clockMinutes)
   setStatus('ready')
@@ -255,6 +275,20 @@ export async function resetWorld(): Promise<void> {
   await clearPersisted(p.id, seed)
   loadToken++
   install(generateWorld(p, seed), WORLD.clockStart)
+}
+
+/**
+ * @internal world/eco.ts: an extension registered while a world is installed patches it now (one store update,
+ * never mid-batch: called from a resolved import, outside flush), then notifies and saves.
+ */
+export function _extendCurrent(): void {
+  if (status !== 'ready' || !current.regionId) return
+  const next = applyExtensions({ ...current, meta: { ...current.meta, seq: { ...seq } } }, pack)
+  if (next.meta.ext === current.meta.ext) return
+  current = next
+  seq = { ...next.meta.seq }
+  notify()
+  schedulePersist(snapshot)
 }
 
 export function exportWorld(): string {

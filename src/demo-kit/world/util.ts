@@ -7,7 +7,7 @@ import type { LngLat, Minutes, Table, TableKey } from './types'
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
   /** bump when the generated shape changes → persisted worlds are regenerated */
-  version: 4,
+  version: 5,
   /** max entities per table (oldest dropped) */
   maxPerTable: 5000,
   /** max reaction chain depth (0 = emitted directly) */
@@ -117,7 +117,9 @@ export const TABLE_KEYS: TableKey[] = [
   'citizens', 'complaints', 'tickets', 'clusters', 'bookings', 'briefings', 'instructions', 'letters', 'meetings', 'actionItems',
   'mentions', 'hoaxAlerts', 'alerts', 'rainCells', 'programs', 'messages', 'facilities', 'harvests', 'supplySignals', 'gauges', 'procurements', 'bidders', 'documents', 'verifications',
   'businesses', 'outlets', 'products', 'sales', 'salesDaily', 'stock', 'purchaseOrders', 'suppliers', 'ledger', 'taxItems',
-  'calls', 'chats', 'agentsSales', 'coachings', 'candidates', 'brandMentions', 'tenders', 'bids', 'catalogNeeds', 'matches',
+  'calls', 'chats', 'agentsSales', 'coachings', 'candidates', 'brandMentions', 'tenders', 'bids',
+  'staff', 'shifts', 'promos', 'cashShifts', 'posNotices', 'bankImports', 'roleplays', 'verificationRequests', 'brandAlerts', 'brandAnnouncements',
+  'catalogNeeds', 'matches',
   'orders', 'bizScores', 'loanApps', 'econIndex', 'prices', 'markets', 'marketOps', 'auditLog',
 ]
 

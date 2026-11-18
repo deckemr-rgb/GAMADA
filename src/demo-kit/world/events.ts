@@ -4,6 +4,7 @@
  */
 import type { EventMap, EventSource, EventType, Minutes, TableKey, WorldEvent, WorldState } from './types'
 import { formatId, nextEventId, nextId, type Seq } from './ids'
+import { extensions } from './ext'
 
 /** payload fields that receive a generated id when missing: [field, table, alsoCode] */
 const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
@@ -36,7 +37,8 @@ const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
 
 /** fill generated ids into a (copied) payload */
 export function prepare<K extends EventType>(s: WorldState, seq: Seq, type: K, payload: EventMap[K]): EventMap[K] {
-  const fields = ID_FIELDS[type]
+  let fields = ID_FIELDS[type]
+  for (const x of extensions()) fields ??= x.idFields?.[type]
   if (!fields) return payload
   const p = { ...(payload as Record<string, unknown>) }
   const year = s.day.slice(0, 4)

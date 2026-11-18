@@ -12,11 +12,11 @@ import type { WorldEvent, WorldState } from './types'
 import { REDUCERS } from './reducers'
 import { REACTIONS } from './reactions'
 import { describe } from './audit'
-import { processWith, type Handlers } from './engine-core'
+import { processWith, withExtensions, type Handlers } from './engine-core'
 import type { Seq } from './ids'
 
 export { createEvent, prepare } from './events'
-export { processWith, type Handlers } from './engine-core'
+export { processWith, withExtensions, type Handlers } from './engine-core'
 
 export interface BatchResult {
   state: WorldState
@@ -28,12 +28,14 @@ export interface BatchResult {
 
 /** every type's handlers */
 export const FULL: Handlers = { reducers: REDUCERS, reactions: REACTIONS, describe, covers: () => true }
+/** every type's handlers + the registered extensions (what the store runs) */
+export const fullHandlers = (): Handlers => withExtensions(FULL)
 
 /**
  * Apply a batch of already-created events. Reactions run on the post-reducer state; their follow-ups are
  * queued (breadth first) with depth + 1 and dropped beyond WORLD.maxDepth.
  */
 export function processEvents(state: WorldState, seq: Seq, events: WorldEvent[], onError?: (err: unknown, e: WorldEvent) => void): BatchResult {
-  const { state: s, processed, dropped } = processWith(FULL, state, seq, events, onError)
+  const { state: s, processed, dropped } = processWith(fullHandlers(), state, seq, events, onError)
   return { state: s, processed, dropped }
 }

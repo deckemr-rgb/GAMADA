@@ -11,7 +11,8 @@ export const ID_PREFIX: Record<TableKey, string> = {
   programs: 'PG', messages: 'PSN', facilities: 'FS', harvests: 'PN', supplySignals: 'SPS', gauges: 'TMA', procurements: 'PK', bidders: 'PS', documents: 'DK', verifications: 'VF', businesses: 'UM', outlets: 'OT',
   products: 'SKU', sales: 'TR', salesDaily: 'SD', stock: 'ST', purchaseOrders: 'PO', suppliers: 'SP', ledger: 'JR',
   taxItems: 'PJ', calls: 'CL', chats: 'CH', agentsSales: 'AG', coachings: 'CO', candidates: 'KD', brandMentions: 'BM',
-  tenders: 'TD', bids: 'BD', catalogNeeds: 'KB', matches: 'MC', orders: 'OR', bizScores: 'RU', loanApps: 'LN',
+  tenders: 'TD', bids: 'BD', staff: 'KR', shifts: 'SF', promos: 'PR', cashShifts: 'KS', posNotices: 'NP', bankImports: 'MB', roleplays: 'RL',
+  verificationRequests: 'KM', brandAlerts: 'BA', brandAnnouncements: 'BN', catalogNeeds: 'KB', matches: 'MC', orders: 'OR', bizScores: 'RU', loanApps: 'LN',
   econIndex: 'EI', prices: 'HG', markets: 'PSR', marketOps: 'OP', auditLog: 'AU',
 }
 

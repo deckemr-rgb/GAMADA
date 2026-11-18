@@ -187,6 +187,22 @@ function checksFor(doc: SampleDoc, lang: Lang): Check[] {
       out.push(check('signature', { id: 'Tanda tangan elektronik ada', en: 'Electronic signature present' }, 'ok', { id: 'Kode QR terbaca (dummy)', en: 'QR code read (dummy)' }, lang))
       break
     }
+    case 'npwp': {
+      const masked = /^\d{4} •••• •••• \d{4}$/.test(meta.npwp ?? '')
+      out.push(check('npwp-format', { id: 'Format NPWP', en: 'Tax ID format' }, masked ? 'ok' : 'fail', { id: 'Nomor tersamar (spesimen)', en: 'Masked number (specimen)' }, lang))
+      out.push(check('name', { id: 'Nama wajib pajak terbaca', en: 'Taxpayer name read' }, meta.name ? 'ok' : 'fail', { id: meta.name, en: meta.name }, lang))
+      break
+    }
+    case 'akta': {
+      out.push(check('akta-number', { id: 'Nomor & tanggal akta', en: 'Deed number & date' }, meta.akta ? 'ok' : 'fail', { id: `Nomor ${meta.akta ?? '-'}`, en: `No. ${meta.akta ?? '-'}` }, lang))
+      out.push(sigCheck(doc, lang))
+      break
+    }
+    case 'lokasi': {
+      const g = meta.gps
+      out.push(check('gps', { id: 'Koordinat GPS di foto', en: 'GPS stamp on the photo' }, g ? 'ok' : 'fail', g ? { id: `${g[1].toFixed(5)}, ${g[0].toFixed(5)}`, en: `${g[1].toFixed(5)}, ${g[0].toFixed(5)}` } : undefined, lang))
+      break
+    }
     case 'nib': {
       const ok = /^\d{13}$/.test(meta.nib)
       out.push(check('nib-format', { id: 'Format NIB', en: 'NIB format' }, ok ? 'ok' : 'fail', { id: '13 digit', en: '13 digits' }, lang))

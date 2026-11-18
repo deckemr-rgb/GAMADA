@@ -27,6 +27,24 @@ export const EFFECT_TARGET: Partial<Record<EventType, ProductSlug>> = {
   'hoax.detected': 'meja-pimpinan',
 }
 
+/**
+ * Roots whose effect in other products is read from STATE (no follow-up event): one toast per root names them
+ * ("Status pajak … diteruskan ke TenderPilot …"); `focus` = the entity to open there (the latest matched tender).
+ */
+const latestMatchedTender = (s: WorldState): string | null => {
+  for (const id of s.tenders.ids) if (Object.keys(s.tenders.byId[id]?.matches ?? {}).includes(s.meta.shopId)) return id
+  return null
+}
+export const EFFECT_ALSO: Partial<Record<EventType, { targets: ProductSlug[]; focus(s: WorldState, e: Recent): string | null }>> = {
+  'tax.ready': { targets: ['tenderpilot', 'katalog-lokal', 'rapor-usaha'], focus: latestMatchedTender },
+  'partner.verified': { targets: ['tenderpilot', 'katalog-lokal'], focus: latestMatchedTender },
+}
+/** short root names of Usaha Pintar actions (the toast title) */
+const ROOT_UP: Partial<Record<EventType, [string, string]>> = {
+  'po.sent': ['PO {code}', 'PO {code}'], 'tax.ready': ['Status pajak {period}', 'Tax status {period}'], 'partner.verified': ['Verifikasi mitra', 'Partner verification'],
+  'bid.submitted': ['Penawaran tender', 'Tender bid'], 'brand.announced': ['Pengumuman layanan', 'Service notice'],
+}
+
 export interface CrossEffect {
   /** one toast per root event: the key stays the same while more targets are added */
   key: string
@@ -76,6 +94,7 @@ function rootLabel(e: Recent, lang: 'id' | 'en', summary: string | null): string
     case 'meeting.transcribed':
       return L.meeting
     default:
+      if (ROOT_UP[e.type]) return ROOT_UP[e.type]![lang === 'id' ? 0 : 1].replace(/\{(\w+)\}/g, (_, k: string) => String(p[k] ?? ''))
       // a title is a whole short sentence, never cut mid-word: a long summary stays in the body
       return summary && summary.length <= 48
         ? summary
@@ -148,6 +167,13 @@ export function createEffectTracker(product: ProductSlug) {
     /** returns the effect to announce, or null */
     feed(e: WorldEvent, s: WorldState): CrossEffect | null {
       remember(e)
+      // a root this product raised whose consumers read state (EFFECT_ALSO): announced as its own toast
+      const also = !e.depth && e.source === product ? EFFECT_ALSO[e.type] : undefined
+      if (also) {
+        let out: CrossEffect | null = null
+        for (const t of also.targets) out = announce(e, recent.get(e.id)!, t, s, also.focus(s, recent.get(e.id)!)) ?? out
+        return out
+      }
       if (!e.depth || !e.causeId) return null
       const root = rootOf(recent.get(e.id)!)
       if (!root || root.id === e.id) return null
@@ -156,6 +182,17 @@ export function createEffectTracker(product: ProductSlug) {
       // a background root this product reacted to (e.g. the clock's rumor burst → Radar Isu detects the hoax)
       else if (root.source === 'clock' && e.source === product) target = EFFECT_TARGET[e.type]
       if (!target || target === product) return null
+      return announce(e, root, target, s, null)
+    },
+    /** forget everything (world reset) */
+    clear() {
+      recent.clear()
+      seen.clear()
+      byRoot.clear()
+    },
+  }
+
+  function announce(e: WorldEvent, root: Recent, target: ProductSlug, s: WorldState, focusOverride: string | null): CrossEffect | null {
       const k = `${root.id}>${target}`
       if (seen.has(k)) return null
       seen.add(k)
@@ -170,7 +207,7 @@ export function createEffectTracker(product: ProductSlug) {
         // the cluster audit row) drops that tail: the toast never names a product twice or names this one
         const body = row?.summary ? { id: stripTargets(row.summary.id), en: stripTargets(row.summary.en) } : null
         acc = {
-          targets: [], body: body ?? { id: dict('id').openIn(name), en: dict('en').openIn(name) }, focus: refId(row?.entityRefs[0]),
+          targets: [], body: body ?? { id: dict('id').openIn(name), en: dict('en').openIn(name) }, focus: focusOverride ?? refId(row?.entityRefs[0]),
           what: { id: rootLabel(lead, 'id', leadRow?.summary.id ?? null), en: rootLabel(lead, 'en', leadRow?.summary.en ?? null) },
         }
         byRoot.set(root.id, acc)
@@ -198,12 +235,5 @@ export function createEffectTracker(product: ProductSlug) {
         body: acc.body,
         focus: acc.focus,
       }
-    },
-    /** forget everything (world reset) */
-    clear() {
-      recent.clear()
-      seen.clear()
-      byRoot.clear()
-    },
   }
 }

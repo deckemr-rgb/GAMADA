@@ -7,7 +7,7 @@ import type { AnyFollowUp, ComplaintCategory, EventType, FollowUp, Product, Worl
 import { COMPLAINT_TEXT, COMPLAINT_WEIGHTS, MEDIA_OUTLETS, MENTION_TEXT, SOCIAL_HANDLES, fillComplaint, fromComplaintTemplate, mentionText } from './texts'
 import { HOAX_OFFSETS, hoaxPost } from './scenario-texts'
 import { hashString, makeRng, type Rng } from './prng'
-import { NATURAL } from './natural'
+import { NATURAL, naturalBoost } from './natural'
 import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, offsetKm, round, rows } from './util'
 
 /**
@@ -82,7 +82,8 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
     if (!o || o.businessId !== s.meta.shopId) continue
     const tod = ((minute % DAY_MIN) + DAY_MIN) % DAY_MIN
     if (tod < o.opensAt || tod >= o.closesAt) continue
-    if (!r.chance((o.kind === 'toko' ? NATURAL.saleToko : NATURAL.saleFnb) * rhythm)) continue
+    // ×3 while a shop demo is open (setNaturalBoost), opening hours 07–17 only
+    if (!r.chance((o.kind === 'toko' ? NATURAL.saleToko : NATURAL.saleFnb) * rhythm * (h >= 7 && h < 17 ? naturalBoost('sale') : 1))) continue
     const sale = shopSale(r, s, o.id, o.kind === 'toko')
     if (sale) out.push(sale)
   }

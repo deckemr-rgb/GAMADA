@@ -378,7 +378,7 @@ export interface Bidder {
   id: string
   /** fictional company */
   name: string
-  legal: 'PT' | 'CV'
+  legal: 'PT' | 'CV' | 'UD'
   director: string
   address: string
   kecamatanId: string
@@ -390,7 +390,7 @@ export interface Bidder {
   bidPrice?: number
 }
 
-export type DocKind = 'ktp' | 'kk' | 'nib' | 'domisili' | 'foto-rumah' | 'npwp' | 'akta' | 'cv'
+export type DocKind = 'ktp' | 'kk' | 'nib' | 'domisili' | 'foto-rumah' | 'npwp' | 'akta' | 'cv' | 'lokasi'
 export interface DocumentRec {
   id: string
   kind: DocKind
@@ -405,6 +405,8 @@ export interface DocumentRec {
   at: Minutes
   /** specimen flagged as digitally edited (Cek Berkas tamper demo) */
   tampered?: boolean
+  /** the docs-kit specimen that renders this document ('ktp-joko', 'nib-<businessId>' …) */
+  sampleId?: string
 }
 
 export interface Verification {
@@ -443,6 +445,10 @@ export interface Business {
   supplies: string[]
   /** km of delivery radius */
   capacity: number
+  /** legal form (Usaha Pintar): the scenario shop is an individual ('perorangan', non-PKP) */
+  legal?: 'perorangan' | 'UD' | 'CV' | 'PT'
+  /** periods closed by the tax consultant (Pajak Beres "Kunci periode") */
+  lockedPeriods?: string[]
 }
 
 export interface Outlet {
@@ -481,9 +487,19 @@ export interface Sale {
   businessId: string
   at: Minutes
   items: SaleItem[]
+  /** Σ items − discount */
   total: number
-  payment: 'tunai' | 'qris' | 'transfer'
+  /** the method with the largest share */
+  payment: PayMethod
+  /** Rp off the receipt (Kasir) */
+  discount?: number
+  /** split payment (Σ amount = total); missing = one payment of `payment` */
+  payments?: { method: PayMethod; amount: number }[]
+  /** cashier (staff id) */
+  staffId?: string
+  cash?: { given: number; change: number }
 }
+export type PayMethod = 'tunai' | 'qris' | 'transfer'
 
 /** Daily aggregate per outlet (90 days of history without 90 days of receipts). id = `${outletId}:${dayOffset}` */
 export interface SalesDay {
@@ -523,7 +539,15 @@ export interface PurchaseOrder {
   total: number
   status: 'draf' | 'terkirim' | 'dibalas' | 'diterima'
   at: Minutes
-  reply: { at: Minutes; message: Bi; eta: Minutes | null } | null
+  /** `tpl` = index of the kit's supplier reply pool (rotates: no text repeats within 20 POs) */
+  reply: { at: Minutes; message: Bi; eta: Minutes | null; tpl?: number } | null
+  /** why the PO was drafted (po.drafted) */
+  reason?: Bi
+  cause?: EntityRef | null
+  /** when the goods arrived (po.received) */
+  receivedAt?: Minutes
+  /** when its supplier invoice reached Pajak Beres (nota.received, once per PO) */
+  notaAt?: Minutes
 }
 
 export interface Supplier {
@@ -563,20 +587,29 @@ export interface TaxItem {
   status: 'perlu-hitung' | 'siap' | 'dibayar' | 'dilaporkan'
 }
 
+export type Industry = 'multifinance' | 'asuransi' | 'toko-bangunan'
+export type CriterionKey = 'salam' | 'gali' | 'keberatan' | 'penawaran' | 'closing' | 'kepatuhan'
+export type Criteria = Record<CriterionKey, number>
+/** key of a call transcript clip (Juara Jualan owns the clip texts; the kit owns the key list CALL_CLIPS) */
+export type ClipKey = string
 export interface Call {
   id: string
   agentId: string
-  industry: 'multifinance' | 'asuransi' | 'toko-bangunan'
+  industry: Industry
   channel: 'telepon' | 'wa'
   customer: string
   at: Minutes
   durationSec: number
-  /** 0..100, null = not scored yet */
+  /** 0..100 = callScore(criteria), null = not scored yet */
   score: number | null
-  criteria: Record<'salam' | 'gali' | 'keberatan' | 'penawaran' | 'closing' | 'kepatuhan', number> | null
+  criteria: Criteria | null
   flags: string[]
   /** PO / chat this came from (consume po.sent) */
   refId?: string
+  /** transcript clip (CALL_CLIPS key) */
+  transcript: ClipKey
+  topic?: 'banjir' | null
+  scoredBy?: 'ai' | 'supervisor'
 }
 
 export interface Chat {
@@ -594,9 +627,17 @@ export interface SalesAgent {
   id: string
   name: string
   team: string
-  industry: Call['industry']
+  industry: Industry
   baseline: number
-  radar: Record<'salam' | 'gali' | 'keberatan' | 'penawaran' | 'closing' | 'kepatuhan', number>
+  radar: Criteria
+  role: 'sales' | 'kasir'
+  joinedDays: number
+  /** fictional organisation ("Arta Kencana Finance · Cabang …") or the shop's name */
+  org: string
+  /** the shop for the toko-bangunan team, else null */
+  businessId: string | null
+  /** staff row of a shop employee, else null */
+  staffId: string | null
 }
 
 export interface Coaching {
@@ -606,6 +647,11 @@ export interface Coaching {
   callId: string | null
   at: Minutes
   status: 'baru' | 'latihan' | 'selesai'
+  /** one example sentence per focus */
+  examples: Bi[]
+  /** agent avg14 when assigned (roleplay baseline) */
+  baseline: number
+  focusKeys: CriterionKey[]
 }
 
 export interface Candidate {
@@ -621,18 +667,36 @@ export interface Candidate {
   status: 'baru' | 'shortlist' | 'ditolak' | 'wawancara'
 }
 
+export type BrandTopic = 'pengiriman' | 'kualitas' | 'harga' | 'layanan' | 'stok'
 export interface BrandMention {
   id: string
+  /** may lie in the future (a scheduled burst post): selectors only show `at ≤ now` */
   at: Minutes
-  /** business id or a fictional competitor brand */
+  /** business id, a fictional competitor brand (s.meta.competitors) or 'kategori' (the category in general) */
   brand: string
+  /** keys only; the UI labels them generically (Marketplace, Medsos foto, Medsos singkat, Video pendek, Ulasan peta) */
   channel: 'marketplace' | 'instagram' | 'x' | 'tiktok' | 'ulasan-peta'
   author: string
   text: Bi
   sentiment: Sentiment
-  topic: 'pengiriman' | 'kualitas' | 'harga' | 'layanan' | 'stok'
+  topic: BrandTopic
   rating: number | null
   reply: Bi | null
+  outletId?: string
+  item?: string
+  orderCode?: string
+  kecamatanId?: string
+  desaId?: string
+  daysLate?: number
+  /** scenario cause (e.g. 'alerts:PW-0002') */
+  cause?: EntityRef
+  /** a follow-up post answers this mention */
+  inReplyTo?: string
+  repliedAt?: Minutes
+  replyTone?: 'empatik' | 'formal' | 'santai'
+  repliedBy?: RoleId
+  /** language of the post (EN reviews get EN replies) */
+  lang?: 'id' | 'en'
 }
 
 export interface Tender {
@@ -648,10 +712,24 @@ export interface Tender {
   status: 'dibuka' | 'evaluasi' | 'selesai'
   emergency: boolean
   competitors: number
-  /** businesses this tender was matched to → probability (0..1) */
+  /** businesses this tender was matched to → probability (0..1) = winScore() */
   matches: Record<string, number>
   needId?: string | null
+  method: 'tender' | 'tender-cepat' | 'pengadaan-langsung' | 'e-katalog' | 'darurat'
+  requirements: ReqKey[]
+  items?: TenderItem[]
+  /** Σ qty × hpsPrice (item tenders); = value */
+  hps?: number
+  /** the Awas Belanja package this tender mirrors or created */
+  procurementId?: string | null
+  /** stable scenario key (idempotent reactions) */
+  key?: string
+  /** set when Awas Belanja flagged the mirrored package (riskScore ≥ 60) */
+  risk?: { score: number; at: Minutes } | null
+  spec?: Bi
 }
+export type ReqKey = 'nib-kbli' | 'akta' | 'npwp' | 'kyb' | 'pajak' | 'pengalaman' | 'kapasitas' | 'pakta'
+export interface TenderItem { name: Bi; category: string; qty: number; unit: string; hpsPrice: number }
 
 export interface Bid {
   id: string
@@ -659,7 +737,121 @@ export interface Bid {
   businessId: string
   price: number
   at: Minutes
-  status: 'draf' | 'terkirim' | 'menang' | 'kalah'
+  status: 'draf' | 'terkirim' | 'menang' | 'kalah' | 'evaluasi'
+  pages?: number
+  /** section ids of the composed bid document */
+  docSections?: string[]
+  /** the tender's HPS when bid (history: bid / HPS) */
+  hps?: number
+}
+
+/* ------------------------------------------------------------------ Usaha Pintar · tahap 3 tables */
+
+export type StaffJob = 'kepala-toko' | 'admin' | 'kasir' | 'gudang' | 'sopir' | 'barista' | 'pramusaji' | 'juru-masak'
+export type Ptkp = 'TK/0' | 'TK/1' | 'K/0' | 'K/1' | 'K/2' | 'K/3'
+/** shop employee (Toko Autopilot shifts, Pajak Beres payroll, Juara Jualan tb team). Wages are SIMULATED. */
+export interface Staff {
+  id: string
+  businessId: string
+  outletId: string
+  name: string
+  gender: 'L' | 'P'
+  job: StaffJob
+  ptkp: Ptkp
+  /** Rp / month, simulasi */
+  gross: number
+  joinedDays: number
+  isNew: boolean
+  /** Juara Jualan agent id (toko sales team), else null */
+  agentId: string | null
+}
+/** one block of the week plan: day 0..6 = Monday..Sunday of the demo week; start/end = minutes of that day */
+export interface Shift { id: string; staffId: string; outletId: string; day: number; start: Minutes; end: Minutes; origin: 'auto' | 'manual' }
+export interface Promo { id: string; businessId: string; title: Bi; productIds: string[]; discountPct: number; until: Minutes; at: Minutes }
+export interface CashShift { id: string; staffId: string; outletId: string; expectedCash: number; countedCash: number; variance: number; tx: number; at: Minutes }
+/** banner on the Kasir screen (id = the announcement id) */
+export interface PosNotice { id: string; outletIds: string[]; text: Bi; at: Minutes }
+export interface BankImport { id: string; businessId: string; period: string; rows: number; matched: number; posted: number; review: number; bank: string; at: Minutes }
+export type RoleplayPersona = 'ragu-harga' | 'buru-buru' | 'banyak-tanya'
+export interface Roleplay {
+  id: string
+  agentId: string
+  coachingId: string | null
+  persona: RoleplayPersona
+  industry: Industry
+  turns: number
+  score: number
+  baseline: number
+  criteria: Criteria
+  at: Minutes
+}
+export interface VerificationRequest {
+  id: string
+  /** KM-0xx */
+  code: string
+  kind: 'kyc' | 'kyb' | 'cv'
+  /** KYC: the KTP document; KYB: the business; CV: the opening ('candidate', subjectId 'cv-batch') */
+  subjectKind: Verification['subjectKind']
+  subjectId: string
+  /** who asked (a lender or the shop) */
+  requestedBy: string
+  needId: string | null
+  priority: boolean
+  at: Minutes
+  status: 'antri' | 'diproses' | 'selesai'
+  verificationId: string | null
+}
+export interface BrandAlert {
+  id: string
+  businessId: string
+  topic: BrandTopic
+  volume: number
+  deltaPct: number
+  /** detection time (= the 5th burst mention); may lie in the future when stored: selectors filter at ≤ now */
+  at: Minutes
+  mentionIds: string[]
+  causeRef: EntityRef | null
+  baselinePer2h: number
+  cause: Bi | null
+  status: 'aktif' | 'ditangani'
+}
+export type AnnounceChannel = 'marketplace' | 'sosmed' | 'ulasan-peta' | 'wa-status' | 'struk'
+export interface BrandAnnouncement {
+  id: string
+  businessId: string
+  alertId: string
+  topic: BrandTopic
+  text: Bi
+  channels: AnnounceChannel[]
+  offer: 'gratis-ongkir' | 'ambil-sendiri' | 'jadwal-ulang' | null
+  by: RoleId
+  at: Minutes
+}
+
+/** Usaha Pintar facts (written once by extendUsahaPintar) */
+export interface UpFacts {
+  /** omzet (Rp, simulasi) of each month's days BEFORE the 90-day daily history: 'YYYY-MM' → Rp */
+  omzetPre: Record<string, number>
+  /** the 5 toko staff (PPh 21 "5 karyawan") */
+  payrollStaffIds: string[]
+  /** the new cashier: ONE person (staff row + Juara Jualan agent) */
+  newCashierStaffId: string
+  newCashierAgentId: string
+  /** lowest scored call today with flag keberatan-tidak-dijawab, per industry */
+  lowCall: Record<Industry, string>
+  kenalMitra: {
+    heroBusinessId: string
+    heroRequestId: string
+    mismatchBusinessId: string
+    kycCleanDocId: string
+    kycEditedDocId: string
+    cvOpening: Bi
+    cvCount: number
+    shortlistSize: number
+  }
+  brand: { baselinePer2h: number; preSignalIds: string[]; reputationAt0700: number }
+  /** the shop's Bidder mirror (Awas Belanja lists its bid) */
+  shopBidderId: string
 }
 
 /* ================================================================== Pasar Daerah */
@@ -822,6 +1014,8 @@ export interface WorldMeta {
   personas: { siti: string; raka: string; darmo: string }
   /** seeded facts the demos and tests can rely on (spec "cek lulus") */
   facts: SeedFacts
+  /** ecosystem extensions applied to this world: id → extension version (world/eco.ts) */
+  ext?: Record<string, number>
 }
 
 /** Known numbers of the seeded world (Cek Berkas duplicate count, hoax scenario …). */
@@ -838,6 +1032,8 @@ export interface SeedFacts {
   hoax: { rumor: string; damName: string; gaugeId: string }
   /** bidders of the affiliated ring that bids on the emergency pump package */
   pumpRingBidderIds: string[]
+  /** Usaha Pintar facts (present once the ecosystem extension ran) */
+  up?: UpFacts
 }
 
 export interface WorldState {
@@ -889,6 +1085,16 @@ export interface WorldState {
   brandMentions: Table<BrandMention>
   tenders: Table<Tender>
   bids: Table<Bid>
+  staff: Table<Staff>
+  shifts: Table<Shift>
+  promos: Table<Promo>
+  cashShifts: Table<CashShift>
+  posNotices: Table<PosNotice>
+  bankImports: Table<BankImport>
+  roleplays: Table<Roleplay>
+  verificationRequests: Table<VerificationRequest>
+  brandAlerts: Table<BrandAlert>
+  brandAnnouncements: Table<BrandAnnouncement>
   catalogNeeds: Table<CatalogNeed>
   matches: Table<Match>
   orders: Table<Order>
@@ -975,23 +1181,49 @@ export interface EventMap {
   'procurement.recommended': { procurementId: string; hpsCorrected: number; note: Bi; inviteLocal: boolean }
   'document.verified': { documentId: string; status: DocumentRec['status']; notes?: Bi }
   /* Toko Autopilot */
-  'sale.created': { id?: string; code?: string; outletId: string; items: SaleItem[]; payment: Sale['payment'] }
+  'sale.created': {
+    id?: string; code?: string; outletId: string; items: SaleItem[]; payment: PayMethod
+    discount?: number; payments?: { method: PayMethod; amount: number }[]; staffId?: string; cash?: { given: number; change: number }
+  }
   'stock.forecastChanged': { productIds: string[]; factor: number; reason: Bi; cause?: EntityRef | null }
+  'po.drafted': { id?: string; code?: string; businessId: string; supplierId: string; items: POItem[]; reason: Bi; cause?: EntityRef | null }
   'po.sent': { id?: string; code?: string; businessId: string; supplierId: string; items: POItem[] }
-  'supplier.replied': { poId: string; message: Bi; eta?: Minutes | null }
+  'supplier.replied': { poId: string; supplierId?: string; message: Bi; eta?: Minutes | null; tpl?: number }
+  'po.received': { poId: string }
+  'price.changed': { productId: string; price: number; prev: number; reason: Bi; suggestionId?: string }
+  'promo.created': { id?: string; title: Bi; productIds: string[]; discountPct: number; until: Minutes }
+  'shift.updated': { shiftId?: string; staffId: string; outletId: string; day: number; start: Minutes; end: Minutes }
+  'shift.closed': { id?: string; staffId: string; outletId: string; expectedCash: number; countedCash: number; variance: number; tx: number }
+  'pos.noticeSet': { announcementId: string; outletIds: string[]; text: Bi }
   /* Pajak Beres */
+  'nota.received': { businessId: string; poId: string; supplierId: string; total: number }
   'ledger.posted': { id?: string; businessId: string; memo: Bi; lines: LedgerLine[]; source: LedgerEntry['source']; refId?: string | null; needsReview?: boolean; confidence?: number }
+  'ledger.reviewed': { ledgerId: string; lines?: LedgerLine[]; note?: Bi }
+  'bank.imported': { id?: string; businessId: string; period: string; rows: number; matched: number; posted: number; review: number; bank: string }
+  'tax.computed': { taxItemId: string; kind: 'pph-final' | 'pph21'; amount: number; basis: Bi; rulesRef: string }
   'tax.ready': { businessId: string; period: string; taxItemIds?: string[] }
+  'period.locked': { businessId: string; period: string }
   /* Juara Jualan */
-  'call.scored': { callId: string; score: number; criteria?: Call['criteria'] }
-  'coaching.assigned': { id?: string; agentId: string; focus: Bi[]; callId?: string | null }
+  'call.created': { id?: string; agentId: string; industry: Industry; channel: 'telepon' | 'wa'; customer: string; transcript: ClipKey; durationSec: number; refId?: string; topic?: 'banjir' | null }
+  'call.scored': { callId: string; score: number; criteria?: Criteria | null; flags?: string[]; by?: 'ai' | 'supervisor' }
+  'coaching.assigned': { id?: string; agentId: string; focus: Bi[]; callId?: string | null; examples?: Bi[]; focusKeys?: CriterionKey[]; baseline?: number }
+  'roleplay.completed': { id?: string; agentId: string; coachingId: string | null; persona: RoleplayPersona; industry: Industry; turns: number; score: number; baseline: number; criteria: Criteria }
   /* Kenal Mitra */
+  'verification.requested': { id?: string; code?: string; kind: VerificationRequest['kind']; subjectKind: Verification['subjectKind']; subjectId: string; requestedBy: string; needId?: string | null; priority?: boolean }
   'partner.verified': { subjectKind: Verification['subjectKind']; subjectId: string; kind: Verification['kind']; result: Verification['result']; score?: number }
   /* Pantau Merek */
-  'brand.alert': { businessId: string; topic: BrandMention['topic']; volume: number; deltaPct: number; cause?: Bi }
+  'brand.mentioned': Opt<BrandMention, 'id' | 'at'>
+  'brand.alert': {
+    id?: string; businessId: string; topic: BrandTopic; volume: number; deltaPct: number; cause?: Bi
+    at?: Minutes; mentionIds?: string[]; causeRef?: EntityRef | null; baselinePer2h?: number
+  }
+  'brand.replied': { mentionIds: string[]; tone: 'empatik' | 'formal' | 'santai'; replies: Bi[]; by: RoleId; alertId?: string }
+  'brand.announced': { id?: string; businessId: string; alertId: string; topic: BrandTopic; text: Bi; channels: AnnounceChannel[]; offer: BrandAnnouncement['offer']; by: RoleId }
   /* TenderPilot */
+  'tender.created': Opt<Omit<Tender, 'matches'>, 'id' | 'code' | 'status'> & { key?: string }
   'tender.matched': { tenderId: string; businessId: string; probability: number }
-  'bid.submitted': { id?: string; tenderId: string; businessId: string; price: number }
+  'bid.submitted': { id?: string; tenderId: string; businessId: string; price: number; pages?: number; docSections?: string[] }
+  'procurement.bidReceived': { procurementId: string; bidderId: string; businessId: string; price: number; bidId: string }
   /* Katalog Lokal */
   'need.created': { id?: string; code?: string; title: Bi; items: NeedItem[]; kecamatanId: string; deadlineDays: number; emergency?: boolean; cause?: EntityRef | null }
   'match.made': { id?: string; needId: string; businessId: string; score: number }

@@ -167,6 +167,8 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
           key={m.id}
           type="button"
           className={`dk-wave-mk is-${m.tone ?? 'neutral'}`}
+          data-tone={m.tone ?? 'neutral'}
+          data-marker={m.id}
           style={{ left: `${m.at * 100}%` }}
           aria-label={m.label}
           title={m.label}

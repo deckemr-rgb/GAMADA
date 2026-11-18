@@ -114,6 +114,9 @@ export const id = {
   splitViews: 'Tampilan',
   /* boot */
   loading: 'Menyiapkan dunia demo…',
+  /** Usaha Pintar canvases until the ecosystem's world data is in */
+  upLoading: 'Menyiapkan data usaha…',
+  simChip: 'Data simulasi',
   loadError: 'Dunia demo gagal dimuat.',
   retry: 'Coba lagi',
   /* hotspot / coach */

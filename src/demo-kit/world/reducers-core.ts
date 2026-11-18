@@ -43,10 +43,14 @@ export const CORE_REDUCERS: ReducerMap = {
     const p = e.payload
     const id = must(p.id, 'sale id')
     const outlet = s.outlets.byId[p.outletId]
-    const total = p.items.reduce((a, it) => a + it.qty * it.price, 0)
+    // total = Σ items − discount (Kasir); split payments, cashier and change ride along
+    const total = p.items.reduce((a, it) => a + it.qty * it.price, 0) - (p.discount ?? 0)
     let cost = 0
     for (const it of p.items) cost += it.qty * (s.products.byId[it.productId]?.cost ?? 0)
-    const sale: Sale = { id, code: p.code ?? id, outletId: p.outletId, businessId: outlet?.businessId ?? s.meta.shopId, at: e.at, items: p.items, total, payment: p.payment }
+    const sale: Sale = {
+      id, code: p.code ?? id, outletId: p.outletId, businessId: outlet?.businessId ?? s.meta.shopId, at: e.at, items: p.items, total, payment: p.payment,
+      ...(p.discount ? { discount: p.discount } : {}), ...(p.payments ? { payments: p.payments } : {}), ...(p.staffId ? { staffId: p.staffId } : {}), ...(p.cash ? { cash: p.cash } : {}),
+    }
     const day = Math.floor(e.at / DAY_MIN)
     const dayId = `${p.outletId}:${day}`
     const prev = s.salesDaily.byId[dayId]

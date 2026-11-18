@@ -15,7 +15,7 @@ import { preloadLang, useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
-import { WORLD, clock, emit, getSession, loadWorld, naturalEventsOn, onEvent, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
+import { WORLD, clock, emit, ensureEcosystem, getSession, loadWorld, naturalEventsOn, onEvent, preloadEcosystem, preloadEcosystemChains, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalBoost, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
 import { switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
 import { ShellContext, type ShellApi, type ToastPlacementSpec } from './context'
@@ -199,6 +199,8 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       // a first visit generates the world: start that chunk now instead of after pack.min.json arrives
       preloadWorldGenerator()
     }
+    // the ecosystem's world module (Usaha Pintar: seed extension + chains) loads in parallel with the region
+    preloadEcosystem(product.eco)
     ;(async () => {
       try {
         const p = await loadRegion(regionId)
@@ -223,6 +225,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     if (interim) return
     const go = () => {
       preloadWorldEngine()
+      preloadEcosystemChains(product.eco)
       window.removeEventListener('pointerdown', go, true)
       window.removeEventListener('keydown', go, true)
     }
@@ -259,8 +262,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
   // ?e2e=1 exposes the running world to Playwright (cross-product chain tests drive events without product UI)
   useEffect(() => {
     if (interim || typeof window === 'undefined' || new URLSearchParams(window.location.search).get('e2e') !== '1') return
-    ;(window as unknown as { __gamada?: unknown }).__gamada = { world, emit, settled, onEvent, clock }
+    ;(window as unknown as { __gamada?: unknown }).__gamada = { world, emit, settled, onEvent, clock, ensure: ensureEcosystem }
   }, [interim])
+
+  // shop demos: the natural sales rhythm ×3 during opening hours (Toko Autopilot / Pajak Beres feel busy)
+  useEffect(() => (interim || (slug !== 'toko-autopilot' && slug !== 'pajak-beres') ? undefined : setNaturalBoost('sale', 3)), [slug, interim])
 
   /* ---------------------------------------------------------------- presenter */
   useIdleCursor(session.present)

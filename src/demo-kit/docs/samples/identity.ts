@@ -325,6 +325,19 @@ function makeKk(): SampleDoc {
   })
 }
 
+/** a KTP SPECIMEN for any fictional person (Kenal Mitra KYC subjects): clean, phone-photo look */
+export function ktpSpecimen(p: KtpPerson, opts: { id?: string; tilted?: boolean; edit?: { birth: string } } = {}): SampleDoc {
+  const name = p.name.split(' ').map((w) => w[0] + w.slice(1).toLowerCase()).join(' ')
+  return makeKtp({
+    id: opts.id ?? `ktp-${p.name.split(' ')[0]!.toLowerCase()}`,
+    title: { id: `KTP spesimen · ${name}`, en: `ID card specimen · ${name}` },
+    caption: opts.edit ? { id: 'Tanggal lahir diubah · foto ditempel', en: 'Birth date changed · photo pasted' } : opts.tilted ? { id: 'Foto HP, sedikit miring', en: 'Phone photo, slightly tilted' } : { id: 'Foto HP', en: 'Phone photo' },
+    p,
+    ...(opts.edit ? { edit: opts.edit } : {}),
+    ...(opts.tilted ? { scan: { rotate: -4.5, rotX: 12, rotY: 8, scale: 0.92, noise: 0.3, shade: 0.45 } } : {}),
+  })
+}
+
 export const IDENTITY: SampleDoc[] = [
   makeKtp({
     id: 'ktp-siti',
@@ -347,6 +360,12 @@ export const IDENTITY: SampleDoc[] = [
     edit: { birth: '1986-03-14' },
   }),
   makeKk(),
+  makeKtp({
+    id: 'ktp-bambang',
+    title: { id: 'KTP spesimen · Bambang Sutrisno', en: 'ID card specimen · Bambang Sutrisno' },
+    caption: { id: 'Bersih · cocok dengan KK', en: 'Clean · matches the family card' },
+    p: { ...BAMBANG, kkRef: 'kk-mojosari' },
+  }),
 ]
 
 export { KK_NO }

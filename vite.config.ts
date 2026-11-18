@@ -124,7 +124,7 @@ export default defineConfig({
             { name: 'demo-gen', test: /src[\\/]demo-kit[\\/](world[\\/](seed|catalog|texts|names|rng|prng|score|labels)\.ts|docs[\\/]nik\.ts)$/, priority: 8, includeDependenciesRecursively: false },
             {
               name: 'demo-core',
-              test: /src[\\/](demo-kit[\\/](shell[\\/](DemoShell|controls|TopBar|effects|Picker|EventToasts|lazy|hooks|url|missions|hotspot-store|constants|context|index|GuidePanel|Hotspot|intent)|world[\\/](util|store|selectors|clock|events|natural|ids|persist|session|index|engine-scope)|ui[\\/](Atoms|Popover|Overlay|Toast|Feedback|Form|Button|motion|strings|sla)|i18n[\\/](index|id)|region[\\/](loader|topo|wire)|frames[\\/]frames|ai[\\/]live-base)\.tsx?|demos[\\/]registry\.ts)$/,
+              test: /src[\\/](demo-kit[\\/](shell[\\/](DemoShell|controls|TopBar|effects|Picker|EventToasts|lazy|hooks|url|missions|hotspot-store|constants|context|index|GuidePanel|Hotspot|intent)|world[\\/](util|store|selectors|clock|events|natural|ids|persist|session|index|engine-scope|eco|ext)|ui[\\/](Atoms|Popover|Overlay|Toast|Feedback|Form|Button|motion|strings|sla)|i18n[\\/](index|id)|region[\\/](loader|topo|wire)|frames[\\/]frames|ai[\\/]live-base)\.tsx?|demos[\\/]registry\.ts)$/,
               priority: 8,
               // only these modules: their dependencies (lib/i18n, AppLink, products, icons …) stay where home and the
               // site pages need them

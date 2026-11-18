@@ -1,0 +1,116 @@
+/* ui/MonthCalendar.tsx (tokens only) */
+.dk-cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dk-2);
+  min-width: 0;
+}
+.dk-cal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dk-2);
+}
+.dk-cal-title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font: 600 var(--dk-t16) var(--dk-font);
+  text-transform: capitalize;
+}
+.dk-cal-nav {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--dk-r-input);
+  border: 1px solid var(--dk-line-2);
+  background: var(--dk-s1);
+  color: var(--dk-text);
+  font: 600 var(--dk-t20) var(--dk-font);
+  cursor: pointer;
+}
+.dk-cal-nav:focus-visible,
+.dk-cal-day:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+.dk-cal-dow,
+.dk-cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.dk-cal-dow span {
+  font: 600 var(--dk-t12) var(--dk-font);
+  color: var(--dk-muted);
+  text-align: center;
+}
+.dk-cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dk-cal-day {
+  position: relative;
+  min-height: 64px;
+  padding: 4px;
+  border-radius: var(--dk-r-chip);
+  border: 1px solid var(--dk-line);
+  background: var(--dk-s1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+}
+.dk-cal-day.is-out {
+  opacity: 0.45;
+}
+.dk-cal-day.is-today {
+  border-color: var(--dk-accent);
+}
+.dk-cal-day[aria-selected='true'] {
+  background: var(--dk-accent-12);
+}
+.dk-cal-num {
+  font: 600 var(--dk-t12) var(--dk-font);
+  font-variant-numeric: tabular-nums;
+}
+.dk-cal-ev {
+  font: 400 var(--dk-t12) var(--dk-font);
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--dk-s2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-cal-ev.is-warn {
+  background: var(--dk-warn-12);
+  color: var(--dk-warn-ink);
+}
+.dk-cal-ev.is-danger {
+  background: var(--dk-danger-12);
+  color: var(--dk-danger-ink);
+}
+.dk-cal-ev.is-done {
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+.dk-cal-more {
+  font: 400 var(--dk-t12) var(--dk-font);
+  color: var(--dk-muted);
+}
+.dk-cal.is-strip .dk-cal-day {
+  min-height: 96px;
+}
+.dk-cal.is-strip .dk-cal-ev {
+  white-space: normal;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-cal-nav {
+    width: var(--dk-target);
+    height: var(--dk-target);
+  }
+  .dk-cal-day {
+    min-height: var(--dk-target);
+  }
+}

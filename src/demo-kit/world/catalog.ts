@@ -287,36 +287,7 @@ export const PROCUREMENT_TPL: { n: Bi; hint: string[]; base: number; items: [str
   { n: { id: 'Pengadaan Tempat Sampah Terpilah', en: 'Sorted Waste Bins' }, hint: ['dlh', 'lingkungan hidup'], base: 320_000_000, items: [['Tempat sampah 3 warna', '3-colour waste bin', 500, 'set']] },
 ]
 
-export const TENDER_TPL: { t: Bi; kbli: string; base: number }[] = [
-  { t: { id: 'Pengadaan Material Rehabilitasi Rumah Tidak Layak Huni', en: 'Materials for Substandard-Housing Rehabilitation' }, kbli: '46634', base: 680_000_000 },
-  { t: { id: 'Pengadaan Semen dan Besi untuk Pembangunan Posyandu', en: 'Cement & Steel for Community Health Posts' }, kbli: '46634', base: 240_000_000 },
-  { t: { id: 'Pengadaan Pipa Air Bersih Desa', en: 'Village Clean-Water Pipes' }, kbli: '46634', base: 390_000_000 },
-  { t: { id: 'Pengadaan Cat dan Perlengkapan Renovasi Sekolah', en: 'Paint & Supplies for School Renovation' }, kbli: '46634', base: 175_000_000 },
-  { t: { id: 'Pengadaan Konsumsi Kegiatan Pelatihan', en: 'Catering for Training Events' }, kbli: '56210', base: 95_000_000 },
-  { t: { id: 'Pengadaan Seragam Linmas', en: 'Civil Defence Uniforms' }, kbli: '14111', base: 210_000_000 },
-  { t: { id: 'Jasa Angkutan Logistik Bantuan', en: 'Aid Logistics Transport' }, kbli: '49431', base: 160_000_000 },
-  { t: { id: 'Pengadaan Alat Tulis Kantor Kecamatan', en: 'District Office Stationery' }, kbli: '47612', base: 85_000_000 },
-  { t: { id: 'Pengadaan Bibit Tanaman Penghijauan', en: 'Reforestation Seedlings' }, kbli: '01301', base: 130_000_000 },
-  { t: { id: 'Pengadaan Spanduk Sosialisasi', en: 'Information Banners' }, kbli: '18111', base: 45_000_000 },
-]
-
-export const CANDIDATE_ROLES = ['Kasir', 'Staf Gudang', 'Admin Penjualan', 'Sopir Pengiriman', 'Sales Lapangan', 'Staf Keuangan']
-export const SKILLS = ['Excel', 'Pembukuan', 'Kasir/POS', 'SIM B1', 'Negosiasi', 'Media sosial', 'Inventori', 'Pelayanan pelanggan', 'Bahasa Inggris', 'Desain grafis', 'Las', 'Forklift']
-
-export const BRAND_TEXT: { topic: 'pengiriman' | 'kualitas' | 'harga' | 'layanan' | 'stok'; s: number; t: Bi }[] = [
-  { topic: 'pengiriman', s: -0.7, t: { id: 'Pesanan semen saya telat dua hari, padahal dijanjikan besok.', en: 'My cement order was two days late although it was promised for the next day.' } },
-  { topic: 'pengiriman', s: 0.6, t: { id: 'Pengiriman cepat, sopirnya ramah dan bantu menurunkan barang.', en: 'Fast delivery, the driver was friendly and helped unload.' } },
-  { topic: 'kualitas', s: 0.7, t: { id: 'Besinya sesuai ukuran, tidak ada yang kurang.', en: 'The steel bars matched the size, nothing missing.' } },
-  { topic: 'kualitas', s: -0.5, t: { id: 'Ada dua sak semen yang sudah mengeras.', en: 'Two bags of cement had already hardened.' } },
-  { topic: 'harga', s: 0.5, t: { id: 'Harga paling bersaing di sekitar pasar.', en: 'The most competitive prices around the market.' } },
-  { topic: 'harga', s: -0.4, t: { id: 'Harga terpal naik dibanding minggu lalu.', en: 'Tarp prices went up compared with last week.' } },
-  { topic: 'layanan', s: 0.8, t: { id: 'Penjualnya sabar menjelaskan kebutuhan material.', en: 'The seller patiently explained which materials we need.' } },
-  { topic: 'layanan', s: -0.6, t: { id: 'Chat WA lama dibalas.', en: 'WhatsApp replies are slow.' } },
-  { topic: 'stok', s: -0.5, t: { id: 'Pompa celup kosong waktu saya datang.', en: 'Submersible pumps were out of stock when I came.' } },
-]
-
-export const CALL_CUSTOMERS = ['Bapak/Ibu pelanggan', 'Calon nasabah', 'Pemilik proyek rumah', 'Kontraktor kecil', 'Pengurus masjid', 'Kepala tukang']
-export const AGENT_TEAMS = ['Tim Mawar', 'Tim Melati', 'Tim Kenanga']
+// tender templates, CV roles / skills, brand texts, call customers and sales teams: world/up/texts.ts (lazy)
 
 /* ------------------------------------------------------------------ tahap 2 (generator only) */
 

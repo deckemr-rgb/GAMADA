@@ -28,3 +28,4 @@ export { speak, cancel, loadVoices, pickVoice, hasVoiceFor, ttsSupported, TTS, t
 export { createRecognizer, recognitionSupported, speechLangs, SPEECH, type Recognizer, type RecognizerOptions, type RecognitionError } from './speech'
 export { openMic, micSupported, micPermission, MicOpenError, MIC, type MicHandle, type MicError } from './mic'
 export { MEETING_BANJIR, MEETING_BANJIR_NOTES, SALES_CALL, VOICE_NOTES, voiceNoteFromTemplate, type VoiceSample } from './samples'
+export { useCamera, type CameraState } from './camera'
