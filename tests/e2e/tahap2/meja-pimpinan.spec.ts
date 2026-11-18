@@ -105,6 +105,44 @@ test.describe('phone 390', () => {
   })
 })
 
+/* the other language at each size: every mission still completes, and on a phone the kit's top bar alone carries the
+   clock chip and the guide pill (no in-canvas duplicates) */
+for (const v of [{ lang: 'en' as const, phone: false }, { lang: 'id' as const, phone: true }]) {
+  test.describe(`missions ${v.phone ? '390' : '1440'} ${v.lang.toUpperCase()}`, () => {
+    if (v.phone) test.use(PHONE)
+    test(`Meja Pimpinan · every mission completes (${v.phone ? '390' : '1440'}, ${v.lang.toUpperCase()})`, async ({ page, errors }) => {
+      await openDemo(page, 'meja-pimpinan', v.lang === 'en' ? { lang: 'en' } : {})
+      const n = v.phone ? 4 : 5
+      await expect(page.locator('.dk-guide-step')).toHaveCount(n)
+      if (v.phone) await closeGuide(page)
+      if (v.phone) {
+        await expect(page.locator('.dk-mp .dk-mp-clock')).toHaveCount(0)
+        await expect(page.locator('[data-mp="guide"]')).toHaveCount(0)
+      }
+      await page.locator('[data-hotspot="briefing"]').click()
+      await expect(page.locator('.dk-mp-item').nth(5)).toBeVisible({ timeout: 10_000 })
+      await page.locator('[data-mp="listen"]').click()
+      await expect.poll(() => missionsDone(page, 'meja-pimpinan'), { timeout: 60_000 }).toContain('listen')
+      await page.locator('[data-mp="listen"]').click()
+      if (v.phone) await page.getByRole('tab', { name: v.lang === 'en' ? /^Ask$/ : /^Tanya$/ }).click()
+      await page.locator('.dk-mp-ask .dk-mp-qchip').first().click()
+      await expect.poll(() => missionsDone(page, 'meja-pimpinan'), { timeout: 15_000 }).toContain('ask')
+      await page.locator('[data-mp="instruct"]').first().click()
+      await page.locator('[data-mp="send-instruction"]').click()
+      await expect(page.locator('.dk-mp-sent')).toBeVisible({ timeout: 8_000 })
+      await page.getByRole('button', { name: v.lang === 'en' ? /^Done$/ : /^Selesai$/ }).click()
+      if (!v.phone) {
+        await page.locator('[data-mp="meeting"]').click()
+        await expect(page.locator('.dk-mp-mm')).toBeVisible({ timeout: 10_000 })
+        await page.keyboard.press('Escape')
+      }
+      await expectGuideComplete(page, n)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+      expect(errors.filter(notNoise)).toEqual([])
+    })
+  })
+}
+
 test('Meja Pimpinan · Kepala OPD composes the briefing as the leader; meeting KPIs carry captions + trends (1440, EN)', async ({ page, errors }) => {
   await openDemo(page, 'meja-pimpinan', { lang: 'en', role: 'kepala-opd' })
   await closeGuide(page)

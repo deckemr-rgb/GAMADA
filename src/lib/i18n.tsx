@@ -83,9 +83,22 @@ interface I18nValue {
 
 const I18nContext = createContext<I18nValue | null>(null)
 
+/**
+ * A demo sandbox (/demo/<slug>, no site chrome) reads no site-dictionary text: the demo kit and the products carry
+ * their own strings and only read `lang`. An English visitor landing there renders at once in English, and the site
+ * EN chunk is fetched the first time something reads `t` (a page with site chrome after a client-side jump, or the
+ * 404 of an unknown slug, which shows Indonesian until it arrives), so the demo's first load does not carry the home
+ * page's English copy. No slug check here: the slug list would become one more chunk on the home page.
+ */
+function sandboxRoute(): boolean {
+  return typeof window !== 'undefined' && /^\/demo\/[a-z-]+\/?$/.test(window.location.pathname)
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [want] = useState(initialLang)
-  const [lang, setLangState] = useState<Lang | null>(() => (DICTS[want] ? want : null))
+  const [lang, setLangState] = useState<Lang | null>(() => (DICTS[want] || sandboxRoute() ? want : null))
+  // bumped when a dictionary that was read lazily (see sandboxRoute) arrives
+  const [dictVersion, setDictVersion] = useState(0)
 
   useEffect(() => {
     if (lang) return
@@ -120,7 +133,26 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
-  const value = useMemo<I18nValue | null>(() => (lang ? { lang, t: DICTS[lang] as Dict, setLang } : null), [lang, setLang])
+  const value = useMemo<I18nValue | null>(() => {
+    if (!lang) return null
+    const dict = DICTS[lang]
+    if (dict) return { lang, t: dict, setLang }
+    // sandbox route in a language whose dictionary is not here yet: `t` fetches it on first read (Indonesian until
+    // it arrives, then a re-render); `lang` alone (all a demo reads) never does
+    return {
+      lang,
+      setLang,
+      get t(): Dict {
+        loadDict(lang).then(
+          () => setDictVersion((v) => v + 1),
+          () => {},
+        )
+        return DICTS.id as Dict
+      },
+    }
+    // dictVersion: a new value object (with the real `t`) once the lazily read dictionary has arrived
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, setLang, dictVersion])
   if (!value) return null
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }

@@ -11,7 +11,7 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { useLocation, useNavigate } from 'react-router'
 import { gsap } from 'gsap'
 import { PRODUCT_BY_SLUG, type Bi, type ProductDef, type ProductSlug } from '../../content/products'
-import { useI18n } from '../../lib/i18n'
+import { preloadLang, useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
@@ -109,6 +109,8 @@ const bi = (v: Bi | string | undefined, lang: 'id' | 'en') => (v === undefined ?
  */
 export function DemoShell(props: DemoShellProps) {
   const layout = props.layout ?? 'page'
+  // index.html's static first paint for /demo/* (#dk-boot) gives way to the shell's own frame / skeleton
+  useLayoutEffect(() => document.getElementById('dk-boot')?.remove(), [])
   return (
     <Suspense fallback={<div className={`dk-root dk-shell is-${layout} is-waiting`} data-eco={PRODUCT_BY_SLUG[props.product].eco} aria-busy="true" />}>
       <DemoShellFrame {...props} />
@@ -233,6 +235,26 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     }
   }, [interim])
 
+  // the site dictionary of a non-Indonesian visitor is not part of a demo's first load (lib/i18n.tsx sandboxRoute):
+  // fetch it when a link that leaves the sandbox is hovered, focused or pressed, so the next page does not wait
+  useEffect(() => {
+    const el = root.current
+    if (!el || lang === 'id') return
+    const evs = ['pointerover', 'focusin', 'touchstart'] as const
+    const off = () => {
+      for (const t of evs) el.removeEventListener(t, on, true)
+    }
+    function on(e: Event) {
+      const a = (e.target as Element | null)?.closest?.('a[href]')
+      const href = a?.getAttribute('href') ?? ''
+      if (!a || !href.startsWith('/') || href.startsWith('/demo/')) return
+      off()
+      void preloadLang(lang)
+    }
+    for (const t of evs) el.addEventListener(t, on, { capture: true, passive: true })
+    return off
+  }, [lang])
+
   /* ---------------------------------------------------------------- test hook */
   // ?e2e=1 exposes the running world to Playwright (cross-product chain tests drive events without product UI)
   useEffect(() => {
@@ -307,6 +329,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     hadGuide.current = true
     setGuideOpenState(!query.present && readFlag(`guide:${slug}`, typeof window !== 'undefined' && window.innerWidth >= SHELL.guideAutoOpenMin))
   }, [hasGuide, query.present, slug])
+  // phones: products fold the sheet while an animation plays (ShellApi.holdGuide); the stored choice stays
+  const [guideHold, setGuideHold] = useState(0)
+  const holdGuide = useCallback((on: boolean) => setGuideHold((n) => Math.max(0, n + (on ? 1 : -1))), [])
+  const guideShown = guideOpen && !(size === 'sm' && guideHold > 0)
+  const toggleGuide = () => (guideOpen && !guideShown ? setGuideHold(0) : setGuideOpen(!guideOpen))
   const [moreOpen, setMoreOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   // the palette chunk is fetched the first time it opens, then stays mounted (keeps its query between opens)
@@ -443,6 +470,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       markMission: (id: string) => markMission(slug, id),
       guideOpen,
       setGuideOpen,
+      holdGuide,
       openPalette: () => setPaletteOpen(true),
       setToastPlacement: setToastOverride,
       toast: (d: Omit<ToastData, 'id'> & { id?: string }) => void push(d),
@@ -451,7 +479,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       link: query,
       interim,
     }),
-    [product, pack, focus, slug, guideOpen, setGuideOpen, push, session.present, size, query, interim],
+    [product, pack, focus, slug, guideOpen, setGuideOpen, holdGuide, push, session.present, size, query, interim],
   )
 
   const bar = {
@@ -465,8 +493,8 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     fullscreen,
     guide: {
       available: hasGuide,
-      open: guideOpen,
-      toggle: () => setGuideOpen(!guideOpen),
+      open: guideShown,
+      toggle: toggleGuide,
       id: guideId,
     },
     onOpenPalette: () => setPaletteOpen(true),
@@ -479,8 +507,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     <ShellContext.Provider value={api}>
       <div
         ref={root}
-        className={`dk-root dk-shell is-${layout} is-${size}${pill || pillSlot ? ' has-pill' : ''}${session.present ? ' is-present' : ''}${guideOpen && hasGuide ? ' has-guide' : ''}${motionMode() !== 'full' ? ' is-calm' : ''}${className ? ` ${className}` : ''}`}
+        className={`dk-root dk-shell is-${layout} is-${size}${pill || pillSlot ? ' has-pill' : ''}${session.present ? ' is-present' : ''}${guideShown && hasGuide ? ' has-guide' : ''}${motionMode() !== 'full' ? ' is-calm' : ''}${className ? ` ${className}` : ''}`}
         data-eco={product.eco}
+        // the site's smooth scroll (Lenis, RootLayout) cancels wheel events outside opted-out elements: every panel,
+        // list and phone thread in a sandbox scrolls natively (the sandbox page itself never scrolls)
+        data-lenis-prevent=""
         data-present={session.present ? '1' : undefined}
         style={
           {
@@ -492,7 +523,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
         {/* the page heading only when the shell IS the page; a contained shell sits under its host page's h1 */}
         {layout === 'page' && <h1 className="dk-sr">{`${product.name} — ${lang === 'id' ? 'demo interaktif' : 'interactive demo'}`}</h1>}
         <TopBar {...bar} onOpenMore={() => setMoreOpen(true)} />
-        {pill && <MissionPill product={slug} missions={missions!} guideId={guideId} open={guideOpen} onToggle={() => setGuideOpen(!guideOpen)} />}
+        {pill && <MissionPill product={slug} missions={missions!} guideId={guideId} open={guideShown} onToggle={toggleGuide} />}
         {pillSlot && <div className="dk-mpill is-slot" aria-hidden="true" />}
         <div className="dk-shell-body">
           <section ref={canvasRef} className="dk-shell-canvas" aria-label={lang === 'id' ? `Demo ${product.name}` : `${product.name} demo`} aria-busy={boot !== 'ready' || rewinding}>
@@ -533,7 +564,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
           </section>
           {hasGuide && (
             <Suspense fallback={null}>
-              <GuidePanel product={slug} missions={missions!} open={guideOpen} onClose={() => setGuideOpen(false)} id={guideId} size={size} />
+              <GuidePanel product={slug} missions={missions!} open={guideShown} onClose={() => setGuideOpen(false)} id={guideId} size={size} />
             </Suspense>
           )}
         </div>

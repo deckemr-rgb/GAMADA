@@ -913,11 +913,6 @@
 }
 
 /* ------------------------------------------------------------------ wow-audit round 1 */
-/* the warning dialog lists its chain effects itself: the shell toasts wait while it (or the phone Geo-AI sheet) is
-   open, so they never cover its title, delivery ticks or close button (class set by index.tsx) */
-.dk-sg-hold-toasts .dk-toasts {
-  visibility: hidden;
-}
 /* river gauge outlook + forecast line (dashed) and the "now" dot on the sparkline */
 .dk-sg-outlook {
   color: var(--dk-muted);

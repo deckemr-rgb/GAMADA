@@ -8,6 +8,12 @@ import { MINI_PACK } from '../__fixtures__/mini-pack'
 import { generateWorld } from '../seed'
 import { createEvent, processEvents } from '../engine'
 import { REACTIONS } from '../reactions'
+import { REDUCERS } from '../reducers'
+import { CORE_REDUCERS } from '../reducers-core'
+import { CORE_REACTIONS } from '../reactions-core'
+import { CORE, processWith } from '../engine-core'
+import { FULL } from '../engine'
+import { CORE_EVENT_TYPES, coreCovers } from '../engine-scope'
 import { naturalEventsAt } from '../natural-gen'
 import { _onNaturalMinute, naturalBacklog, setNaturalEvents } from '../natural'
 import { clock } from '../clock'
@@ -551,6 +557,53 @@ section('natural events')
   ok(all.length > 0 && all.every((e) => e.source === 'clock'), `every natural event has source 'clock' (${all.length})`)
   ok(all.every((e) => !!e.origin && isProductSlug(e.origin)), 'every natural event names its owning product in origin')
   ok(all.filter((e) => e.type === 'sale.created').every((e) => e.origin === 'toko-autopilot'), 'natural sale → origin toko-autopilot')
+}
+
+/* ------------------------------------------------------------------ 4b. core pipeline ≡ full pipeline */
+section('core pipeline (engine-core) ≡ full pipeline (engine)')
+{
+  for (const t of CORE_EVENT_TYPES) {
+    ok(!!CORE_REDUCERS[t] && REDUCERS[t] === CORE_REDUCERS[t], `${t}: the core reducer is the full one`)
+    const fullR = REACTIONS.filter((r) => r.on === t && r.id !== 'rumor-burst→hoax')
+    const coreR = CORE_REACTIONS.filter((r) => r.on === t)
+    ok(fullR.length === coreR.length && fullR.every((r, i) => r === coreR[i]), `${t}: the core reactions are the full ones, in order`)
+  }
+  ok(REACTIONS.filter((r) => r.id === 'rumor-burst→hoax').every((r) => r.on === 'mention.created'), 'rumor-burst is the only reaction left out (rumor posts go to the full pipeline)')
+  // a day of natural events (07:00–13:30, the 10:00 hoax burst included) plus a flood alert at 09:00, processed minute
+  // by minute: once with the full pipeline, once core-first (continuing `rest` with the full one)
+  const pack = packs[packs.length - 1]!.pack
+  let sa = generateWorld(pack, 2026)
+  let sb = sa
+  const qa: Seq = { ...sa.meta.seq }
+  const qb: Seq = { ...sb.meta.seq }
+  let stopped = 0
+  let coreOnlyMin = 0
+  let same = true
+  for (let m = 7 * 60 + 1; m <= 13 * 60 + 30 && same; m++) {
+    const fus = naturalEventsAt(sa, m)
+    const mk = (s: WorldState, q: Seq) => {
+      const evs = fus.map((o) => createEvent(s, q, o.type, o.payload as never, o.source, m) as WorldEvent)
+      if (m === 9 * 60) evs.push(createEvent(s, q, 'flood.alert', floodScenarioAlert(s, m), 'siaga-wilayah', m) as WorldEvent)
+      return evs
+    }
+    const ea = mk(sa, qa)
+    const eb = mk(sb, qb)
+    if (!ea.length) continue
+    const ra = processEvents(sa, qa, ea)
+    let rb = processWith(CORE, sb, qb, eb)
+    const pb = [...rb.processed]
+    if (rb.rest.length) {
+      stopped++
+      rb = processWith(FULL, rb.state, qb, rb.rest)
+      pb.push(...rb.processed)
+    } else coreOnlyMin++
+    sa = ra.state
+    sb = rb.state
+    same = JSON.stringify(ra.processed.map((e) => e.id)) === JSON.stringify(pb.map((e) => e.id)) && JSON.stringify(qa) === JSON.stringify(qb)
+  }
+  ok(same && JSON.stringify(sa) === JSON.stringify(sb), `core-first gives the identical world (${coreOnlyMin} minutes core only, ${stopped} continued in the full pipeline)`)
+  ok(coreOnlyMin > 20 && stopped > 0, 'both paths were exercised')
+  ok(!coreCovers({ type: 'mention.created', payload: { rumor: 'x' } }) && coreCovers({ type: 'mention.created', payload: {} }) && !coreCovers({ type: 'flood.alert', payload: {} }), 'coreCovers: rumor posts and other types need the full pipeline')
 }
 
 /* ------------------------------------------------------------------ 5. store: microtask batch + one notify */

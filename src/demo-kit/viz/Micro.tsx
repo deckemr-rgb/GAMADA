@@ -5,8 +5,7 @@
  * (stroke-dashoffset / attribute tweens / CSS transform transitions), never a React render per frame.
  */
 import { useRef } from 'react'
-import { line as d3line, area as d3area, curveMonotoneX } from 'd3-shape'
-import { extent } from 'd3-array'
+import { extentOf, monotoneArea, monotoneLine } from './monotone'
 import { useVizLang } from './ChartFrame'
 import { rv, useAttrTween, useReveal, useRevealDom, useSize, vizMode } from './core'
 import './viz.css'
@@ -31,12 +30,15 @@ export function Sparkline({ values, label, height = 28, color = 'var(--dk-viz-ac
   const vis = useRevealDom(ref)
   useAttrTween(ref, values, vis)
   const vals = values
-  const [lo = 0, hi = 1] = extent(vals) as [number | undefined, number | undefined]
+  const [lo = 0, hi = 1] = extentOf(vals)
   const n = vals.length
   const x = (i: number) => 2 + (i / Math.max(1, n - 1)) * (w - 6)
   const y = (v: number) => height - 3 - ((v - lo) / (hi - lo || 1)) * (height - 6)
-  const d = d3line<number>().x((_, i) => x(i)).y(y).curve(curveMonotoneX)(vals) ?? ''
-  const a = area ? (d3area<number>().x((_, i) => x(i)).y0(height).y1(y).curve(curveMonotoneX)(vals) ?? '') : ''
+  // the same paths as d3-shape's monotone-x line / area (viz/monotone.ts), without the shared d3-shape chunk
+  const xs = vals.map((_, i) => x(i))
+  const ys = vals.map(y)
+  const d = monotoneLine(xs, ys) ?? ''
+  const a = area ? (monotoneArea(xs, ys, height) ?? '') : ''
   const first = values[0] ?? 0
   const last = values[values.length - 1] ?? 0
   const aria = `${label}: ${last > first ? s.increase : last < first ? s.decrease : s.flat} ${s.from} ${fmt(first)} ${s.to} ${fmt(last)}`

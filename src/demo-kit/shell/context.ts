@@ -17,6 +17,12 @@ export interface ShellApi {
   markMission: (id: string) => void
   guideOpen: boolean
   setGuideOpen: (open: boolean) => void
+  /**
+   * fold the phone guide sheet while a product animation plays (holdGuide(true) at its start, holdGuide(false) at its
+   * end; calls nest). The visitor's open / closed choice is kept and comes back after the last release; the bar's
+   * "Coba ini" tap releases at once. No effect on the desktop column.
+   */
+  holdGuide: (on: boolean) => void
   openPalette: () => void
   /**
    * where the shell's toast stack sits for this demo: one placement, or { wide, sm } by shell size; null = the

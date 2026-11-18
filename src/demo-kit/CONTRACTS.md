@@ -518,3 +518,78 @@ All seven Satu Daerah products are `DEMO_READY`. API and behaviour changes:
   dikirim". Item 4: a hoax with a clarification instruction reads "Klarifikasi diinstruksikan pukul HH.MM (OPD),
   menunggu rilis". Item 5 EN "Owner's estimate (HPS) …". Item 8 after verification: "n berkas diperiksa · x lolos ·
   p pasang NIK ganda ditahan · z luar zona" (pairs / out-of-zone once the whole batch is checked).
+
+## Tahap 2 size limit and kit round 3 (2026-11-18)
+
+The owner's limit: **≤ 180 KB gzip -9 per demo first load** beyond home (JS + JSON, MapLibre engine excluded, measured
+by `.shots/t2-int/budget.mjs`: networkidle + 3 s at 1440, ID and EN). Everything the page fetches by itself in that
+window counts, idle preloads included. Internal target ≤ 175 KB in both languages. Code fetched after a user action
+is reported separately and is allowed.
+
+### Preload on intent, not on idle (shell/intent.ts)
+
+A lazy part the visitor may open next is fetched when they show intent, never as a side effect of opening the demo
+(`requestIdleCallback` preloads count as first load). From `../../demo-kit/shell`:
+
+```tsx
+const loadLetters = () => import('./Letters')
+const Letters = lazy(loadLetters)
+<Tab {...intentProps(loadLetters)}>Surat Masuk</Tab>          // props: pointerenter / focus / pointerdown / touchstart
+const ref = usePreloadOnIntent<HTMLButtonElement>(loadVoice)  // ref form
+useEffect(() => preloadOnIntent(el, loadBulk), [el])          // imperative, returns a cleanup
+preloadNow(loadX)                                             // from your own handler (e.g. a toast appeared)
+```
+
+Each loader runs once (a failed download is retried by the real use). Hover → click is ~200–400 ms and pointerdown →
+click ~100 ms, so the chunk is normally there by the click; keep a Suspense fallback for the rare slow case.
+
+### world/ — the event pipeline comes in two chunks
+
+- `engine-core.ts` (≈ 3 KB) handles the events a demo raises **without input**: `complaint.created`, `mention.created`
+  (not a hoax-burst post, i.e. without `rumor`), `price.updated`, `sale.created`, `ledger.posted`, `score.updated`,
+  `procurement.flagged` (`engine-scope.ts`, `CORE_EVENT_TYPES`). A running clock (natural events) or a boot-time
+  screening therefore no longer downloads the full pipeline.
+- `engine.ts` (reducers + reactions + audit of every type) is fetched for any other event, or on the visitor's first
+  pointerdown / keydown (as before). A batch that reaches a non-core event stops before it and continues, in the same
+  order, once `engine.ts` has arrived: same ids, audit rows and reactions (world self-test "core pipeline ≡ full").
+- Products: emitting a non-core type at boot (or from a clock subscriber before any input) brings the full pipeline
+  (~13 KB) into the first load. Keep boot-time emits to the core types, or emit on the visitor's action.
+- `reducers-core.ts`, `reactions-core.ts`, `audit-core.ts` hold the core types' functions; `REDUCERS`, `REACTIONS` and
+  `describe` still contain every type (the core ones are the same objects). Adding a reaction on a core type: put it in
+  `reactions-core.ts` and in `CORE_REACTIONS`, or remove the type from `CORE_EVENT_TYPES`; the self-test fails otherwise.
+- `world/satu-daerah.ts` is a barrel of `world/sd/<domain>.ts` (citizen, leaderboard, gauge, leader, letters, radar,
+  siaga, procurement, bansos, base). Import from `satu-daerah` as before: the build rewrites the import to the module
+  that defines each name (vite.config `satuDaerahImports`), so a demo carries only its own selectors. A dynamic
+  `import('…/satu-daerah').then(({ a }) => …)` is rewritten when all names come from one module; destructure there.
+- `useSession().role` is deferred (`useDeferredValue`): a role switch renders the new role's views in the background
+  and the current screen stays up (no loading fallback) until they are ready. `getSession()` is always current; read
+  the role from `useSession()` in render, not from `getSession()`.
+
+### Site language in a sandbox
+
+`/demo/<slug>` renders at once in English without the site's EN dictionary (`lib/i18n.tsx`): demo code reads only
+`useI18n().lang` (and `setLang` via `switchLang`). Reading `useI18n().t` (or spreading the value, e.g. `useEcoI18n()`)
+in a demo downloads the home page's English copy (~7 KB) into the first load. The shell warms that dictionary when a
+link out of the sandbox is hovered, focused or touched.
+
+### shell/
+
+- `index.html` paints a static frame on `/demo/*` before any JS (`#dk-boot`: top bar, three cards, "Menyiapkan dunia
+  demo…" / "Preparing the demo world…"); `DemoShell` removes it in its first layout pass (RootLayout / RouteError on
+  any other outcome). The 11 home-hero AVIF preloads now apply to `/` only.
+- The shell root and every kit portal (`ui/Overlay` host) carry `data-lenis-prevent`: panels, lists, phone threads and
+  dialogs scroll natively with the wheel (the site's Lenis used to cancel those wheel events). A product portal of its
+  own needs the same attribute.
+- Guide on phones: a tap outside the sheet folds it (the tap still reaches its target). `useShell().holdGuide(true |
+  false)` folds the sheet while a product animation plays (nested calls; the visitor's choice comes back after the
+  last release; the "Coba ini" bar releases at once). `Mission.target` (a selector) turns the step card into a
+  button that scrolls to and focuses the target (on phones the sheet folds first).
+- Build: the always-loaded kit modules form two chunks, `demo-core` and `demo-gen` (vite.config). A new always-loaded
+  shell / world / ui atom module belongs in that list; modules a site page imports (ui/icons, i18n/roles) must not.
+
+### viz/ · map/
+
+- `Sparkline` draws its monotone line / area with `viz/monotone.ts` (byte-identical to d3-shape's curveMonotoneX,
+  `viz/__tests__/monotone.test.ts`), so a demo with only sparklines no longer loads the shared d3-shape chunk.
+- `MapView` shows a quiet "Memuat citra peta…" / "Loading map tiles…" pill (top centre, after 450 ms) while basemap or
+  imagery tiles are still arriving, and sets `aria-busy` on the map region meanwhile.

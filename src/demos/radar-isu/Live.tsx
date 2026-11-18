@@ -4,7 +4,7 @@
  * source radar-isu: the world raises ONE hoax.detected on the 6th post → toast to Meja Pimpinan) and, for the
  * Regional Head, an instruction to the Comms Office. Clarify and the AI analyst are lazy drawers.
  */
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { Button, Drawer, Kpi, KpiStrip, InsightCallout, Icon, LiveBadge, Segmented, motionMode } from '../../demo-kit/ui'
 import { BubbleChart, LineChart, type BubbleDatum } from '../../demo-kit/viz'
 import { clockWib, compact } from '../../demo-kit/viz/format'
@@ -219,16 +219,6 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
       setBursting(false)
     }
   }, [])
-  // warm the burst texts while the visitor reads the page (idle time), so the first post lands right after the click
-  useEffect(() => {
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(prefetchBurst, { timeout: 4000 })
-      return () => w.cancelIdleCallback?.(id)
-    }
-    const id = window.setTimeout(prefetchBurst, 2500)
-    return () => window.clearTimeout(id)
-  }, [])
   /* the live feed (lazy): curated mentions while the clock runs, backfill after a jump, the 10.00 scenario after a
      jump over it. On a first visit with full motion the monitor starts by itself at ×60 (the world moves within
      seconds; reduced motion, ?off=, ?static, a presenter / test run or a clock already moved keep it as it is). */
@@ -432,21 +422,6 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
 
   /* charts: memoised elements, so a stream filter / drawer / badge update does not re-render them */
   const onBubble = useCallback((d: BubbleDatum) => openTopic(d.id), [openTopic])
-  const pickBubble = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      const svg = e.currentTarget.querySelector('svg')
-      if (!svg || !svg.contains(e.target as Node)) return
-      // the kit draws one g.dk-viz-bubble per datum, in data order
-      let hit = -1
-      svg.querySelectorAll(':scope > g.dk-viz-bubble').forEach((g, i) => {
-        const r = g.querySelectorAll('circle')[1]?.getBoundingClientRect()
-        if (r && Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2)) <= r.width / 2) hit = i
-      })
-      const d = bubbles[hit]
-      if (d) onBubble(d)
-    },
-    [bubbles, onBubble],
-  )
   const bubbleEl = useMemo(
     () => <BubbleChart title={t.bubblesTitle} unit={t.bubblesUnit} seed={seed} data={bubbles} selectedId={topic} onSelect={onBubble} height={sm ? 260 : 300} className="dk-ri-bubbles" />,
     [t, seed, bubbles, topic, onBubble, sm],
@@ -490,7 +465,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const kpiStrip = useMemo(
     () => (
       // keyed by language: the kit count-up keeps its first formatter until the value changes ("219 rb" in EN)
-      <KpiStrip key={lang} label={t.kpiLabel} className="dk-ri-kpis">
+      <KpiStrip label={t.kpiLabel} className="dk-ri-kpis">
         <Kpi label={t.kpiMentions} value={kCount} delta={kCount - kPrev} goodWhen="up" deltaLabel={narrow ? t.vsPrevShort : t.vsPrev} {...(narrow ? {} : { caption: t.kpiMentionsCap })} />
         <Kpi hero label={t.kpiSentiment} value={kSent} format={fmtSent} caption={fill(narrow ? t.kpiSentimentCap : t.kpiSentimentCapN, { w: sentCap, n: kCount })} />
         <Kpi label={t.kpiNegative} value={kNeg} caption={fill(narrow ? t.kpiNegativeCapShort : t.kpiNegativeCap, { d: negDominant })} />
@@ -603,9 +578,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
           <Stream key={role} items={stream} initialFilter={head ? 'neg' : 'all'} onAssess={assess} compact={sm} />
         </div>
         <div className="dk-ri-col-mid">
-          {/* a tap (or a click with no hover before it) sends no pointermove, and the kit chart only selects the bubble
-              it last hovered: hit-test the click itself, so the bubble under the finger opens */}
-          <div onClick={pickBubble}>{bubbleEl}</div>
+          <div>{bubbleEl}</div>
           <div className="dk-ri-topicrow">
             <span className="dk-ri-hint">
               <Icon name="info" size={14} /> {COARSE ? t.bubblesHintTouch : t.bubblesHint}

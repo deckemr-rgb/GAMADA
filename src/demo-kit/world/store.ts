@@ -3,8 +3,9 @@
  * React hook with memoised selector slices.
  *
  *   emit(type, payload, source) → queued → microtask: reducer → auditLog row → reactions … → ONE notify
- * The pipeline (engine.ts: reducers, reactions, audit texts) is loaded on the first emit (or preloadWorldEngine()),
- * so viewing a world never downloads it; the first batch is processed as soon as it arrives.
+ * The pipeline is loaded on the first emit (or preloadWorldEngine()), so viewing a world never downloads it; the
+ * first batch is processed as soon as it arrives. Events a demo raises by itself need only the small core chunk
+ * (engine-core.ts); the full one (engine.ts) comes with the first other event or the first pointerdown / keydown.
  */
 import { useCallback, useRef, useSyncExternalStore } from 'react'
 import type { RegionPack } from '../region/types'
@@ -14,6 +15,7 @@ import { createEvent } from './events'
 import { clock } from './clock'
 import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted } from './persist'
 import { TABLE_KEYS, WORLD, emptyTable } from './util'
+import { coreCovers } from './engine-scope'
 import type { Seq } from './ids'
 
 export type WorldStatus = 'idle' | 'loading' | 'ready'
@@ -50,38 +52,58 @@ const statusSubs = new Set<() => void>()
 type Listener = (e: WorldEvent) => void
 const listeners = new Map<EventType | '*', Set<Listener>>()
 
-/* The event pipeline: loaded on the first emit; events queue up meanwhile and are processed in order. */
-let pipeline: typeof import('./engine') | null = null
-let pipelineLoad: Promise<void> | null = null
-function loadPipeline(): Promise<void> {
-  pipelineLoad ??= import('./engine').then(
+/* The event pipeline: loaded on the first emit; events queue up meanwhile and are processed in order.
+   Two chunks: engine-core.ts handles the events a demo raises by itself (natural events of a running clock, Awas
+   Belanja's screening: engine-scope.ts), engine.ts (which includes the core) every type. A queue of core events only
+   needs the small one; a batch that reaches another type stops before it and continues, in order, once engine.ts has
+   arrived (the same functions run either way, so the world is identical). */
+let core: typeof import('./engine-core') | null = null
+let full: typeof import('./engine') | null = null
+let coreLoad: Promise<void> | null = null
+let fullLoad: Promise<void> | null = null
+function loadCore(): Promise<void> {
+  coreLoad ??= import('./engine-core').then(
     (m) => {
-      pipeline = m
+      core = m
     },
     (e: unknown) => {
-      pipelineLoad = null
+      coreLoad = null
       throw e
     },
   )
-  return pipelineLoad
+  return coreLoad
 }
-/** Start downloading the event pipeline without awaiting (e.g. when the user is about to act). */
+function loadFull(): Promise<void> {
+  fullLoad ??= import('./engine').then(
+    (m) => {
+      full = m
+    },
+    (e: unknown) => {
+      fullLoad = null
+      throw e
+    },
+  )
+  return fullLoad
+}
+/** Start downloading the (full) event pipeline without awaiting (e.g. when the user is about to act). */
 export function preloadWorldEngine(): void {
-  loadPipeline().catch(() => {})
+  loadFull().catch(() => {})
+}
+const coreOnly = () => queue.every(coreCovers)
+/* decided in a microtask, once the synchronous emits of this tick are queued (so one batch = one notify), and again
+   after a download (an event outside the core set may have been emitted meanwhile) */
+function drain() {
+  if (full || (core && coreOnly())) return flush()
+  ;(coreOnly() ? loadCore() : loadFull()).then(drain, (err: unknown) => {
+    // keep the queue; the next emit retries the download
+    scheduled = false
+    console.error('[world] event pipeline failed to load', err)
+  })
 }
 function scheduleFlush() {
   if (scheduled) return
   scheduled = true
-  if (pipeline) queueMicrotask(flush)
-  else
-    loadPipeline().then(
-      () => queueMicrotask(flush),
-      (err: unknown) => {
-        // keep the queue; the next emit retries the download
-        scheduled = false
-        console.error('[world] event pipeline failed to load', err)
-      },
-    )
+  queueMicrotask(drain)
 }
 
 /* The generator (seed.ts + catalog + name lists + NIK rules, the heaviest part of the world) is loaded only when a
@@ -123,11 +145,15 @@ function flush() {
   scheduled = false
   const batch = queue
   queue = []
-  if (batch.length && pipeline) {
-    const r = pipeline.processEvents(current, seq, batch, (err, e) => console.error(`[world] ${e.type} failed`, err))
+  const p = full ? { run: full.processWith, h: full.FULL } : core ? { run: core.processWith, h: core.CORE } : null
+  if (batch.length && !p) queue = batch
+  else if (batch.length && p) {
+    const r = p.run(p.h, current, seq, batch, (err, e) => console.error(`[world] ${e.type} failed`, err))
     if (r.dropped) console.warn(`[world] ${r.dropped} follow-up event(s) dropped (depth > ${WORLD.maxDepth})`)
     current = r.state
-    notify()
+    // the part the core pipeline could not take waits (first in line) for engine.ts
+    if (r.rest.length) queue = [...r.rest, ...queue]
+    if (r.processed.length || !r.rest.length) notify()
     for (const e of r.processed) {
       for (const key of [e.type, '*'] as const) {
         const set = listeners.get(key)
@@ -145,6 +171,7 @@ function flush() {
     // another product right after a bulk run used to lose it (the pagehide save does not finish before navigation)
     schedulePersist(snapshot, r.processed.some((e) => e.source !== 'clock' && !e.depth) ? PERSIST_USER_MS : undefined)
   }
+  if (queue.length) scheduleFlush()
   if (!queue.length && !scheduled) {
     const w = idleWaiters
     idleWaiters = []

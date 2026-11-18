@@ -6,7 +6,8 @@ import type { ProductSlug } from '../../content/products'
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, overdueActions, rows, ref, type Bi, type EntityRef, type Minutes, type WorldState } from '../../demo-kit/world'
 import { complaintsByKecamatan, instructionIdeas, kpiStrip } from '../../demo-kit/world/satu-daerah'
-import { MP, desaName, findOpd, kecName, mpBriefingItems, mpLeaderboard, mpServiceIndex, opdShort, refId, riskiestProcurement, riverNow, topRiser } from './data'
+import { MP, desaName, kecName, mpBriefingItems, mpLeaderboard, mpServiceIndex, opdShort, refId, riverNow } from './data'
+import { findOpd, riskiestProcurement, topRiser } from './data-ext'
 
 /* ------------------------------------------------------------------ "Beri instruksi" ideas */
 

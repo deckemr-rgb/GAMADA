@@ -363,12 +363,7 @@ html[data-dk-calm] .dk-np-pulse {
   background: linear-gradient(to left, transparent, var(--dk-bg));
 }
 
-/* touch: the filter chips are full 44 px targets */
-@media (max-width: 767px), (pointer: coarse) {
-  .dk-np-ftools .dk-chip {
-    height: var(--dk-target);
-  }
-}
+/* touch: the filter chips are full 44 px targets through the kit (button.dk-chip[aria-pressed], ui.css) */
 /* the agency board shows whole columns only (no lane cut at the right edge): 4, 3 or 2 by the board's width */
 .dk-np-laneboard {
   container-type: inline-size;

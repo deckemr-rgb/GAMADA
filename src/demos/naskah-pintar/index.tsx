@@ -12,7 +12,7 @@
 import { Activity, Suspense, lazy, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { DemoCanvasProps } from '../registry'
 import type { Mission } from '../../demo-kit/shell'
-import { useShell } from '../../demo-kit/shell'
+import { intentProps, preloadNow, useShell } from '../../demo-kit/shell'
 import { BrowserFrame } from '../../demo-kit/frames'
 import { Button, Icon, IconButton, Select, Skeleton, Tabs } from '../../demo-kit/ui'
 import { clock, isEvent, onEvent, shallowEqual, useClock, useSession, useWorld, world, type ActionItem, type WorldState } from '../../demo-kit/world'
@@ -27,18 +27,16 @@ import './naskah-pintar.css'
 /* memo: a tab click re-renders the shell of the page first (the tab bar answers at once), the panels follow in the
    deferred render below (INP) */
 const Meeting = memo(MeetingTab)
-const Letters = memo(lazy(() => import('./Letters')))
-const FollowUps = memo(lazy(() => import('./FollowUps')))
+const loadLetters = () => import('./Letters')
+const loadFollowUps = () => import('./FollowUps')
+const Letters = memo(lazy(loadLetters))
+const FollowUps = memo(lazy(loadFollowUps))
 const Assistant = lazy(() => import('./Assistant'))
 const LeaderDesk = lazy(() => import('./LeaderDesk'))
-const preloadLetters = () => void import('./Letters').catch(() => undefined)
-const preloadFollow = () => void import('./FollowUps').catch(() => undefined)
-/* after the first view has settled, fetch the other tabs (and the recorder) on idle so their first tap does not wait;
-   resolves once both tab chunks are in (the tabs are then pre-rendered hidden, see `warm`) */
-const preloadIdle = () => {
-  void import('./Recorder').catch(() => undefined)
-  return Promise.all([import('./Letters'), import('./FollowUps')]).then(() => true, () => false)
-}
+/* the other tabs are fetched on intent (hover / focus / press of their tab or of a button that opens them), never at
+   boot: they stay out of the first load (size limit, CONTRACTS.md) and still arrive before the click */
+const lettersIntent = intentProps(loadLetters)
+const followIntent = intentProps(loadFollowUps)
 
 export type NpTab = 'rapat' | 'surat' | 'tindak'
 
@@ -155,23 +153,8 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
     return clock.subscribe(tick)
   }, [toast, lang, S, go])
 
-  /* idle prefetch of the other tabs once the first view is up (first taps answer without a network wait) */
-  /* …and once both are in, render them hidden (React Activity, low priority) so the first tap only reveals them */
-  const [warm, setWarm] = useState(false)
-  useEffect(() => {
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
-    let idle = 0
-    let live = true
-    const run = () => void preloadIdle().then((ok) => live && ok && setWarm(true))
-    const t = window.setTimeout(() => {
-      idle = w.requestIdleCallback ? w.requestIdleCallback(run, { timeout: 4000 }) : window.setTimeout(run, 0)
-    }, 1500)
-    return () => {
-      live = false
-      clearTimeout(t)
-      if (idle) (w.cancelIdleCallback ?? clearTimeout)(idle)
-    }
-  }, [])
+  /* once a tab's intent has fetched its chunk, render it hidden (React Activity, low priority) so the tap only reveals it */
+  const [warm, setWarm] = useState<{ surat: boolean; tindak: boolean }>({ surat: false, tindak: false })
 
   /* ?focus=<entity> (cross-product toast): open the right tab and entity */
   const { focus: shellFocus, clearFocus } = shell
@@ -203,10 +186,17 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
     ],
     [S, c.pending, c.late, sm],
   )
+  /* intent on a tab (pointer over, keyboard focus, press, touch): fetch its chunk, then pre-render it hidden */
   const warmTab = useCallback((e: { target: EventTarget }) => {
     const t = (e.target as HTMLElement).closest?.('[role=tab]')?.id ?? ''
-    if (t.endsWith('-t-surat')) preloadLetters()
-    else if (t.endsWith('-t-tindak')) preloadFollow()
+    const k = t.endsWith('-t-surat') ? 'surat' : t.endsWith('-t-tindak') ? 'tindak' : null
+    if (!k) return
+    const load = k === 'surat' ? loadLetters : loadFollowUps
+    preloadNow(load)
+    load().then(
+      () => setWarm((w) => (w[k] ? w : { ...w, [k]: true })),
+      () => undefined,
+    )
   }, [])
   const opdOptions = useMemo(() => opds.map((o) => ({ value: o.id, label: opdLabel(o, o.id, lang) })), [opds, lang])
   const path = `naskah-pintar/${tab === 'rapat' ? 'rapat' : tab === 'surat' ? 'surat-masuk' : 'tindak-lanjut'}`
@@ -233,11 +223,11 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
           </div>
           <div className="dk-np-banner-act">
             {instr.letterId && (
-              <Button size="sm" variant="primary" icon="doc" onClick={() => go('surat', { letterId: instr.letterId ?? undefined })} onPointerEnter={preloadLetters}>
+              <Button size="sm" variant="primary" icon="doc" {...lettersIntent} onClick={() => go('surat', { letterId: instr.letterId ?? undefined })}>
                 {S.instrOpen}
               </Button>
             )}
-            <Button size="sm" variant="quiet" icon="kanban" onClick={() => go('tindak', { itemId: instr.actionItemIds[0], opdIds: instr.opdIds })} onPointerEnter={preloadFollow}>
+            <Button size="sm" variant="quiet" icon="kanban" {...followIntent} onClick={() => go('tindak', { itemId: instr.actionItemIds[0], opdIds: instr.opdIds })}>
               {S.instrTasks}
             </Button>
             <IconButton icon="close" label={S.dismiss} size="sm" onClick={() => setBanner(null)} />
@@ -250,12 +240,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
         className="dk-np-frame"
         actions={
           <span className="dk-np-actions">
-            {sm && (
-              <span className="dk-np-clock dk-num" role="timer" aria-label={S.clockLabel(clockText(now, lang))}>
-                <Icon name="clock" size={14} />
-                {clockText(now, lang)}
-              </span>
-            )}
+            {/* phones: the demo clock is the kit's top-bar clock chip (no second clock here) */}
             {role === 'kepala-opd' && shell.size !== 'sm' && (
               <label className="dk-np-unit">
                 <span>{S.myUnit}</span>
@@ -272,7 +257,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
           </span>
         }
       >
-        <div className="dk-np-tabs" onPointerOver={warmTab} onPointerDown={warmTab}>
+        <div className="dk-np-tabs" onPointerOver={warmTab} onPointerDown={warmTab} onFocus={warmTab} onTouchStart={warmTab}>
           <Tabs items={items} value={tab} onChange={pickTab} label={S.tabsLabel} fill={sm}>
             <div className="dk-np-rolenote">
               <Icon name="user" size={14} />
@@ -292,14 +277,14 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
             <div hidden={shown !== 'rapat'}>
               <Meeting nav={nav} />
             </div>
-            {(warm || shown === 'surat') && (
+            {(warm.surat || shown === 'surat') && (
               <Activity mode={shown === 'surat' ? 'visible' : 'hidden'}>
                 <Suspense fallback={fallback}>
                   <Letters nav={nav} focusLetter={focus.letterId ?? null} focusKey={focus.n} autoRead={!!focus.autoRead} />
                 </Suspense>
               </Activity>
             )}
-            {(warm || shown === 'tindak') && (
+            {(warm.tindak || shown === 'tindak') && (
               <Activity mode={shown === 'tindak' ? 'visible' : 'hidden'}>
                 <Suspense fallback={fallback}>
                   <FollowUps nav={nav} focusItem={focus.itemId ?? null} focusOpd={focus.opdId ?? null} focusOpds={focus.opdIds ?? null} focusLate={!!focus.lateOnly} focusKey={focus.n} />

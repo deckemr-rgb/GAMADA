@@ -28,6 +28,7 @@ export {
   type HealthState,
 } from './controls'
 export { Picker, type PickerOption, type PickerProps } from './Picker'
+export { preloadOnIntent, preloadNow, intentProps, usePreloadOnIntent } from './intent'
 export type { GuidePanelProps } from './GuidePanel'
 export { markMission, resetMissions, missionProgress, useMissionProgress, useMissionTracker, type Mission } from './missions'
 export type { HotspotProps } from './Hotspot'

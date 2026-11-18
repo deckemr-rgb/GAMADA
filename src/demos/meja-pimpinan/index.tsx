@@ -16,7 +16,7 @@ import type { ProductSlug } from '../../content/products'
 import { dismissHotspot, useShell, type Mission } from '../../demo-kit/shell'
 import { clock, emit, isEvent, rows, setSession, useClock, useSession, useWorld, world, type EntityRef, type WorldState } from '../../demo-kit/world'
 import { WallScreenFrame } from '../../demo-kit/frames'
-import { Button, IconButton, LiveBadge, LoadingText, Select, Tabs, motionMode, useElementWidth } from '../../demo-kit/ui'
+import { Button, IconButton, LiveBadge, LoadingText, Select, motionMode, useElementWidth, type TabsProps } from '../../demo-kit/ui'
 import type { MapViewHandle } from '../../demo-kit/map'
 import { Kpis as KpisP } from './Kpis'
 import { MapPanel as MapPanelP } from './MapPanel'
@@ -24,7 +24,6 @@ import { Briefing as BriefingP } from './Briefing'
 import { Leaderboard as LeaderboardP } from './Leaderboard'
 import { Events as EventsP } from './Events'
 import { AskBox as AskBoxP } from './AskBox'
-import { HoaxBanner } from './HoaxBanner'
 import { MP, desaName, mpBriefingItems, useNow } from './data'
 import { leaderTitle, nf, regionLabel, tr, trf, type Bi } from './strings'
 import './mp.css'
@@ -54,11 +53,20 @@ if (typeof window !== 'undefined') {
   }
 }
 
+/* the tab strip exists only on phones (< 768 px): its code comes with the phone layout, fetched at once on a narrow
+   window and never on the wall screen */
+const loadTabs = () => import('../../demo-kit/ui/Tabs')
+const Tabs = lazy(() => loadTabs().then((m) => ({ default: m.Tabs as (p: TabsProps<MobileTab>) => ReturnType<typeof m.Tabs> })))
+if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767.98px)').matches) void loadTabs().catch(() => {})
+
 const InstructionDialog = lazy(() => import('./InstructionDialog'))
 const Scorecard = lazy(() => import('./Scorecard'))
 const MeetingMode = lazy(() => import('./MeetingMode'))
 const PhoneBriefing = lazy(() => import('./PhoneBriefing'))
 const OpdTasks = lazy(() => import('./OpdTasks'))
+/* the hoax banner arrives with the 10.30 hoax (or the skip chip): its code waits for that moment */
+const loadHoax = () => import('./HoaxBanner')
+const HoaxBanner = lazy(() => loadHoax().then((m) => ({ default: m.HoaxBanner })))
 
 /** what "Beri instruksi" opens with (a suggestion, a briefing item, an AI draft, a market operation) */
 export interface InstructionPreset {
@@ -82,12 +90,14 @@ export const missions: readonly Mission[] = [
     id: 'briefing',
     label: { id: 'Susun briefing pagi', en: 'Compose the morning briefing' },
     hint: { id: 'Tekan "Susun briefing": butirnya dirakit dari 6 produk lain, masing-masing bertaut ke sumbernya.', en: 'Press "Compose briefing": its items are assembled from 6 other products, each linked to its source.' },
+    target: '[data-hotspot="briefing"]',
     done: (e) => isEvent(e, 'briefing.generated') && e.source === 'meja-pimpinan',
   },
   {
     id: 'listen',
     label: { id: 'Dengarkan 1 butir briefing', en: 'Listen to 1 briefing item' },
     hint: { id: 'Di panel briefing tekan "Dengarkan briefing" (di perangkat tanpa suara: "Baca bersama"): butir yang sedang dibacakan disorot.', en: 'In the briefing panel press "Listen to briefing" (on a device without a voice: "Read along"): the item being read is highlighted.' },
+    target: '[data-mp="listen"]',
   },
   {
     id: 'ask',
@@ -98,6 +108,7 @@ export const missions: readonly Mission[] = [
     id: 'instruct',
     label: { id: 'Beri 1 instruksi', en: 'Issue 1 instruction' },
     hint: { id: 'Tekan "Beri instruksi", pilih saran AI atau tulis sendiri. Instruksi menjadi disposisi di Naskah Pintar. (Peran Kepala Daerah atau Sekretariat; Kepala OPD menerima tugasnya.)', en: 'Press "Issue instruction", pick an AI suggestion or write your own. It becomes a disposition in Naskah Pintar. (Regional head or Secretariat role; an agency head receives the task.)' },
+    target: '[data-mp="instruct"]',
     done: (e) => isEvent(e, 'instruction.issued') && e.source === 'meja-pimpinan',
   },
   {
@@ -107,6 +118,7 @@ export const missions: readonly Mission[] = [
     hintSm: { id: 'Mode rapat untuk layar ruang rapat: buka demo ini di tablet atau komputer (lebar ≥ 768 px).', en: 'Meeting mode is for the meeting-room screen: open this demo on a tablet or computer (≥ 768 px wide).' },
     // the button is not rendered below 768 px: phones list and complete 4 of 4
     hideSm: true,
+    target: '[data-mp="meeting"]',
   },
 ]
 
@@ -132,14 +144,14 @@ function NowText() {
 }
 
 /** "LANGSUNG" only while the world clock runs; paused, the chip says so and one tap starts the day again */
-function ClockChip({ button = true }: { button?: boolean }) {
+function ClockChip() {
   const { lang } = useI18n()
   const c = useClock()
   const on = c.running && c.speed > 0
   return (
     <span className={`dk-mp-clock${on ? ' is-on' : ''}`}>
       {on ? <LiveBadge label={`${tr('live', lang)} ×${c.speed}`} /> : <span className="dk-mp-paused">{tr('paused', lang)}</span>}
-      {button && <IconButton icon={on ? 'pause' : 'play'} size="sm" variant="quiet" label={on ? tr('clockPause', lang) : tr('clockPlay', lang)} onClick={() => clock.toggle()} data-mp="clock" />}
+      <IconButton icon={on ? 'pause' : 'play'} size="sm" variant="quiet" label={on ? tr('clockPause', lang) : tr('clockPlay', lang)} onClick={() => clock.toggle()} data-mp="clock" />
     </span>
   )
 }
@@ -191,13 +203,19 @@ function useAutoplay(present: boolean) {
 
 /** before the morning's viral hoax: one tap to the moment it lands (the jump replays every event in between) */
 const SKIP_TO = 10 * 60 + 30
+const warmHoax = () => void loadHoax().catch(() => {})
 function SkipChip() {
   const { lang } = useI18n()
   const now = useNow(5)
   const hoaxSeen = useWorld((s) => rows(s.hoaxAlerts).some((h) => h.at >= 0 && h.at <= now))
+  // half an hour before the hoax lands, fetch its banner's code
+  const near = now >= SKIP_TO - 60
+  useEffect(() => {
+    if (near) warmHoax()
+  }, [near])
   if (now >= 10 * 60 || hoaxSeen) return null
   return (
-    <button type="button" className="dk-mp-skip" onClick={() => clock.setTime(SKIP_TO)} data-mp="skip">
+    <button type="button" className="dk-mp-skip" onClick={() => clock.setTime(SKIP_TO)} onPointerEnter={warmHoax} onPointerDown={warmHoax} onFocus={warmHoax} data-mp="skip">
       {tr('skipHoax', lang)}
     </button>
   )
@@ -369,7 +387,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
           <span>Meja Pimpinan</span>
           <span aria-hidden="true">·</span>
           <span>{regionLabel(regionName, lang)}</span>
-          <ClockChip button={!phone} />
+          {/* phones: the kit top bar carries the clock chip */}
+          {!phone && <ClockChip />}
           {!isOpd && <SkipChip />}
         </p>
         <h2 className="dk-mp-title">{tr('title', lang)}</h2>
@@ -385,11 +404,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
             <Select value={opdScope} onChange={(e) => setOpdScope(e.target.value)} options={opdList.map((o) => ({ value: o.id, label: o.short }))} aria-label={tr('opdPick', lang)} />
           </label>
         )}
-        {phone ? (
-          <Button variant="ghost" size="sm" icon="info" onClick={() => shell.setGuideOpen(true)} data-mp="guide">
-            {tr('tryThis', lang)}
-          </Button>
-        ) : (
+        {/* phones: the kit top bar carries the guide pill ("Coba ini n/m") */}
+        {!phone && (
           <Button variant="ghost" size="sm" icon="phone" onClick={() => setDlg({ kind: 'phone' })} {...warm(() => import('./PhoneBriefing'))}>
             {tr('phone', lang)}
           </Button>
@@ -440,7 +456,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const events = <Events />
   const ask = <AskBox onFly={flyTo} onInstruct={openInstruct} onAnswered={onAnswered} leader={leader[lang]} />
 
-  const hoaxBanner = useMemo(() => (hoax ? <HoaxBanner hoax={hoax} onClarify={canInstruct ? openInstruct : undefined} overlay={wall} /> : null), [hoax, canInstruct, openInstruct, wall])
+  const hoaxBanner = useMemo(() => (hoax ? <Suspense fallback={null}><HoaxBanner hoax={hoax} onClarify={canInstruct ? openInstruct : undefined} overlay={wall} /></Suspense> : null), [hoax, canInstruct, openInstruct, wall])
   const top = (
     <div className="dk-mp-top">
       {header}
@@ -454,7 +470,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
       <Kpis role={role} opdId={opdScope} compact />
       <MapPanel selected={selKec} onSelect={setSelKec} onReady={onMapReady} onFly={flyTo} note={note} onNoteDone={onNoteDone} opdId={isOpd ? opdScope : null} phone />
       <div ref={tabsRef} className="dk-mp-tabs">
-      <Tabs<MobileTab>
+      <Suspense fallback={<div className="dk-mp-tabbody">{briefingPanel}</div>}>
+      <Tabs
         fill
         label={tr('tabsLabel', lang)}
         value={tab}
@@ -468,6 +485,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
       >
         <div className="dk-mp-tabbody">{shownTab === 'briefing' ? briefingPanel : shownTab === 'opd' ? leaderboard : shownTab === 'ask' ? ask : events}</div>
       </Tabs>
+      </Suspense>
       </div>
     </div>
   ) : (

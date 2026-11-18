@@ -347,7 +347,7 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
           {view !== 'cluster' && (
             <div className="dk-sw-chans" role="group" aria-label={t.fChannel}>
               {(['all', 'wa', 'web', 'telepon', 'voice'] as ChannelF[]).map((c) => (
-                <Chip key={c} selected={channel === c} onToggle={() => setChannel(c)} icon={c === 'all' ? undefined : CHANNEL_ICON[c]}>
+                <Chip key={c} selected={channel === c} aria-current={channel === c} onToggle={() => setChannel(c)} icon={c === 'all' ? undefined : CHANNEL_ICON[c]}>
                   {c === 'all' ? t.all : CHANNEL_LABEL[c][lang]}
                 </Chip>
               ))}

@@ -530,7 +530,7 @@ export function streamOf(mentions: Table<Mention>, now: number, limit: number): 
  * exists). Same posts as world/satu-daerah `hoaxBurst`, built from world/scenario-texts.
  */
 const loadTexts = () => import('../../demo-kit/world/scenario-texts')
-/** warm the burst texts (hover / focus of the trigger, or idle time after mount): the click then answers at once */
+/** warm the burst texts (hover / focus / press of the trigger): the click then answers at once */
 export function prefetchBurst(): void {
   void loadTexts().catch(() => undefined)
 }

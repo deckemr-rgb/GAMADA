@@ -355,3 +355,24 @@
     display: none;
   }
 }
+
+/* basemap / imagery tiles still arriving (MapView tilesLoading): a quiet pill, top centre, never in the way */
+.dk-map-tiles {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--dk-line-2, rgba(185, 178, 255, 0.22));
+  border-radius: 999px;
+  background: rgba(26, 22, 56, 0.94);
+  color: var(--dk-muted, #c9c3ea);
+  font-size: 12px;
+  line-height: 18px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}

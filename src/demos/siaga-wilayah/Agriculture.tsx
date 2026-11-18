@@ -194,7 +194,7 @@ export default function Agriculture() {
           <span className="dk-sg-muted">{L('crop')}</span>
           <div className="dk-sg-chips" role="group" aria-label={L('crop')}>
             {CROPS.map((c) => (
-              <Chip key={c} selected={crop === c} onToggle={() => ui.set({ crop: c })}>
+              <Chip key={c} selected={crop === c} aria-current={crop === c} onToggle={() => ui.set({ crop: c })}>
                 {L(c)}
               </Chip>
             ))}

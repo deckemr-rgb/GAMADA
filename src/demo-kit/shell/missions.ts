@@ -20,6 +20,10 @@ export interface Mission {
   /** not offered on a phone-sized shell (the feature is hidden there): the phone guide lists, counts and
    *  completes without it */
   hideSm?: boolean
+  /** where the step happens (a selector inside the shell, e.g. '[data-hotspot="briefing"]'): the guide's step card
+   *  becomes a button that scrolls to it and focuses it (on phones the sheet folds first). Omit when there is no
+   *  single place to go. */
+  target?: string
   /** auto-tick rule; omit for UI-only steps that the product marks with markMission() */
   done?: (e: WorldEvent, s: WorldState) => boolean
 }

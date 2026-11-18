@@ -149,7 +149,8 @@ test('chain 10 · Siaga Wilayah post-flood harvest ⇒ Indeks Ekonomi update + S
   await openDemo(page, 'siaga-wilayah')
   await recordEvents(page)
   await page.getByRole('tab', { name: /Pertanian/ }).click()
-  await page.getByRole('radio', { name: /Pascabanjir/ }).or(page.getByRole('button', { name: /Pascabanjir/ })).first().click()
+  // the scenario radio itself: the open guide's step 4 ("geser skenario ke Pascabanjir") is a button earlier in the DOM
+  await page.getByRole('radiogroup', { name: 'Skenario' }).getByRole('radio', { name: /Pascabanjir/ }).click()
   await expect.poll(async () => (await events(page)).map((e) => `${e.type}:${e.source}`), { timeout: 10_000 }).toEqual(
     expect.arrayContaining(['harvest.updated:siaga-wilayah', 'econ.updated:indeks-ekonomi', 'supply.signal:sinyal-pasar']),
   )

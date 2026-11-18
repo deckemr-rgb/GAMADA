@@ -34,6 +34,7 @@ const S = {
   mapOf: { id: 'Peta', en: 'Map of' },
   canvasOf: { id: 'Kanvas peta', en: 'Map canvas:' },
   loading: { id: 'Memuat peta…', en: 'Loading map…' },
+  tiles: { id: 'Memuat citra peta…', en: 'Loading map tiles…' },
   failed: { id: 'Peta gagal dimuat. Muat ulang halaman untuk mencoba lagi.', en: 'The map failed to load. Reload the page to try again.' },
   noTiles: { id: 'Peta dasar tidak tersedia (offline atau diblokir) — batas wilayah tetap tampil.', en: 'Basemap unavailable (offline or blocked) — region boundaries still shown.' },
   noWebgl: { id: 'Peramban ini tidak mendukung WebGL — gunakan daftar kecamatan.', en: 'This browser has no WebGL — use the district list.' },
@@ -124,6 +125,9 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   const pendingHour = useRef<number | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [notice, setNotice] = useState<'noTiles' | null>(null)
+  // basemap / imagery tiles still arriving after a pan, zoom or layer switch (shown after a short delay, so a fast
+  // network never flashes it)
+  const [tilesLoading, setTilesLoading] = useState(false)
   const [pack, setPack] = useState<RegionPack | null>(null)
   // the outline shown while loading: the same cached request the engine uses (no extra download)
   const [ghost, setGhost] = useState<RegionGeoData | null>(null)
@@ -399,8 +403,30 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
     if (m) m.zoomTo(m.getZoom() + d, { duration: isEnabled('demoAnimations') ? 250 : 0 })
   }
 
+  useEffect(() => {
+    const m = status === 'ready' ? engineRef.current?.map : null
+    if (!m) return
+    let timer = 0
+    const onData = (e: { dataType?: string; tile?: unknown }) => {
+      if (e.dataType !== 'source' || !e.tile || timer) return
+      timer = window.setTimeout(() => setTilesLoading(!m.areTilesLoaded()), 450)
+    }
+    const onIdle = () => {
+      window.clearTimeout(timer)
+      timer = 0
+      setTilesLoading(false)
+    }
+    m.on('dataloading', onData)
+    m.on('idle', onIdle)
+    return () => {
+      m.off('dataloading', onData)
+      m.off('idle', onIdle)
+      window.clearTimeout(timer)
+    }
+  }, [status, engineTick])
+
   return (
-    <div ref={rootRef} className={`dk-map${full ? ' is-full' : ''}${className ? ` ${className}` : ''}`} role="region" aria-label={label} aria-busy={status === 'loading'} style={minHeight !== undefined ? { minHeight } : undefined}>
+    <div ref={rootRef} className={`dk-map${full ? ' is-full' : ''}${className ? ` ${className}` : ''}`} role="region" aria-label={label} aria-busy={status === 'loading' || tilesLoading} style={minHeight !== undefined ? { minHeight } : undefined}>
       {/* DOM order = tab order: corner controls → Sumber → map canvas → basemap attribution (all overlays are
           absolutely positioned, so this does not change the picture) */}
       {interactive && status === 'ready' && (
@@ -490,6 +516,12 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
           <Icon name="wifi" size={16} />
           {ms('noTiles', lang)}
         </p>
+      )}
+      {tilesLoading && status === 'ready' && notice !== 'noTiles' && (
+        <span className="dk-map-tiles" aria-hidden="true">
+          <span className="dk-map-spin" />
+          {ms('tiles', lang)}
+        </span>
       )}
       {debugFps && fps !== null && (
         <output className="dk-map-fps" aria-label="fps">

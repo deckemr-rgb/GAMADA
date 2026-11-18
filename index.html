@@ -10,6 +10,26 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // /demo/<slug> only: a static first paint (top bar + cards + "preparing") while the JS chain arrives, so a cold
+      // load on a slow phone never shows an empty page. Removed by DemoShell's first layout pass (or by RootLayout /
+      // RouteError on any other outcome). No animation; same colours as the demo shell.
+      if (/^\/demo\/[a-z-]+\/?$/.test(location.pathname)) {
+        var q = location.search, en = /[?&]lang=en(&|$)/.test(q)
+        if (!en && !/[?&]lang=id(&|$)/.test(q)) try { en = localStorage.getItem('gamada.lang') === 'en' } catch (e) {}
+        var b = document.createElement('div')
+        b.id = 'dk-boot'
+        b.setAttribute('aria-busy', 'true')
+        b.innerHTML =
+          '<style>#dk-boot{position:fixed;inset:0;z-index:50;background:#1a1638;color:#c9c3ea;font:15px/1.5 system-ui,sans-serif}' +
+          '#dk-boot .b{display:flex;align-items:center;height:56px;padding:0 16px;border-bottom:1px solid rgba(185,178,255,.12);color:#fff;font-weight:700;letter-spacing:.08em}' +
+          '#dk-boot .c{display:grid;gap:16px;max-width:960px;padding:24px 16px}#dk-boot p{margin:0}' +
+          '#dk-boot .r{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}#dk-boot i{display:block;height:72px;border-radius:14px;background:rgba(185,178,255,.08)}' +
+          '@media (max-width:767px){#dk-boot .r{grid-template-columns:1fr}}</style>' +
+          '<div class="b">GAMADA</div><div class="c"><p role="status">' + (en ? 'Preparing the demo world…' : 'Menyiapkan dunia demo…') + '</p><div class="r"><i></i><i></i><i></i></div></div>'
+        document.body.appendChild(b)
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

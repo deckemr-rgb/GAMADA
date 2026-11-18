@@ -270,22 +270,20 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
   const [seen, setSeen] = useState<Mode[]>(() => [mode])
   useEffect(() => setSeen((s) => (s.includes(mode) ? s : [...s, mode])), [mode])
 
-  // Massal is fetched and rendered (hidden) while the visitor reads, in idle time after the first paint: the tab
-  // then only swaps visibility (INP)
-  useEffect(() => {
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
-    let alive = true
-    const idle = (fn: () => void, ms: number) => (w.requestIdleCallback ? w.requestIdleCallback(fn, { timeout: ms }) : window.setTimeout(fn, ms))
-    const id = idle(() => {
-      void loadBulk().then(() => {
-        if (alive) idle(() => alive && setSeen((s) => (s.includes('bulk') ? s : [...s, 'bulk'])), 3000)
-      })
-    }, 4000)
-    return () => {
-      alive = false
-      if (w.cancelIdleCallback) w.cancelIdleCallback(id)
-      else window.clearTimeout(id)
-    }
+  // Massal is fetched on intent (pointer over / focus on / touch of its tab, never at open: size limit) and then
+  // rendered hidden in idle time, so the press itself only swaps visibility (INP)
+  const warmed = useRef(false)
+  const onIntent = useCallback((v: Mode) => {
+    if (v !== 'bulk' || warmed.current) return
+    warmed.current = true
+    void loadBulk().then(() => {
+      const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+      const show = () => setSeen((s) => (s.includes('bulk') ? s : [...s, 'bulk']))
+      if (w.requestIdleCallback) w.requestIdleCallback(show, { timeout: 1500 })
+      else window.setTimeout(show, 200)
+    }, () => {
+      warmed.current = false
+    })
   }, [])
 
   return (
@@ -307,6 +305,7 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
             label={t.modes}
             value={tab}
             onChange={onMode}
+            onIntent={onIntent}
             options={[
               { value: 'single', label: t.single, icon: 'doc' },
               { value: 'bulk', label: t.bulk, icon: 'layers' },

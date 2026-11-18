@@ -6,7 +6,8 @@
  */
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, rows, type Bi, type ComplaintCategory, type Minutes, type WorldState } from '../../demo-kit/world'
-import { devOf, kecName, mpLeaderboard, opdShort, riskRank, weekChange } from './data'
+import { devOf, kecName, mpLeaderboard, opdShort, weekChange } from './data'
+import { riskRank } from './data-ext'
 import { topicLabel } from './strings'
 
 export type Metric = 'complaints' | 'sla_on_time' | 'ticket_backlog' | 'alerts' | 'mentions_negative' | 'procurement_risk' | 'sales' | 'prices' | 'econ_index' | 'action_items_overdue'

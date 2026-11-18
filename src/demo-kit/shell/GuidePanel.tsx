@@ -11,7 +11,7 @@ import { DEMO_READY } from '../../demos/registry'
 import { useI18n } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
 import AppLink from '../../components/AppLink'
-import { Button, Confetti, Icon, IconButton, enterPanel, overlayOpen } from '../ui'
+import { Button, Confetti, Icon, IconButton, enterPanel, motionMode, overlayOpen } from '../ui'
 import { useSession } from '../world'
 import { useDemoStrings } from '../i18n'
 import { resetMissions, useMissionProgress, useMissionTracker, type Mission } from './missions'
@@ -90,6 +90,32 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open, size])
+  // phones: a tap outside the sheet folds it (the tap itself still reaches what it hit, so tapping "Putar" or a
+  // mission target starts the product's animation with the sheet out of the way). Not while a dialog sits above it,
+  // and not on the bar that toggles it (that bar handles the tap itself).
+  useEffect(() => {
+    if (!open || size !== 'sm') return
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as Element | null
+      if (!el || panel.current?.contains(el) || overlayOpen()) return
+      if (id && el.closest(`[aria-controls="${CSS.escape(id)}"]`)) return
+      if (el.closest('.dk-toast, [data-dk-more], [role="dialog"]')) return
+      closeRef.current()
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [open, size, id])
+  // a step that names its target (Mission.target): tapping it goes there (on phones the sheet folds first)
+  const goTo = (target: string) => {
+    const scope: ParentNode = panel.current?.closest('.dk-shell') ?? document
+    const el = [...scope.querySelectorAll<HTMLElement>(target)].find((x) => x.getClientRects().length > 0)
+    if (!el) return
+    if (size === 'sm') onClose()
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      el.focus({ preventScroll: true })
+    })
+  }
   const swipe = useRef<{ y: number; id: number } | null>(null)
 
   useLayoutEffect(() => {
@@ -155,8 +181,8 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
             const ok = done.includes(m.id)
             const isNext = next?.id === m.id
             const hint = size === 'sm' ? (m.hintSm ?? m.hint) : m.hint
-            return (
-              <li key={m.id} className={`dk-guide-step${ok ? ' is-done' : ''}${isNext ? ' is-next' : ''}`}>
+            const body = (
+              <>
                 <span className="dk-guide-check" aria-hidden="true">
                   {ok ? <Icon name="check" size={14} strokeWidth={2} /> : <span className="dk-num">{i + 1}</span>}
                 </span>
@@ -165,6 +191,18 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
                   {hint && !ok && <span className="dk-guide-hint">{hint[lang]}</span>}
                   <span className="dk-sr">, {ok ? t.missionDone : isNext ? t.missionNext : t.missionTodo}</span>
                 </span>
+              </>
+            )
+            const target = !ok ? m.target : undefined
+            return (
+              <li key={m.id} className={`dk-guide-step${ok ? ' is-done' : ''}${isNext ? ' is-next' : ''}${target ? ' has-target' : ''}`}>
+                {target ? (
+                  <button type="button" className="dk-guide-go" onClick={() => goTo(target)}>
+                    {body}
+                  </button>
+                ) : (
+                  body
+                )}
               </li>
             )
           })}

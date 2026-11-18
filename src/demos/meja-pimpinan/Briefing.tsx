@@ -8,10 +8,9 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
-import { demoHref } from '../../demo-kit/shell'
+import { demoHref, useShell } from '../../demo-kit/shell'
 import { Button, Icon, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
 import { useSession, useWorld, type Briefing as BriefingT } from '../../demo-kit/world'
-import { hasVoiceFor, loadVoices } from '../../demo-kit/media/tts'
 import { MP, dayPart, mpBriefingItems, refId, sameItems, useNow, withControls } from './data'
 import type { InstructionPreset } from './index'
 import { nf, tr, trf, type Bi } from './strings'
@@ -42,6 +41,7 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
 }) {
   const { lang } = useI18n()
   const session = useSession()
+  const { holdGuide } = useShell()
   const [voice, setVoice] = useState(false)
   const [active, setActive] = useState(-1)
   const listRef = useRef<HTMLOListElement>(null)
@@ -75,11 +75,21 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
     if (!has) return
     let live = true
     void loadPlayer().catch(() => {})
-    void loadVoices().then(() => live && setVoiceOk(hasVoiceFor(lang === 'id' ? 'id-ID' : 'en-GB') ?? false))
+    // the speech module is shared with the player: fetched with it, after the first briefing (not on the first screen)
+    void import('../../demo-kit/media/tts')
+      .then((t) => t.loadVoices().then(() => live && setVoiceOk(t.hasVoiceFor(lang === 'id' ? 'id-ID' : 'en-GB') ?? false)))
+      .catch(() => {})
     return () => {
       live = false
     }
   }, [has, lang])
+
+  // phones: the guide sheet folds while the briefing is read aloud (the highlighted item stays in view)
+  useEffect(() => {
+    if (!voice) return
+    holdGuide(true)
+    return () => holdGuide(false)
+  }, [voice, holdGuide])
 
   // staggered entrance of a freshly composed briefing (transform / opacity only)
   useLayoutEffect(() => {

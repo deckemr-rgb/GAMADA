@@ -615,17 +615,8 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, 
   const [staged, setStaged] = useState<Staged>({})
   const openSheet = useCallback((s: Sheet) => setSheet(s), [])
   const voiceRef = useRef<VoiceFn | null>(null)
-  /* the voice sheet is the first thing most visitors tap: fetch its chunk (≈ 7 KB) once the page is idle, so the first
-     tap opens it at once instead of a "Memuat…" sheet (a touch gives no hover to warm it on intent) */
-  useEffect(() => {
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(warmVoice, { timeout: 4000 })
-      return () => w.cancelIdleCallback?.(id)
-    }
-    const id = window.setTimeout(warmVoice, 2500)
-    return () => window.clearTimeout(id)
-  }, [])
+  /* the voice sheet chunk is warmed on intent only (hover / focus / touchstart on the voice chip and the mic button),
+     so it stays out of the first load (size limit) and the first tap still finds it ready */
   const [notice, setNotice] = useState<{ code: string; ticketId: string } | null>(null)
   /* the "in the console" banner is a moment, not a fixture: it goes once the ticket moves on or after 12 s */
   const noticeStatus = useWorld((s) => (notice ? s.tickets.byId[notice.ticketId]?.status ?? null : null))
@@ -751,12 +742,11 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, 
       )}
     </div>
   )
-  const time = slotLabel(minutes)
   if (flat)
     return (
       <section className="dk-sw-flat" aria-label={t.phoneFrame}>
+        {/* no clock here: on phones the kit's top bar already shows the demo clock */}
         <div className="dk-sw-flat-status" aria-hidden="true">
-          <span className="dk-num">{time}</span>
           {ticker ? (
             <span className="dk-sw-ticker" key={ticker.key}>
               <i />
@@ -770,7 +760,7 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, 
       </section>
     )
   return (
-    <PhoneFrame label={t.phoneFrame} time={time} width="var(--dk-sw-phone-w)" className="dk-sw-frame" tilt={false}>
+    <PhoneFrame label={t.phoneFrame} time={slotLabel(minutes)}width="var(--dk-sw-phone-w)" className="dk-sw-frame" tilt={false}>
       {body}
     </PhoneFrame>
   )

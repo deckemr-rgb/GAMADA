@@ -44,15 +44,6 @@ export default function SiagaWilayah({ product }: DemoCanvasProps) {
     setToastPlacement({ wide: overlay ? 'bottom-left' : 'bottom-right', sm: 'bottom-left' })
   }, [setToastPlacement, overlay])
   useEffect(() => () => setToastPlacement(null), [setToastPlacement])
-  // the warning dialog lists the same chain effects itself ("Efek berantai"), and on phones the kit lifts the stack
-  // to the top edge over a sheet's title: hold the shell toasts while that dialog (or the phone Geo-AI sheet) is open
-  const hold = broadcastOpen || (aiOpen && size === 'sm')
-  useEffect(() => {
-    if (!hold) return
-    document.documentElement.classList.add('dk-sg-hold-toasts')
-    return () => document.documentElement.classList.remove('dk-sg-hold-toasts')
-  }, [hold])
-
   // citizen flood reports arrive on their own while the world clock runs (scripted from the morning scenario)
   useEffect(() => clock.onMinute(scriptedReport), [])
   useAutoplay(useSession().present)
@@ -189,11 +180,13 @@ export const missions: readonly Mission[] = [
   {
     id: 'scrub6',
     label: { id: 'Jalankan prediksi sampai +6 jam', en: 'Run the forecast to +6 h' },
+    target: '[data-sw="cta"]',
     hint: { id: 'Tekan "Jalankan prediksi 6 jam" atau geser waktu di bawah peta.', en: 'Press "Run 6-hour forecast" or drag the time slider under the map.' },
   },
   {
     id: 'broadcast',
     label: { id: 'Kirim peringatan dini ke zona banjir', en: 'Send an early warning to the flood zone' },
+    target: '[data-sw="cta"]',
     hint: { id: 'Peran BPBD atau Kepala Daerah: "Kirim peringatan dini", periksa level & wilayah, lalu Kirim.', en: 'Disaster Management Agency (BPBD) or Regional Head role: "Send early warning", check level & area, then Send.' },
     hintSm: { id: 'Peran BPBD (menu ⋯): "Kirim peringatan dini" di bawah peta.', en: 'Disaster Management Agency (BPBD) role (⋯ menu): "Send early warning" under the map.' },
     done: (e) => isEvent(e, 'alert.broadcast') && e.source === 'siaga-wilayah',
@@ -201,23 +194,27 @@ export const missions: readonly Mission[] = [
   {
     id: 'confirm',
     label: { id: 'Cek konfirmasi laporan warga', en: 'Check the citizen confirmation' },
+    target: '[data-sw="cta"]',
     hint: { id: 'Setelah peringatan terkirim: "Cek konfirmasi laporan warga" di bawah peta. Klaster ≥ 5 aduan dalam 1 km mengonfirmasi prediksi.', en: 'After the warning is out: "Check citizen confirmation" under the map. A cluster of ≥ 5 reports within 1 km confirms the forecast.' },
     done: (e) => isEvent(e, 'flood.confirmed'),
   },
   {
     id: 'harvest',
     label: { id: 'Lihat dampak pertanian', en: 'See the farm impact' },
+    target: '.dk-sg [role="tab"][id$="-t-agri"]',
     hint: { id: 'Tab Pertanian → geser skenario ke "Pascabanjir".', en: 'Agriculture tab → switch the scenario to "Post-flood".' },
     done: (e) => isEvent(e, 'harvest.updated') && e.payload.scenario === 'pasca-banjir',
   },
   {
     id: 'imagery',
     label: { id: 'Buka citra satelit', en: 'Open the satellite imagery' },
+    target: '[data-sw="layers"]',
     hint: { id: 'Tombol "Lapisan" di peta → Citra satelit Sentinel-2 (2016), atau tab Lingkungan → "Tampilkan citra Sentinel-2 (2016) di peta".', en: 'The "Layers" button on the map → Sentinel-2 satellite imagery (2016), or Environment tab → "Show Sentinel-2 (2016) imagery on the map".' },
   },
   {
     id: 'compare',
     label: { id: 'Bandingkan citra sebelum/sesudah', en: 'Compare before/after imagery' },
+    target: '[data-sw="compare"], .dk-sg [role="tab"][id$="-t-env"]',
     hint: { id: 'Tab Lingkungan → geser slider pada citra.', en: 'Environment tab → drag the slider on the image.' },
   },
 ]

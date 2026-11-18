@@ -36,6 +36,8 @@ export function Portal({ children, anchor, className }: { children: ReactNode; a
   useLayoutEffect(() => {
     if (!host) return
     host.className = `dk-root dk-portal${className ? ` ${className}` : ''}`
+    // the site's smooth scroll (Lenis) cancels wheel events outside opted-out elements: dialogs scroll natively
+    host.setAttribute('data-lenis-prevent', '')
     const a = anchor?.current ?? ownAnchor.current
     const eco = a?.closest('[data-eco]')?.getAttribute('data-eco')
     if (eco) host.setAttribute('data-eco', eco)

@@ -8,7 +8,7 @@ import { PRODUCT_BY_SLUG, isProductSlug, type ProductSlug } from '../../content/
 import type { IconName } from '../../demo-kit/ui'
 import {
   CATEGORY_LABEL, DAY_MIN, clock, createParamSelector, createSelector, rows,
-  type AuditEntry, type Bi, type ComplaintCategory, type EntityRef, type EventType, type Minutes, type PricePoint, type Procurement, type WorldState,
+  type AuditEntry, type Bi, type ComplaintCategory, type EntityRef, type EventType, type Minutes, type WorldState,
 } from '../../demo-kit/world'
 import { briefingItems, gaugeLevelAt, gaugeName, gaugeOutlook, weekChangeOf, type BriefingItem } from '../../demo-kit/world/satu-daerah'
 
@@ -37,38 +37,6 @@ export const kecName = (s: WorldState, id: string): string => s.region.kecamatan
 export const desaName = (s: WorldState, kec: string, desa: string): string => s.region.kecamatan.find((k) => k.id === kec)?.desa.find((d) => d.id === desa)?.name ?? desa
 export const opdShort = (s: WorldState, id: string): string => s.region.opd.find((o) => o.id === id)?.short ?? id
 export const refId = (r: EntityRef | undefined): string | null => (r ? (r.split(':').slice(1).join(':') || null) : null)
-
-/** OPD id by a hint (id or short name contains it), as the kit's instructionIdeas does */
-export function findOpd(s: WorldState, hint: string): string | undefined {
-  const h = hint.toLowerCase()
-  return s.region.opd.find((o) => o.id === h)?.id ?? s.region.opd.find((o) => `${o.id} ${o.short} ${o.name}`.toLowerCase().includes(h))?.id
-}
-
-/** OPD ids named in free text ("BPBD dan Dinas PUPR", "the public works office") */
-export function opdsInText(s: WorldState, text: string): string[] {
-  const t = ` ${text.toLowerCase()} `
-  const alias: Record<string, string[]> = {
-    bpbd: ['bpbd', 'bencana', 'disaster'],
-    pupr: ['pupr', 'pekerjaan umum', 'public works', 'bina marga'],
-    diskominfo: ['kominfo', 'diskominfo', 'humas', 'communication'],
-    disperindag: ['disperindag', 'perdagangan', 'trade'],
-    inspektorat: ['inspektorat', 'inspectorate', 'audit'],
-    dinsos: ['dinsos', 'sosial', 'social'],
-    dinkes: ['dinkes', 'kesehatan', 'health'],
-    dlh: ['dlh', 'lingkungan hidup', 'environment', 'sampah', 'waste'],
-    dishub: ['dishub', 'perhubungan', 'transport'],
-    distan: ['distan', 'pertanian', 'agricultur'],
-    satpolpp: ['satpol', 'public order'],
-    ukpbj: ['pbj', 'ukpbj', 'pengadaan', 'procurement'],
-    disdukcapil: ['dukcapil', 'civil registry'],
-  }
-  const out = new Set<string>()
-  for (const o of s.region.opd) {
-    const keys = [o.short.toLowerCase(), o.id, ...(alias[o.id] ?? [])]
-    if (keys.some((k) => k.length > 2 && t.includes(k))) out.add(o.id)
-  }
-  return [...out]
-}
 
 /** keep ?controls=all on cross-product links while the products are not DEMO_READY (dev / controls builds only) */
 export function withControls(href: string): string {
@@ -142,26 +110,6 @@ export function devOf(p: { items: { qty: number; marketPrice: number; hpsPrice: 
 }
 /** change vs 7 days ago; `history` holds daily closes EXCLUDING today, so 7 days ago is the 7th from the end */
 export const weekChange = (price: number, history: number[]): number => weekChangeOf(price, history)
-/** the single market x commodity with the largest 7-day rise (briefing, map, suggestions and chat all name this one) */
-export function topRiser(s: WorldState): { p: PricePoint; d: number } | null {
-  let best: { p: PricePoint; d: number } | null = null
-  for (const p of rows(s.prices)) {
-    const d = weekChange(p.price, p.history)
-    if (!best || d > best.d) best = { p, d }
-  }
-  return best
-}
-/** the riskiest active package, in the kit briefing's order: flagged by risk score, else an emergency one, else the
- *  highest mark-up over market. Briefing, suggestions and chat name the same package. */
-export function riskiestProcurement(s: WorldState): Procurement | null {
-  const procs = rows(s.procurements).filter((p) => p.status !== 'selesai')
-  return procs.filter((p) => p.flagged).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0))[0] ?? procs.find((p) => p.emergency) ?? [...procs].sort((a, b) => devOf(b) - devOf(a))[0] ?? null
-}
-/** sort key for a package list that starts with riskiestProcurement's choice */
-export function riskRank(p: Procurement): number {
-  return p.flagged ? 2000 + (p.riskScore ?? 0) : p.emergency ? 1000 : devOf(p)
-}
-
 /* ------------------------------------------------------------------ agency scores (one rule everywhere in Meja Pimpinan) */
 
 /** an agency needs this many tickets in the 30-day window (closed + open past SLA) before it gets an SLA, a score

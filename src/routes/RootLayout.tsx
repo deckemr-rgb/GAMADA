@@ -40,8 +40,12 @@ function useChrome(): Chrome {
 /** Frames to wait for a #hash target that lives in a lazy chunk (e.g. /#layanan) before giving up. */
 const HASH_RETRY_FRAMES = 120
 
+/** the skip link on a bare sandbox, where the site dictionary is not read (lib/i18n.tsx sandboxRoute): same text as
+ *  a11y.skip in content/i18n/{id,en}.ts */
+const SKIP_BARE = { id: 'Lewati ke konten utama', en: 'Skip to main content' } as const
+
 export default function RootLayout() {
-  const { t } = useI18n()
+  const i18n = useI18n()
   const location = useLocation()
   const isHome = location.pathname === '/'
   const bare = useChrome() === 'none'
@@ -52,6 +56,11 @@ export default function RootLayout() {
 
   // one Lenis for the whole site (driven by gsap.ticker)
   useLayoutEffect(() => initSmoothScroll(), [])
+  // index.html's static /demo first paint (#dk-boot): a sandbox's DemoShell removes it; any other page (the 404 of an
+  // unknown slug) does it here
+  useLayoutEffect(() => {
+    if (!bare) document.getElementById('dk-boot')?.remove()
+  }, [bare])
 
   useLayoutEffect(() => {
     if (prevKey.current === null || prevKey.current === location.key) {
@@ -101,7 +110,7 @@ export default function RootLayout() {
   return (
     <>
       <a className="skip-link" href="#main">
-        {t.a11y.skip}
+        {bare ? SKIP_BARE[i18n.lang] : i18n.t.a11y.skip}
       </a>
       {isFpsDebug() ? <FpsHud /> : null}
       {bare ? null : <Cursor />}

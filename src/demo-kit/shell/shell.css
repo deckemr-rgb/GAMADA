@@ -578,6 +578,31 @@
   border-color: var(--dk-line-act);
   background: var(--dk-s2);
 }
+/* a step with Mission.target: the whole card is the button that goes there (≥ 44 px, global focus ring) */
+.dk-guide-step.has-target {
+  padding: 0;
+}
+.dk-guide-go {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--dk-target, 44px);
+  padding: 10px 12px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .dk-guide-go:hover .dk-guide-label {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
 .dk-guide-step.is-next::before {
   content: '';
   position: absolute;

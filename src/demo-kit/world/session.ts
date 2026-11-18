@@ -2,7 +2,7 @@
  * world/session.ts — the demo session (region, seed, role, AI mode, presenter mode, language).
  * URL sync is the shell's job; this is only the store.
  */
-import { useSyncExternalStore } from 'react'
+import { useDeferredValue, useMemo, useSyncExternalStore } from 'react'
 import type { RoleId } from '../../content/products'
 
 export const DEFAULT_SEED = 2026
@@ -36,6 +36,14 @@ export function subscribeSession(fn: () => void): () => void {
   return () => subs.delete(fn)
 }
 
+/**
+ * The session for React. A role switch re-renders every role-specific view (and may fetch its chunk): `role` is
+ * deferred, so that render runs in the background and the current screen stays up, with no loading fallback, until
+ * the new role's view is ready (the picker itself closes at once). Every other field updates immediately;
+ * getSession() always has the new value.
+ */
 export function useSession(): DemoSession {
-  return useSyncExternalStore(subscribeSession, getSession, getSession)
+  const s = useSyncExternalStore(subscribeSession, getSession, getSession)
+  const role = useDeferredValue(s.role)
+  return useMemo(() => (role === s.role ? s : { ...s, role }), [s, role])
 }

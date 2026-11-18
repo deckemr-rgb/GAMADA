@@ -62,7 +62,7 @@ let framed: { w: number; z: number } | null = null
 
 export function Timeline() {
   const { lang, t } = useT()
-  const { markMission, size } = useShell()
+  const { markMission, size, holdGuide } = useShell()
   const role = swRole(useSession().role)
   const hour = useUi((s) => s.hour)
   const ran = useUi((s) => s.ran)
@@ -106,6 +106,24 @@ export function Timeline() {
     if (awasNoAlert && awasRef.current) return flashNewRow(awasRef.current)
   }, [awasNoAlert])
 
+  // phones: the guide sheet folds while the scrubber plays the 9 s forecast run (CTA, "Run again" or its play button)
+  useEffect(() => {
+    const root = scrubRef.current
+    if (!root) return
+    let held = false
+    const sync = () => {
+      const on = scrubPlaying(root)
+      if (on === held) return
+      held = on
+      holdGuide(on)
+    }
+    const mo = new MutationObserver(sync)
+    mo.observe(root, { subtree: true, attributes: true, attributeFilter: ['aria-label'] })
+    return () => {
+      mo.disconnect()
+      if (held) holdGuide(false)
+    }
+  }, [holdGuide])
   const onFrame = useCallback((h: number) => {
     mapRef.current?.setTime(h)
   }, [])

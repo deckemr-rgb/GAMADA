@@ -7,6 +7,7 @@
 import { memo, useMemo } from 'react'
 import { Button, Score, Icon, LiveBadge } from '../../demo-kit/ui'
 import { Sparkline } from '../../demo-kit/viz'
+import { intentProps } from '../../demo-kit/shell'
 import { clockWib, compact } from '../../demo-kit/viz/format'
 import type { RoleId } from '../../content/products'
 import type { WaterGauge } from '../../demo-kit/world'
@@ -142,7 +143,7 @@ export const HoaxCard = memo(function HoaxCard(p: HoaxCardProps) {
           </div>
         }
         <div key={ACT} className="dk-ri-hoax-act" data-hotspot="radar-start">
-          <Button variant="primary" icon="zap" onClick={p.onTrigger} onPointerEnter={p.onPrefetch} onFocus={p.onPrefetch} busy={p.bursting} className="dk-ri-hoax-cta">
+          <Button variant="primary" icon="zap" {...intentProps(p.onPrefetch)} onClick={p.onTrigger} busy={p.bursting} className="dk-ri-hoax-cta">
             {p.compactIdle || row ? fill(t.triggerShort, { dam: damName }) : fill(t.trigger, { dam: damName })}
           </Button>
         </div>

@@ -1027,19 +1027,6 @@ html[data-dk-calm] .dk-np-summary.is-streaming::after {
 
 /* ------------------------------------------------------------------ wow-audit round 1 */
 
-/* phones: the world clock rides in the frame bar (the shell's clock sits in a menu there) */
-.dk-np-clock {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
-  height: 28px;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--dk-r-pill);
-  color: var(--dk-text);
-  font: 600 var(--dk-t12) var(--dk-font);
-  white-space: nowrap;
-}
 /* the follow-ups tab counts what is overdue: a danger badge, not a neutral count */
 .dk-np-tabs [role='tab'][id$='-t-tindak'] .dk-badge {
   background: var(--dk-danger);

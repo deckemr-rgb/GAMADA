@@ -41,14 +41,16 @@ export interface ChipProps {
   'aria-disabled'?: boolean
   /** id(s) of the element that explains the chip (e.g. why it is unavailable) */
   'aria-describedby'?: string
+  /** single-choice chip group (a filter): the selected chip is the current choice, re-clicking it is a no-op by design */
+  'aria-current'?: boolean
 }
 
-export function Chip({ children, icon, tone = 'neutral', selected, onToggle, onRemove, removeLabel, className, 'aria-disabled': ariaDisabled, 'aria-describedby': describedBy }: ChipProps) {
+export function Chip({ children, icon, tone = 'neutral', selected, onToggle, onRemove, removeLabel, className, 'aria-disabled': ariaDisabled, 'aria-describedby': describedBy, 'aria-current': ariaCurrent }: ChipProps) {
   const t = useUiStrings()
   const cls = cx('dk-chip', `dk-chip--${tone}`, selected && 'is-selected', className)
   if (onToggle)
     return (
-      <button type="button" className={cls} aria-pressed={!!selected} aria-disabled={ariaDisabled || undefined} aria-describedby={describedBy} onClick={onToggle}>
+      <button type="button" className={cls} aria-pressed={!!selected} aria-disabled={ariaDisabled || undefined} aria-describedby={describedBy} aria-current={ariaCurrent || undefined} onClick={onToggle}>
         {icon && <Icon name={icon} size={14} />}
         <span>{children}</span>
       </button>
