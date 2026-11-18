@@ -8,6 +8,7 @@ import type {
   TicketStatus, WorldState,
 } from './types'
 import { DAY_MIN, TABLE_KEYS, rows } from './util'
+import { clock } from './clock'
 
 /* ------------------------------------------------------------------ memo helpers */
 
@@ -66,17 +67,29 @@ export const ticketsByStatus = createSelector((s) => [s.tickets], (t) => {
   return out
 })
 
-/** % of tickets closed in the last 30 days that met their SLA (0–100) */
-export const slaOnTimePct = createSelector((s) => [s.tickets], (t) => {
-  let done = 0
-  let onTime = 0
+/**
+ * On-time SLA % (0–100), ONE rule for the whole ecosystem: tickets closed on time in the 30 days up to `now` ÷
+ * (tickets closed in those 30 days + open tickets already past their SLA). An open ticket past its deadline counts
+ * against the SLA. `now` defaults to the world clock.
+ */
+export const slaParts = createParamSelector((s) => [s.tickets], (now: Minutes, t) => {
+  let closed30 = 0
+  let onTime30 = 0
+  let pastSla = 0
   for (const x of rows(t)) {
-    if (x.status !== 'selesai' || x.closedAt === null || x.closedAt < -30 * DAY_MIN) continue
-    done++
-    if (x.closedAt <= x.slaDueAt) onTime++
+    if (x.createdAt > now) continue
+    if (x.status !== 'selesai' || x.closedAt === null || x.closedAt > now) {
+      if (x.slaDueAt < now) pastSla++
+      continue
+    }
+    if (x.closedAt <= now - 30 * DAY_MIN) continue
+    closed30++
+    if (x.closedAt <= x.slaDueAt) onTime30++
   }
-  return done ? Math.round((onTime / done) * 100) : 100
+  const n = closed30 + pastSla
+  return { closed30, onTime30, pastSla, pct: n ? Math.round((onTime30 / n) * 100) : 100 }
 })
+export const slaOnTimePct = (s: Pick<WorldState, 'tickets'>, now: Minutes = clock.get().minutes): number => slaParts(s as WorldState, now).pct
 
 export const avgRating = createSelector((s) => [s.tickets], (t) => {
   let n = 0
@@ -110,14 +123,24 @@ export const overdueActions = createParamSelector((s) => [s.actionItems], (now: 
   rows(t).filter((a) => a.status !== 'selesai' && a.dueAt < now).sort((a, b) => a.dueAt - b.dueAt),
 )
 
-/** composite public-service index 0–100: SLA 40 %, satisfaction 30 %, follow-up discipline 30 % */
+/** follow-up discipline: of the items already due (dueAt < now), the share done; 1 when none is due yet. A new
+ *  instruction (due tomorrow) never moves it. */
+export const disciplineOf = createParamSelector((s) => [s.actionItems], (now: Minutes, t) => {
+  let due = 0
+  let late = 0
+  for (const a of rows(t)) {
+    if (a.dueAt >= now) continue
+    due++
+    if (a.status !== 'selesai') late++
+  }
+  return { due, late, value: due ? 1 - late / due : 1 }
+})
+
+/** composite public-service index 0–100: SLA 40 % (slaOnTimePct), satisfaction 30 %, follow-up discipline 30 % (disciplineOf) */
 export const serviceIndex = createParamSelector((s) => [s.tickets, s.actionItems], (now: Minutes, tickets, actions) => {
-  const st = { tickets } as WorldState
-  const sla = slaOnTimePct(st)
-  const rating = avgRating(st)
-  const open = rows(actions).filter((a) => a.status !== 'selesai')
-  const late = open.filter((a) => a.dueAt < now).length
-  const discipline = open.length ? 1 - late / open.length : 1
+  const sla = slaParts({ tickets } as WorldState, now).pct
+  const rating = avgRating({ tickets } as WorldState)
+  const discipline = disciplineOf({ actionItems: actions } as WorldState, now).value
   return Math.round(0.4 * sla + 0.3 * (rating / 5) * 100 + 0.3 * discipline * 100)
 })
 

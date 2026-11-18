@@ -175,6 +175,11 @@ export interface MapViewProps {
   regionId: string
   layers: MapLayer[]
   onReady?: (handle: MapViewHandle) => void
+  /**
+   * fires once, after the first region is in AND the map has drawn the layers passed so far (MapLibre 'idle'), so an
+   * overlay can fade exactly when the heat / choropleth is visible (onReady fires earlier, before the layer sync)
+   */
+  onLayersReady?: (handle: MapViewHandle) => void
   /** false = static picture (no pan/zoom, no hover) */
   interactive?: boolean
   /** default: fit the region bbox */
@@ -183,6 +188,11 @@ export interface MapViewProps {
   /** CSS min-height of the map box (default 320px; e.g. 0 or '180px' for a mini map inside a fixed-size wrapper) */
   minHeight?: number | string
   ariaLabel?: string
+  /**
+   * where the "basemap unavailable" notice sits: top-left (default) or bottom-left, `inset` px from that edge
+   * (default 12; e.g. { inset: 56 } to clear a product's own top-left control)
+   */
+  notice?: { placement?: 'top' | 'bottom'; inset?: number }
   /** selected kecamatan (outline + raised fill) */
   selectedId?: string | null
   /** click on a kecamatan (null = click outside) */

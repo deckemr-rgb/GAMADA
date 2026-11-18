@@ -14,7 +14,7 @@ import { ECOSYSTEMS, type EcoOrInti, type ProductDef } from '../../content/produ
 import AppLink from '../../components/AppLink'
 import { Button, Drawer, IconButton } from '../ui'
 import { useDemoStrings } from '../i18n'
-import { AiModeToggle, BackToProduct, ClockControl, FullscreenButton, LangToggle, ModeBadge, RegionSwitcher, ResetButton, RoleSwitcher, type HealthState } from './controls'
+import { AiModeToggle, BackToProduct, ClockChip, ClockControl, FullscreenButton, LangToggle, ModeBadge, RegionSwitcher, ResetButton, RoleSwitcher, type HealthState } from './controls'
 import type { ShellSize } from './hooks'
 import { preloadPalette } from './lazy'
 
@@ -129,6 +129,7 @@ export function TopBar({ product, size, health, interim, onLiveUnavailable, rewi
         {lg && <RegionSwitcher />}
         {size !== 'sm' && !interim && <RoleSwitcher product={product.slug} />}
         {size !== 'sm' && !interim && <ClockControl rewinding={rewinding} />}
+        {size === 'sm' && !interim && <ClockChip />}
         {lg && !interim && <AiModeToggle health={health} onUnavailable={onLiveUnavailable} />}
         {lg && <ModeBadge />}
       </div>
@@ -157,10 +158,12 @@ export function TopBar({ product, size, health, interim, onLiveUnavailable, rewi
 export interface MoreSheetProps extends Omit<TopBarProps, 'onOpenMore'> {
   open: boolean
   onClose: () => void
+  /** a role was picked in the sheet: on phones the sheet closes so the visitor sees the result (plus a toast) */
+  onRolePicked?: (name: string) => void
 }
 
 /** The "⋯" sheet: on sm everything, on md only what the bar does not show. */
-export function MoreSheet({ open, onClose, product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette }: MoreSheetProps) {
+export function MoreSheet({ open, onClose, product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette, onRolePicked }: MoreSheetProps) {
   const t = useDemoStrings()
   const sm = size === 'sm'
   const then = (fn: () => void) => () => {
@@ -178,13 +181,20 @@ export function MoreSheet({ open, onClose, product, size, health, interim, onLiv
         {sm && !interim && (
           <section className="dk-more-sec">
             <h3 className="dk-more-h">{t.role}</h3>
-            <RoleSwitcher product={product.slug} inline />
+            <RoleSwitcher
+              product={product.slug}
+              inline
+              onPicked={(name) => {
+                onClose()
+                onRolePicked?.(name)
+              }}
+            />
           </section>
         )}
         {sm && !interim && (
           <section className="dk-more-sec">
             <h3 className="dk-more-h">{t.clock}</h3>
-            <ClockControl inline rewinding={rewinding} />
+            <ClockControl inline rewinding={rewinding} onPicked={onClose} />
           </section>
         )}
         <section className="dk-more-sec dk-more-row">

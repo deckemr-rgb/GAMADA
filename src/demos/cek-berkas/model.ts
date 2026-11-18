@@ -4,10 +4,14 @@
  * epoch remount), bulk result → document status, and the compact context the AI assistant reads.
  */
 import type { DocumentRec, WorldState } from '../../demo-kit/world'
+import { flushPersist } from '../../demo-kit/world/persist'
 import type { Verdict } from '../../demo-kit/docs'
-import type { BansosBatch } from '../../demo-kit/world/satu-daerah'
+import type { BansosRow } from '../../demo-kit/world/satu-daerah'
 
 export type Mode = 'single' | 'bulk'
+
+/** the shell's "start here" ring (index.tsx `hotspot.id`); a gallery pick retires it via dismissHotspot */
+export const HOTSPOT_ID = 'cek-berkas:start'
 export type CekRole = 'perizinan' | 'dinsos'
 
 export const asRole = (r: string): CekRole => (r === 'dinsos' ? 'dinsos' : 'perizinan')
@@ -49,11 +53,13 @@ export const sessionLog = {
   get: (): readonly LogRow[] => log,
   add(row: LogRow): void {
     log = [row, ...log].slice(0, 30)
+    save()
     subs.forEach((f) => f())
   },
   clear(): void {
     if (!log.length) return
     log = []
+    save()
     subs.forEach((f) => f())
   },
   subscribe(fn: () => void): () => void {
@@ -65,7 +71,30 @@ export const sessionLog = {
 /* ------------------------------------------------------------------ bulk */
 
 export type BulkResult = 'lolos' | 'kurang' | 'ganda' | 'luar-zona'
+/** one finding on a file; a file can carry several (a missing attachment never hides behind "luar zona") */
+export type Finding = Exclude<BulkResult, 'lolos'>
 export const STATUS_OF: Record<BulkResult, DocumentRec['status']> = { lolos: 'lengkap', kurang: 'kurang', ganda: 'cek-manual', 'luar-zona': 'cek-manual' }
+export type ZoneSource = 'program' | 'alert' | 'scenario'
+
+export interface CekRow extends Omit<BansosRow, 'result'> {
+  /** primary status (card colour, world status): NIK ganda → luar zona → kurang → lolos */
+  result: BulkResult
+  /** every finding on the file, primary first */
+  findings: Finding[]
+  /** 1-based positions (#nn) of the files sharing this NIK */
+  pairNos: number[]
+  /** 1-based positions (#nn) of other files with the same full name but a different NIK: a note, not a finding */
+  sameName: number[]
+}
+export interface CekBatch {
+  rows: CekRow[]
+  /** kecamatan the addresses are checked against: the warning / programme kecamatan + the scenario flood-risk map */
+  zone: string[]
+  /** the kecamatan named by the warning / programme (null before any warning) */
+  warnZone: string[] | null
+  source: ZoneSource
+  duplicateGroups: string[][]
+}
 
 /** the bansos applicant files have all been verified once (world-persisted) */
 export function bulkProcessed(s: WorldState): boolean {
@@ -79,43 +108,63 @@ export function bulkProcessed(s: WorldState): boolean {
   return n > 0
 }
 
-/** Chip counts, mutually exclusive (Σ = total): a duplicate NIK outside the zone counts as NIK ganda only;
- *  `outside` = every address outside the zone (map, AI), `outsideGanda` = the overlap shown as a sub-label. */
+/** Chip counts per finding (a file with two findings counts in both chips; lolos = no finding at all). */
 export interface BulkSummary {
   total: number
+  /** files checked so far */
+  done: number
   lolos: number
   kurang: number
+  /** kurang files that also carry another finding */
+  kurangAlso: number
   ganda: number
   gandaPairs: number
   luarZona: number
-  outside: number
-  outsideGanda: number
+  /** luar-zona files that are also NIK ganda */
+  luarGanda: number
+  /** files for manual review: NIK ganda or outside the zone (each file once) */
+  manual: number
 }
-export function summarize(b: BansosBatch, upTo = b.rows.length): BulkSummary {
-  const rows = b.rows.slice(0, upTo)
-  const n = (r: BulkResult) => rows.filter((x) => x.result === r).length
-  const done = new Set(rows.map((r) => r.doc.id))
+export function summarize(b: CekBatch, upTo = b.rows.length): BulkSummary {
+  const rs = b.rows.slice(0, upTo)
+  const has = (r: CekRow, f: Finding) => r.findings.includes(f)
+  const done = new Set(rs.map((r) => r.doc.id))
   return {
     total: b.rows.length,
-    lolos: n('lolos'),
-    kurang: n('kurang'),
-    ganda: n('ganda'),
+    done: rs.length,
+    lolos: rs.filter((r) => !r.findings.length).length,
+    kurang: rs.filter((r) => has(r, 'kurang')).length,
+    kurangAlso: rs.filter((r) => has(r, 'kurang') && r.findings.length > 1).length,
+    ganda: rs.filter((r) => has(r, 'ganda')).length,
     gandaPairs: b.duplicateGroups.filter((g) => g.every((id) => done.has(id))).length,
-    luarZona: n('luar-zona'),
-    outside: rows.filter((x) => x.outsideZone).length,
-    outsideGanda: rows.filter((x) => x.outsideZone && x.result === 'ganda').length,
+    luarZona: rs.filter((r) => has(r, 'luar-zona')).length,
+    luarGanda: rs.filter((r) => has(r, 'luar-zona') && has(r, 'ganda')).length,
+    manual: rs.filter((r) => has(r, 'ganda') || has(r, 'luar-zona')).length,
   }
 }
 export const zoneKey = (zone: readonly string[]): string => [...zone].sort().join(',')
 
-/** The last bulk run of this session: what was emitted to the world (KPI strip, AI context). Cleared with the log. */
+/** one file of the last bulk run, as the audit drawer names it (#nn, findings, NIK pair / namesake numbers) */
+export interface BulkFile {
+  n: number
+  name: string
+  findings: Finding[]
+  pairNos: number[]
+}
+/** The last bulk run of this session: what was emitted to the world (KPI strip, AI context, audit labels).
+ *  Kept with the session (sessionStorage) so a hop to Siaga Wilayah and back keeps the result on screen. */
 export interface BulkRun {
   summary: BulkSummary
   zone: string[]
+  warnZone: string[] | null
+  source: ZoneSource
+  /** world minutes of the run */
+  at: number
   /** wall time of the run (ms) */
   ms: number
-  /** files sent to manual review (NIK ganda + luar zona) */
+  /** files sent to manual review (NIK ganda or luar zona, each file once) */
   manual: number
+  files: Record<string, BulkFile>
 }
 let bulk: BulkRun | null = null
 const bulkSubs = new Set<() => void>()
@@ -123,6 +172,7 @@ export const bulkLog = {
   get: (): BulkRun | null => bulk,
   set(r: BulkRun | null): void {
     bulk = r
+    save()
     bulkSubs.forEach((f) => f())
   },
   subscribe(fn: () => void): () => void {
@@ -130,6 +180,69 @@ export const bulkLog = {
     return () => void bulkSubs.delete(fn)
   },
 }
+
+/* ------------------------------------------------------------------ session persistence (per tab, per world) */
+
+/** Save the world now instead of after the kit's debounce: a verification is followed at once by a hop to another
+ *  product (a full page load), and a world saved before the hop keeps the audit entries the screen counts. */
+export function saveWorldSoon(): void {
+  setTimeout(() => flushPersist(), 60)
+}
+/** a cross-product link: start the save before the page goes */
+export const saveWorldNow = (): void => flushPersist()
+
+const STORE_KEY = 'gamada:cb:session'
+let worldKey = ''
+function save(): void {
+  if (!worldKey) return
+  try {
+    window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ world: worldKey, log, bulk }))
+  } catch {
+    /* storage blocked: the session lives in memory only */
+  }
+}
+const cekVerifies = (s: WorldState) => {
+  let n = 0
+  for (const id of s.auditLog.ids) {
+    const e = s.auditLog.byId[id]
+    if (e && e.source === 'cek-berkas' && e.type === 'document.verified') n++
+  }
+  return n
+}
+/**
+ * A canvas mount: keep (or restore from this tab's sessionStorage) the session's checks while the world still holds
+ * their audit entries, so a hop to another product and back never zeroes the KPI strip or drops the bulk result;
+ * a reset / new world (no Cek Berkas entries in its audit log) starts a fresh session.
+ */
+export function resumeSession(s: WorldState): void {
+  const key = `${s.region.id}:${s.seed}`
+  const known = cekVerifies(s)
+  if (worldKey !== key || (!log.length && !bulk)) {
+    worldKey = key
+    log = []
+    bulk = null
+    try {
+      const raw = window.sessionStorage.getItem(STORE_KEY)
+      const o = raw ? (JSON.parse(raw) as { world?: string; log?: LogRow[]; bulk?: BulkRun | null }) : null
+      if (o && o.world === key) {
+        log = Array.isArray(o.log) ? o.log : []
+        bulk = o.bulk && o.bulk.files && Array.isArray(o.bulk.zone) ? o.bulk : null
+      }
+    } catch {
+      /* nothing to restore */
+    }
+  }
+  // a world without any Cek Berkas entry (reset, new seed) never shows an older session's numbers
+  if (!known) {
+    log = []
+    bulk = null
+  }
+  save()
+  subs.forEach((f) => f())
+  bulkSubs.forEach((f) => f())
+}
+
+export const pad2 = (n: number): string => String(n).padStart(2, '0')
 
 /* ------------------------------------------------------------------ gallery sample → world document */
 
@@ -164,8 +277,10 @@ function buildDocMap(s: WorldState): Map<string, string> {
   return out
 }
 
-/** "************1234" */
-export const maskNik = (nik: string | null): string => (nik ? `•••• •••• •••• ${nik.slice(-4)}` : '—')
+/** 16 digits → "•••• •••• ••12 3456": the last 6 stay visible, so two different NIKs never look alike */
+export const maskNik = (nik: string | null): string => (nik ? `•••• •••• ••${nik.slice(10, 12)} ${nik.slice(12)}` : '—')
+/** card corner: "…12 3456" */
+export const nikTail = (nik: string | null): string => (nik ? `…${nik.slice(10, 12)}\u2009${nik.slice(12)}` : '')
 
 /* ------------------------------------------------------------------ AI context */
 
@@ -185,7 +300,8 @@ export interface CekContext {
     tamperReasons: string[]
   }
   /** luarZona = files whose result is "luar zona" (chips, Σ = total); outside = every address outside the zone */
-  batch: { total: number; lolos: number; kurang: number; ganda: number; gandaPairs: number; luarZona: number; outside: number; processed: boolean; zone: string[] }
+  /** chip counts: a file with two findings counts in both; manual = NIK ganda or luar zona (each file once) */
+  batch: { total: number; lolos: number; kurang: number; ganda: number; gandaPairs: number; luarZona: number; manual: number; processed: boolean; zone: string[]; warnZone: string[] | null }
   program: null | { quota: number; kecamatan: string[]; openedAt: string }
   session: { verified: number; manual: number }
   region: string

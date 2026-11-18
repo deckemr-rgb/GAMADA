@@ -11,10 +11,17 @@ import { useAiChat, type Structured } from '../../demo-kit/ai/chat'
 import { useShell } from '../../demo-kit/shell'
 import { clock, emit, useSession, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { radarCtx } from './ctx'
-import { afterPaint, useDeferredOpen } from './model'
+import { afterPaint, approvalFor, recordClarAudit, useDeferredOpen } from './model'
+import { clockWib } from '../../demo-kit/viz/format'
 import { clarification, type ClarificationData } from './clarify-text'
 import { CHANNELS, CHANNEL_LABEL, TONES, type Channel, type Tone } from './strings'
 import './scenario'
+
+/** real ms the simulated drafting may take before the rest of the draft is shown at once */
+const DRAFT_CAP_MS = 1300
+/** real ms the simulated approver (Head of the Communications Office) takes to answer, then a beat to read it */
+const APPROVE_MS = 1300
+const READ_MS = 700
 
 const S = {
   id: {
@@ -49,7 +56,21 @@ const S = {
     error: 'Draf gagal disusun. Coba susun ulang.',
     prompt: (tone: string) => `Susun klarifikasi nada ${tone} untuk hoaks bendungan`,
     simMark: '[SIMULASI DEMO GAMADA]',
-    tools: {} as Record<string, string>,
+    tools: {
+      'siaga_wilayah.tinggi_muka_air': 'Cek data pos pantau Siaga Wilayah',
+      susun_klarifikasi: 'Susun draf rilis, caption, dan infografis',
+      cek_hoaks: 'Cek status hoaks',
+      sapa_warga: 'Cek laporan warga di Sapa Warga',
+    } as Record<string, string>,
+    publishBusy: 'Menyusun draf…',
+    submit: 'Ajukan persetujuan & terbitkan (simulasi)',
+    releasedAs: 'Rilis atas nama Diskominfo, tanpa kutipan Kepala Daerah.',
+    waiting: 'Menunggu persetujuan…',
+    auditWait: 'Jejak persetujuan: disusun {d} · menunggu persetujuan {a} · draf v{v}.',
+    auditAsking: 'Jejak persetujuan: disusun {d} pukul {t} · diajukan ke {a}, menunggu jawaban… · draf v{v}.',
+    auditDone: 'Jejak persetujuan: disusun {d} pukul {t} · disetujui {a} pukul {u} (persetujuan disimulasikan) · draf v{v}.',
+    auditHead: 'Jejak persetujuan: disusun {d} · menunggu persetujuan Anda ({a}) · draf v{v}. Tercatat di Laporan dan ekspor.',
+    publishedBy: 'Disetujui {a} pukul {u}.',
   },
   en: {
     titleDraft: 'Draft a clarification',
@@ -84,10 +105,20 @@ const S = {
     prompt: (tone: string) => `Draft a ${tone} clarification for the dam hoax`,
     simMark: '[GAMADA DEMO SIMULATION]',
     tools: {
-      'siaga_wilayah.tinggi_muka_air': 'Siaga Wilayah water level',
-      susun_klarifikasi: 'draft the clarification',
-      cek_hoaks: 'check hoaxes',
+      'siaga_wilayah.tinggi_muka_air': 'Checked the Siaga Wilayah gauge',
+      susun_klarifikasi: 'Drafted the release, caption and infographic',
+      cek_hoaks: 'Checked the hoax status',
+      sapa_warga: 'Checked citizen reports in Sapa Warga',
     } as Record<string, string>,
+    publishBusy: 'Drafting…',
+    submit: 'Send for approval & publish (simulated)',
+    releasedAs: 'Released in the Comms Office’s name, no quote of the Regional Head.',
+    waiting: 'Waiting for approval…',
+    auditWait: 'Approval trail: drafted by the {d} · awaiting approval by the {a} · draft v{v}.',
+    auditAsking: 'Approval trail: drafted by the {d} at {t} · sent to the {a}, awaiting an answer… · draft v{v}.',
+    auditDone: 'Approval trail: drafted by the {d} at {t} · approved by the {a} at {u} (simulated approval) · draft v{v}.',
+    auditHead: 'Approval trail: drafted by the {d} · awaiting your approval ({a}) · draft v{v}. Recorded in the Report and the exports.',
+    publishedBy: 'Approved by the {a} at {u}.',
   },
 }
 const TONE_WORD = {
@@ -154,38 +185,91 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
   const aiDraft = useMemo(() => asClarification(chat.structured), [chat.structured])
   // a Live answer without the structured package (the model only wrote text): fall back to the package built from
   // the same on-screen facts, and say so
-  const localDraft = useMemo(
-    () => (!aiDraft && last?.status === 'done' ? clarification(radarCtx(world.get(), clock.get().minutes), tone, lang) : null),
-    [aiDraft, last?.status, tone, lang],
-  )
+  const localDraft = useMemo(() => (!aiDraft && last?.status === 'done' ? clarification(radarCtx(world.get(), clock.get().minutes), tone, lang) : null), [aiDraft, last?.status, tone, lang])
   const draft = aiDraft ?? localDraft
 
   // draft on open and on every tone change (the AI result lands in a few seconds); a new tone aborts the old draft
   const prompt = alert ? T.prompt(TONE_WORD[lang][tone]) : null
   const { send, stop } = chat
+  // every draft request (open, tone change, redraft) is a draft version in the approval trail
+  const version = useRef(0)
+  const lastPrompt = useRef<string | null>(null)
   useEffect(() => {
     if (!open || !prompt) return
+    // a re-run of the same request (dev StrictMode) is not a new draft
+    if (lastPrompt.current !== prompt) version.current++
+    lastPrompt.current = prompt
     void send(prompt)
     return () => stop()
   }, [open, prompt, send, stop])
+  // a simulated draft never keeps the visitor waiting long: after DRAFT_CAP_MS the rest of it shows at once
+  const { flush, busy: chatBusy } = chat
+  useEffect(() => {
+    if (!chatBusy) return
+    const id = window.setTimeout(flush, DRAFT_CAP_MS)
+    return () => window.clearTimeout(id)
+  }, [chatBusy, flush])
+  /* the approval is a step of its own: the Comms Office sends the draft to its head (a simulated approver who answers
+     after a moment, labelled as such) and the release goes out only once approved; the Regional Head approves herself */
+  const [stage, setStage] = useState<'draft' | 'asking' | 'approved'>('draft')
+  const times = useRef<{ drafted: number; approved: number }>({
+    drafted: 0,
+    approved: 0,
+  })
+  const timers = useRef<number[]>([])
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), [])
+  const approval = approvalFor(session.role)
 
   const pointsRef = useRef<HTMLOListElement>(null)
   useEffect(() => {
     if (draft && pointsRef.current) return dropChips(pointsRef.current)
   }, [draft])
 
-  const publish = () => {
+  const head = mode === 'approve'
+  const release = () => {
     if (!alert || !draft || !channels.length) return
     const payload = { hoaxId: alert.id, tone, channels: [...channels] }
+    recordClarAudit(alert.id, {
+      ...approval,
+      version: Math.max(1, version.current),
+      draftedAt: times.current.drafted,
+      approvedAt: times.current.approved,
+      simulated: !head,
+    })
     // the drawer closes and the toast shows in this frame; the world update (recovery mentions, every subscriber
     // re-rendering) follows right after the paint
     onClose()
-    shell.toast({
-      title: fill(T.published, { n: payload.channels.length }),
-      tone: 'accent',
-      icon: 'check',
-    })
+    // phones: the card itself now says "Diklarifikasi … disetujui …" in view; a second toast would only stack on
+    // the detection toast over the card's next step
+    if (shell.size !== 'sm')
+      shell.toast({
+        title: fill(T.published, { n: payload.channels.length }),
+        body: fill(T.publishedBy, {
+          a: approval.approvedBy[lang],
+          u: clockWib(times.current.approved, lang),
+        }),
+        tone: 'accent',
+        icon: 'check',
+      })
     afterPaint(() => emit('clarification.published', payload, 'radar-isu'))
+  }
+  const publish = () => {
+    if (!alert || !draft || !channels.length || stage !== 'draft') return
+    const now = clock.get().minutes
+    times.current = { drafted: now, approved: now }
+    if (head) {
+      // the Regional Head's own click is the approval
+      release()
+      return
+    }
+    setStage('asking')
+    timers.current.push(
+      window.setTimeout(() => {
+        times.current.approved = Math.max(times.current.drafted, clock.get().minutes)
+        setStage('approved')
+        timers.current.push(window.setTimeout(release, READ_MS))
+      }, APPROVE_MS),
+    )
   }
 
   const busy = chat.busy
@@ -202,15 +286,42 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
             <legend className="dk-ri-k">{T.channels}</legend>
             <div className="dk-ri-chips">
               {CHANNELS.map((c) => (
-                <Chip key={c} selected={channels.includes(c)} onToggle={() => setChannels((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]))}>
+                <Chip
+                  key={c}
+                  selected={channels.includes(c)}
+                  aria-describedby={channels.length ? undefined : 'dk-ri-needch'}
+                  onToggle={() => setChannels((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]))}
+                >
                   {CHANNEL_LABEL[c][lang]}
                 </Chip>
               ))}
             </div>
           </fieldset>
-          {!channels.length && <p className="dk-ri-note is-warn">{T.needChannel}</p>}
-          <Button variant="primary" icon="send" onClick={publish} disabled={!draft || busy || !channels.length || alert?.status !== 'aktif'} data-testid="ri-publish">
-            {mode === 'approve' ? T.approve : T.publish}
+          {!channels.length && (
+            <p id="dk-ri-needch" className="dk-ri-note is-warn">
+              {T.needChannel}
+            </p>
+          )}
+          <p className={`dk-ri-note dk-ri-audit${stage === 'approved' ? ' is-ok' : ''}`} aria-live="polite">
+            <Icon name={stage === 'approved' ? 'check' : 'stamp'} size={13} />{' '}
+            {fill(head ? T.auditHead : stage === 'asking' ? T.auditAsking : stage === 'approved' ? T.auditDone : T.auditWait, {
+              d: approval.draftedBy[lang],
+              a: approval.approvedBy[lang],
+              v: Math.max(1, version.current),
+              t: clockWib(times.current.drafted, lang),
+              u: clockWib(times.current.approved, lang),
+            })}
+          </p>
+          {/* while the AI drafts, the button says so (never a near-normal button that silently ignores a tap) */}
+          <Button
+            variant="primary"
+            icon={stage === 'draft' ? 'send' : 'stamp'}
+            onClick={publish}
+            busy={busy || stage === 'asking'}
+            disabled={!draft || busy || stage !== 'draft' || !channels.length || alert?.status !== 'aktif'}
+            data-testid="ri-publish"
+          >
+            {busy ? T.publishBusy : stage !== 'draft' ? fill(T.waiting, { a: approval.approvedBy[lang] }) : head ? T.approve : fill(T.submit, { a: approval.approvedBy[lang] })}
           </Button>
         </div>
       }
@@ -239,8 +350,7 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
             <ol className="dk-ri-steps" aria-label={T.steps}>
               {last.toolCalls.map((c) => (
                 <li key={c.id}>
-                  <Icon name="check" size={13} /> {T.tools[c.name] ? <span>{T.tools[c.name]}</span> : <code>{c.name}</code>}
-                  {c.ms ? <span className="dk-num"> · {c.ms} ms</span> : null}
+                  <Icon name="check" size={13} /> <span>{T.tools[c.name] ?? c.name.replace(/[._]/g, ' ')}</span>
                 </li>
               ))}
             </ol>
@@ -319,7 +429,10 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
                 ))}
               </ol>
             </section>
-            <p className="dk-ri-note">{T.simData}</p>
+            <p className="dk-ri-note">
+              {T.simData}
+              {!head && ` ${T.releasedAs}`}
+            </p>
           </div>
         )}
       </div>

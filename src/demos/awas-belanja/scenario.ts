@@ -6,7 +6,7 @@
 import type { Intent, Lang, Scenario, SimContext, SimResponse, Structured } from '../../demo-kit/ai/types'
 import { registerScenario } from '../../demo-kit/ai/chat'
 import type { Bi } from '../../demo-kit/world'
-import { DETECTOR_BY_ID, noteText, pct, rpFull, rpShort, type AbContext, type Detector, type Level } from './model'
+import { DETECTOR_BY_ID, ROUNDING_NOTE, noteText, pct, rpFull, rpShort, type AbContext, type Detector, type Level } from './model'
 import { STRINGS } from './strings'
 
 type Ctx = SimContext<AbContext>
@@ -48,12 +48,18 @@ function correctionLine(w: AbContext, lang: Lang): string {
   if (!h) return ''
   return T(
     lang,
-    `Koreksi HPS ke ${rpFull(h.pasar, 'id')} (median pasar), klarifikasi peserta yang terhubung, dan undang UMKM lokal lewat Katalog Lokal sebelum penetapan pemenang.`,
-    `Correct the HPS to ${rpFull(h.pasar, 'en')} (market median), clarify the linked bidders, and invite local SMEs through Katalog Lokal before a winner is named.`,
+    `Usulkan kepada PPK koreksi HPS ke ${rpFull(h.hpsUsulan, 'id')} (median pasar + margin wajar ${h.marginPct}%, asumsi simulasi; ${ROUNDING_NOTE.id}), klarifikasi peserta yang terhubung, dan undang UMKM lokal lewat Katalog Lokal sebelum penetapan pemenang.`,
+    `Propose to the PPK an HPS of ${rpFull(h.hpsUsulan, 'en')} (market median + a fair ${h.marginPct}% margin, simulation assumption; ${ROUNDING_NOTE.en}), clarify the linked bidders, and invite local SMEs through Katalog Lokal before a winner is named.`,
   )
 }
 
 const ringNames = (w: AbContext) => [...new Set(w.afiliasi.flatMap((e) => [e.a, e.b]))]
+/** number of bids above the proposed HPS when that is every bid, else 0 */
+const above = (w: AbContext) => {
+  const h = w.hpsVsPasar
+  const bids = w.peserta.filter((p) => p.penawaran != null)
+  return h && bids.length && bids.every((p) => (p.penawaran ?? 0) > h.hpsUsulan) ? bids.length : 0
+}
 
 /** the memo summary (also the recommendation note): numbers from the same table as the HPS tab */
 export function memoSummary(w: AbContext, lang: Lang): string {
@@ -71,7 +77,10 @@ export function memoSummary(w: AbContext, lang: Lang): string {
       ring.length ? `${ring.length} dari ${p.jumlahPeserta} peserta terhubung lewat alamat, direktur, atau IP pendaftaran yang sama.` : '',
       spec ? 'Spesifikasi teknis menyebut satu merek tanpa "atau setara".' : '',
       sched ? `Jadwal penawaran ${p.jadwalHari ?? '?'} hari perlu justifikasi tertulis.` : '',
-      `Kami merekomendasikan koreksi HPS menjadi ${rpFull(h.pasar, 'id')} dan mengundang UMKM lokal lewat Katalog Lokal sebelum pemenang ditetapkan.`,
+      w.role === 'inspektorat'
+        ? `Kami merekomendasikan Bupati memerintahkan PPK/UKPBJ meninjau HPS sebelum pemenang ditetapkan; sebagai acuan, median pasar + margin wajar ${h.marginPct}% = ${rpFull(h.hpsUsulan, 'id')} (${ROUNDING_NOTE.id}).`
+        : `Kami mengusulkan kepada PPK koreksi HPS menjadi ${rpFull(h.hpsUsulan, 'id')} (median pasar + margin wajar ${h.marginPct}%, ${ROUNDING_NOTE.id}) dan mengundang UMKM lokal lewat Katalog Lokal sebelum pemenang ditetapkan.`,
+      above(w) ? `Seluruh ${above(w)} penawaran berada di atas HPS usulan, sehingga perlu negosiasi harga atau tender ulang.` : '',
     ].filter(Boolean).join(' ')
   return [
     `Package ${p.nama.en} (${p.kode}), HPS ${rpFull(h.hps, 'en')}${score != null ? `, scores ${score} out of 100 for risk` : ''}.`,
@@ -79,7 +88,10 @@ export function memoSummary(w: AbContext, lang: Lang): string {
     ring.length ? `${ring.length} of the ${p.jumlahPeserta} bidders are linked by a shared address, director or registration IP.` : '',
     spec ? 'The technical spec names one brand without "or equivalent".' : '',
     sched ? `The ${p.jadwalHari ?? '?'}-day bidding window needs a written justification.` : '',
-    `We recommend correcting the HPS to ${rpFull(h.pasar, 'en')} and inviting local SMEs through Katalog Lokal before a winner is named.`,
+    w.role === 'inspektorat'
+      ? `We recommend that the Regent instruct the PPK/UKPBJ to review the HPS before a winner is named; as a reference, the market median + a fair ${h.marginPct}% margin = ${rpFull(h.hpsUsulan, 'en')} (${ROUNDING_NOTE.en}).`
+      : `We propose to the PPK an HPS of ${rpFull(h.hpsUsulan, 'en')} (market median + a fair ${h.marginPct}% margin, ${ROUNDING_NOTE.en}) and inviting local SMEs through Katalog Lokal before a winner is named.`,
+    above(w) ? `All ${above(w)} bids are above the proposed HPS, so the price needs negotiating or the tender re-run.` : '',
   ].filter(Boolean).join(' ')
 }
 
@@ -238,10 +250,10 @@ const INTENTS: Intent<AbContext>[] = [
       return {
         text: T(
           ctx.lang,
-          `HPS yang wajar mengikuti median pasar: **${rpFull(h.pasar, 'id')}** (dari ${rpFull(h.hps, 'id')}). Potensi penghematan ${rpFull(h.selisih, 'id')} atau ${pct(h.deviasiPct, 'id')}.${w.rekomendasi ? ' Koreksi ini sudah tercatat di rekomendasi.' : ' Tekan "Rekomendasikan" agar koreksi tercatat dan memo tersusun.'}`,
-          `A fair HPS follows the market median: **${rpFull(h.pasar, 'en')}** (from ${rpFull(h.hps, 'en')}). Potential savings ${rpFull(h.selisih, 'en')} or ${pct(h.deviasiPct, 'en')}.${w.rekomendasi ? ' This correction is already recorded in the recommendation.' : ' Press "Recommend" to record the correction and draft the memo.'}`,
+          `HPS yang wajar: median pasar ${rpFull(h.pasar, 'id')} ditambah margin keuntungan dan biaya umum ${h.marginPct}% (asumsi simulasi; ${ROUNDING_NOTE.id}), yaitu **${rpFull(h.hpsUsulan, 'id')}** (dari ${rpFull(h.hps, 'id')}, turun ${rpFull(h.hps - h.hpsUsulan, 'id')}). Ini usulan: penetapan HPS tetap wewenang PPK.${above(w) ? ` Catatan: seluruh ${above(w)} penawaran berada di atas angka ini, jadi perlu negosiasi atau tender ulang.` : ''}${w.rekomendasi ? ' Usulan ini sudah tercatat dan menunggu persetujuan PPK.' : ' Tekan "Rekomendasikan koreksi" agar usulan tercatat dan memo tersusun.'}`,
+          `A fair HPS: the market median ${rpFull(h.pasar, 'en')} plus a ${h.marginPct}% margin for profit and overheads (simulation assumption; ${ROUNDING_NOTE.en}), i.e. **${rpFull(h.hpsUsulan, 'en')}** (from ${rpFull(h.hps, 'en')}, down ${rpFull(h.hps - h.hpsUsulan, 'en')}). This is a proposal: setting the HPS remains the PPK's decision.${above(w) ? ` Note: all ${above(w)} bids are above this figure, so the price needs negotiating or the tender re-run.` : ''}${w.rekomendasi ? ' The proposal is recorded and waits for the PPK.' : ' Press "Recommend a correction" to record it and draft the memo.'}`,
         ),
-        toolCalls: [{ name: 'koreksi_hps', input: { paket: w.paket.kode }, output: { hpsKoreksi: h.pasar } }],
+        toolCalls: [{ name: 'koreksi_hps', input: { paket: w.paket.kode }, output: { hpsUsulan: h.hpsUsulan } }],
         followUps: chips(ctx.lang, 'memo', 'local'),
       }
     },
@@ -275,13 +287,13 @@ const INTENTS: Intent<AbContext>[] = [
           data: {
             title: T(ctx.lang, `Memo audit ${w.paket.nama.id}`, `Audit memo ${w.paket.nama.en}`),
             findings: (w.analisis?.temuan ?? []).filter((f) => f.tingkat !== 'lolos').map((f) => noteText(f.catatan, ctx.lang)),
-            hpsCorrected: w.hpsVsPasar.pasar,
+            hpsCorrected: w.hpsVsPasar.hpsUsulan,
             recommendations: [correctionLine(w, ctx.lang)].concat(ring.length ? [T(ctx.lang, `Klarifikasi ${ring.length} peserta yang terhubung.`, `Clarify the ${ring.length} linked bidders.`)] : []),
             inviteLocal: true,
           },
         },
         toolCalls: [
-          { name: 'hps_vs_pasar', input: { paket: w.paket.kode }, output: { hpsKoreksi: w.hpsVsPasar.pasar } },
+          { name: 'hps_vs_pasar', input: { paket: w.paket.kode }, output: { hpsUsulan: w.hpsVsPasar.hpsUsulan } },
           { name: 'draft_audit_memo', input: { paket: w.paket.kode, peran: ctx.role }, output: { bagian: 4 } },
         ],
         followUps: chips(ctx.lang, 'next', 'local'),
@@ -297,13 +309,21 @@ const INTENTS: Intent<AbContext>[] = [
     ],
     respond: (ctx) => {
       const w = ctx.world
-      const list = w?.daftarPaket ?? []
-      if (!list.length) return { text: T(ctx.lang, 'Tidak ada paket aktif saat ini.', 'No open package right now.') }
-      const lines = list.slice(0, 4).map((p, i) => `${i + 1}. ${L(ctx.lang, p.nama)} (${p.kode}, ${p.opd}): ${p.skor != null ? T(ctx.lang, `skor ${p.skor}`, `score ${p.skor}`) : T(ctx.lang, 'belum dianalisis', 'not analysed')}, HPS ${pct(p.deviasiPct, ctx.lang, true)} vs pasar`).join('\n')
+      const open = (w?.daftarPaket ?? []).filter((p) => p.aktif)
+      if (!open.length) return { text: T(ctx.lang, 'Tidak ada paket yang masih tender saat ini.', 'No package is still in tender right now.') }
+      const scored = open.filter((p) => p.skor != null).sort((a, b) => (b.skor ?? 0) - (a.skor ?? 0))
+      const rest = open.filter((p) => p.skor == null).sort((a, b) => b.deviasiPct - a.deviasiPct)
+      const line = (p: AbContext['daftarPaket'][number]) => `- ${L(ctx.lang, p.nama)} (${p.kode}, ${p.opd}): ${p.skor != null ? T(ctx.lang, `skor ${p.skor}`, `score ${p.skor}`) + ', ' : ''}HPS ${pct(p.deviasiPct, ctx.lang, true)} vs ${T(ctx.lang, 'pasar', 'market')}`
+      const parts = [
+        T(ctx.lang, `${open.length} paket masih tender (saringan "Tender").`, `${open.length} packages are still in tender (the "In tender" filter).`),
+        scored.length ? T(ctx.lang, `Sudah dianalisis, menurut skor:\n`, `Analysed, by score:\n`) + scored.slice(0, 3).map(line).join('\n') : '',
+        rest.length ? T(ctx.lang, `Belum dianalisis, menurut deviasi HPS:\n`, `Not analysed yet, by HPS deviation:\n`) + rest.slice(0, 3).map(line).join('\n') : '',
+        w?.ringkasan ? T(ctx.lang, `Paket berkontrak (${w.ringkasan.contract}) tidak masuk daftar ini; lihat saringan "Semua".`, `Contracted packages (${w.ringkasan.contract}) are not in this list; see the "All" filter.`) : '',
+      ].filter(Boolean)
       return {
-        text: T(ctx.lang, `Paket aktif dengan risiko tertinggi (skor analisis, atau deviasi HPS bila belum dianalisis):\n${lines}`, `Open packages with the highest risk (analysis score, or HPS deviation when not analysed yet):\n${lines}`),
-        toolCalls: [{ name: 'daftar_paket', input: { urut: 'risiko' }, output: { paket: list.length } }],
-        followUps: chips(ctx.lang, 'sum', 'how'),
+        text: parts.join('\n'),
+        toolCalls: [{ name: 'daftar_paket', input: { urut: 'risiko', saringan: 'aktif' }, output: { paket: open.length } }],
+        followUps: ctx.world?.paket ? chips(ctx.lang, 'sum', 'how') : chips(ctx.lang, 'gap', 'due', 'how'),
       }
     },
   },
@@ -316,16 +336,20 @@ const INTENTS: Intent<AbContext>[] = [
     ],
     respond: (ctx) => {
       const w = ctx.world
-      const total = (w?.daftarPaket ?? []).reduce((a, p) => a + Math.max(0, p.hps - p.hps / (1 + p.deviasiPct / 100)), 0)
-      if (!w?.paket || !w.hpsVsPasar) {
-        const n = w?.daftarPaket.length ?? 0
-        return {
-          text: T(
+      const r = w?.ringkasan
+      const top = (w?.daftarPaket ?? []).filter((p) => p.tahap !== 'selesai' && p.selisih > 0).sort((a, b) => b.selisih - a.selisih).slice(0, 3)
+      const lines = top.map((p) => `- ${L(ctx.lang, p.nama)} (${p.kode}): ${rpShort(p.selisih, ctx.lang)}`).join('\n')
+      const all = r
+        ? T(
             ctx.lang,
-            `Di ${n} paket aktif teratas, selisih HPS terhadap median pasar sekitar **${rpShort(total, 'id')}** (simulasi). Buka satu paket untuk melihat rincian per item.`,
-            `Across the top ${n} open packages, the HPS is about **${rpShort(total, 'en')}** above the market median (simulated). Open a package to see the item breakdown.`,
-          ),
-          toolCalls: [{ name: 'daftar_paket', input: { urut: 'selisih' }, output: { paket: n } }],
+            `Di ${r.watched} paket aktif dipantau (${r.tender} tender, ${r.contract} berkontrak), HPS melebihi median pasar sebesar **${rpShort(r.gap, 'id')}** (simulasi), sama dengan KPI "Selisih HPS vs pasar"${r.proposed ? `; usulan koreksi ${rpShort(r.proposed, 'id')} sudah tercatat, menunggu PPK, dan belum mengurangi angka ini` : ''}. Penyumbang terbesar:\n${lines}`,
+            `Across the ${r.watched} open packages watched (${r.tender} in tender, ${r.contract} under contract), the HPS is **${rpShort(r.gap, 'en')}** above the market median (simulated), the same as the "HPS vs market gap" KPI${r.proposed ? `; proposed corrections of ${rpShort(r.proposed, 'en')} are recorded, await the PPK and are not deducted yet` : ''}. Largest contributors:\n${lines}`,
+          )
+        : ''
+      if (!w?.paket || !w.hpsVsPasar) {
+        return {
+          text: all + T(ctx.lang, '\nBuka satu paket untuk melihat rincian per item.', '\nOpen a package to see the item breakdown.'),
+          toolCalls: [{ name: 'daftar_paket', input: { urut: 'selisih' }, output: { paket: r?.watched ?? 0 } }],
           followUps: chips(ctx.lang, 'top', 'due'),
         }
       }
@@ -333,9 +357,9 @@ const INTENTS: Intent<AbContext>[] = [
       return {
         text: T(
           ctx.lang,
-          `Untuk paket ini, koreksi HPS ke median pasar menghemat ${rpFull(h.selisih, 'id')} (${pct(h.deviasiPct, 'id')}). Di ${w.daftarPaket.length} paket aktif teratas, selisih HPS terhadap pasar sekitar ${rpShort(total, 'id')} (simulasi).`,
-          `For this package, correcting the HPS to the market median saves ${rpFull(h.selisih, 'en')} (${pct(h.deviasiPct, 'en')}). Across the top ${w.daftarPaket.length} open packages the HPS gap is about ${rpShort(total, 'en')} (simulated).`,
-        ),
+          `Untuk paket ini, HPS ${rpFull(h.selisih, 'id')} (${pct(h.deviasiPct, 'id')}) di atas median pasar. Dengan HPS usulan ${rpFull(h.hpsUsulan, 'id')} (median + margin ${h.marginPct}%), HPS turun ${rpFull(h.hps - h.hpsUsulan, 'id')}.\n`,
+          `For this package, the HPS is ${rpFull(h.selisih, 'en')} (${pct(h.deviasiPct, 'en')}) above the market median. With the proposed HPS of ${rpFull(h.hpsUsulan, 'en')} (median + ${h.marginPct}% margin) it drops by ${rpFull(h.hps - h.hpsUsulan, 'en')}.\n`,
+        ) + all,
         followUps: chips(ctx.lang, 'fix', 'memo'),
       }
     },
@@ -362,7 +386,7 @@ const INTENTS: Intent<AbContext>[] = [
               )
         return { text, toolCalls: [{ name: 'jadwal_paket', input: { paket: p.kode }, output: { sisaHari: p.sisaHari } }], followUps: chips(ctx.lang, 'sum', 'next') }
       }
-      const open = (w?.daftarPaket ?? []).filter((p) => p.sisaHari != null).sort((a, b) => (a.sisaHari ?? 0) - (b.sisaHari ?? 0)).slice(0, 4)
+      const open = (w?.daftarPaket ?? []).filter((p) => p.aktif && p.sisaHari != null).sort((a, b) => (a.sisaHari ?? 0) - (b.sisaHari ?? 0)).slice(0, 4)
       if (!open.length) return { text: T(ctx.lang, 'Tidak ada paket yang masih menerima penawaran.', 'No package is still taking bids.'), followUps: chips(ctx.lang, 'top') }
       const lines = open.map((p) => `- ${L(ctx.lang, p.nama)} (${p.kode}): ${days(p.sisaHari ?? 0)}`).join('\n')
       return {
@@ -399,10 +423,287 @@ const INTENTS: Intent<AbContext>[] = [
   },
 ]
 
+/* ------------------------------------------------------------------ agencies, vendors, named bidders */
+
+const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** the agency a question names ("BPBD", "Dinas PUPR", "dinkes"…), from the package list */
+function opdIn(w: AbContext, text: string): { opd: string; nama: string } | null {
+  const q = ` ${norm(text)} `
+  for (const p of w.daftarPaket) if (q.includes(` ${norm(p.opd)} `) || q.includes(` ${norm(p.opdNama)} `)) return { opd: p.opd, nama: p.opdNama }
+  return null
+}
+
+INTENTS.push(
+  {
+    id: 'opd',
+    examples: [
+      'Apakah ada indikasi korupsi di BPBD?', 'Bagaimana pengadaan di Dinas PUPR?', 'Paket BPBD apa saja?', 'Ada kecurangan di dinas ini?', 'Indikasi mark up di OPD mana?',
+      'Is there corruption at BPBD?', 'How is procurement at the public works agency?', 'Which agency has the most risk?', 'Any fraud signs at Dinkes?',
+      'Ana korupsi neng BPBD ora?', 'Pengadaan neng dinas PUPR piye?',
+    ],
+    respond: (ctx) => {
+      const w = ctx.world
+      if (!w) return { text: T(ctx.lang, 'Data paket belum siap.', 'Package data is not ready yet.') }
+      const hit = opdIn(w, ctx.text)
+      if (!hit) {
+        const by = new Map<string, number>()
+        for (const p of w.daftarPaket) if (p.tahap !== 'selesai') by.set(p.opd, (by.get(p.opd) ?? 0) + p.selisih)
+        const top = [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        return {
+          text: T(ctx.lang, 'OPD dengan selisih HPS terhadap pasar terbesar (paket aktif, simulasi):\n', 'Agencies with the largest HPS gap to the market (open packages, simulated):\n') +
+            top.map(([o, v]) => `- ${o}: ${rpShort(v, ctx.lang)}`).join('\n') +
+            T(ctx.lang, '\nSebut nama OPD-nya (misalnya "BPBD") untuk rincian per paket. Hasilnya indikasi untuk ditinjau, bukan tuduhan.', '\nName the agency (for example "BPBD") for a per-package breakdown. Results are indications to review, not accusations.'),
+          followUps: chips(ctx.lang, 'top', 'gap'),
+        }
+      }
+      const ps = w.daftarPaket.filter((p) => p.opd === hit.opd)
+      const open = ps.filter((p) => p.tahap !== 'selesai')
+      const done = ps.filter((p) => p.tahap === 'selesai')
+      const flagged = ps.filter((p) => p.skor != null && p.skor >= 35)
+      const winners = [...new Set(done.map((p) => p.pemenang).filter((x): x is string => !!x))]
+      const lines = open
+        .map((p) => `- ${L(ctx.lang, p.nama)} (${p.kode}): HPS ${pct(p.deviasiPct, ctx.lang, true)} vs ${T(ctx.lang, 'pasar', 'market')}${p.skor != null ? T(ctx.lang, `, skor ${p.skor}`, `, score ${p.skor}`) : T(ctx.lang, ', belum dianalisis', ', not analysed')}`)
+        .join('\n')
+      return {
+        text: T(
+          ctx.lang,
+          `${hit.nama} (${hit.opd}): ${open.length} paket aktif dan ${done.length} paket selesai di data simulasi.\n${lines}${winners.length ? `\nPaket selesai dimenangkan: ${winners.join(', ')}.` : ''}\n${flagged.length ? `${flagged.length} paket bertanda berisiko.` : 'Belum ada paket yang bertanda berisiko.'} Ini indikasi untuk ditinjau Inspektorat, bukan tuduhan korupsi.`,
+          `${hit.nama} (${hit.opd}): ${open.length} open and ${done.length} completed packages in the simulated data.\n${lines}${winners.length ? `\nCompleted packages were won by: ${winners.join(', ')}.` : ''}\n${flagged.length ? `${flagged.length} package(s) flagged as risky.` : 'No package flagged as risky yet.'} These are indications for the Inspectorate to review, not an accusation of corruption.`,
+        ),
+        toolCalls: [{ name: 'daftar_paket', input: { opd: hit.opd }, output: { paket: ps.length } }],
+        followUps: chips(ctx.lang, 'top', 'gap'),
+      }
+    },
+  },
+  {
+    id: 'pemasok',
+    examples: [
+      'Apakah toko saya bisa ikut jual pompa ke pemda?', 'Bagaimana UMKM bisa ikut tender?', 'Cara daftar jadi pemasok pemda', 'Usaha saya bisa ikut pengadaan?',
+      'Can my shop sell to the local government?', 'How can a small business join a tender?', 'How do I become a government supplier?',
+      'Toko kula saged tumut sade?', 'Usahaku iso melu tender?',
+    ],
+    respond: (ctx) => ({
+      text: T(
+        ctx.lang,
+        'Bisa. Di ekosistem ini, kebutuhan pengadaan diteruskan ke Katalog Lokal: toko dan UMKM yang identitas usahanya sudah diverifikasi (lewat produk Kenal Mitra) diundang sebagai pembanding harga dan calon pemasok, lalu TenderPilot memberi tahu toko bila ada tender yang cocok. Rekomendasi Awas Belanja untuk paket pompa darurat juga mengirim kebutuhan itu ke Katalog Lokal. Demo Katalog Lokal dan TenderPilot menyusul di tahap berikutnya (simulasi).',
+        'Yes. In this ecosystem procurement needs go to Katalog Lokal: shops and SMEs whose business identity is verified (through the Kenal Mitra product) are invited as a price benchmark and potential suppliers, and TenderPilot alerts a shop when a matching tender opens. The Awas Belanja recommendation for the emergency pump package also sends that need to Katalog Lokal. The Katalog Lokal and TenderPilot demos follow in a later stage (simulated).',
+      ),
+      followUps: ctx.world?.paket ? chips(ctx.lang, 'local', 'memo') : chips(ctx.lang, 'top', 'gap'),
+    }),
+  },
+  {
+    id: 'peserta',
+    examples: ['Siapa pemilik perusahaan ini?', 'Siapa direktur peserta ini?', 'Berapa kali perusahaan ini menang?', 'Profil peserta tender', 'Who owns this company?', 'Who is the director of this bidder?', 'How many times has this company won?', 'Sapa sing nduwe perusahaan iki?'],
+    respond: (ctx) => {
+      const w = ctx.world
+      if (!w?.paket) return noPkg(ctx)
+      const lines = w.peserta
+        .map((p) => `- ${p.nama}: ${T(ctx.lang, 'direktur', 'director')} ${p.direktur}, ${p.penawaran != null ? rpShort(p.penawaran, ctx.lang) : T(ctx.lang, 'belum menawar', 'no bid')}, ${T(ctx.lang, `menang ${p.menang}×`, `${p.menang} wins`)}`)
+        .join('\n')
+      return { text: T(ctx.lang, `Peserta ${w.paket.kode} (data simulasi):\n${lines}\nSebut nama perusahaannya untuk profil lengkap.`, `Bidders of ${w.paket.kode} (simulated data):\n${lines}\nName a company for its full profile.`), followUps: chips(ctx.lang, 'ring', 'memo') }
+    },
+  },
+)
+
+/** a question that names a bidder of the open package is answered from that bidder's row, whatever the intent */
+function bidderAnswer(ctx: Ctx): SimResponse | null {
+  const w = ctx.world
+  if (!w?.paket) return null
+  const q = ` ${norm(ctx.text)} `
+  const b = w.peserta.find((p) => q.includes(` ${norm(p.nama.replace(/^(CV|PT)\s+/, ''))} `))
+  if (!b) return null
+  const linked = b.terhubungDengan.length
+    ? T(ctx.lang, `Terhubung dengan ${b.terhubungDengan.join(', ')} (bukti di tab Peserta).`, `Linked to ${b.terhubungDengan.join(', ')} (evidence in the Bidders tab).`)
+    : T(ctx.lang, 'Tidak terhubung dengan peserta lain.', 'Not linked to any other bidder.')
+  const bid =
+    b.penawaran != null
+      ? `${rpFull(b.penawaran, ctx.lang)}${b.diAtasHps ? T(ctx.lang, ' (di atas HPS, gugur dalam evaluasi harga)', ' (above the HPS: fails the price evaluation)') : ''}`
+      : T(ctx.lang, 'belum menawar', 'no bid yet')
+  return {
+    text: T(
+      ctx.lang,
+      `**${b.nama}** (data simulasi): direktur ${b.direktur}, alamat ${b.alamat}. Penawaran untuk ${w.paket.kode}: ${bid}. Tercatat menang ${b.menang} kali. ${linked}${b.terhubungDengan.length ? ' Ini indikasi untuk ditinjau, bukan tuduhan.' : ''}`,
+      `**${b.nama}** (simulated data): director ${b.direktur}, address ${b.alamat}. Bid for ${w.paket.kode}: ${bid}. Recorded wins: ${b.menang}. ${linked}${b.terhubungDengan.length ? ' This is an indication to review, not an accusation.' : ''}`,
+    ),
+    toolCalls: [{ name: 'graf_peserta', input: { paket: w.paket.kode, peserta: b.nama }, output: { terhubung: b.terhubungDengan.length, menang: b.menang } }],
+    followUps: chips(ctx.lang, 'ring', 'memo', 'next'),
+  }
+}
+
+
+/* ------------------------------------------------------------------ routed questions (keywords, before the matcher) */
+
+const RX = {
+  credit: /\b(kredit|pinjaman|debitur|modal kerja|layak dibiayai|uji tuntas|penjaminan|credit|loan|lend|borrower|due diligence)/i,
+  integration: /\b(spse|lpse|sirup|e-?katalog|inaproc|integrasi|terhubung ke|tersambung|sumber data|data asli|data nyata|api|integrat\w*|connected to|data source|real data)\b/i,
+  save: /\b(hemat|dihemat|penghematan|selamatkan|diselamatkan|menyelamatkan|save|saved|saving)/i,
+  lowest: /\b(terendah|termurah|paling murah|lowest|cheapest)\b/i,
+  risky: /\b(berisiko|paling rawan|riskiest|most risky|risk)\b/i,
+}
+
+/** a question that names another package (a word only that package's name has, its code, or "paket <OPD>") */
+const NAME_STOP = new Set(['pengadaan', 'belanja', 'paket', 'kota', 'daerah', 'untuk', 'procurement', 'purchase', 'package', 'packages', 'district', 'emergency', 'darurat', 'tahap', 'stage', 'layanan', 'services'])
+function packageIn(w: AbContext, text: string): AbContext['daftarPaket'][number] | null {
+  const q = ` ${norm(text)} `
+  const byCode = w.daftarPaket.find((p) => q.includes(` ${norm(p.kode)} `))
+  if (byCode) return byCode
+  const words = (p: AbContext['daftarPaket'][number]) => new Set(norm(`${p.nama.id} ${p.nama.en}`).split(' ').filter((x) => x.length >= 5 && !NAME_STOP.has(x)))
+  const count = new Map<string, number>()
+  for (const p of w.daftarPaket) for (const x of words(p)) count.set(x, (count.get(x) ?? 0) + 1)
+  const hits = w.daftarPaket.filter((p) => [...words(p)].some((x) => count.get(x) === 1 && q.includes(` ${x}`)))
+  return hits.length === 1 ? hits[0]! : null
+}
+
+function packageAnswer(ctx: Ctx, p: AbContext['daftarPaket'][number]): SimResponse {
+  const lang = ctx.lang
+  const head = T(lang, `**${p.nama.id}** (${p.kode}, ${p.opd}), HPS ${rpFull(p.hps, 'id')}, ${pct(p.deviasiPct, 'id', true)} vs median pasar (simulasi).`, `**${p.nama.en}** (${p.kode}, ${p.opd}), HPS ${rpFull(p.hps, 'en')}, ${pct(p.deviasiPct, 'en', true)} vs the market median (simulated).`)
+  let body: string
+  if (p.dianalisis && p.skor != null) {
+    const lines = p.temuan.map((f) => `- ${L(lang, DETECTOR_BY_ID[f.detektor].name)} (${STRINGS[lang].levels[f.tingkat]}, ${T(lang, 'bobot', 'weight')} ${f.bobot}%): ${noteText(f.catatan, lang)}`).join('\n')
+    body = p.temuan.length
+      ? T(lang, `Skor ${p.skor} berasal dari detektor yang menyala:\n${lines}\nBobot digabung, tidak dijumlah lurus: 100 × (1 − Π(1 − bobot)) = ${p.skor}. Detektor lain lolos.`, `The score ${p.skor} comes from the detectors that fired:\n${lines}\nWeights are combined, not added: 100 × (1 − Π(1 − weight)) = ${p.skor}. The other detectors passed.`)
+      : T(lang, 'Ketujuh detektor lolos: tidak ada pola risiko.', 'All 7 detectors passed: no risk pattern.')
+    if (p.skorAwal != null && p.skorAwal !== p.skor) body += T(lang, `\nSkor awal penyaringan (${p.skorAwal}) sudah diganti hasil 7 detektor ini.`, `\nThe initial screening score (${p.skorAwal}) has been replaced by this 7-detector result.`)
+  } else if (p.skorAwal != null) {
+    body = T(lang, `Baru ada skor awal ${p.skorAwal} dari penyaringan otomatis, tanpa rincian detektor. Buka paketnya dan jalankan analisis untuk penjelasan tiap detektor.`, `It only has an initial screening score of ${p.skorAwal}, without detector detail. Open the package and run the analysis for each detector's explanation.`)
+  } else body = T(lang, 'Paket ini belum dipindai. Pemindaian otomatis akan mencapainya saat jam dunia berjalan, atau buka paketnya dan jalankan analisis.', 'This package has not been screened yet. The automatic screening reaches it while the world clock runs, or open it and run the analysis.')
+  return {
+    text: `${head}\n${body}\n${T(lang, 'Ini indikasi untuk ditinjau, bukan tuduhan.', 'This is an indication to review, not an accusation.')}`,
+    toolCalls: [{ name: 'daftar_paket', input: { paket: p.kode }, output: { skor: p.skor ?? p.skorAwal ?? null } }],
+    followUps: chips(lang, 'top', 'gap'),
+  }
+}
+
+function integrationAnswer(ctx: Ctx): SimResponse {
+  return {
+    text: T(
+      ctx.lang,
+      'Belum. Di demo ini semua data adalah simulasi: paket, peserta, dan harga pasar dibangkitkan untuk daerah contoh, dan tidak tersambung ke sistem pemerintah mana pun. Pada implementasi, data paket dan jadwal ditarik dari SPSE/LPSE dan rencana pengadaan dari SiRUP lewat API resmi atau ekspor berkala sesuai izin LKPP dan pemda; harga pasar dari e-Katalog, survei harga, dan kontrak sebelumnya. Detektornya tetap sama, dan setiap angka tetap bisa ditelusuri ke sumbernya.',
+      'Not yet. Everything in this demo is simulated: packages, bidders and market prices are generated for a sample region and are not connected to any government system. In a deployment, packages and schedules come from SPSE/LPSE and procurement plans from SiRUP through the official API or periodic exports, with LKPP and local-government permission; market prices from e-Katalog, price surveys and past contracts. The detectors stay the same, and every number stays traceable to its source.',
+    ),
+    followUps: chips(ctx.lang, 'how', 'top'),
+  }
+}
+
+/** the savings question: what the proposals would take off the HPS (upper bound, waiting for the PPK) */
+function savingsAnswer(ctx: Ctx): SimResponse {
+  const lang = ctx.lang
+  const w = ctx.world
+  const r = w?.ringkasan
+  if (!w || !r) return { text: T(lang, 'Data paket belum siap.', 'Package data is not ready yet.') }
+  const watched = w.daftarPaket.filter((p) => p.tahap !== 'selesai')
+  const cut = (p: AbContext['daftarPaket'][number]) => Math.max(0, p.hps - (p.usulanTercatat ?? p.hpsUsulan))
+  const potential = watched.reduce((a, p) => a + cut(p), 0)
+  const top = [...watched].filter((p) => cut(p) > 0).sort((a, b) => cut(b) - cut(a)).slice(0, 3)
+  const lines = top.map((p) => `- ${L(lang, p.nama)} (${p.kode}): ${rpShort(cut(p), lang)}${p.usulanTercatat != null ? T(lang, ' · usulan tercatat, menunggu PPK', ' · proposal recorded, awaiting the PPK') : ''}`).join('\n')
+  const parts: string[] = []
+  if (RX.risky.test(ctx.text)) {
+    const open = w.daftarPaket.filter((p) => p.aktif && (p.skor ?? p.skorAwal) != null).sort((a, b) => (b.skor ?? b.skorAwal ?? 0) - (a.skor ?? a.skorAwal ?? 0))[0]
+    if (open) parts.push(T(lang, `Paling berisiko saat ini: **${open.nama.id}** (${open.kode}), skor ${open.skor ?? open.skorAwal}${open.skor == null ? ' (skor awal)' : ''}.`, `Riskiest right now: **${open.nama.en}** (${open.kode}), score ${open.skor ?? open.skorAwal}${open.skor == null ? ' (initial score)' : ''}.`))
+  }
+  parts.push(
+    T(
+      lang,
+      `Di ${r.watched} paket dipantau, HPS di atas median pasar sebesar **${rpShort(r.gap, 'id')}** (simulasi). Bila setiap HPS dikoreksi ke median pasar + margin wajar 10%, plafon anggaran turun sekitar **${rpShort(potential, 'id')}**. Penyumbang terbesar:\n${lines}`,
+      `Across the ${r.watched} packages watched, the HPS is **${rpShort(r.gap, 'en')}** above the market median (simulated). If every HPS were corrected to the market median + a fair 10% margin, the budget ceiling would drop by about **${rpShort(potential, 'en')}**. Largest contributors:\n${lines}`,
+    ),
+  )
+  const p = w.paket
+  const lowest = w.peserta.filter((x) => x.penawaran != null).sort((a, b) => (a.penawaran ?? 0) - (b.penawaran ?? 0))[0]
+  if (p && w.hpsVsPasar && lowest?.penawaran != null)
+    parts.push(T(lang, `Untuk ${p.kode}: penawaran terendah ${rpFull(lowest.penawaran, 'id')} (${lowest.nama}) masih ${rpFull(lowest.penawaran - w.hpsVsPasar.hpsUsulan, 'id')} di atas HPS usulan, jadi penghematannya baru terwujud lewat negosiasi atau tender ulang.`, `For ${p.kode}: the lowest bid ${rpFull(lowest.penawaran, 'en')} (${lowest.nama}) is still ${rpFull(lowest.penawaran - w.hpsVsPasar.hpsUsulan, 'en')} above the proposed HPS, so the saving only materialises through negotiation or a re-tender.`))
+  parts.push(T(lang, 'Ini batas atas dan bersifat simulasi: uang yang benar-benar terselamatkan bergantung pada keputusan PPK dan harga kontrak akhir.', 'This is an upper bound and simulated: the money actually saved depends on the PPK decision and the final contract price.'))
+  return { text: parts.join('\n'), toolCalls: [{ name: 'daftar_paket', input: { urut: 'penghematan' }, output: { paket: watched.length } }], followUps: chips(lang, 'top', 'gap') }
+}
+
+/** the open package's lowest bid against the current and the proposed HPS */
+function lowestAnswer(ctx: Ctx): SimResponse | null {
+  const w = ctx.world
+  const lang = ctx.lang
+  if (!w?.paket || !w.hpsVsPasar) return null
+  const bids = w.peserta.filter((x) => x.penawaran != null).sort((a, b) => (a.penawaran ?? 0) - (b.penawaran ?? 0))
+  const lo = bids[0]
+  if (!lo || lo.penawaran == null) return { text: T(lang, 'Belum ada penawaran masuk untuk paket ini.', 'No bid has come in for this package yet.'), followUps: chips(lang, 'fix', 'next') }
+  const h = w.hpsVsPasar
+  const diffNow = h.hps - lo.penawaran
+  const diffProp = lo.penawaran - h.hpsUsulan
+  return {
+    text: T(
+      lang,
+      `HPS saat ini ${rpFull(h.hps, 'id')}. Penawaran terendah ${rpFull(lo.penawaran, 'id')} (${lo.nama}), ${rpFull(diffNow, 'id')} di bawah HPS. HPS usulan ${rpFull(h.hpsUsulan, 'id')}: penawaran terendah masih ${diffProp > 0 ? `${rpFull(diffProp, 'id')} di atasnya, sehingga perlu negosiasi harga atau tender ulang` : `${rpFull(-diffProp, 'id')} di bawahnya`}. Angka simulasi; keputusan tetap di PPK.`,
+      `The current HPS is ${rpFull(h.hps, 'en')}. The lowest bid is ${rpFull(lo.penawaran, 'en')} (${lo.nama}), ${rpFull(diffNow, 'en')} below the HPS. Against the proposed HPS of ${rpFull(h.hpsUsulan, 'en')}, the lowest bid is still ${diffProp > 0 ? `${rpFull(diffProp, 'en')} above it, so the price needs negotiating or the tender re-run` : `${rpFull(-diffProp, 'en')} below it`}. Simulated figures; the decision stays with the PPK.`,
+    ),
+    toolCalls: [{ name: 'hps_vs_pasar', input: { paket: w.paket.kode }, output: { penawaranTerendah: lo.penawaran } }],
+    followUps: chips(lang, 'fix', 'memo'),
+  }
+}
+
+/** a bank / cooperative asking about a contractor: the procurement signals as one due-diligence input, nothing more */
+function creditAnswer(ctx: Ctx): SimResponse | null {
+  const w = ctx.world
+  const lang = ctx.lang
+  if (!w?.paket) return null
+  const q = ` ${norm(ctx.text)} `
+  const b = w.peserta.find((p) => q.includes(` ${norm(p.nama.replace(/^(CV|PT)\s+/, ''))} `))
+  if (!b) return null
+  const bids = w.peserta.filter((x) => x.penawaran != null && x.nama !== b.nama).map((x) => x.penawaran ?? 0)
+  const uniform = b.penawaran != null && bids.some((x) => Math.abs(x - (b.penawaran ?? 0)) / x < 0.005)
+  const sig = [
+    T(lang, `menang ${b.menang}× (riwayat simulasi)`, `${b.menang} recorded wins (simulated history)`),
+    b.terhubungDengan.length ? T(lang, `terhubung dengan ${b.terhubungDengan.join(', ')}`, `linked to ${b.terhubungDengan.join(', ')}`) : T(lang, 'tidak terhubung dengan peserta lain', 'no link to other bidders'),
+    uniform ? T(lang, 'penawaran berselisih < 0,5% dengan peserta lain', 'bid within 0.5% of another bidder') : T(lang, 'penawaran tidak seragam', 'bid not uniform with others'),
+    b.diAtasHps ? T(lang, 'penawaran di atas HPS (gugur)', 'bid above the HPS (fails)') : T(lang, 'penawaran di bawah HPS', 'bid below the HPS'),
+  ]
+  const clean = !b.terhubungDengan.length && !uniform && !b.diAtasHps
+  return {
+    text: T(
+      lang,
+      `**Profil risiko kontraktor (simulasi): ${b.nama}**\n${sig.map((x) => `- ${x}`).join('\n')}\n${clean ? 'Dari sisi pengadaan tidak ada sinyal risiko pada paket ini.' : 'Ada sinyal pengadaan yang perlu diklarifikasi lebih dulu.'} Sinyal ini bisa menjadi satu masukan uji tuntas; keputusan kredit tetap di bank atau koperasi berdasarkan analisis kreditnya sendiri (arus kas, agunan, riwayat pembayaran).`,
+      `**Contractor risk profile (simulated): ${b.nama}**\n${sig.map((x) => `- ${x}`).join('\n')}\n${clean ? 'On the procurement side there is no risk signal in this package.' : 'There are procurement signals to clarify first.'} These signals can be one due-diligence input; the credit decision stays with the bank or cooperative and its own credit analysis (cash flow, collateral, repayment history).`,
+    ),
+    toolCalls: [{ name: 'graf_peserta', input: { paket: w.paket.kode, peserta: b.nama }, output: { terhubung: b.terhubungDengan.length, menang: b.menang } }],
+    followUps: chips(lang, 'ring', 'next'),
+  }
+}
+
+/** keyword routes that the TF-IDF matcher would miss or answer with the wrong intent */
+function routed(ctx: Ctx): SimResponse | null {
+  const t = ctx.text
+  if (RX.credit.test(t)) {
+    const c = creditAnswer(ctx)
+    if (c) return c
+  }
+  if (RX.integration.test(t)) return integrationAnswer(ctx)
+  if (RX.lowest.test(t)) {
+    const l = lowestAnswer(ctx)
+    if (l) return l
+  }
+  if (RX.save.test(t)) return savingsAnswer(ctx)
+  const w = ctx.world
+  if (w) {
+    const p = packageIn(w, t)
+    if (p && p.id !== w.paket?.id) return packageAnswer(ctx, p)
+  }
+  return null
+}
+
+/** chips that only make sense with a package open */
+const PKG_CHIPS = new Set(['hps', 'ring', 'fix', 'memo', 'local', 'next', 'sum'].flatMap((k) => CHIP[k]!))
+function finish(ctx: Ctx, r: SimResponse): SimResponse {
+  if (ctx.world?.paket || !r.followUps) return r
+  const keep = r.followUps.filter((c) => !PKG_CHIPS.has(c))
+  return { ...r, followUps: keep.length ? keep : chips(ctx.lang, 'top', 'gap', 'due') }
+}
+for (const it of INTENTS) {
+  const respond = it.respond
+  it.respond = (ctx, slots) => finish(ctx, routed(ctx) ?? bidderAnswer(ctx) ?? respond(ctx, slots))
+}
+
 export const SCENARIO: Scenario<AbContext> = {
   product: 'awas-belanja',
   intents: INTENTS,
-  fallback: (ctx) => ({
+  fallback: (ctx) => routed(ctx) ?? bidderAnswer(ctx) ?? ({
     text: T(
       ctx.lang,
       'Maaf, saya belum menangkap maksudnya. Saya membantu pengawasan pengadaan: kewajaran HPS, peserta tender, jadwal, pola risiko, dan memo rekomendasi. Pilih salah satu saran di bawah, atau tulis ulang pertanyaannya.',

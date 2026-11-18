@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { gsap } from 'gsap'
 import { PaperFrame, printPaper } from '../../demo-kit/frames'
-import { Button, EmptyState, Icon, enterPanel } from '../../demo-kit/ui'
+import { Button, EmptyState, Icon, enterPanel, motionMode } from '../../demo-kit/ui'
 import { useAiChat } from '../../demo-kit/ai/chat'
 import { useShell } from '../../demo-kit/shell'
 import { dateWib } from '../../demo-kit/viz/format'
@@ -20,7 +20,7 @@ import type { RoleKey } from './types'
 const all = (s: WorldState) => s
 
 export default function MemoTab({
-  id, roleKey, memoReq, memoHandled, onAnalyse, running,
+  id, roleKey, memoReq, memoHandled, onAnalyse, running, onBusy,
 }: {
   id: string
   roleKey: RoleKey
@@ -29,6 +29,8 @@ export default function MemoTab({
   memoHandled: RefObject<number>
   onAnalyse: () => void
   running: boolean
+  /** drafting state for the header button (a request that has not started yet counts as busy) */
+  onBusy: (b: boolean) => void
 }) {
   const { t, lang } = useT()
   const cards = useShell().size === 'sm'
@@ -55,7 +57,7 @@ export default function MemoTab({
       emit('procurement.recommended', { procurementId: id, hpsCorrected: m2.hpsCorrected, note: { id: memoSummary(ctx, 'id'), en: memoSummary(ctx, 'en') }, inviteLocal: true }, SLUG)
     },
   })
-  const { send, busy, last, prepare } = chat
+  const { send, busy, last, prepare, flush } = chat
 
   const start = useCallback(() => {
     void send(lang === 'id' ? 'Susun memo audit untuk paket ini' : 'Draft the audit memo for this package')
@@ -74,9 +76,18 @@ export default function MemoTab({
     }
   }, [memoReq, memoHandled, analysed, recommended, start])
 
+  // the memo finished while this tab is open: show its recommendations; phones bring the paper itself into view
+  const wasRecommended = useRef(recommended)
   useEffect(() => {
     if (recommended && recsRef.current) enterPanel(recsRef.current, { y: 6 })
-  }, [recommended])
+    if (recommended && !wasRecommended.current && cards && paper.current) paper.current.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+    wasRecommended.current = recommended
+  }, [recommended, cards])
+
+  const pendingReq = memoReq > memoHandled.current && analysed && !recommended
+  const drafting = busy || pendingReq
+  useEffect(() => onBusy(drafting), [drafting, onBusy])
+  useEffect(() => () => onBusy(false), [onBusy])
 
   const model = useMemo(() => memoModel(s, id, roleKey, lang), [s.procurements, s.bidders, s.region, id, roleKey, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -110,12 +121,18 @@ export default function MemoTab({
             <Button variant="primary" icon="spark" onClick={start} onFocus={prepare} onPointerEnter={prepare} busy={busy} disabled={busy || running || !analysed}>
               {busy ? t.memoWriting : t.memoWrite}
             </Button>
+            {/* a long simulated memo can be shown at once instead of waiting for it to stream */}
+            {busy && (
+              <Button variant="secondary" icon="forward" onClick={flush} className="dk-ab-memo-now">
+                {t.memoNow}
+              </Button>
+            )}
           </>
         ) : (
           <>
             <p className="dk-ab-memo-ok" role="status">
               <Icon name="check" size={16} />
-              {t.memoSent}
+              {t.memoSent[roleKey]}
             </p>
             <Button variant="secondary" icon="print" onClick={() => paper.current && printPaper(paper.current)}>
               {t.memoPrint}

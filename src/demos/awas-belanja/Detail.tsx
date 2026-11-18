@@ -4,12 +4,14 @@
  * Laporan. Peserta and Laporan are lazy chunks. On wide shells a rail lists the other packages.
  */
 import { Suspense, lazy, memo, useCallback, useDeferredValue, useEffect, useRef, useState, type RefObject } from 'react'
+import { Link } from 'react-router'
 import { gsap } from 'gsap'
-import { Badge, Button, Icon, LoadingText, Score, StatusChip, Tabs, motionMode, useCountUp, useElementWidth, type TabItem } from '../../demo-kit/ui'
-import { useShell } from '../../demo-kit/shell'
-import { emit, useWorld, world, type Procurement, type ProcurementFinding, type WorldState } from '../../demo-kit/world'
-import { analyzeProcurement, packages } from '../../demo-kit/world/satu-daerah'
-import { AB, BAND_TONE, DETECTORS, DETECTOR_BY_ID, LEVEL_TONE, SLUG, isAnalysed, noteText, opdShort, riskBand, rpFull, rpShort, topFindings, type Detector } from './model'
+import { Badge, Button, Icon, LoadingText, Portal, Score, StatusChip, Tabs, motionMode, useCountUp, useElementWidth, type TabItem } from '../../demo-kit/ui'
+import { demoHref, useShell } from '../../demo-kit/shell'
+import { emit, hhmm, rows, useSession, useWorld, world, type Procurement, type ProcurementFinding, type WorldState } from '../../demo-kit/world'
+import { packages } from '../../demo-kit/world/satu-daerah'
+import { DEMO_READY } from '../registry'
+import { AB, BAND_TONE, DETECTORS, DETECTOR_BY_ID, LEVEL_TONE, PUMP_KEY, SLUG, analyse as analyseOf, isAnalysed, needOf, noteText, opdShort, riskBand, rpFull, rpShort, topFindings, type Detector } from './model'
 import HpsTab from './HpsTab'
 import PatternsTab, { type ScanState } from './PatternsTab'
 import { useT, type Strings, type Lang } from './strings'
@@ -31,6 +33,9 @@ export interface DetailProps {
   /** memo requests already started (owned by the Canvas instance) */
   memoHandled: RefObject<number>
   onRecommend: () => void
+  /** the AI memo is being drafted (MemoTab reports it; the header button shows it) */
+  memoBusy: boolean
+  onMemoBusy: (b: boolean) => void
   arrived: boolean
 }
 
@@ -54,7 +59,7 @@ function flashEl(el: Element | null) {
 const sel = (id: string) => (s: WorldState) => s.procurements.byId[id]
 const opdSel = (s: WorldState) => s.region.opd
 
-export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memoReq, memoHandled, onRecommend, arrived }: DetailProps) {
+export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memoReq, memoHandled, onRecommend, memoBusy, onMemoBusy, arrived }: DetailProps) {
   const { t, lang } = useT()
   const { size, markMission } = useShell()
   const p = useWorld(sel(id))
@@ -105,7 +110,7 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
 
   const analyse = useCallback(() => {
     if (runningRef.current) return
-    const r = analyzeProcurement(world.get(), id)
+    const r = analyseOf(world.get(), id)
     setScan({ pid: id, step: 0, findings: r.findings, riskScore: r.riskScore, token: ++tokens.current })
     onTab('patterns')
     // the button that started the scan may unmount (Pola / Peserta / Laporan empty states): keep focus on the
@@ -118,6 +123,49 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
       }),
     )
   }, [id, onTab])
+
+  // the memo is drafted in the Laporan tab: bring it into view where the button was pressed (phones: below the fold)
+  const recommend = useCallback(() => {
+    if (memoBusy) return
+    onMemoBusy(true)
+    onRecommend()
+    requestAnimationFrame(() => requestAnimationFrame(() => revealPanel(panelRef.current)))
+  }, [memoBusy, onMemoBusy, onRecommend])
+
+  // phones: a bottom bar with the score and the next step while the header's actions are scrolled away
+  const actRef = useRef<HTMLDivElement>(null)
+  const [actGone, setActGone] = useState(false)
+  useEffect(() => {
+    const el = actRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([en]) => setActGone(!!en && !en.isIntersecting && en.boundingClientRect.top < window.innerHeight / 2))
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasP])
+
+  // phones: the bidder graph must never sit under the sticky bar (a tap on an edge would hit the bar)
+  const [graphOn, setGraphOn] = useState(false)
+  useEffect(() => {
+    setGraphOn(false)
+    if (size !== 'sm' || tab !== 'bidders' || typeof IntersectionObserver === 'undefined') return
+    let io: IntersectionObserver | null = null
+    let raf = 0
+    let tries = 0
+    const find = () => {
+      const el = panelRef.current?.querySelector<HTMLElement>('.dk-ab-bid-grid')
+      if (!el) {
+        if (++tries < 120) raf = requestAnimationFrame(find)
+        return
+      }
+      io = new IntersectionObserver(([en]) => setGraphOn(!!en?.isIntersecting))
+      io.observe(el)
+    }
+    raf = requestAnimationFrame(find)
+    return () => {
+      cancelAnimationFrame(raf)
+      io?.disconnect()
+    }
+  }, [size, tab])
 
   // "Lihat bukti": switch tab, reveal the panel, flash the evidence (also when that tab is already open)
   const see = useCallback(
@@ -155,6 +203,7 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
   const wide = size !== 'sm' && rootW >= 1000
   const nonPass = p.findings.filter((f) => f.level !== 'lolos').length
   const sm = size === 'sm'
+  const sticky = sm && analysed && !running && !p.recommendation && actGone && !graphOn
   const items: TabItem<TabId>[] = [
     { id: 'hps', label: t.tabs.hps, ...(sm ? {} : { icon: 'coins' as const }) },
     { id: 'bidders', label: t.tabs.bidders, ...(sm ? {} : { icon: 'users' as const }) },
@@ -163,7 +212,7 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
   ]
 
   return (
-    <div ref={rootRef} className={`dk-ab-detail${wide ? ' has-rail' : ''}`}>
+    <div ref={rootRef} className={`dk-ab-detail${wide ? ' has-rail' : ''}${sticky ? ' has-sticky' : ''}`}>
       {wide && <Rail current={id} onSwitch={onSwitch} t={t} lang={lang} />}
       <div className="dk-ab-main">
         <Head
@@ -178,10 +227,19 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
           arrived={arrived}
           onBack={onBack}
           onAnalyse={analyse}
-          onRecommend={onRecommend}
+          onRecommend={recommend}
+          memoBusy={memoBusy}
+          actRef={actRef}
           onMemoTab={() => onTab('memo')}
         />
-        {analysed && !running && <TopFindings findings={p.findings} t={t} lang={lang} onSee={see} />}
+        {p.key === PUMP_KEY && <Chain p={p} analysed={analysed && !running} t={t} />}
+        {/* the block is inserted (cards hidden) when the scan starts: the click owns that layout change, and the
+            cards fade in as their detectors finish, with no shift at the end of the scan */}
+        {running && scan ? (
+          <TopFindings findings={scan.findings} t={t} lang={lang} onSee={see} step={scan.step} />
+        ) : (
+          analysed && <TopFindings findings={p.findings} t={t} lang={lang} onSee={see} />
+        )}
         <Tabs<TabId>
           className="dk-ab-tabs"
           items={items}
@@ -191,6 +249,17 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
           onChange={(v) => {
             onTab(v)
             if (v === 'memo') preloadMemo()
+            // the tab body starts low on the screen after the analysis: bring the tabs + body up; on phones the
+            // bidder graph itself comes up (its card top just under the top bar), clear of the sticky bar
+            if (v === 'bidders' && sm) {
+              let n = 0
+              const go = () => {
+                const g = panelRef.current?.querySelector<HTMLElement>('.dk-ab-bid-grid')
+                if (!g) return void (++n < 90 && requestAnimationFrame(go))
+                g.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+              }
+              requestAnimationFrame(go)
+            } else requestAnimationFrame(() => revealPanel(panelRef.current?.closest<HTMLElement>('.dk-ab-tabs') ?? null))
           }}
         >
           <div ref={panelRef} className="dk-ab-panel" onPointerEnter={tab === 'hps' ? preloadBidders : undefined}>
@@ -204,11 +273,24 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
             )}
             {shownTab === 'memo' && (
               <Suspense fallback={<LoadingText>{t.loading}</LoadingText>}>
-                <MemoTab id={id} roleKey={roleKey} memoReq={memoReq} memoHandled={memoHandled} onAnalyse={analyse} running={running} />
+                <MemoTab id={id} roleKey={roleKey} memoReq={memoReq} memoHandled={memoHandled} onAnalyse={analyse} running={running} onBusy={onMemoBusy} />
               </Suspense>
             )}
           </div>
         </Tabs>
+        {sticky && p.riskScore != null && (
+          <Portal anchor={rootRef}>
+          <div className="dk-ab-sticky" role="region" aria-label={t.stickyNext}>
+            <span className={`dk-ab-sticky-s is-${riskBand(p.riskScore)}`}>
+              <b className="dk-num">{p.riskScore}</b>
+              <small>{t.riskBand[riskBand(p.riskScore)]}</small>
+            </span>
+            <Button variant="primary" icon="spark" onClick={recommend} busy={memoBusy} aria-disabled={memoBusy || undefined} onPointerEnter={preloadMemo} onFocus={preloadMemo}>
+              {memoBusy ? t.memoWriting : t.recommend[roleKey]}
+            </Button>
+          </div>
+          </Portal>
+        )}
       </div>
     </div>
   )
@@ -217,7 +299,7 @@ export default function Detail({ id, tab, onTab, onBack, onSwitch, roleKey, memo
 /* ------------------------------------------------------------------ header */
 
 function Head({
-  titleRef, p, opdLabel, t, lang, roleKey, running, analysed, arrived, onBack, onAnalyse, onRecommend, onMemoTab,
+  titleRef, p, opdLabel, t, lang, roleKey, running, analysed, arrived, onBack, onAnalyse, onRecommend, memoBusy, actRef, onMemoTab,
 }: {
   titleRef: RefObject<HTMLHeadingElement | null>
   p: Procurement
@@ -231,6 +313,8 @@ function Head({
   onBack: () => void
   onAnalyse: () => void
   onRecommend: () => void
+  memoBusy: boolean
+  actRef: RefObject<HTMLDivElement | null>
   onMemoTab: () => void
 }) {
   const hpsNow = p.recommendation ? p.recommendation.hpsCorrected : p.hps
@@ -253,7 +337,8 @@ function Head({
           <p className="dk-ab-dmeta">
             <span className="dk-num">{p.code}</span>
             <span>{opdLabel}</span>
-            <span>{t.method[p.method] ?? p.method}</span>
+            {/* an emergency package shows its method once, as the amber chip */}
+            {!(p.emergency && p.method === 'darurat') && <span>{t.method[p.method] ?? p.method}</span>}
             <StatusChip label={t.status[p.status] ?? p.status} tone={p.status === 'evaluasi' || p.status === 'pengumuman' ? 'new' : 'neutral'} />
             {p.emergency && <Badge tone="warn">{t.emergency}</Badge>}
             <span>{t.bidders(p.bidderIds.length)}</span>
@@ -285,11 +370,11 @@ function Head({
           </div>
         </div>
       </div>
-      <div className="dk-ab-dhead-act">
+      <div ref={actRef} className="dk-ab-dhead-act">
         {/* one element for the whole scan, never disabled: a disabled or swapped button drops keyboard focus */}
         <Button
-          variant={analysed ? 'ghost' : 'primary'}
-          size={analysed ? 'sm' : 'md'}
+          variant={analysed || running ? 'ghost' : 'primary'}
+          size={analysed || running ? 'sm' : 'md'}
           icon={analysed ? 'refresh' : 'zap'}
           onClick={onAnalyse}
           busy={running}
@@ -299,14 +384,24 @@ function Head({
         >
           {running ? t.analysing : analysed ? t.reanalyse : t.analyse}
         </Button>
-        {analysed &&
+        {/* the next step is in place (disabled) while the scan runs: no layout change when it ends */}
+        {(analysed || running) &&
           (p.recommendation ? (
             <Button variant="secondary" icon="check" onClick={onMemoTab}>
-              {t.recommended}
+              {t.recommended[roleKey]}
             </Button>
           ) : (
-            <Button variant="primary" icon="spark" onClick={onRecommend} onPointerEnter={preloadMemo} onFocus={preloadMemo} disabled={running}>
-              {t.recommend[roleKey]}
+            <Button
+              variant="primary"
+              icon="spark"
+              onClick={onRecommend}
+              onPointerEnter={preloadMemo}
+              onFocus={preloadMemo}
+              disabled={running}
+              busy={memoBusy}
+              aria-disabled={memoBusy || undefined}
+            >
+              {memoBusy ? t.memoWriting : t.recommend[roleKey]}
             </Button>
           ))}
       </div>
@@ -315,25 +410,90 @@ function Head({
   )
 }
 
+/* ------------------------------------------------------------------ cross-product flow (emergency package) */
+
+/** the package Meja Pimpinan's briefing shows: the highest-scored flagged open package (same rule as briefingItems) */
+const briefingPick = (s: WorldState): string | null => {
+  let best: Procurement | undefined
+  for (const q of rows(s.procurements)) if (q.status !== 'selesai' && q.flagged && (!best || (q.riskScore ?? 0) > (best.riskScore ?? 0))) best = q
+  return best?.id ?? null
+}
+const needIdOf = (id: string) => (s: WorldState) => needOf(s, id)?.id ?? null
+
+/** where this package came from and where its result goes; every "done" step links to the product that shows it */
+const Chain = memo(function Chain({ p, analysed, t }: { p: Procurement; analysed: boolean; t: Strings }) {
+  const session = useSession()
+  const inBriefing = useWorld(briefingPick) === p.id && analysed
+  const needId = useWorld(needIdOf(p.id))
+  const keep = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('controls') === 'all' ? '&controls=all' : ''
+  const katalogReady = !!DEMO_READY['katalog-lokal']
+  const steps: { key: string; product: string; text: string; state: 'done' | 'now' | 'wait' | 'queued'; to?: string; soon?: boolean }[] = [
+    { key: 'siaga', product: 'Siaga Wilayah', text: t.chainSiaga(hhmm(p.createdAt)), state: 'done', to: demoHref('siaga-wilayah', session) + keep },
+    { key: 'here', product: 'Awas Belanja', text: t.chainHere, state: analysed ? 'done' : 'now' },
+    { key: 'meja', product: 'Meja Pimpinan', text: t.chainMeja, state: inBriefing ? 'done' : 'wait', ...(inBriefing ? { to: demoHref('meja-pimpinan', session, p.id) + keep } : {}) },
+    {
+      key: 'katalog',
+      product: 'Katalog Lokal',
+      text: needId && !katalogReady ? t.chainQueued : t.chainKatalog,
+      state: needId ? (katalogReady ? 'done' : 'queued') : 'wait',
+      soon: !katalogReady,
+      ...(needId && katalogReady ? { to: demoHref('katalog-lokal', session, needId) + keep } : {}),
+    },
+  ]
+  return (
+    <ol className="dk-ab-chain" aria-label={t.chainLabel}>
+      {steps.map((st, i) => {
+        const body = (
+          <>
+            <span className="dk-ab-chain-dot" aria-hidden="true">
+              {st.state === 'done' ? <Icon name="check" size={12} /> : st.state === 'queued' ? <Icon name="clock" size={12} /> : i + 1}
+            </span>
+            <span className="dk-ab-chain-tx">
+              <b>{st.product}</b>
+              <span>{st.text}</span>
+              {st.soon && <small className="dk-ab-chain-soon">{t.chainSoon}</small>}
+            </span>
+            <span className="dk-sr">{` (${st.state === 'done' ? t.chainDone : st.state === 'now' ? t.chainNow : st.state === 'queued' ? t.chainQueuedSr : t.chainWait})`}</span>
+            {st.to && <Icon name="external" size={12} className="dk-ab-chain-go" />}
+          </>
+        )
+        return (
+          <li key={st.key} className={`dk-ab-chain-i is-${st.state}`} aria-current={st.state === 'now' ? 'step' : undefined}>
+            {st.to ? (
+              <Link className="dk-ab-chain-a" to={st.to}>
+                {body}
+              </Link>
+            ) : (
+              <span className="dk-ab-chain-a">{body}</span>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+})
+
 /* ------------------------------------------------------------------ 3 key findings */
 
-const TopFindings = memo(function TopFindings({ findings, t, lang, onSee }: { findings: ProcurementFinding[]; t: Strings; lang: Lang; onSee: (d: Detector) => void }) {
+const TopFindings = memo(function TopFindings({ findings, t, lang, onSee, step }: { findings: ProcurementFinding[]; t: Strings; lang: Lang; onSee: (d: Detector) => void; step?: number }) {
   const top = topFindings(findings)
+  const wait = step != null
+  const shown = (d: Detector) => !wait || DETECTORS.findIndex((x) => x.id === d) < (step ?? 0)
   if (!top.length)
     return (
-      <p className="dk-ab-allpass">
+      <p className="dk-ab-allpass" style={wait ? { opacity: 0 } : undefined} aria-hidden={wait || undefined}>
         <Icon name="check" size={16} />
         {t.allPass}
       </p>
     )
   return (
-    <section className="dk-ab-top" aria-label={t.topTitle(top.length)}>
-      <h3 className="dk-ab-top-h">{t.topTitle(top.length)}</h3>
+    <section className={wait ? 'dk-ab-top-wait' : 'dk-ab-top'} aria-label={t.topTitle(top.length)} aria-hidden={wait || undefined} {...(wait ? { inert: true } : {})}>
+      <h3 className={`dk-ab-top-h${wait && top.every((f) => shown(f.detector)) ? ' is-in' : ''}`}>{t.topTitle(top.length)}</h3>
       <ol className="dk-ab-top-list">
         {top.map((f) => {
           const d = DETECTOR_BY_ID[f.detector]
           return (
-            <li key={f.detector} className={`dk-ab-top-card is-${f.level}`}>
+            <li key={f.detector} className={`dk-ab-top-card is-${f.level}${wait && shown(f.detector) ? ' is-in' : ''}`}>
               <p className="dk-ab-top-n">
                 <StatusChip label={t.levels[f.level] ?? f.level} tone={LEVEL_TONE[f.level]} />
                 {d.name[lang]}

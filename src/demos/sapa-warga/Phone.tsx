@@ -9,11 +9,13 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
-import { useAiChat, registerScenario } from '../../demo-kit/ai/chat'
+import { useAiChat, registerScenario, type ChatMessage } from '../../demo-kit/ai/chat'
+import type { SimContext, SimResponse } from '../../demo-kit/ai/types'
 import { PhoneFrame } from '../../demo-kit/frames'
 import { Avatar, Icon, initialsOf } from '../../demo-kit/ui'
-import { useShell } from '../../demo-kit/shell'
-import { clock, rows, useClock, useSession, useWorld, world, type Bi, type CitizenMessage, type ComplaintCategory, type WorldState } from '../../demo-kit/world'
+import { useNavigate } from 'react-router'
+import { demoHref, dismissHotspot, useShell } from '../../demo-kit/shell'
+import { clock, getSession, rows, useClock, useSession, useWorld, world, type Bi, type CitizenMessage, type ComplaintCategory, type WorldState } from '../../demo-kit/world'
 import {
   PERSONA_KEYS, PHOTO_META, SLUG, SW, afterPaint, bookQueue, buildContext, categoryFromLabel, classifyReport, createComplaint, kecName, liveContext, looksJawa, opdForCategory, opdShort,
   personaCitizen, placeOf, reportCoord, resolvePlace, slotLabel, summaryOf, urgencyOf, voiceSampleFor, type Created, type PersonaKey, type PhotoId, type SwContext,
@@ -30,6 +32,109 @@ const SlotSheet = lazy(() => loadSheets().then((m) => ({ default: m.SlotSheet })
 /** warm a sheet's chunk on intent (hover / focus / touch) so the first tap opens it at once */
 const warmVoice = () => void loadVoice().catch(() => undefined)
 const warmSheets = () => void loadSheets().catch(() => undefined)
+
+/* ------------------------------------------------------------------ the conversations survive a reload / Back */
+
+/**
+ * The phone threads live in sessionStorage next to the persisted world (same region + seed), so a reload or a trip
+ * to Meja Pimpinan and Back shows the same voice note, ticket card and replies the console still lists. A saved thread
+ * is dropped when its tickets no longer belong to that persona (the world was reset or reseeded).
+ */
+const convKey = (s: WorldState) => `gamada:sw-convs:${s.regionId}:${s.seed}`
+export function loadConvs(): Map<PersonaKey, Conv> {
+  const out = new Map<PersonaKey, Conv>()
+  try {
+    const s = world.get()
+    const raw = sessionStorage.getItem(convKey(s))
+    if (!raw) return out
+    const data = JSON.parse(raw) as Partial<Record<PersonaKey, Conv>>
+    for (const k of PERSONA_KEYS) {
+      const c = data[k]
+      if (!c || !Array.isArray(c.messages) || !Array.isArray(c.timeline)) continue
+      const cid = s.meta.personas[k]
+      const owns = (x: Created | undefined) => !x || s.complaints.byId[x.complaintId]?.citizenId === cid
+      if (!Object.values(c.created ?? {}).every(owns) || !Object.values(c.meta ?? {}).every((m) => owns(m.created))) continue
+      out.set(k, {
+        ...c,
+        meta: c.meta ?? {},
+        created: c.created ?? {},
+        done: c.done ?? [],
+        messages: c.messages.filter((m) => m.status !== 'thinking').map((m) => (m.status === 'streaming' ? { ...m, status: 'done' as const } : m)),
+      })
+    }
+  } catch {
+    /* blocked storage: the threads simply start fresh */
+  }
+  return out
+}
+/**
+ * The finished answer of every simulated reply, by the question it answers (recorded when the scenario computes it,
+ * before the typing animation starts). A thread saved while the AI is still "typing" (the visitor follows a toast to
+ * Meja Pimpinan, or reloads) is saved with the whole answer, its card and its chips, never half a sentence.
+ */
+const finals = new Map<string, SimResponse>()
+function finalOf(messages: ChatMessage[], i: number): ChatMessage {
+  const m = messages[i]!
+  if (m.role !== 'assistant' || (m.status !== 'thinking' && m.status !== 'streaming' && m.status !== 'stopped')) return m
+  let q: ChatMessage | undefined
+  for (let j = i - 1; j >= 0; j--)
+    if (messages[j]!.role === 'user') {
+      q = messages[j]
+      break
+    }
+  const r = q ? finals.get(q.content.trim()) : undefined
+  if (!r) return m
+  const out: ChatMessage = {
+    ...m,
+    status: 'done',
+    mode: m.mode ?? 'sim',
+    content: r.text,
+    structured: r.structured ? [r.structured] : (m.structured ?? []),
+    followUps: r.followUps ?? [],
+    toolCalls: m.toolCalls?.length ? m.toolCalls : (r.toolCalls ?? []).map((c, k) => ({ ...c, id: `${m.id}-t${k}` })),
+  }
+  if (r.translation) out.translation = r.translation
+  return out
+}
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+let lastConvs: Map<PersonaKey, Conv> | null = null
+function writeConvs(): void {
+  const convs = lastConvs
+  if (!convs) return
+  try {
+    const plain: Partial<Record<PersonaKey, Conv>> = {}
+    for (const [k, c] of convs) {
+      // the visitor's own photo is a blob URL of this page only: keep the bubble, not the URL
+      const meta = Object.fromEntries(Object.entries(c.meta).map(([id, m]) => [id, m.photo?.url ? { ...m, photo: { ...m.photo, url: undefined } } : m]))
+      plain[k] = { ...c, meta, messages: c.messages.map((_, i) => finalOf(c.messages, i)) }
+    }
+    sessionStorage.setItem(convKey(world.get()), JSON.stringify(plain))
+  } catch {
+    /* storage full or blocked: the thread lives in memory only */
+  }
+}
+function saveConvs(convs: Map<PersonaKey, Conv>, now = false): void {
+  lastConvs = convs
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = null
+  if (now) {
+    writeConvs()
+    return
+  }
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    writeConvs()
+  }, 400)
+}
+/* a reload or a tab close never loses the last change (the 400 ms debounce would) */
+if (typeof window !== 'undefined')
+  window.addEventListener('pagehide', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+      writeConvs()
+    }
+  })
 
 /** shown while a sheet's chunk is still on its way (cold first tap) */
 function SheetSkeleton({ label }: { label: string }) {
@@ -49,7 +154,16 @@ function SheetSkeleton({ label }: { label: string }) {
 let scenarioLoad: Promise<void> | null = null
 export function loadScenario(): Promise<void> {
   scenarioLoad ??= import('./scenario').then(
-    (m) => registerScenario(m.sapaWargaScenario),
+    (m) => {
+      const sc = m.sapaWargaScenario
+      // record each finished answer by its question (see finals above)
+      const rec = <A extends unknown[]>(fn: (ctx: SimContext<SwContext>, ...a: A) => SimResponse) => (ctx: SimContext<SwContext>, ...a: A): SimResponse => {
+        const r = fn(ctx, ...a)
+        finals.set(ctx.text.trim(), r)
+        return r
+      }
+      registerScenario<SwContext>({ ...sc, intents: sc.intents.map((x) => ({ ...x, respond: rec(x.respond) })), fallback: rec(sc.fallback) })
+    },
     (e: unknown) => {
       scenarioLoad = null
       throw e
@@ -72,6 +186,10 @@ export interface PhoneProps {
   flat: boolean
   /** mobile: switch to the console tab (offered after a report instead of switching on its own) */
   toConsole: (() => void) | null
+  /** the phone is on screen (always on wide layouts; the HP Warga tab on phones) */
+  active: boolean
+  /** phone layout: the newest background complaint, shown in the slim status line (the desk is alive) */
+  ticker?: { key: string; text: string } | null
 }
 
 /* ------------------------------------------------------------------ quick chips per persona */
@@ -103,9 +221,9 @@ const STORY: Record<PersonaKey, 'personaSiti' | 'personaRaka' | 'personaDarmo'> 
 
 const EMPTY_MSGS: CitizenMessage[] = []
 
-function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRef, onQuickScroll, notice }: {
+function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRef, notice, active }: {
+  active: boolean
   voiceRef: { current: VoiceFn | null }
-  onQuickScroll: (scrolled: boolean) => void
   notice: ReactNode
   persona: PersonaKey
   convs: Map<PersonaKey, Conv>
@@ -131,6 +249,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   const composer = useRef<HTMLFormElement>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const [text, setText] = useState('')
+  const navigate = useNavigate()
 
   const chat = useAiChat(SLUG, {
     mode: session.aiMode,
@@ -143,13 +262,22 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       return session.aiMode === 'live' ? liveContext(c) : c
     },
   })
-  const { send: chatSend, prepare: chatPrepare } = chat
+  const { send: chatSend, prepare: chatPrepare, flush: chatFlush } = chat
+  const busyRef = useRef(false)
+  busyRef.current = chat.busy
 
   const ask = useCallback(
     async (q: string, meta?: MsgMeta, justCreated?: SwContext['justCreated']) => {
       const msg = q.trim()
       if (!msg) return
+      dismissHotspot('sapa-warga:voice')
       if (meta) pending.current.push({ text: msg, meta })
+      // a new message while the AI is still typing: finish that answer at once (text, card, chips) instead of
+      // cutting it off mid-sentence
+      if (busyRef.current) {
+        chatFlush()
+        await new Promise((r) => setTimeout(r, 40))
+      }
       try {
         await loadScenario()
       } catch {
@@ -158,7 +286,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       just.current = justCreated ?? null
       void chatSend(msg)
     },
-    [chatSend],
+    [chatSend, chatFlush],
   )
   const prepare = useCallback(() => {
     chatPrepare()
@@ -187,6 +315,10 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   }, [chat.messages])
 
   /* world messages (ticket updates, queue tickets, warnings, officer replies) → timeline */
+  useEffect(() => {
+    // something arrived on the phone: the "Mulai dari sini" ring has done its job (it would sit under the new card)
+    if (worldMsgs.length) dismissHotspot('sapa-warga:voice')
+  }, [worldMsgs.length])
   useEffect(() => {
     setConv((prev) => {
       const have = new Set(prev.timeline.flatMap((e) => (e.k === 'w' ? [e.id] : [])))
@@ -250,7 +382,18 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   /* keep the conversation when switching persona */
   useEffect(() => {
     convs.set(persona, { ...conv, messages: chat.messages, done: [...done.current] })
+    if (chat.messages.length) saveConvs(convs)
   }, [convs, persona, conv, chat.messages])
+
+  /* back on the phone tab (mobile): show the newest message (ticket updates, the rating card) */
+  const wasActive = useRef(active)
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      const sc = scroll.current
+      if (sc) requestAnimationFrame(() => (sc.scrollTop = sc.scrollHeight))
+    }
+    wasActive.current = active
+  }, [active])
 
   /* ------------------------------------------------------------ actions */
 
@@ -275,7 +418,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       const cat = classifyReport(res.text)
       const words = res.text.split(/\s+/).length
       const regional = pack?.languages.regional[0]
-      const langLabel = jv ? (regional === 'jv' ? 'Basa Jawa' : lang === 'id' ? 'Bahasa daerah' : 'Regional language') : 'Bahasa Indonesia'
+      const langLabel = jv ? (regional === 'jv' ? (lang === 'id' ? 'Basa Jawa' : 'Javanese') : lang === 'id' ? 'Bahasa daerah' : 'Regional language') : lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian'
       const meta: MsgMeta = { voice: { lang: jv ? res.lang : 'id-ID', translation, secs: Math.max(3, Math.round(words / 2.3)), label: jv ? fill(t.voiceLang, { from: langLabel }) : langLabel } }
       let j: SwContext['justCreated'] = null
       if (cat) {
@@ -351,11 +494,19 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   }, [pack, citizen, lang, t])
 
   const tips = useMemo(() => {
-    const icons: Record<PersonaKey, ('mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search')[]> = { siti: ['mic', 'camera', 'bell'], raka: ['checkCircle', 'calendar', 'mic'], darmo: ['mic', 'calendar', 'search'] }
+    const icons: Record<PersonaKey, ('mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search' | 'share')[]> = { siti: ['mic', 'camera', 'share', 'bell'], raka: ['checkCircle', 'calendar', 'mic'], darmo: ['mic', 'calendar', 'search'] }
     const txt = persona === 'siti' ? t.tipsSiti : persona === 'raka' ? t.tipsRaka : t.tipsDarmo
-    return txt.split('|').map((text, i) => ({ icon: icons[persona][i] ?? 'mic', text }))
+    // Ibu Siti's last tip (the BPBD warning) is a way to make it happen: send one from Siaga Wilayah, then come back
+    const goSiaga = () => {
+      const href = `${demoHref('siaga-wilayah', getSession())}&role=bpbd`
+      const dev = new URLSearchParams(window.location.search).get('controls') === 'all'
+      navigate(dev ? `${href}&controls=all` : href)
+    }
+    return txt.split('|').map((text, i, all) => ({ icon: icons[persona][i] ?? 'mic', text, ...(persona === 'siti' && i === all.length - 1 ? { go: goSiaga } : {}) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persona, t])
   const quick = QUICK[persona]
+  const quickChips = useMemo(() => QUICK[persona].flatMap((q) => [q.label[lang], ...(q.text ? [typeof q.text === 'string' ? q.text : q.text[lang]] : [])]), [persona, lang])
   const onQuick = (q: Quick) => {
     if (q.act === 'voice') openSheet({ k: 'voice', quick: true })
     else if (q.act === 'photo') {
@@ -369,10 +520,10 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   return (
     <>
       <div ref={scroll} className="dk-sw-scroll">
-        <Thread conv={{ ...conv, messages: chat.messages }} worldMsgs={worldById} greeting={greeting} tips={tips} actions={actions} scrollRef={scroll} />
+        <Thread conv={{ ...conv, messages: chat.messages }} worldMsgs={worldById} greeting={greeting} tips={tips} actions={actions} scrollRef={scroll} quickChips={quickChips} />
       </div>
       {notice}
-      <div className="dk-sw-quick" role="group" aria-label={t.quick} onScroll={(e) => onQuickScroll(e.currentTarget.scrollLeft > 4)}>
+      <div className="dk-sw-quick" role="group" aria-label={t.quick}>
         {quick.map((q, i) => (
           <button
             key={i}
@@ -453,7 +604,7 @@ type VoiceFn = (r: { text: string; source: 'mic' | 'sample'; lang: string }) => 
 
 /* ------------------------------------------------------------------ the phone */
 
-export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }: PhoneProps) {
+export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, active, ticker }: PhoneProps) {
   const { lang } = useI18n()
   const t = useT()
   const shell = useShell()
@@ -464,14 +615,35 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }
   const [staged, setStaged] = useState<Staged>({})
   const openSheet = useCallback((s: Sheet) => setSheet(s), [])
   const voiceRef = useRef<VoiceFn | null>(null)
-  const [quickScrolled, setQuickScrolled] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  /* the voice sheet is the first thing most visitors tap: fetch its chunk (≈ 7 KB) once the page is idle, so the first
+     tap opens it at once instead of a "Memuat…" sheet (a touch gives no hover to warm it on intent) */
+  useEffect(() => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(warmVoice, { timeout: 4000 })
+      return () => w.cancelIdleCallback?.(id)
+    }
+    const id = window.setTimeout(warmVoice, 2500)
+    return () => window.clearTimeout(id)
+  }, [])
+  const [notice, setNotice] = useState<{ code: string; ticketId: string } | null>(null)
+  /* the "in the console" banner is a moment, not a fixture: it goes once the ticket moves on or after 12 s */
+  const noticeStatus = useWorld((s) => (notice ? s.tickets.byId[notice.ticketId]?.status ?? null : null))
+  useEffect(() => {
+    if (!notice) return
+    if (noticeStatus && noticeStatus !== 'baru') {
+      setNotice(null)
+      return
+    }
+    const id = window.setTimeout(() => setNotice(null), 12000)
+    return () => window.clearTimeout(id)
+  }, [notice, noticeStatus])
   const pick = (k: PersonaKey) => {
     if (k === persona) return
+    dismissHotspot('sapa-warga:voice')
     setSheet(null)
     setStaged({})
     setNotice(null)
-    setQuickScrolled(false)
     setPersona(k)
   }
   /* persona radiogroup: one tab stop, arrows move the selection (ARIA radio pattern) */
@@ -491,18 +663,10 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }
   const created = useCallback(
     (c: Created, from: Element | null) => {
       onCreated(c, from)
-      if (flat) setNotice(c.code)
+      if (flat) setNotice({ code: c.code, ticketId: c.ticketId })
     },
     [onCreated, flat],
   )
-  /* the "Mulai dari sini" hotspot rides on Siti's voice chip: hide it while a sheet covers the chips, while the chip
-     row is scrolled (the chip is clipped) or on another persona (kit Hotspot has no visibility test of its own) */
-  const hsOff = sheet !== null || quickScrolled || persona !== 'siti'
-  useEffect(() => {
-    const html = document.documentElement
-    html.toggleAttribute('data-sw-hs-off', hsOff)
-    return () => html.removeAttribute('data-sw-hs-off')
-  }, [hsOff])
   const cur = citizens[PERSONA_KEYS.indexOf(persona)]
   const body = (
     <div className="dk-sw-phone">
@@ -550,12 +714,12 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }
         staged={staged}
         setStaged={setStaged}
         voiceRef={voiceRef}
-        onQuickScroll={setQuickScrolled}
+        active={active}
         notice={
           notice && toConsole ? (
             <div className="dk-sw-notice" role="status">
               <Icon name="checkCircle" size={16} />
-              <span>{fill(t.inConsole, { code: notice })}</span>
+              <span>{fill(t.inConsole, { code: notice.code })}</span>
               <button
                 type="button"
                 className="dk-sw-cbtn"
@@ -593,7 +757,14 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole }
       <section className="dk-sw-flat" aria-label={t.phoneFrame}>
         <div className="dk-sw-flat-status" aria-hidden="true">
           <span className="dk-num">{time}</span>
-          <span>{lang === 'id' ? 'HP Warga' : 'Citizen phone'}</span>
+          {ticker ? (
+            <span className="dk-sw-ticker" key={ticker.key}>
+              <i />
+              {ticker.text}
+            </span>
+          ) : (
+            <span>{lang === 'id' ? 'HP Warga' : 'Citizen phone'}</span>
+          )}
         </div>
         {body}
       </section>

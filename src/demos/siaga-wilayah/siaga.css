@@ -240,9 +240,6 @@
 .dk-sg-scrub {
   min-width: 0;
 }
-/* the first-action hotspot sits on the CTA's top-right corner; its label hangs ABOVE the button here (the kit puts it
-   below, where it would cover the button's own text). Scoped to pages that show this product. */
-/* hotspot label placement: kit Hotspot `placement` (index.tsx hotspot export) */
 .dk-sg-scrub .dk-mts {
   padding: 0;
   border: 0;
@@ -661,8 +658,9 @@
 }
 .dk-sg.is-sm .dk-sg-map {
   flex: none;
-  height: 60vh;
-  min-height: 360px;
+  /* the region is fitted edge to edge by width on a portrait screen: a taller box only adds empty map above and
+     below it (64 px top for Lapisan / Home, 52 px bottom for Sumber / legend) */
+  height: clamp(320px, 46vh, 420px);
 }
 .dk-sg.is-sm .dk-sg-timeline {
   grid-template-columns: minmax(0, 1fr);
@@ -742,20 +740,12 @@
 }
 
 /* ------------------------------------------------------------------ review fixes (round 2) */
-/* the kit's "basemap unavailable" notice sits under the Lapisan chip, not behind it */
-.dk-sg .dk-map-notice {
-  top: 56px;
-}
 /* first-action hotspot: a wrapper that folds away (no box ⇒ the ring hides) once the forecast ran by any means */
 .dk-sg-hot {
   display: contents;
 }
 .dk-sg-hot[data-on] {
   display: inline-flex;
-}
-/* keep the ring's dot off the CTA's last word */
-.dk-sg-hot[data-on] > .dk-btn {
-  padding-right: 26px;
 }
 .dk-sg.is-sm .dk-sg-hot[data-on] {
   flex: 1 1 100%;
@@ -823,15 +813,231 @@
   overflow-wrap: anywhere;
   hyphens: auto;
 }
-/* shell toasts: bottom-LEFT would sit on this product's left panel (its buttons) for seconds; on wide layouts move
-   them bottom-right (over the HUD / legend, no controls). Scoped to pages that show this product. Phones: kit default. */
-body:has(.dk-sg:not(.is-sm)) .dk-toasts--bottom-left {
-  left: auto;
-  right: 16px;
-}
 @media (max-width: 767px), (pointer: coarse) {
   .dk-sg-picked .dk-sg-link,
   .dk-sg-insight-chip {
     min-height: var(--dk-target);
   }
+}
+
+/* ------------------------------------------------------------------ polish round (kit leftovers + first 30 s) */
+/* Situation: river + dam gauges (pick one to see its 24 h curve; ?focus=<gauge id> arrives here) */
+.dk-sg-gpick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.dk-sg-gpick button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) var(--dk-font);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+}
+.dk-sg-gpick button:hover {
+  background: var(--dk-s3);
+}
+.dk-sg-gpick button[aria-pressed='true'] {
+  border-color: var(--dk-line-act);
+  background: var(--dk-s1);
+  color: var(--dk-text);
+}
+.dk-sg-gpick button:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+.dk-sg-gname {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.dk-sg-gst {
+  font: 700 11px/14px var(--dk-font);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--dk-pos);
+}
+.dk-sg-gst.is-siaga {
+  color: var(--dk-warn-ink);
+}
+.dk-sg-gst.is-awas {
+  color: var(--dk-danger-ink);
+}
+.dk-sg-gauge .dk-sg-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--dk-accent);
+  font: 600 var(--dk-t12) var(--dk-font);
+  text-decoration: none;
+}
+.dk-sg-gauge .dk-sg-link:hover {
+  text-decoration: underline;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-sg-gauge .dk-sg-link {
+    min-height: var(--dk-target);
+  }
+}
+/* one line under the title: what this product does, readable in the first seconds */
+.dk-sg-tagline {
+  margin: 0 16px 10px;
+  color: var(--dk-muted);
+  font: 400 var(--dk-t13) / 1.45 var(--dk-font);
+}
+.dk-sg.is-sm .dk-sg-tagline {
+  margin: 0 12px 10px;
+}
+/* the map's left edge meets the panel: rain cells drifting in from the west fade in instead of being cut off at the
+   panel border (a static mask on the map canvas only; the HTML controls and the Sumber chip stay crisp) */
+.dk-sg:not(.is-sm) .dk-sg-mapview .maplibregl-canvas {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 48px);
+  mask-image: linear-gradient(90deg, transparent, #000 48px);
+}
+/* phones: the "start here" label hangs under the CTA; give it its own row so it never covers the scrubber head */
+.dk-sg.is-sm .dk-sg-cta:has(.dk-sg-hot[data-on]) {
+  margin-bottom: 30px;
+}
+
+/* ------------------------------------------------------------------ wow-audit round 1 */
+/* the warning dialog lists its chain effects itself: the shell toasts wait while it (or the phone Geo-AI sheet) is
+   open, so they never cover its title, delivery ticks or close button (class set by index.tsx) */
+.dk-sg-hold-toasts .dk-toasts {
+  visibility: hidden;
+}
+/* river gauge outlook + forecast line (dashed) and the "now" dot on the sparkline */
+.dk-sg-outlook {
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) / 1.45 var(--dk-font);
+}
+.dk-sg-gauge .dk-num .dk-sg-gst {
+  margin-left: 4px;
+}
+.dk-sg-spark path.is-fc {
+  stroke: var(--dk-warn);
+  stroke-dasharray: 4 3;
+}
+.dk-sg-spark .is-now {
+  fill: var(--dk-accent-2);
+  stroke: var(--dk-s1);
+  stroke-width: 1.5;
+}
+/* audit trail on the active-warning card; duplicate-report tag */
+.dk-sg-basis {
+  display: block;
+  margin-top: 2px;
+  color: var(--dk-muted);
+}
+.dk-sg-dup {
+  color: var(--dk-warn-ink);
+  font-weight: 600;
+}
+.dk-sg-aiadd {
+  color: var(--dk-accent);
+}
+/* phones, Kepala Daerah: the summary right under the map */
+.dk-sg-execwrap {
+  padding: 0 12px 12px;
+}
+.dk-sg-exec.is-compact .dk-sg-kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dk-sg-exec.is-compact .dk-sg-kpis dd {
+  font-size: 18px;
+}
+/* tapped district card: a text-link button */
+.dk-sg-linkbtn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dk-accent);
+  font: 600 var(--dk-t13) var(--dk-font);
+  cursor: pointer;
+}
+.dk-sg-linkbtn:hover {
+  text-decoration: underline;
+}
+.dk-sg-linkbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+  border-radius: 6px;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-sg-linkbtn {
+    min-height: var(--dk-target);
+  }
+}
+/* phones: all four tabs fit the strip (no tab cut off at the right edge) */
+.dk-sg.is-sm .dk-sg-tabs > .dk-tablist {
+  mask-image: none;
+}
+.dk-sg.is-sm .dk-sg-tabs > .dk-tablist [role='tab'] {
+  padding-inline: 4px;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------------ wow-audit round 2 */
+/* phones: the one-line value statement above the map (first screen) */
+.dk-sg-valueline {
+  margin: 0;
+  padding: 8px 12px 6px;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) / 1.4 var(--dk-font);
+}
+/* the river passed AWAS with no warning out: a red prompt above the guided CTA */
+.dk-sg-awasbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-danger);
+  border-radius: 10px;
+  color: var(--dk-danger-ink);
+  font: 600 var(--dk-t13, 13px) / 1.4 var(--dk-font);
+}
+.dk-sg-awasbar > svg {
+  flex: none;
+  margin-top: 2px;
+}
+/* shelter capacity vs the zone's need, and the "outside the zone" tag in the Prediksi list */
+.dk-sg-need {
+  margin: 6px 0 2px !important;
+}
+.dk-sg-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--dk-line, currentColor);
+  border-radius: 999px;
+  color: var(--dk-muted);
+  font: 500 11px / 1.5 var(--dk-font);
+  white-space: nowrap;
+}
+/* tablets / narrow panels: four tabs fit (no clipped "Lingkun…"): a smaller label that may wrap to two lines */
+.dk-sg:not(.is-sm) .dk-sg-tabs .dk-tab {
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: normal;
+  text-align: center;
 }

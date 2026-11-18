@@ -16,10 +16,11 @@ import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { clock, emit, rows, settled, useSession, world, type AuditEntry } from '../../demo-kit/world'
 import { alertRecipients, floodScenarioAlert, zoneCitizens } from '../../demo-kit/world/satu-daerah'
-import { clockText, draftLevel, floodAlerts, productHref, withSimMark } from './data'
+import { arrivalAt, chainText, clockText, draftLevel, floodAlerts, gaugeNow, levelState, productHref, recommendedKec, riverGauge, suggestedLevel, withSimMark } from './data'
 import { draftAlert, geoContext } from './scenario'
 import { fill, nf, type Bi } from './strings'
-import { ui, useUi } from './ui'
+import { focusFloodArea } from './Timeline'
+import { ensureDesa, impactAt, revealMap, ui, useUi } from './ui'
 import './more.css'
 
 const T = {
@@ -72,6 +73,17 @@ const T = {
   chars: { id: '{n}/600 karakter', en: '{n}/600 characters' },
   sim: { id: 'Simulasi', en: 'Simulation' },
   live: { id: 'Live', en: 'Live' },
+  basisLine: {
+    id: 'Dasar level: muka air sekarang {v} m ({st}), proyeksi puncak {p} m ±{t} ({pst}); model +6 j: {d} desa tergenang → disarankan level {l} (simulasi).',
+    en: 'Level basis: river now {v} m ({st}), projected crest {p} m at ±{t} ({pst}); +6 h model: {d} villages flooded → level {l} suggested (simulated).',
+  },
+  stNormal: { id: 'normal', en: 'normal' },
+  stSiaga: { id: 'SIAGA', en: 'WATCH' },
+  stAwas: { id: 'AWAS', en: 'WARNING' },
+  aiAdded: { id: 'AI menambahkan dari model: jam tiba air per desa, posko terdekat dengan sisa kapasitas, dan satu kalimat Basa Jawa untuk WA.', en: 'AI added from the model: water arrival time per village, the nearest shelter with places left, and one Javanese line for WA.' },
+  meja: { id: 'Peringatan aktif tampil di peta & ringkasan pimpinan', en: 'The active warning shows on the leader’s map & summary' },
+  modelWait: { id: 'Menghitung model desa +6 j… Level, wilayah dan jam tiba air diisi begitu model siap; tombol Kirim aktif setelahnya.', en: 'Computing the +6 h village model… Level, area and arrival times fill in once it is ready; Send unlocks then.' },
+  waitBtn: { id: 'Menunggu model…', en: 'Waiting for the model…' },
 } satisfies Record<string, Bi>
 
 /** resolves in a fresh task after the next frame has painted */
@@ -90,20 +102,36 @@ export default function Broadcast() {
   const s0 = useMemo(() => world.get(), [])
   const kecName = (id: string) => s0.region.kecamatan.find((k) => k.id === id)?.name ?? id
 
-  // suggestions: the model's most affected kecamatan (+6 h), then the scenario flood kecamatan
-  const suggested = useMemo(() => {
-    const per = new Map<string, number>()
-    for (const d of impact6?.desa ?? []) per.set(d.kecamatanId, (per.get(d.kecamatanId) ?? 0) + d.people)
-    const ranked = [...per.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
-    return [...new Set([...ranked.slice(0, 6), ...s0.region.floodKecamatanIds])].slice(0, 7)
-  }, [impact6, s0])
+  // the model's recommendation (one definition with the Prediksi list, Geo-AI and the insight card): the 6 kecamatan
+  // with the most people in the +6 h zone; the chips add the scenario's river kecamatan
+  const recommended0 = useMemo(() => recommendedKec(impact6), [impact6])
+  const suggested = useMemo(() => [...new Set([...recommended0, ...s0.region.floodKecamatanIds])].slice(0, 7), [recommended0, s0])
+  const recommended = useMemo(() => (recommended0.length ? recommended0 : [s0.region.floodKecamatanIds[0] ?? s0.region.kecamatan[0]!.id]), [recommended0, s0])
+  // opened before the village model was in (a fast double click): compute it now; Send waits for it
+  const modelReady = !!impact6
+  useEffect(() => {
+    if (!modelReady) void ensureDesa()
+  }, [modelReady])
 
+  // the level the river gauge + its 6-hour outlook support (the same curve as the Situation card)
+  const river = useMemo(() => riverGauge(s0), [s0])
+  const gNow = useMemo(() => (river ? gaugeNow(river, clock.get().minutes) : null), [river])
   const draft = useMemo(() => ui.get().draft, [])
-  const [level, setLevel] = useState<Level>(draft?.level ?? 3)
-  const [kec, setKec] = useState<string[]>(() => {
+  const [level, setLevel] = useState<Level>(draft?.level ?? suggestedLevel(gNow, river))
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const touched = useRef(!!draft?.areas.length)
+  const [kec, setKecState] = useState<string[]>(() => {
     const fromDraft = draft?.areas.map((n) => s0.region.kecamatan.find((k) => k.name.toLowerCase() === n.toLowerCase())?.id).filter((x): x is string => !!x)
-    return fromDraft?.length ? fromDraft : [s0.region.floodKecamatanIds[0] ?? suggested[0] ?? s0.region.kecamatan[0]!.id]
+    return fromDraft?.length ? fromDraft : recommended
   })
+  const setKec: typeof setKecState = (v) => {
+    touched.current = true
+    setKecState(v)
+  }
+  // the model rows can land after the dialog opened: follow the recommendation until the visitor picks an area
+  useEffect(() => {
+    if (!touched.current) setKecState(recommended)
+  }, [recommended])
   const [scope, setScope] = useState<'all' | 'hit'>('all')
   const [channels, setChannels] = useState<Channel[]>(() => (draft?.channels.filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c)) ?? ['wa', 'sms']))
   const [edited, setEdited] = useState<string | null>(draft?.message || null)
@@ -157,15 +185,27 @@ export default function Broadcast() {
     setStage('sending')
     // let the click paint ("Mengirim…") before the world processes the alert and its chain (INP)
     await afterPaint()
+    // the arrival time comes from the +6 h model rows of the chosen area, computed once here and stored with the
+    // warning (never re-derived later from whatever the model state is then)
+    if (!ui.get().impact6) await ensureDesa()
+    const i6 = ui.get().impact6 ?? impactAt(6)
+    if (!i6?.desa.length) return setStage('compose')
+    const hd = (i6?.desa ?? []).filter((d) => kec.includes(d.kecamatanId))
+    const onset = hd.length ? Math.min(...hd.map((d) => d.onset)) : null
     const s = world.get()
     const now = clock.get().minutes
+    const gn = river ? gaugeNow(river, now) : null
     const reuse = floodAlerts(s).find((a) => a.level === level && a.kecamatanIds.length === kec.length && kec.every((k) => a.kecamatanIds.includes(k)))
     const evs: string[] = []
     let alertId = reuse?.id
     if (!alertId) {
-      const e = emit('flood.alert', { ...floodScenarioAlert(s, now, { level, kecamatanIds: kec, desaIds: desaIds ?? [] }), expectedAt: now + Math.round((onsetH ?? 3) * 60) }, 'siaga-wilayah')
+      // the arrival clock time of the model run (07.00 anchor): the same time the AI draft, Geo-AI and the map card give
+      const expectedAt = onset !== null ? arrivalAt(onset) : (gn?.awasAt ?? null)
+      const e = emit('flood.alert', { ...floodScenarioAlert(s, now, { level, kecamatanIds: kec, desaIds: desaIds ?? [] }), expectedAt }, 'siaga-wilayah')
       alertId = e.payload.id!
       evs.push(e.id)
+      // audit trail: who issued it and on what basis (shown on the active-warning card)
+      ui.set((u) => ({ basis: { ...u.basis, [alertId!]: { by: session.role, level: gn?.level ?? 0, state: gn?.state ?? 'normal', desa: hd.length, people: hd.reduce((n, d) => n + d.people, 0), awasAt: gn?.awasAt ?? null } } }))
     }
     const msg: Bi = edited
       ? { id: withSimMark(lang === 'id' ? edited : template.id, 'id'), en: withSimMark(lang === 'en' ? edited : template.en, 'en') }
@@ -190,8 +230,27 @@ export default function Broadcast() {
     setStage('done')
     ui.set({ flash: alertId, tab: 'alerts' })
   }
+  // the sent view starts at its top (delivery ticks), whatever was scrolled to compose
+  useEffect(() => {
+    if (stage !== 'done') return
+    const b = bodyRef.current?.closest<HTMLElement>('.dk-ov-body')
+    if (b) b.scrollTop = 0
+  }, [stage])
 
-  const close = () => ui.set({ broadcastOpen: false })
+  const close = () => {
+    const done = stage === 'done'
+    ui.set({ broadcastOpen: false })
+    if (!done) return
+    // the dialog already listed every chain effect: on a phone the same notifications would cover the result, so
+    // they go; then the map with the new warning zone comes into view
+    if (size === 'sm')
+      requestAnimationFrame(() => {
+        document.querySelectorAll<HTMLButtonElement>('.dk-toasts .dk-toast-x').forEach((b) => b.click())
+        revealMap()
+      })
+    // the whole new warning zone in view (the flood stretch the model framed), not one district close up
+    focusFloodArea()
+  }
   const footer =
     stage === 'done' ? (
       <Button variant="primary" onClick={close} data-sw="bc-done">
@@ -202,14 +261,15 @@ export default function Broadcast() {
         <Button variant="ghost" onClick={close}>
           {L('cancel')}
         </Button>
-        <Button variant={level >= 3 ? 'danger' : 'primary'} icon="send" onClick={() => void send()} busy={stage === 'sending'} disabled={!kec.length || !channels.length || !message.trim()} data-sw="bc-send">
-          {stage === 'sending' ? L('sending') : kd ? L('approve') : L('send')}
+        <Button variant={level >= 3 ? 'danger' : 'primary'} icon="send" onClick={() => void send()} busy={stage === 'sending' || !modelReady} disabled={!modelReady || !kec.length || !channels.length || !message.trim()} data-sw="bc-send">
+          {stage === 'sending' ? L('sending') : !modelReady ? L('waitBtn') : kd ? L('approve') : L('send')}
         </Button>
       </>
     )
 
   return (
     <Modal open onClose={close} title={stage === 'done' ? L('sentTitle') : L('title')} description={stage === 'done' ? undefined : L('desc')} size="lg" footer={footer} dismissable={stage !== 'sending'}>
+      <div ref={bodyRef} hidden />
       {stage === 'done' && result ? (
         <Sent L={L} lang={lang} officials={officials} result={result} message={outgoing} session={session} region={s0.region.shortName} sm={size === 'sm'} />
       ) : (
@@ -226,6 +286,23 @@ export default function Broadcast() {
                 }}
                 options={[1, 2, 3, 4].map((n) => ({ value: `${n}` as `${Level}`, label: L(`l${n}` as 'l1') }))}
               />
+              {!modelReady ? (
+                <p className="dk-sg-fine dk-sg-basis" role="status">
+                  {L('modelWait')}
+                </p>
+              ) : gNow && river && (
+                <p className="dk-sg-fine dk-sg-basis">
+                  {L('basisLine', {
+                    v: nf(gNow.level, lang, 2),
+                    st: L(gNow.state === 'awas' ? 'stAwas' : gNow.state === 'siaga' ? 'stSiaga' : 'stNormal'),
+                    p: nf(gNow.peak.level, lang, 2),
+                    t: clockText(gNow.peak.at, lang),
+                    pst: L(levelState(river, gNow.peak.level) === 'awas' ? 'stAwas' : levelState(river, gNow.peak.level) === 'siaga' ? 'stSiaga' : 'stNormal'),
+                    d: nf(impact6?.desa.length ?? 0, lang),
+                    l: suggestedLevel(gNow, river),
+                  })}
+                </p>
+              )}
             </fieldset>
             <fieldset className="dk-sg-fs">
               <legend>{L('area')}</legend>
@@ -312,6 +389,7 @@ export default function Broadcast() {
                 {aiState === 'done' && ` · ${L('aiDone', { m: aiMsg?.mode === 'live' ? L('live') : L('sim') })}`}
                 {aiMsg?.fellBack && ` · ${L('aiFell')}`}
               </p>
+              {aiState === 'done' && edited && aiMsg?.mode !== 'live' && <p className="dk-sg-fine dk-sg-aiadd">{L('aiAdded')}</p>}
             </div>
           </div>
           <div className="dk-sg-bc-side">
@@ -419,14 +497,24 @@ function Sent({
             <li key={a.id}>
               <Icon name={PRODUCT_BY_SLUG[a.source as ProductSlug]?.icon ?? 'dot'} size={14} />
               <span>
-                <strong>{PRODUCT_BY_SLUG[a.source as ProductSlug]?.name ?? a.source}</strong> · {a.summary[lang]}
+                <strong>{PRODUCT_BY_SLUG[a.source as ProductSlug]?.name ?? a.source}</strong> · {chainText(a.summary[lang], lang)}
               </span>
               <AppLink to={productHref(a.source as ProductSlug, session, focusOf(a))} className="dk-sg-link">
-
                 {L('open')} →
               </AppLink>
             </li>
           ))}
+          {!products.some((p) => p.source === 'meja-pimpinan') && (
+            <li>
+              <Icon name={PRODUCT_BY_SLUG['meja-pimpinan']?.icon ?? 'dot'} size={14} />
+              <span>
+                <strong>{PRODUCT_BY_SLUG['meja-pimpinan']?.name ?? 'Meja Pimpinan'}</strong> · {L('meja')}
+              </span>
+              <AppLink to={productHref('meja-pimpinan', session)} className="dk-sg-link">
+                {L('open')} →
+              </AppLink>
+            </li>
+          )}
         </ul>
       </div>
       <div className="dk-sg-bc-side">

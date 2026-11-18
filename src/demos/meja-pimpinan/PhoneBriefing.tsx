@@ -10,7 +10,10 @@ import { PhoneFrame } from '../../demo-kit/frames'
 import { Icon, Modal, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
 import { cancel, speak } from '../../demo-kit/media'
 import { hhmm, rows, useClock, useWorld, world, type WorldState } from '../../demo-kit/world'
-import { mpBriefingItems } from './data'
+import { dayPart, mpBriefingItems } from './data'
+
+/** the greeting follows the world time of the briefing (never "Selamat pagi" at 20.00) */
+const GREET = { pagi: { id: 'pagi', en: 'morning' }, siang: { id: 'siang', en: 'afternoon' }, sore: { id: 'sore', en: 'afternoon' }, malam: { id: 'malam', en: 'evening' } } as const
 import type { Bi } from './strings'
 
 const H = {
@@ -19,7 +22,7 @@ const H = {
   frame: { id: 'Simulasi layar HP pimpinan', en: "Simulated leader's phone screen" },
   name: { id: 'Asisten Pimpinan', en: 'Leadership Assistant' },
   sub: { id: 'akun resmi · briefing otomatis · data simulasi', en: 'official account · automatic briefing · simulated data' },
-  hello: { id: 'Selamat pagi, Bapak/Ibu {l}. Briefing pukul {t}: {n} butir dari {p} produk.', en: 'Good morning, {l}. The {t} briefing: {n} items from {p} products.' },
+  hello: { id: 'Selamat {g}, Bapak/Ibu {l}. Briefing pukul {t}: {n} butir dari {p} produk.', en: 'Good {g}, {l}. The {t} briefing: {n} items from {p} products.' },
   tap: { id: 'Ketuk butir untuk rinciannya.', en: 'Tap an item for its detail.' },
   none: { id: 'Briefing hari ini belum disusun.', en: "Today's briefing has not been composed yet." },
   compose: { id: 'Susun sekarang', en: 'Compose now' },
@@ -59,7 +62,7 @@ export default function PhoneBriefing({ open, onClose, onCompose, onInstruct, le
       setTalking(false)
       return
     }
-    const text = [H.hello[lang].replace('{l}', leader[lang]).replace('{t}', at).replace('{n}', String(b.items.length)).replace('{p}', String(sources)), ...b.items.map((it, i) => `${i + 1}. ${it.title[lang]}.`)].join(' ')
+    const text = [H.hello[lang].replace('{g}', GREET[dayPart(b.at)][lang]).replace('{l}', leader[lang]).replace('{t}', at).replace('{n}', String(b.items.length)).replace('{p}', String(sources)), ...b.items.map((it, i) => `${i + 1}. ${it.title[lang]}.`)].join(' ')
     setTalking(true)
     void speak(text, lang === 'id' ? 'id-ID' : 'en-GB').done.then(() => setTalking(false))
   }
@@ -84,7 +87,7 @@ export default function PhoneBriefing({ open, onClose, onCompose, onInstruct, le
               {b ? (
                 <>
                   <p className="dk-mp-hp-msg">
-                    {H.hello[lang].replace('{l}', leader[lang]).replace('{t}', at).replace('{n}', String(b.items.length)).replace('{p}', String(sources))}
+                    {H.hello[lang].replace('{g}', GREET[dayPart(b.at)][lang]).replace('{l}', leader[lang]).replace('{t}', at).replace('{n}', String(b.items.length)).replace('{p}', String(sources))}
                     <small>{H.tap[lang]}</small>
                   </p>
                   <ol ref={listRef} className="dk-mp-hp-items">

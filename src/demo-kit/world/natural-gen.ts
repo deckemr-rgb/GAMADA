@@ -4,7 +4,7 @@
  */
 import type { ProductSlug } from '../../content/products'
 import type { AnyFollowUp, ComplaintCategory, EventType, FollowUp, Product, WorldState } from './types'
-import { COMPLAINT_TEXT, COMPLAINT_WEIGHTS, MEDIA_OUTLETS, MENTION_TEXT, SOCIAL_HANDLES } from './texts'
+import { COMPLAINT_TEXT, COMPLAINT_WEIGHTS, MEDIA_OUTLETS, MENTION_TEXT, SOCIAL_HANDLES, fillComplaint, fromComplaintTemplate, mentionText } from './texts'
 import { HOAX_OFFSETS, hoaxPost } from './scenario-texts'
 import { hashString, makeRng, type Rng } from './prng'
 import { NATURAL } from './natural'
@@ -51,17 +51,28 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
   const floodZone = new Set(activeFlood.flatMap((a) => a.kecamatanIds))
 
   // complaints
-  if (r.chance(NATURAL.complaint * rhythm) && s.citizens.ids.length) {
+  // the working morning (07–11) is the busiest for reports; one report always lands at 07:02 so something arrives
+  // in the first seconds of a running demo
+  const morning = h >= 7 && h < 11 ? 2 : 1
+  if ((r.chance(NATURAL.complaint * rhythm * morning) || minute === WORLD.clockStart + 2) && s.citizens.ids.length) {
     const c = s.citizens.byId[r.pick(s.citizens.ids)]!
     let category: ComplaintCategory = r.weighted(COMPLAINT_WEIGHTS)
     if (floodZone.has(c.kecamatanId) && r.chance(1 - 1 / NATURAL.floodBoost)) category = 'banjir'
     const desa = s.region.kecamatan.find((k) => k.id === c.kecamatanId)?.desa.find((d) => d.id === c.desaId)?.name ?? ''
-    const t = r.pick(COMPLAINT_TEXT[category])
-    const text = t.id.replace('{d}', desa)
+    // a variant not used in this category during the last 30 days; when every one was used, one of the least
+    // recently used (never the template of a report an hour ago, e.g. two "Gerobak sampah RT …" in a row)
+    const pool = COMPLAINT_TEXT[category]
+    const recent = rows(s.complaints).filter((x) => x.category === category && x.at > minute - 30 * DAY_MIN && x.at <= minute)
+    const lastUse = pool.map((t) => recent.reduce((m, x) => (x.at > m && fromComplaintTemplate(t, x.text) ? x.at : m), -Infinity))
+    const fresh = pool.filter((_, i) => lastUse[i] === -Infinity)
+    const oldest = pool.map((t, i) => ({ t, at: lastUse[i]! })).sort((a, b) => a.at - b.at).slice(0, Math.max(1, Math.ceil(pool.length / 3))).map((x) => x.t)
+    const t = r.pick(fresh.length ? fresh : oldest)
+    const filled = fillComplaint(t, desa, makeRng(hashString(`${s.seed}|natural-detail|${minute}`)))
+    const u = category === 'banjir' ? 'tinggi' : r.weighted([['rendah', 35], ['sedang', 50], ['tinggi', 15]] as const)
     out.push(fu('complaint.created', {
-      citizenId: c.id, category, channel: r.weighted([['wa', 55], ['web', 20], ['telepon', 10], ['voice', 15]] as const), text, lang: 'id',
-      summary: { id: text, en: t.en.replace('{d}', desa) }, kecamatanId: c.kecamatanId, desaId: c.desaId, coord: offsetKm(c.coord, r.float(-0.3, 0.3), r.float(-0.3, 0.3)),
-      urgency: category === 'banjir' ? 'tinggi' : r.weighted([['rendah', 35], ['sedang', 50], ['tinggi', 15]] as const), photo: r.chance(0.4),
+      citizenId: c.id, category, channel: r.weighted([['wa', 55], ['web', 20], ['telepon', 10], ['voice', 15]] as const), text: filled.id, lang: 'id',
+      summary: filled, kecamatanId: c.kecamatanId, desaId: c.desaId, coord: offsetKm(c.coord, r.float(-0.3, 0.3), r.float(-0.3, 0.3)),
+      urgency: category === 'pungli' && u === 'rendah' ? 'sedang' : u, photo: r.chance(0.4),
     }, 'sapa-warga'))
   }
 
@@ -77,7 +88,7 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
   }
 
   // mentions
-  if (r.chance(NATURAL.mention * rhythm) && s.region.kecamatan.length) {
+  if ((r.chance(NATURAL.mention * rhythm) || minute === WORLD.clockStart + 4) && s.region.kecamatan.length) {
     const pool = floodZone.size && r.chance(0.5) ? MENTION_TEXT.filter((m) => m.topic === 'banjir') : MENTION_TEXT
     const tpl = r.pick(pool)
     const k = floodZone.size && tpl.topic === 'banjir' ? s.region.kecamatan.find((x) => floodZone.has(x.id)) ?? r.pick(s.region.kecamatan) : r.pick(s.region.kecamatan)
@@ -86,7 +97,7 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
     const fill = (x: string) => x.replace('{k}', k.name).replace('{r}', s.region.shortName)
     out.push(fu('mention.created', {
       outlet: kind === 'berita' ? r.pick(MEDIA_OUTLETS) : kind === 'sosmed' ? r.pick(SOCIAL_HANDLES) : 'Forum Warga', kind, author: kind === 'berita' ? 'Redaksi' : r.pick(SOCIAL_HANDLES),
-      text: { id: fill(tpl.t.id), en: fill(tpl.t.en) }, sentiment: score < -0.2 ? 'negatif' : score > 0.2 ? 'positif' : 'netral', score, topic: tpl.topic,
+      text: { id: fill(mentionText(tpl, minute).id), en: fill(mentionText(tpl, minute).en) }, sentiment: score < -0.2 ? 'negatif' : score > 0.2 ? 'positif' : 'netral', score, topic: tpl.topic,
       reach: Math.round(Math.exp(r.normal(kind === 'berita' ? 8 : 6.5, 1))),
     }, 'radar-isu'))
   }
@@ -94,12 +105,15 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
   // the false narrative of the day (Radar Isu, spec P4 step 2): one post per scheduled minute from 10:00, unless the
   // scenario was already started by hand ("Picu skenario"); the spread stops once the hoax is clarified
   const rumor = s.meta.facts?.hoax.rumor
+  // a post that is due (its offset ≤ this minute) but missing is caught up one per minute, so a clock that lands
+  // exactly on 10:00 (or a replayed jump) still starts the burst
   const step = minute - WORLD.hoaxAt
-  const i = HOAX_OFFSETS.indexOf(step as (typeof HOAX_OFFSETS)[number])
-  if (rumor && i >= 0) {
+  const due = step >= 0 && step < 30 ? HOAX_OFFSETS.filter((o) => o <= step).length : 0
+  if (rumor && due > 0) {
     const posts = rows(s.mentions).filter((m) => m.rumor === rumor)
     const ours = posts.filter((m) => m.at >= WORLD.hoaxAt && m.at < WORLD.hoaxAt + 30).length
-    if (posts.length === ours && ours === i && !rows(s.hoaxAlerts).some((h) => h.rumor === rumor && h.status === 'diklarifikasi')) {
+    const i = ours
+    if (posts.length === ours && ours < due && !rows(s.hoaxAlerts).some((h) => h.rumor === rumor && h.status === 'diklarifikasi')) {
       const k = s.region.kecamatan.find((x) => x.id === s.region.floodKecamatanIds[0])?.name ?? s.region.shortName
       out.push(fu('mention.created', hoaxPost(i, WORLD.hoaxAt, s.meta.facts.hoax.damName || 'Bendungan', k, rumor), 'radar-isu'))
     }

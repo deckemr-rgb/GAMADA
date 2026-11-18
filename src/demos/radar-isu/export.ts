@@ -5,7 +5,7 @@
  * Everything is simulated (fictional outlets / accounts) and says so in the metadata.
  */
 import { rows, type WorldState } from '../../demo-kit/world'
-import { getDeepResult, hoaxPhase, radarKpis, sentimentIndex } from './model'
+import { clarAuditOf, getDeepResult, hoaxPhase, radarKpis, riverAlert, sapaFlood, sentimentIndex } from './model'
 import { TOPIC } from './strings'
 
 type L = 'id' | 'en'
@@ -50,6 +50,15 @@ export function buildExport(s: WorldState, now: number, lang: L) {
     }))
     .sort((a, b) => b.mentions - a.mentions)
   const ph = hoaxPhase(s, now)
+  // the second and third evidence rows of the hoax card (Sapa Warga reports, the river gauge), as on screen
+  const sw = sapaFlood(s, now)
+  const rv = riverAlert(s, now)
+  const evidenceSapa = sw
+    ? lang === 'id'
+      ? `Sapa Warga: ${sw.count} laporan banjir di Kec. ${sw.kecamatan} sejak ${hm(sw.since, lang)} (${sw.evac} permintaan evakuasi, ${sw.dike ? 'tanggul desa rembes' : 'tanpa laporan tanggul'}); ${sw.regionCount} laporan banjir 24 jam di seluruh daerah. Bukan dari bendungan.`
+      : `Sapa Warga: ${sw.count} flood reports in ${sw.kecamatan} since ${hm(sw.since, lang)} (${sw.evac} evacuation request${sw.evac === 1 ? '' : 's'}, ${sw.dike ? 'a village embankment seeping' : 'no embankment report'}); ${sw.regionCount} flood reports region-wide in 24 h. Not from the dam.`
+    : null
+  const evidenceRiver = rv ? `${rv.name}: ${rv.level} m (${lang === 'id' ? 'batas siaga' : 'alert level'} ${rv.siaga} m) · ${rv.status.toUpperCase()} · ${hm(rv.updatedAt, lang)}` : null
   const hoaxes = rows(s.hoaxAlerts).map((h) => ({
     id: h.id,
     detectedAt: hm(h.at, lang),
@@ -59,6 +68,8 @@ export function buildExport(s: WorldState, now: number, lang: L) {
     accounts: h.accounts,
     // the world writes the gauge numbers with a decimal comma in both languages; English uses a point
     evidence: h.evidence ? (lang === 'en' ? h.evidence.en.replace(/(\d),(\d)/g, '$1.$2') : h.evidence.id) : null,
+    evidenceSapa,
+    evidenceRiver,
     status: h.status,
     posts: ph.kind !== 'idle' && 'alert' in ph && ph.alert.id === h.id ? ph.posts.length : null,
     clarification: h.clarification
@@ -66,6 +77,14 @@ export function buildExport(s: WorldState, now: number, lang: L) {
           at: hm(h.clarification.at, lang),
           tone: h.clarification.tone,
           channels: h.clarification.channels,
+          // approval trail (who drafted / approved, draft version)
+          draftedBy: clarAuditOf(h.id).draftedBy[lang],
+          approvedBy: clarAuditOf(h.id).approvedBy[lang],
+          draftedAt: hm(clarAuditOf(h.id).draftedAt ?? h.clarification.at, lang),
+          approvedAt: hm(clarAuditOf(h.id).approvedAt ?? h.clarification.at, lang),
+          // the Comms Office path: the Head of the Communications Office is a simulated approver in this demo
+          approvalSimulated: clarAuditOf(h.id).simulated !== false,
+          draftVersion: clarAuditOf(h.id).version,
         }
       : null,
   }))
@@ -224,7 +243,7 @@ function sheets(x: RadarExport, lang: L): Sheet[] {
         h.accounts.join(', '),
         h.evidence,
         h.status,
-        h.clarification ? `${h.clarification.at} · ${h.clarification.tone} · ${h.clarification.channels.join(', ')}` : null,
+        h.clarification ? `${h.clarification.at} · ${h.clarification.tone} · ${h.clarification.channels.join(', ')} · ${clarAuditOf(h.id).approvedBy[lang]}` : null,
       ]),
     },
   ]
@@ -283,8 +302,7 @@ function sheets(x: RadarExport, lang: L): Sheet[] {
 
 /* ------------------------------------------------------------------ SpreadsheetML */
 
-const esc = (v: string) =>
-  v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
 function colName(i: number): string {
   let s = ''
   let n = i + 1

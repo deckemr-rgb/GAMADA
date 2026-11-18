@@ -5,7 +5,8 @@
  */
 import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
 import { WORLD, clock, negativeIssues, rows } from '../../demo-kit/world'
-import type { EventMap, HoaxAlert, Mention, Table, WorldState } from '../../demo-kit/world'
+import type { EventMap, HoaxAlert, Mention, Table, WaterGauge, WorldState } from '../../demo-kit/world'
+import { HOUR_RHYTHM } from '../../demo-kit/world/util'
 import type { DeepResult } from './deep-model'
 
 /* ------------------------------------------------------------------ constants (module-local) */
@@ -17,8 +18,10 @@ export const RADAR = {
   /** weight of the slow baseline in the sentiment index (≈ one fresh mention of reach 10 000) */
   sentPrior: 4,
   /** real ms between the posts of the "Picu skenario" burst (the stream fills live) */
-  burstGapMs: 420,
+  burstGapMs: 260,
   burstGapReducedMs: 120,
+  /** real ms after the first paint before the monitor starts by itself (full motion only) */
+  autoRunMs: 2500,
   /** stream length */
   streamLimit: 40,
 } as const
@@ -121,17 +124,51 @@ export function sentimentIndex(mentions: Table<Mention>, now: number, res: SentR
   return out
 }
 
-/** the index at the clarification and now (recovery line, report, export): both read from the same 24 h index */
+/** world minutes after the clarification at which the recovery is quoted (card, report, export, AI: one figure) */
+export const RECOVERY_MIN = 30
+/**
+ * The index at the clarification and RECOVERY_MIN world minutes later (or now, while those 30 minutes run): every
+ * surface quotes the same pair, so the card and a report printed later never disagree ("−25 → −7" in both).
+ */
 export function recoveryOf(mentions: Table<Mention>, now: number, clarAt: number): { before: number; after: number } {
   const series = sentimentIndex(mentions, now)
   const z = sentimentIndex(mentions, now, '3h')
   const sr = z[0] && z[0].at <= clarAt ? z : series
   const before = [...sr].reverse().find((p) => p.at <= clarAt)?.value ?? 0
-  return { before, after: series[series.length - 1]?.value ?? 0 }
+  const ref = Math.min(now, clarAt + RECOVERY_MIN)
+  const after = [...sr].reverse().find((p) => p.at <= ref)?.value ?? series[series.length - 1]?.value ?? 0
+  return { before, after }
 }
 
 /** signed index for display: "+6", "−5", "0" (one minus sign everywhere) */
 export const signedIdx = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n))}`
+
+/**
+ * Screen-reader / report summary of an index series in POINTS (a percentage change of an index that can cross zero
+ * means nothing): "Indeks sentimen turun 22 poin, dari +17 menjadi −5; terendah −26 pukul 10.25."
+ */
+export function sentSummary(series: SentPoint[], lang: 'id' | 'en', label: string): string {
+  const first = series[0]
+  const last = series[series.length - 1]
+  if (!first || !last) return label
+  const low = series.reduce((m, p) => (p.value < m.value ? p : m), first)
+  const d = last.value - first.value
+  const hhmm = (m: number) => {
+    const x = ((m % 1440) + 1440) % 1440
+    const s = `${String(Math.floor(x / 60)).padStart(2, '0')}${lang === 'id' ? '.' : ':'}${String(x % 60).padStart(2, '0')}`
+    return s
+  }
+  // a low from yesterday is named as such, and today's own low follows (the reader compares today with today)
+  const day = (m: number) => Math.floor(m / 1440)
+  const today = day(last.at)
+  const lowToday = series.filter((p) => day(p.at) === today).reduce<SentPoint | null>((m, p) => (!m || p.value < m.value ? p : m), null)
+  const yest = day(low.at) < today
+  const lowId = `terendah ${signedIdx(low.value)} pukul ${hhmm(low.at)}${yest ? ' kemarin' : ''}${yest && lowToday ? `; terendah hari ini ${signedIdx(lowToday.value)} pukul ${hhmm(lowToday.at)}` : ''}`
+  const lowEn = `low ${signedIdx(low.value)} at ${hhmm(low.at)}${yest ? ' yesterday' : ''}${yest && lowToday ? `; today’s low ${signedIdx(lowToday.value)} at ${hhmm(lowToday.at)}` : ''}`
+  return lang === 'id'
+    ? `${label}: ${d > 0 ? `naik ${d} poin` : d < 0 ? `turun ${-d} poin` : 'tetap'}, dari ${signedIdx(first.value)} menjadi ${signedIdx(last.value)}; ${lowId}.`
+    : `${label}: ${d > 0 ? `up ${d} points` : d < 0 ? `down ${-d} points` : 'unchanged'}, from ${signedIdx(first.value)} to ${signedIdx(last.value)}; ${lowEn}.`
+}
 
 /* ------------------------------------------------------------------ negative issues (the ecosystem definition) */
 
@@ -190,11 +227,7 @@ export function radarKpis(mentions: Table<Mention>, now: number): RadarKpis {
 
 /* ------------------------------------------------------------------ the hoax scenario state */
 
-export type HoaxPhase =
-  | { kind: 'idle' }
-  | { kind: 'burst'; posts: Mention[] }
-  | { kind: 'active'; alert: HoaxAlert; posts: Mention[] }
-  | { kind: 'clarified'; alert: HoaxAlert; posts: Mention[] }
+export type HoaxPhase = { kind: 'idle' } | { kind: 'burst'; posts: Mention[] } | { kind: 'active'; alert: HoaxAlert; posts: Mention[] } | { kind: 'clarified'; alert: HoaxAlert; posts: Mention[] }
 
 /** where the dam-hoax scenario stands at `now` (posts visible so far) */
 export function hoaxPhase(s: Pick<WorldState, 'mentions' | 'hoaxAlerts' | 'meta'>, now: number): HoaxPhase {
@@ -211,6 +244,103 @@ export function hoaxPhase(s: Pick<WorldState, 'mentions' | 'hoaxAlerts' | 'meta'
     }
   if (posts.length) return { kind: 'burst', posts }
   return { kind: 'idle' }
+}
+
+/* ------------------------------------------------------------------ Sapa Warga cross-check (second evidence) */
+
+export interface SapaFlood {
+  /** flood complaints in the last 24 h in the kecamatan the rumour names */
+  count: number
+  kecamatan: string
+  /** village of the latest one */
+  desa: string
+  /** world minute of the first one */
+  since: number
+  /** flood complaints in the last 24 h across the region (Siaga Wilayah lists them all) */
+  regionCount: number
+  /** what the reports in that kecamatan actually say (read from their text): an evacuation request, a seeping
+   *  embankment, water inside homes */
+  evac: number
+  dike: number
+  inHomes: number
+  /** the complaint to open in Sapa Warga (the most urgent: evacuation first, else the latest) */
+  focusId: string
+}
+/** the region's river gauge at or above its alert level (Siaga Wilayah shows it as SIAGA / AWAS) */
+export interface RiverAlert {
+  name: string
+  level: number
+  siaga: number
+  awas: number
+  status: 'siaga' | 'awas'
+  updatedAt: number
+}
+/**
+ * The flood river's level at a world minute: the SAME curve Siaga Wilayah draws (demos/siaga-wilayah/data.ts
+ * riverLevelAt: the seeded history up to the 06.00 reading, then the morning rain pushes it past SIAGA before 07.00,
+ * past AWAS ±10.15, a crest at 13.00, receding after). Copied here (a few lines of math) so the radar's first chunk
+ * does not load Siaga Wilayah; both read the same seeded gauge, so both products show one river.
+ */
+const RIVER_CREST_AT = 13 * 60
+function riverLevelAt(g: WaterGauge, minute: number): number {
+  if (g.kind !== 'sungai') return g.level
+  const h = g.history
+  const t0 = g.updatedAt
+  if (minute <= t0) {
+    const i = h.length - 1 - (t0 - minute) / 60
+    if (i <= 0) return h[0] ?? g.level
+    const a = Math.floor(i)
+    const b = Math.min(h.length - 1, a + 1)
+    return (h[a] ?? g.level) + ((h[b] ?? g.level) - (h[a] ?? g.level)) * (i - a)
+  }
+  const crest = g.awas + 0.45
+  if (minute <= RIVER_CREST_AT) {
+    const f = (minute - t0) / Math.max(1, RIVER_CREST_AT - t0)
+    return g.level + (crest - g.level) * Math.sin((f * Math.PI) / 2)
+  }
+  return g.normal + (crest - g.normal) * Math.exp(-(minute - RIVER_CREST_AT) / 600)
+}
+export function riverAlert(s: Pick<WorldState, 'gauges'>, now: number): RiverAlert | null {
+  // 10-minute steps: the card does not re-render on every world minute at x60
+  const at = Math.floor(now / 10) * 10
+  for (const id of s.gauges.ids) {
+    const g = s.gauges.byId[id]
+    if (!g || g.kind !== 'sungai') continue
+    const level = Math.round(riverLevelAt(g, at) * 100) / 100
+    if (level < g.siaga) continue
+    return { name: g.name, level, siaga: g.siaga, awas: g.awas, status: level >= g.awas ? 'awas' : 'siaga', updatedAt: at }
+  }
+  return null
+}
+/**
+ * The rumour names the region's first flood kecamatan; Sapa Warga may hold real local flood reports there. The radar
+ * shows them next to the dam gauge, so a clarification never says "nothing is happening" while water is in houses.
+ */
+export function sapaFlood(s: Pick<WorldState, 'complaints' | 'region'>, now: number): SapaFlood | null {
+  const kid = s.region.floodKecamatanIds[0]
+  if (!kid) return null
+  const list = rows(s.complaints)
+    .filter((c) => c.category === 'banjir' && c.kecamatanId === kid && c.at <= now && c.at > now - 1440)
+    .sort((a, b) => a.at - b.at)
+  if (!list.length) return null
+  const k = s.region.kecamatan.find((x) => x.id === kid)
+  const lastC = list[list.length - 1]!
+  const txt = (c: (typeof list)[number]) => `${c.text} ${c.summary.id}`.toLowerCase()
+  const evacL = list.filter((c) => /evakuasi|dievakuasi|mengungsi/.test(txt(c)))
+  const dike = list.filter((c) => /tanggul/.test(txt(c)) && /rembes|bocor|jebol|bibir/.test(txt(c))).length
+  const inHomes = list.filter((c) => /dalam rumah|masuk rumah|sampai teras|selutut|sepinggang|sebetis/.test(txt(c))).length
+  const regionCount = rows(s.complaints).filter((c) => c.category === 'banjir' && c.at <= now && c.at > now - 1440).length
+  return {
+    count: list.length,
+    kecamatan: k?.name ?? kid,
+    desa: k?.desa.find((d) => d.id === lastC.desaId)?.name ?? '',
+    since: list[0]!.at,
+    regionCount,
+    evac: evacL.length,
+    dike,
+    inHomes,
+    focusId: (evacL[evacL.length - 1] ?? lastC).id,
+  }
 }
 
 /* ------------------------------------------------------------------ last Deep Analysis (shared by tabs) */
@@ -233,6 +363,93 @@ export function useDeepResult(): DeepResult | null {
     () => deep,
     () => deep,
   )
+}
+
+/* ------------------------------------------------------------------ clarification audit trail (who drafted / approved) */
+
+export interface ClarAudit {
+  draftedBy: { id: string; en: string }
+  approvedBy: { id: string; en: string }
+  /** number of drafts generated before publishing (tone changes / redrafts) */
+  version: number
+  /** world minutes: the draft was submitted for approval / the approval was given */
+  draftedAt?: number
+  approvedAt?: number
+  /** the approver is simulated (the Comms Office path: the Head of the Communications Office answers by itself) */
+  simulated?: boolean
+}
+const AUDIT_KEY = 'gamada:radar-isu:clar-audit'
+const HUMAS = { id: 'Humas/Diskominfo', en: 'Comms Office' }
+const KADIS = { id: 'Kepala Diskominfo', en: 'Head of the Communications Office' }
+const KD = { id: 'Kepala Daerah', en: 'Regional Head' }
+/** the approval a role's publish carries: the Comms Office releases in its own name (approved by its head, no quote of
+ *  the Regional Head); the Regional Head approves herself */
+export const approvalFor = (role: string): Omit<ClarAudit, 'version'> => (role === 'kepala-daerah' ? { draftedBy: HUMAS, approvedBy: KD } : { draftedBy: HUMAS, approvedBy: KADIS })
+let audits: Record<string, ClarAudit> | null = null
+function loadAudits(): Record<string, ClarAudit> {
+  if (audits) return audits
+  try {
+    audits = JSON.parse(window.sessionStorage.getItem(AUDIT_KEY) ?? '{}') as Record<string, ClarAudit>
+  } catch {
+    audits = {}
+  }
+  return audits
+}
+export function recordClarAudit(hoaxId: string, a: ClarAudit): void {
+  const all = loadAudits()
+  all[hoaxId] = a
+  try {
+    window.sessionStorage.setItem(AUDIT_KEY, JSON.stringify(all))
+  } catch {
+    /* private mode: kept in memory only */
+  }
+}
+/** the audit of a published clarification (default: the Comms Office path) */
+export function clarAuditOf(hoaxId: string): ClarAudit {
+  return loadAudits()[hoaxId] ?? { ...approvalFor('humas'), version: 1 }
+}
+
+/* ------------------------------------------------------------------ the crawl behind the curated stream */
+
+/**
+ * Public posts the (simulated) crawler scanned today up to `now`: about 9 per world minute at the day's rhythm. The
+ * stream only carries the curated share, so the line "dipindai N · M masuk pantauan" explains why the Live numbers are
+ * small next to Analisis Mendalam, and it ticks with the clock (the monitor visibly works between new mentions).
+ */
+export function scannedToday(now: number): number {
+  const m = ((now % 1440) + 1440) % 1440
+  let sum = 0
+  for (let h = 0; h < 24 && m > h * 60; h++) sum += Math.min(60, m - h * 60) * (HOUR_RHYTHM[h] ?? 0.2)
+  return Math.round(sum * 9)
+}
+/** curated mentions of today (world day of `now`) up to `now` */
+export function mentionsToday(mentions: Table<Mention>, now: number): number {
+  const d0 = Math.floor(now / 1440) * 1440
+  let n = 0
+  for (const x of rows(mentions)) if (x.at >= d0 && x.at <= now) n++
+  return n
+}
+
+/* ------------------------------------------------------------------ "Picu skenario" by hand (replay note) */
+
+/** world minute the visitor pressed the trigger (per world facts object), so the card can say the burst is a replay */
+let manual: { at: number; facts: object } | null = null
+export function markManualTrigger(at: number, facts: object): void {
+  manual = { at, facts }
+}
+export function manualTriggerAt(facts: object): number | null {
+  return manual && manual.facts === facts ? manual.at : null
+}
+
+/* ------------------------------------------------------------------ "Nilai dengan AI" (the card the analyst reads) */
+
+/** the stream card last sent to the analyst: its assessment quotes the card's own label, score and topic */
+let assessTarget: Mention | null = null
+export function setAssessTarget(m: Mention | null): void {
+  assessTarget = m
+}
+export function getAssessTarget(): Mention | null {
+  return assessTarget
 }
 
 /* ------------------------------------------------------------------ cross-tab requests */
@@ -351,7 +568,8 @@ export function useDeferredOpen(open: boolean, inside?: RefObject<HTMLElement | 
     if (!shown || !open || !inside) return
     const id = window.setTimeout(() => {
       const panel = inside.current?.closest<HTMLElement>('[role="dialog"]')
-      if (panel && !panel.contains(document.activeElement)) (panel.querySelector<HTMLElement>('[data-autofocus]') ?? panel.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]'))?.focus({ preventScroll: true })
+      if (panel && !panel.contains(document.activeElement))
+        (panel.querySelector<HTMLElement>('[data-autofocus]') ?? panel.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]'))?.focus({ preventScroll: true })
     }, 120)
     return () => window.clearTimeout(id)
   }, [shown, open, inside])

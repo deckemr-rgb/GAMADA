@@ -8,6 +8,8 @@ import { registerScenario, type Intent, type Scenario, type SimContext, type Sim
 import type { RadarCtx } from './ctx'
 import { CLARIFY_TEXT, clarification, toneFromText } from './clarify-text'
 import { TOPIC } from './strings'
+import { analyze, matchTopic } from './deep-model'
+import { clock, world } from '../../demo-kit/world'
 
 type L = 'id' | 'en'
 type Ctx = SimContext<RadarCtx>
@@ -19,17 +21,7 @@ const nf = (n: number, lang: L, d = 0) =>
   })
 const tm = (hhmm: string, lang: L) => (lang === 'id' ? hhmm.replace(':', '.') : hhmm)
 const word = (v: number, lang: L) =>
-  v <= -20
-    ? lang === 'id'
-      ? 'cenderung negatif'
-      : 'leaning negative'
-    : v >= 20
-      ? lang === 'id'
-        ? 'cenderung positif'
-        : 'leaning positive'
-      : lang === 'id'
-        ? 'netral'
-        : 'neutral'
+  v <= -20 ? (lang === 'id' ? 'cenderung negatif' : 'leaning negative') : v >= 20 ? (lang === 'id' ? 'cenderung positif' : 'leaning positive') : lang === 'id' ? 'netral' : 'neutral'
 const signed = (v: number, lang: L) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${nf(Math.abs(v), lang)}`
 /** Basa Jawa input? answer gets a short Javanese opener + translation line */
 const JV = /\b(opo|apa wae|piye|pripun|sing|ora|mboten|iki|niki|kae|wae|dina|saiki|nggawe|gawekna|tulung|nyuwun|wonten|ana|kabare|isu ne|endi)\b/i
@@ -67,9 +59,7 @@ function hoaxLine(x: RadarCtx, lang: L): string {
       ? `Ada hoaks aktif: “${x.hoax.claim.id}” (skor ${Math.round(x.hoax.score * 100)}%, ${x.hoax.posts} unggahan, terdeteksi ${tm(x.hoax.detectedAt, lang)}). Belum diklarifikasi.`
       : `There is an active hoax: “${x.hoax.claim.en}” (score ${Math.round(x.hoax.score * 100)}%, ${x.hoax.posts} posts, detected at ${x.hoax.detectedAt}). Not clarified yet.`
   if (x.hoax?.status === 'diklarifikasi' && x.hoax.clarification)
-    return lang === 'id'
-      ? `Hoaks “${x.hoax.claim.id}” sudah diklarifikasi pukul ${tm(x.hoax.clarification.at, lang)}.`
-      : `The “${x.hoax.claim.en}” hoax was clarified at ${x.hoax.clarification.at}.`
+    return lang === 'id' ? `Hoaks “${x.hoax.claim.id}” sudah diklarifikasi pukul ${tm(x.hoax.clarification.at, lang)}.` : `The “${x.hoax.claim.en}” hoax was clarified at ${x.hoax.clarification.at}.`
   if (x.burst)
     return lang === 'id'
       ? `Ada narasi mencurigakan yang mulai menyebar (${x.burst.posts}/${x.burst.threshold} unggahan menuju ambang deteksi).`
@@ -81,19 +71,38 @@ function hoaxLine(x: RadarCtx, lang: L): string {
 
 const HOAX_CUES = /(jebol|breaking|sebarkan|teruskan|viral|katanya|kabarnya|grup|pass it on|share|they say|burst|!!!|air bah|evakuasi sekarang|pemerintah diam)/gi
 const NEG_CUES =
-  /(rusak|keluh|macet|banjir|naik|mahal|lambat|antre|mengular|parah|bahaya|jebol|panik|mengungsi|air bah|complain|broken|flood|slow|queue|expensive|danger|burst|evacuate)/gi
-const POS_CUES = /(aman|cepat|bagus|terima kasih|juara|berhasil|ramai pesanan|tenang|safe|fast|great|thanks|wins|calm)/gi
+  /\b(rusak|keluh|keluhan|mengeluh|dikeluhkan|macet|banjir|naik lagi|mahal|lambat|antre|antrean|mengular|parah|bahaya|jebol|panik|mengungsi|air bah|bau|enggan|hilang|bocor|tersumbat|meluber|habis|pulang lagi|pudar|lubang|tumpukan|belum diangkut|belum turun|tidak bisa|sepi|complain|broken|flood|slow|queue|expensive|danger|burst|evacuate|smell|vanished|leaks|blocked|ran out|potholes|faded)\b/gi
+const POS_CUES =
+  /\b(aman|cepat|bagus|terima kasih|juara|berhasil|ramai pesanan|kebanjiran pesanan|laris|lancar|tertib|antusias|lega|disambut|memangkas|tenang|safe|fast|great|thanks|wins|calm|smoothly|orderly|eager|relieved|swamped with|sales are up|saves)\b/gi
+const SENT_EN: Record<string, string> = { negatif: 'negative', positif: 'positive', netral: 'neutral' }
+const SENT_ID: Record<string, string> = { negatif: 'Negatif', positif: 'Positif', netral: 'Netral' }
+const norm = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
 
 export function assess(text: string, x: RadarCtx | null, lang: L) {
   const body = text.replace(/^[^:«“"]*[:«“"]\s*/, '').replace(/[»”"]\s*$/, '')
+  // a card from the stream: the assessment reads that card's own label, score and topic (never a second opinion that
+  // contradicts the badge printed next to the button); a pasted text falls back to the cue-word reading
+  const tg = x?.assessTarget
+  const card = tg && (norm(tg.text.id) === norm(body) || norm(tg.text.en) === norm(body)) ? tg : null
   const hoaxHits = body.match(HOAX_CUES)?.length ?? 0
-  const neg = body.match(NEG_CUES)?.length ?? 0
-  const pos = body.match(POS_CUES)?.length ?? 0
+  const negW = [...new Set((body.match(NEG_CUES) ?? []).map((w) => w.toLowerCase()))]
+  const posW = [...new Set((body.match(POS_CUES) ?? []).map((w) => w.toLowerCase()))]
+  const neg = negW.length
+  const pos = posW.length
+  const cue = (ws: string[]) =>
+    ws
+      .slice(0, 3)
+      .map((w) => `“${w}”`)
+      .join(', ')
   const dam = /bendungan|waduk|\bdam\b/i.test(body)
   const caps = (body.match(/[A-Z]{4,}/g)?.length ?? 0) > 0
   let likelihood = Math.min(0.97, 0.06 + hoaxHits * 0.16 + (dam && /jebol|burst/i.test(body) ? 0.35 : 0) + (caps ? 0.08 : 0))
   if (x?.hoax && dam) likelihood = Math.max(likelihood, x.hoax.score)
-  const sentiment = neg > pos ? 'negatif' : pos > neg ? 'positif' : 'netral'
+  const sentiment = card ? card.sentiment : neg > pos ? 'negatif' : pos > neg ? 'positif' : 'netral'
   const key = dam
     ? 'hoaks-bendungan'
     : /banjir|flood|sungai|river/i.test(body)
@@ -105,21 +114,71 @@ export function assess(text: string, x: RadarCtx | null, lang: L) {
           : /antre|ktp|layanan|queue|service/i.test(body)
             ? 'layanan'
             : 'umum'
-  const topic = TOPIC[key]?.[lang] ?? (lang === 'id' ? 'umum' : 'general')
+  const topic = card ? card.topicLabel[lang] : (TOPIC[key]?.[lang] ?? (lang === 'id' ? 'umum' : 'general'))
   const reasons: string[] = []
+  if (card) {
+    // the card's label explained with the cue words that agree with it (no boilerplate that contradicts it)
+    const agree = card.sentiment === 'negatif' ? negW : card.sentiment === 'positif' ? posW : []
+    const sc = nf(card.score, lang, 2).replace('-', '−')
+    if (hoaxHits)
+      reasons.push(
+        lang === 'id' ? `Ada ${hoaxHits} ciri pesan berantai (ajakan menyebar, klaim tanpa sumber, huruf kapital).` : `${hoaxHits} chain-message signs (calls to share, unsourced claim, capitals).`,
+      )
+    else
+      reasons.push(
+        lang === 'id'
+          ? `Tidak ada ciri pesan berantai; isinya ${card.sentiment === 'negatif' ? 'keluhan warga biasa' : card.sentiment === 'positif' ? 'kabar baik biasa' : 'informasi biasa'}.`
+          : `No chain-message signs; it reads as ${card.sentiment === 'negatif' ? 'an ordinary complaint' : card.sentiment === 'positif' ? 'ordinary good news' : 'ordinary information'}.`,
+      )
+    if (dam && x?.dam)
+      reasons.push(
+        lang === 'id'
+          ? `Data Siaga Wilayah: tinggi muka air ${x.dam.name} ${nf(x.dam.level, lang, 2)} m, di bawah batas siaga ${nf(x.dam.siaga, lang, 1)} m (simulasi).`
+          : `Siaga Wilayah data: ${x.dam.name} water level ${nf(x.dam.level, lang, 2)} m, below the ${nf(x.dam.siaga, lang, 1)} m alert level (simulated).`,
+      )
+    reasons.push(
+      lang === 'id'
+        ? `Label ${SENT_ID[card.sentiment] ?? card.sentiment} di kartu (skor model ${sc}, topik ${card.topicLabel.id})${agree.length ? `; kata penanda: ${cue(agree)}` : card.sentiment === 'netral' ? '; tidak ada kata keluhan atau pujian yang menonjol' : '; nadanya tersirat, tanpa satu kata penanda yang menonjol'}.`
+        : `The card’s ${SENT_EN[card.sentiment] ?? card.sentiment} label (model score ${sc}, topic ${card.topicLabel.en})${agree.length ? `; cue words: ${cue(agree)}` : card.sentiment === 'netral' ? '; no stand-out complaint or praise words' : '; the tone is implied, with no single stand-out cue word'}.`,
+    )
+    return {
+      sentiment,
+      topic,
+      hoaxLikelihood: Math.round(likelihood * 100) / 100,
+      reasons: reasons.slice(0, 4),
+      evidenceNeeded:
+        likelihood > 0.5
+          ? lang === 'id'
+            ? ['Konfirmasi petugas lapangan di lokasi yang disebut', 'Sumber asli foto/video bila ada']
+            : ['Confirmation from field officers at the place named', 'Original source of any photo/video']
+          : [],
+    }
+  }
   if (lang === 'id') {
     if (hoaxHits) reasons.push(`Ada ${hoaxHits} ciri pesan berantai (ajakan menyebar, klaim tanpa sumber, huruf kapital).`)
-    if (dam && x?.dam)
-      reasons.push(`Data Siaga Wilayah: tinggi muka air ${x.dam.name} ${nf(x.dam.level, lang, 1)} m, di bawah batas siaga ${nf(x.dam.siaga, lang, 1)} m (simulasi).`)
-    if (!hoaxHits) reasons.push('Tidak ada ciri pesan berantai; isi berupa keluhan atau informasi biasa.')
-    reasons.push(`Sentimen ${sentiment} dari ${neg} kata bernada negatif dan ${pos} kata bernada positif.`)
+    if (dam && x?.dam) reasons.push(`Data Siaga Wilayah: tinggi muka air ${x.dam.name} ${nf(x.dam.level, lang, 2)} m, di bawah batas siaga ${nf(x.dam.siaga, lang, 1)} m (simulasi).`)
+    if (!hoaxHits) reasons.push(`Tidak ada ciri pesan berantai; isinya ${sentiment === 'negatif' ? 'keluhan biasa' : 'informasi biasa'}.`)
+    reasons.push(
+      sentiment === 'negatif'
+        ? `Nada keluhan: ${cue(negW)}${pos ? `, meski ada nada positif (${cue(posW)})` : ''}.`
+        : sentiment === 'positif'
+          ? `Nada positif: ${cue(posW)}${neg ? `, dengan sedikit keluhan (${cue(negW)})` : ''}.`
+          : neg || pos
+            ? `Nada berimbang: ${cue([...negW, ...posW])}.`
+            : 'Nada netral: tidak ada kata keluhan atau pujian yang menonjol.',
+    )
   } else {
     if (hoaxHits) reasons.push(`${hoaxHits} chain-message signs (calls to share, unsourced claim, capitals).`)
-    if (dam && x?.dam)
-      reasons.push(`Siaga Wilayah data: ${x.dam.name} water level ${nf(x.dam.level, lang, 1)} m, below the ${nf(x.dam.siaga, lang, 1)} m alert level (simulated).`)
-    if (!hoaxHits) reasons.push('No chain-message signs; it reads as an ordinary complaint or report.')
+    if (dam && x?.dam) reasons.push(`Siaga Wilayah data: ${x.dam.name} water level ${nf(x.dam.level, lang, 2)} m, below the ${nf(x.dam.siaga, lang, 1)} m alert level (simulated).`)
+    if (!hoaxHits) reasons.push(`No chain-message signs; it reads as an ordinary ${sentiment === 'negatif' ? 'complaint' : 'report'}.`)
     reasons.push(
-      `${sentiment === 'negatif' ? 'Negative' : sentiment === 'positif' ? 'Positive' : 'Neutral'} sentiment from ${neg} negative and ${pos} positive cue words.`,
+      sentiment === 'negatif'
+        ? `Complaint tone: ${cue(negW)}${pos ? `, with some positive wording (${cue(posW)})` : ''}.`
+        : sentiment === 'positif'
+          ? `Positive tone: ${cue(posW)}${neg ? `, with a little complaint (${cue(negW)})` : ''}.`
+          : neg || pos
+            ? `Balanced tone: ${cue([...negW, ...posW])}.`
+            : 'Neutral tone: no stand-out complaint or praise words.',
     )
   }
   const evidenceNeeded =
@@ -148,10 +207,38 @@ const kwOf = (text: string): string | undefined => cleanKw(KW_RE.exec(text)?.[1]
  * Explicit commands win over word overlap: the UI sends "Nilai unggahan ini: «…»" (the quoted post would otherwise
  * pull the match towards its own topic), "Analisis kata kunci banjir" (not the flood intent) and "Susun klarifikasi …".
  */
+/** "harga cabai naik nggak?", "is the rice price going up": the keyword is the commodity price */
+const PRICE_RE = /\b(harga\s+(?:cabai|cabe|beras|bawang|minyak|gula|telur|daging|jagung)(?:\s+(?:rawit|merah|putih|goreng))?|(?:chil+i|rice|shallot|onion|sugar|egg)\s+prices?)\b/iu
+const priceKw = (text: string): string | undefined =>
+  PRICE_RE.exec(text)?.[1]
+    ?.toLowerCase()
+    .replace(/\bcabe\b/, 'cabai')
+/** a period comparison ("minggu ini vs minggu lalu", "this week vs last week") */
+const PERIOD_RE = /(minggu|pekan|bulan|week|month)\s+(ini|lalu|kemarin|this|last)|(this|last)\s+(week|month)/i
+/** the first topic word in a question ("bansos", "jalan", "banjir") */
+const topicWordOf = (text: string): string | undefined =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .find((w) => w.length >= 4 && matchTopic(w) !== null && !/^(hoaks|hoax|harga|price|layanan|service)$/.test(w))
+
+/** the Deep Analysis model for one keyword (the same simulated crawl the Analisis Mendalam tab runs) */
+function deepRead(keyword: string, days: 7 | 14) {
+  if (world.status() !== 'ready') return null
+  try {
+    return analyze(world.get(), clock.get().minutes, { keywords: [keyword], days, lang: 'all' }).keywords[0] ?? null
+  } catch {
+    return null
+  }
+}
+
 const FORCE: [RegExp, string][] = [
   [/«[^»]{4,}»/, 'nilai-unggahan'],
-  [/(kata kunci|keyword|tembung)/i, 'analisis-kata-kunci'],
-  [/(susun|buat|buatkan|draft|write|gawe|gawekna|tulis|damelaken).*(klarifikasi|clarification|bantahan|press release|rilis pers)/i, 'klarifikasi'],
+  [PERIOD_RE, 'banding-periode'],
+  [PRICE_RE, 'analisis-kata-kunci'],
+  [/\b(kata kunci|keyword|tembung)\b/i, 'analisis-kata-kunci'],
+  [/(berapa|jumlah|how many|pira).*(aduan|complaint|laporan warga)|(kecamatan|district).*(aduan|complaint)|(aduan|complaint).*(kecamatan|district)/i, 'aduan-sapa'],
+  [/\b(susun|buat|buatkan|draft|write|gawe|gawekna|tulis|damelaken)\b.*\b(klarifikasi|clarification|bantahan|press release|rilis pers)\b/i, 'klarifikasi'],
 ]
 
 /* ------------------------------------------------------------------ intents */
@@ -207,10 +294,7 @@ const intents: Intent<RadarCtx>[] = [
               output: { mention: x.kpis.mentions24h, topik: x.topics.length },
             },
           ],
-          followUps:
-            lang === 'id'
-              ? ['Isu negatif terbesar apa?', 'Ada hoaks?', 'Tren sentimen 24 jam']
-              : ['What is the top negative issue?', 'Is there a hoax?', 'Sentiment trend, 24 h'],
+          followUps: lang === 'id' ? ['Isu negatif terbesar apa?', 'Ada hoaks?', 'Tren sentimen 24 jam'] : ['What is the top negative issue?', 'Is there a hoax?', 'Sentiment trend, 24 h'],
         },
         ['Isu dina iki wis tak rangkum, Bapak/Ibu.', 'Isu hari ini sudah saya rangkum, Bapak/Ibu.', 'I have summarised today’s issues.'],
       )
@@ -282,9 +366,7 @@ const intents: Intent<RadarCtx>[] = [
       return jvWrap(
         ctx,
         {
-          text:
-            hoaxLine(x, lang) +
-            (x.hoax?.status === 'aktif' ? (lang === 'id' ? ' Saya bisa langsung menyusun klarifikasinya.' : ' I can draft the clarification right away.') : ''),
+          text: hoaxLine(x, lang) + (x.hoax?.status === 'aktif' ? (lang === 'id' ? ' Saya bisa langsung menyusun klarifikasinya.' : ' I can draft the clarification right away.') : ''),
           toolCalls: [
             {
               name: 'cek_hoaks',
@@ -343,14 +425,9 @@ const intents: Intent<RadarCtx>[] = [
               output: { level: d.level, siaga: d.siaga },
             },
           ],
-          followUps:
-            lang === 'id' ? ['Susun klarifikasi nada menenangkan', 'Siapa akun penyebar awal?'] : ['Draft a reassuring clarification', 'Who were the first spreaders?'],
+          followUps: lang === 'id' ? ['Susun klarifikasi nada menenangkan', 'Siapa akun penyebar awal?'] : ['Draft a reassuring clarification', 'Who were the first spreaders?'],
         },
-        [
-          'Bendungan aman, Bapak/Ibu: banyune isih ngisor batas siaga.',
-          'Bendungan aman, Bapak/Ibu: airnya masih di bawah batas siaga.',
-          'The dam is safe: the water is still below the alert level.',
-        ],
+        ['Bendungan aman, Bapak/Ibu: banyune isih ngisor batas siaga.', 'Bendungan aman, Bapak/Ibu: airnya masih di bawah batas siaga.', 'The dam is safe: the water is still below the alert level.'],
       )
     },
   },
@@ -392,7 +469,7 @@ const intents: Intent<RadarCtx>[] = [
         {
           text: fill(T.answer, {
             tone: T.tone[tone],
-            level: nf(x.dam?.level ?? 0, lang, 1),
+            level: nf(x.dam?.level ?? 0, lang, 2),
             siaga: nf(x.dam?.siaga ?? 0, lang, 1),
           }),
           toolCalls: [
@@ -400,12 +477,11 @@ const intents: Intent<RadarCtx>[] = [
               name: 'siaga_wilayah.tinggi_muka_air',
               input: { pos: x.dam?.name ?? '' },
               output: { level: x.dam?.level, siaga: x.dam?.siaga },
-              ms: 380,
             },
+            ...(x.sapa ? [{ name: 'sapa_warga', input: { kecamatan: x.sapa.kecamatan }, output: { laporan: x.sapa.count } }] : []),
             {
               name: 'susun_klarifikasi',
               input: { nada: tone, kanal: 'rilis, caption, infografis' },
-              ms: 620,
             },
           ],
           structured: { kind: 'clarification', data: { ...c } },
@@ -494,11 +570,7 @@ const intents: Intent<RadarCtx>[] = [
           ],
           followUps: lang === 'id' ? ['Isu negatif terbesar apa?'] : ['What is the top negative issue?'],
         },
-        [
-          `Sentimen saiki ${last <= -20 ? 'condhong elek' : last >= 20 ? 'condhong apik' : 'biasa wae'}.`,
-          `Sentimen sekarang ${word(last, 'id')}.`,
-          `Sentiment is ${word(last, 'en')} now.`,
-        ],
+        [`Sentimen saiki ${last <= -20 ? 'condhong elek' : last >= 20 ? 'condhong apik' : 'biasa wae'}.`, `Sentimen sekarang ${word(last, 'id')}.`, `Sentiment is ${word(last, 'en')} now.`],
       )
     },
   },
@@ -521,8 +593,11 @@ const intents: Intent<RadarCtx>[] = [
       const x = w(ctx)
       const lang = ctx.lang
       if (!x) return noData(lang)
-      const kw = (cleanKw(slots.keyword) ?? kwOf(ctx.text) ?? x.topics[0]?.label[lang] ?? 'banjir').trim().toLowerCase()
-      const t = x.topics.find((p) => p.label.id.toLowerCase().includes(kw) || p.label.en.toLowerCase().includes(kw) || p.topic.includes(kw))
+      const kw = (priceKw(ctx.text) ?? cleanKw(slots.keyword) ?? kwOf(ctx.text) ?? x.topics[0]?.label[lang] ?? 'banjir').trim().toLowerCase()
+      const mt = matchTopic(kw)
+      const t = x.topics.find((p) => p.label.id.toLowerCase().includes(kw) || p.label.en.toLowerCase().includes(kw) || p.topic.includes(kw) || (mt !== null && p.topic === mt))
+      // the 7-day crawl the Deep Analysis tab runs for the same keyword (same numbers there)
+      const dk = deepRead(kw, 7)
       const score = t?.score ?? -0.1
       const neg = Math.max(0.05, Math.min(0.85, 0.33 - score * 0.45))
       const pos = Math.max(0.05, Math.min(0.85, 0.3 + score * 0.42))
@@ -553,14 +628,58 @@ const intents: Intent<RadarCtx>[] = [
         ctx,
         {
           text:
-            lang === 'id'
-              ? `Ringkasan cepat “${kw}” (7 hari, simulasi): ${t ? `${t.count} mention 24 jam terakhir, skor ${nf(score, lang, 2)}` : 'belum ada mention di 24 jam terakhir'}; ${Math.round(neg * 100)}% negatif. Untuk volume per hari, momentum, kutipan, dan ekspor XLSX, buka tab Analisis Mendalam.`
-              : `Quick read of “${kw}” (7 days, simulated): ${t ? `${t.count} mentions in the last 24 h, score ${nf(score, lang, 2)}` : 'no mentions in the last 24 h'}; ${Math.round(neg * 100)}% negative. For daily volume, momentum, quotes and the XLSX export, open the Deep Analysis tab.`,
+            dk && dk.basis === 'none'
+              ? lang === 'id'
+                ? `“${kw}” hampir tidak muncul di sumber pantauan (simulasi): ${dk.total} unggahan dalam 7 hari, terlalu sedikit untuk dianalisis. Periksa ejaannya atau coba kata kunci lain.`
+                : `“${kw}” barely appears in the monitored sources (simulated): ${dk.total} posts in 7 days, too few to analyse. Check the spelling or try another keyword.`
+              : lang === 'id'
+                ? `Ringkasan cepat “${kw}” (7 hari, simulasi): ${dk ? `${nf(dk.total, lang)} unggahan publik, momentum ${dk.momentum >= 0 ? '+' : '−'}${Math.abs(dk.momentum)}% dalam 3 hari terakhir (${dk.momentum > 5 ? 'naik' : dk.momentum < -5 ? 'turun' : 'stabil'}), ${Math.round(dk.sentiment.neg * 100)}% negatif` : `${Math.round(neg * 100)}% negatif`}; di Pantauan Live ${t ? `${t.count} mention 24 jam terakhir (topik ${t.label.id})` : 'belum ada mention 24 jam terakhir'}. Untuk volume per hari, kutipan, dan ekspor XLSX, buka tab Analisis Mendalam.`
+                : `Quick read of “${kw}” (7 days, simulated): ${dk ? `${nf(dk.total, lang)} public posts, ${dk.momentum >= 0 ? '+' : '−'}${Math.abs(dk.momentum)}% momentum over the last 3 days (${dk.momentum > 5 ? 'rising' : dk.momentum < -5 ? 'falling' : 'flat'}), ${Math.round(dk.sentiment.neg * 100)}% negative` : `${Math.round(neg * 100)}% negative`}; in the Live Monitor ${t ? `${t.count} mentions in the last 24 h (topic ${t.label.en})` : 'no mentions in the last 24 h'}. For daily volume, quotes and the XLSX export, open the Deep Analysis tab.`,
           toolCalls: [{ name: 'analisis_topik', input: { kata_kunci: kw, hari: 7 } }],
           structured: { kind: 'analysis', data },
           followUps: lang === 'id' ? ['Pertanyaan survei untuk isu ini'] : ['Survey questions for this issue'],
         },
         [`Omongan babagan “${kw}” wis tak analisa.`, `Percakapan tentang “${kw}” sudah saya analisis.`, `I have analysed the talk about “${kw}”.`],
+      )
+    },
+  },
+  {
+    // "bandingkan sentimen bansos minggu ini dengan minggu lalu": the live monitor only has a 24 h window; the volume
+    // comparison comes from the 14-day Deep Analysis crawl, and the answer says what it cannot split (sentiment per week)
+    id: 'banding-periode',
+    examples: [
+      'bandingkan minggu ini dengan minggu lalu',
+      'bandingkan sentimen bansos minggu ini dengan minggu lalu',
+      'perbandingan pekan ini dan pekan lalu',
+      'compare this week with last week',
+      'compare social aid sentiment this week vs last week',
+      'bandingke minggu iki karo minggu wingi',
+    ],
+    respond: (ctx) => {
+      const x = w(ctx)
+      const lang = ctx.lang
+      if (!x) return noData(lang)
+      const kw = topicWordOf(ctx.text) ?? x.topics[0]?.topic ?? 'banjir'
+      const dk = deepRead(kw, 14)
+      if (!dk || dk.daily.length < 14)
+        return {
+          text: lang === 'id' ? 'Perbandingan mingguan per topik ada di tab Analisis Mendalam (periode 14 hari).' : 'Week-on-week comparison per topic lives in the Deep Analysis tab (14-day period).',
+        }
+      const thisW = dk.daily.slice(7).reduce((a, b) => a + b, 0)
+      const lastW = dk.daily.slice(0, 7).reduce((a, b) => a + b, 0)
+      const ch = lastW ? Math.round(((thisW - lastW) / lastW) * 100) : 0
+      const neg = Math.round(dk.sentiment.neg * 100)
+      return jvWrap(
+        ctx,
+        {
+          text:
+            lang === 'id'
+              ? `Pantauan Live hanya memegang jendela 24 jam, jadi perbandingan mingguan saya ambil dari Analisis Mendalam “${kw}” (14 hari, simulasi): minggu ini ${nf(thisW, lang)} unggahan, minggu lalu ${nf(lastW, lang)} (${ch >= 0 ? '+' : '−'}${Math.abs(ch)}%). Sentimen per minggu belum dipisah di model ini; untuk 14 hari keseluruhan ${neg}% negatif. Jalankan Analisis Mendalam untuk melihat grafik hariannya.`
+              : `The Live Monitor only holds a 24 h window, so the weekly comparison comes from the Deep Analysis of “${kw}” (14 days, simulated): this week ${nf(thisW, lang)} posts, last week ${nf(lastW, lang)} (${ch >= 0 ? '+' : '−'}${Math.abs(ch)}%). This model does not split sentiment by week; over the 14 days ${neg}% is negative. Run the Deep Analysis to see the daily chart.`,
+          toolCalls: [{ name: 'analisis_topik', input: { kata_kunci: kw, hari: 14 }, output: { minggu_ini: thisW, minggu_lalu: lastW } }],
+          followUps: lang === 'id' ? [`Analisis kata kunci ${kw}`] : [`Analyse the keyword ${kw}`],
+        },
+        ['Perbandingan mingguan sampun kula etang.', 'Perbandingan mingguan sudah saya hitung.', 'I have computed the weekly comparison.'],
       )
     },
   },
@@ -605,6 +724,42 @@ const intents: Intent<RadarCtx>[] = [
     },
   },
   {
+    // questions that belong to Sapa Warga (complaint counts, per-kecamatan breakdowns): answer what the radar really
+    // sees and send the rest there, instead of quoting an unrelated mention count
+    id: 'aduan-sapa',
+    examples: [
+      'berapa jumlah aduan warga di sapa warga',
+      'berapa aduan banjir hari ini',
+      'kecamatan mana yang paling banyak aduan',
+      'aduan warga per kecamatan',
+      'laporan warga soal banjir hari ini',
+      'jumlah laporan di sapa warga',
+      'how many citizen complaints are there',
+      'which district has the most complaints',
+      'complaints per district in sapa warga',
+      'pira aduane warga dina iki',
+      'kecamatan endi sing paling akeh aduan',
+    ],
+    respond: (ctx) => {
+      const x = w(ctx)
+      const lang = ctx.lang
+      if (!x) return noData(lang)
+      const sw = x.sapa
+      return jvWrap(
+        ctx,
+        {
+          text:
+            lang === 'id'
+              ? `${sw ? `Radar Isu hanya membaca aduan Sapa Warga yang menyentuh narasi yang dipantau: dalam 24 jam ada ${sw.count} laporan banjir di Kec. ${sw.kecamatan} (sejak pukul ${tm(sw.since, lang)}${sw.desa ? `, terakhir dari ${sw.desa}` : ''}).` : 'Radar Isu belum melihat aduan Sapa Warga yang menyentuh narasi yang dipantau.'}${x.complaintClusters ? ` Sapa Warga juga mencatat ${x.complaintClusters} klaster aduan banjir.` : ''} Jumlah aduan per kecamatan, statusnya, dan OPD penanggung jawabnya ada di Sapa Warga, bukan di Radar Isu.`
+              : `${sw ? `Radar Isu only reads the Sapa Warga complaints that touch a monitored narrative: in the last 24 h there were ${sw.count} flood reports in ${sw.kecamatan} (since ${sw.since}${sw.desa ? `, the latest from ${sw.desa}` : ''}).` : 'Radar Isu has not seen any Sapa Warga complaint that touches a monitored narrative.'}${x.complaintClusters ? ` Sapa Warga also lists ${x.complaintClusters} flood complaint clusters.` : ''} Complaint counts per district, their status and the agency in charge live in Sapa Warga, not in Radar Isu.`,
+          toolCalls: [{ name: 'sapa_warga', input: { kategori: 'banjir' }, output: { laporan: sw?.count ?? 0 } }],
+          followUps: lang === 'id' ? ['Ada hoaks?', 'Ringkas isu hari ini'] : ['Is there a hoax?', "Summarise today's issues"],
+        },
+        ['Rincian aduan wonten ing Sapa Warga.', 'Rincian aduan ada di Sapa Warga.', 'The complaint details are in Sapa Warga.'],
+      )
+    },
+  },
+  {
     id: 'waktu-respons',
     examples: [
       'kapan sebaiknya klarifikasi diterbitkan',
@@ -634,9 +789,7 @@ const intents: Intent<RadarCtx>[] = [
               : 'Nothing needs an urgent answer. For routine issues, respond within 24 hours at peak times (07:00–09:00 or 19:00–21:00).',
           followUps: urgent ? (lang === 'id' ? ['Susun klarifikasi nada tegas'] : ['Draft a firm clarification']) : [],
         },
-        urgent
-          ? ['Kedah enggal, Bapak/Ibu.', 'Harus segera, Bapak/Ibu.', 'It must be soon.']
-          : ['Mboten kedah enggal-enggalan.', 'Tidak perlu terburu-buru.', 'No need to rush.'],
+        urgent ? ['Kedah enggal, Bapak/Ibu.', 'Harus segera, Bapak/Ibu.', 'It must be soon.'] : ['Mboten kedah enggal-enggalan.', 'Tidak perlu terburu-buru.', 'No need to rush.'],
       )
     },
   },
@@ -661,16 +814,8 @@ const intents: Intent<RadarCtx>[] = [
       const label = n ? n.label[lang].toLowerCase() : lang === 'id' ? 'layanan publik' : 'public services'
       const qs =
         lang === 'id'
-          ? [
-              `Seberapa puas Anda dengan penanganan ${label} bulan ini? (1–5)`,
-              `Dari mana Anda biasa mendapat informasi tentang ${label}?`,
-              `Apa satu perbaikan ${label} yang paling Anda harapkan?`,
-            ]
-          : [
-              `How satisfied are you with how ${label} is handled this month? (1–5)`,
-              `Where do you usually get information about ${label}?`,
-              `What one improvement on ${label} do you want most?`,
-            ]
+          ? [`Seberapa puas Anda dengan penanganan ${label} bulan ini? (1–5)`, `Dari mana Anda biasa mendapat informasi tentang ${label}?`, `Apa satu perbaikan ${label} yang paling Anda harapkan?`]
+          : [`How satisfied are you with how ${label} is handled this month? (1–5)`, `Where do you usually get information about ${label}?`, `What one improvement on ${label} do you want most?`]
       return jvWrap(
         ctx,
         {
@@ -797,10 +942,7 @@ export const SCENARIO: Scenario<RadarCtx> = {
         ctx.lang === 'id'
           ? 'Maaf, saya belum memahami pertanyaan itu. Saya bisa meringkas isu hari ini, memeriksa hoaks dan buktinya, menilai sebuah unggahan, menyusun klarifikasi, atau menganalisis kata kunci.'
           : 'Sorry, I did not catch that. I can summarise today’s issues, check a hoax and its evidence, assess a post, draft a clarification or analyse a keyword.',
-      followUps:
-        ctx.lang === 'id'
-          ? ['Ringkas isu hari ini', 'Ada hoaks?', 'Analisis kata kunci banjir']
-          : ["Summarise today's issues", 'Is there a hoax?', 'Analyse the keyword flood'],
+      followUps: ctx.lang === 'id' ? ['Ringkas isu hari ini', 'Ada hoaks?', 'Analisis kata kunci banjir'] : ["Summarise today's issues", 'Is there a hoax?', 'Analyse the keyword flood'],
     },
 }
 

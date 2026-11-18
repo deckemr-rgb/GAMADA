@@ -34,10 +34,74 @@
 .dk-cb-title h2 svg {
   color: var(--dk-accent);
 }
+.dk-cb-title {
+  min-width: 0;
+  flex: 1 1 420px;
+}
 .dk-cb-title p {
   margin: 2px 0 0;
   color: var(--dk-muted);
   font: var(--dk-t13) var(--dk-font);
+}
+/* the payoff in one sentence (what a head of region needs in the first seconds), then the how */
+.dk-cb-title .dk-cb-value {
+  max-width: 78ch;
+  margin-top: 6px;
+  color: var(--dk-text);
+  font: 600 15px/1.45 var(--dk-font);
+  text-wrap: pretty;
+}
+.dk-cb-title .dk-cb-lead {
+  max-width: 78ch;
+  margin-top: 4px;
+  color: var(--dk-muted);
+  font: var(--dk-t13) var(--dk-font);
+  text-wrap: pretty;
+}
+.dk-cb-title .dk-cb-proof {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: var(--dk-r-pill);
+  background: var(--dk-accent-12);
+  color: var(--dk-text);
+  font: var(--dk-t12) var(--dk-font);
+  animation: dk-cb-in 0.4s var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+.dk-cb-proof svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--dk-accent);
+}
+.dk-cb-proof b {
+  color: var(--dk-accent);
+  font-weight: 600;
+}
+.dk-cb-banner-short {
+  display: none;
+}
+.dk-cb-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-pill);
+  color: var(--dk-muted);
+  font: 600 10px/16px var(--dk-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.dk-cb-edited {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--dk-danger-12);
+  color: var(--dk-danger-ink);
+  font-style: normal;
+  letter-spacing: 0.04em;
 }
 
 /* ------------------------------------------------------------------ programme banner */
@@ -59,7 +123,7 @@
 .dk-cb-banner b {
   font-weight: 600;
 }
-.dk-cb-banner span {
+.dk-cb-banner > div span {
   color: var(--dk-muted);
 }
 .dk-cb-banner.is-idle > svg {
@@ -136,7 +200,7 @@
 }
 .dk-cb-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(104px, auto));
+  grid-template-columns: repeat(4, minmax(124px, 140px));
   border: 1px solid var(--dk-line);
   border-radius: var(--dk-r-input);
   background: var(--dk-s1);
@@ -152,11 +216,8 @@
   border-left: 1px solid var(--dk-line);
 }
 .dk-cb-stat-l {
-  overflow: hidden;
-  color: var(--dk-faint);
-  font: 500 11px/15px var(--dk-font);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--dk-muted);
+  font: 500 11px/14px var(--dk-font);
 }
 .dk-cb-stat-v {
   font: 600 var(--dk-t16) var(--dk-font);
@@ -167,7 +228,8 @@
   font: 500 var(--dk-t12) var(--dk-font);
 }
 .dk-cb-stat-c {
-  color: var(--dk-faint);
+  min-height: 28px;
+  color: var(--dk-muted);
   font: 11px/14px var(--dk-font);
 }
 
@@ -414,25 +476,12 @@
   color: var(--dk-text);
   font: var(--dk-t13) var(--dk-font);
 }
-/* extraction rows: room for a whole NIK; confidence stacked in a narrow column */
-.dk-cb-xp .dk-xp-rowbtn {
-  grid-template-columns: 22px minmax(76px, 0.7fr) minmax(0, 1.7fr) 44px;
-}
-.dk-cb-xp .dk-xp-value {
-  overflow-wrap: break-word;
-  font-variant-numeric: tabular-nums;
-}
-.dk-cb-xp .dk-xp-conf {
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-.dk-cb-xp .dk-xp-bar {
-  width: 36px;
-}
-.dk-cb-xp .dk-xp-lowtag {
-  font-size: 10px;
-  line-height: 12px;
+/* field labels such as "Kelurahan/Desa" are one unbreakable word: a slightly wider label column so they never run
+   into the value (the kit's phone layout, ≤ 640 px, stacks label over value and is left alone) */
+@media (min-width: 641px) {
+  .dk-cb-xp .dk-xp-rowbtn {
+    grid-template-columns: 22px minmax(100px, 0.8fr) minmax(0, 1.6fr) 44px;
+  }
 }
 /* viewer toolbar: the CTA stays on the zoom row; the heatmap controls take their own row under it */
 .dk-cb-viewer .dk-doc-tools {
@@ -449,10 +498,6 @@
 }
 .dk-cb-viewer .dk-doc-bar:has(.dk-heat-ctl) .dk-doc-hint {
   display: none;
-}
-/* OCR confidence pills never steal a click from the neighbouring box (the list rows stay the 44 px route) */
-.dk-cb-viewer .dk-doc-conf {
-  pointer-events: none;
 }
 @media (min-width: 981px) {
   /* the document stays beside its (long) result column */
@@ -499,6 +544,48 @@
 }
 .dk-cb-askbtn {
   width: 100%;
+}
+
+/* before the first read: the checks this document will get */
+.dk-cb-preview {
+  padding: 10px 12px;
+  border: 1px dashed var(--dk-line-2);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+}
+.dk-cb-preview h4 {
+  margin: 0 0 6px;
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dk-cb-preview ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-cb-preview li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--dk-muted);
+  font: var(--dk-t13) var(--dk-font);
+  animation: dk-cb-in 0.32s ease-out both;
+  animation-delay: calc(var(--n, 0) * 40ms);
+}
+.dk-cb-preview li svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--dk-accent);
+}
+.dk-cb-preview li.is-verdict {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dk-line);
+  color: var(--dk-text);
 }
 
 /* history */
@@ -1145,6 +1232,7 @@ button.dk-cb-hist-row:focus-visible {
 .dk-cb-gridwrap {
   position: relative;
   min-width: 0;
+  container-type: inline-size;
 }
 .dk-cb-grid {
   position: relative;
@@ -1188,9 +1276,6 @@ button.dk-cb-hist-row:focus-visible {
   opacity: 0.55;
   border-style: dashed;
 }
-.dk-cb-card.is-dim {
-  opacity: 0.22;
-}
 .dk-cb-card-top {
   display: flex;
   justify-content: space-between;
@@ -1206,7 +1291,7 @@ button.dk-cb-hist-row:focus-visible {
 }
 .dk-cb-card-kec {
   overflow: hidden;
-  color: var(--dk-faint);
+  color: var(--dk-muted);
   font: 10px/14px var(--dk-font);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1224,6 +1309,26 @@ button.dk-cb-hist-row:focus-visible {
 }
 .dk-cb-card.is-done .dk-cb-card-res {
   animation: dk-cb-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.dk-cb-card-also {
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--dk-warn-ink);
+  font: 600 10px/13px var(--dk-font);
+  white-space: nowrap;
+}
+.dk-cb-card-also em {
+  flex: none;
+  color: var(--dk-danger-ink);
+  font-style: normal;
+}
+.dk-cb-card-also span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-cb-card.is-dim .dk-cb-card-also {
+  color: color-mix(in srgb, var(--dk-faint) 55%, transparent);
 }
 @keyframes dk-cb-pop {
   from {
@@ -1271,6 +1376,21 @@ button.dk-cb-hist-row:focus-visible {
 .dk-cb-card.is-luar-zona .dk-cb-card-res {
   color: #d9b2e6;
 }
+/* filtered out: dimmed by colour, not group opacity (50 cards at opacity < 1 each need their own render surface,
+   which made a filter tap cost 200-300 ms on desktop) */
+.dk-cb-card.is-dim {
+  --tone: var(--dk-line);
+  border-color: var(--dk-line);
+}
+.dk-cb-card.is-dim,
+.dk-cb-card.is-dim .dk-cb-card-top,
+.dk-cb-card.is-dim .dk-cb-card-kec,
+.dk-cb-card.is-dim .dk-cb-card-res {
+  color: color-mix(in srgb, var(--dk-faint) 55%, transparent);
+}
+.dk-cb-card.is-dim .dk-cb-card-tint {
+  visibility: hidden;
+}
 .dk-cb-card.is-scan {
   opacity: 1;
   border-color: var(--dk-line-act);
@@ -1316,7 +1436,11 @@ button.dk-cb-hist-row:focus-visible {
 }
 .dk-cb-lines:not(.is-top) path.is-on {
   stroke-dashoffset: 0;
-  opacity: 0.75;
+  opacity: 0;
+}
+/* at rest no line crosses other cards (each duplicate card names its pair "= #nn"); the NIK ganda filter shows them all */
+.dk-cb-gridwrap.is-f-ganda .dk-cb-lines:not(.is-top) path.is-on {
+  opacity: 0.5;
 }
 /* over the cards: only the hovered / focused pair, or every pair with the NIK ganda filter */
 .dk-cb-lines.is-top path {
@@ -1359,6 +1483,57 @@ button.dk-cb-hist-row:focus-visible {
 .dk-cb-detail {
   display: grid;
   gap: 14px;
+}
+.dk-cb-dfind {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-cb-dfind li {
+  padding-left: 10px;
+  border-left: 3px solid var(--dk-line-2);
+}
+.dk-cb-dfind li.is-kurang {
+  border-color: var(--dk-warn);
+}
+.dk-cb-dfind li.is-ganda {
+  border-color: var(--dk-danger);
+}
+.dk-cb-dfind li.is-luar-zona {
+  border-color: #c08ad0;
+}
+/* audit drawer */
+.dk-cb-audit {
+  display: grid;
+  gap: 12px;
+}
+.dk-cb-audit-lead,
+.dk-cb-audit-empty {
+  margin: 0;
+  color: var(--dk-muted);
+  font: var(--dk-t12) var(--dk-font);
+}
+.dk-cb-audit ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-cb-audit li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+  font: var(--dk-t13) var(--dk-font);
+}
+.dk-cb-audit-m {
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
 }
 .dk-cb-dres {
   display: inline-flex;
@@ -1617,6 +1792,85 @@ button.dk-cb-hist-row:focus-visible {
   font: var(--dk-t12) var(--dk-font);
 }
 
+/* ------------------------------------------------------------------ connected products */
+.dk-cb-links {
+  display: grid;
+  gap: 8px;
+}
+.dk-cb-links h3 {
+  margin: 0;
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dk-cb-links ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-cb-links li > a,
+.dk-cb-links li > button,
+.dk-cb-links li.is-static {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: var(--dk-target);
+  height: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+  color: var(--dk-text);
+  text-decoration: none;
+}
+.dk-cb-links li > button {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dk-cb-links li > a,
+.dk-cb-links li > button {
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.dk-cb-links li > a:hover,
+.dk-cb-links li > button:hover {
+  border-color: var(--dk-accent);
+  transform: translateY(-1px);
+}
+.dk-cb-links li > button:focus-visible,
+.dk-cb-links li > a:focus-visible {
+  outline: 2px solid var(--dk-accent);
+  outline-offset: 2px;
+}
+.dk-cb-links li > svg:first-child,
+.dk-cb-links a > svg:first-child,
+.dk-cb-links button > svg:first-child {
+  flex: none;
+  color: var(--dk-accent);
+}
+.dk-cb-links a > svg:last-child,
+.dk-cb-links button > svg:last-child {
+  flex: none;
+  margin-left: auto;
+  color: var(--dk-muted);
+}
+.dk-cb-links span {
+  display: grid;
+  min-width: 0;
+}
+.dk-cb-links b {
+  font: 600 var(--dk-t13) var(--dk-font);
+}
+.dk-cb-links small {
+  color: var(--dk-muted);
+  font: var(--dk-t12) var(--dk-font);
+}
+
 /* ------------------------------------------------------------------ footer */
 .dk-cb-foot {
   display: flex;
@@ -1642,6 +1896,11 @@ button.dk-cb-hist-row:focus-visible {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+@media (pointer: coarse) {
+  .dk-cb-viewer .dk-doc-box {
+    pointer-events: none;
+  }
+}
 @media (max-width: 980px) {
   .dk-cb-work {
     grid-template-columns: minmax(0, 1fr);
@@ -1659,6 +1918,20 @@ button.dk-cb-hist-row:focus-visible {
   }
   .dk-cb-head {
     align-items: stretch;
+  }
+  /* phones: the benefit line replaces the role note (the role sits in the top-bar menu) */
+  .dk-cb-title .dk-cb-role {
+    display: none;
+  }
+  /* phones: the value line + proof carry the first screen; the "how" sentence is the desktop extra */
+  .dk-cb-title .dk-cb-lead {
+    display: none;
+  }
+  .dk-cb-title .dk-cb-value {
+    font-size: var(--dk-t14);
+  }
+  .dk-cb-links ul {
+    grid-template-columns: minmax(0, 1fr);
   }
   .dk-cb-head .dk-seg,
   .dk-cb-head [role='radiogroup'],
@@ -1684,11 +1957,34 @@ button.dk-cb-hist-row:focus-visible {
   .dk-cb-stat-v {
     font-size: var(--dk-t14);
   }
+  /* phones: every number keeps its meaning in a short two-line caption */
   .dk-cb-stat-c {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 0;
+    margin-top: 1px;
+    font-size: 10px;
+    line-height: 12px;
+  }
+  .dk-cb-banner.is-idle > div > .dk-cb-banner-long {
     display: none;
   }
-  .dk-cb-banner.is-idle > div > span {
-    display: none;
+  .dk-cb-banner.is-idle > div > .dk-cb-banner-short {
+    display: inline;
+  }
+  /* gallery titles on two lines: "KTP · sengaja diedit" stays recognisable */
+  .dk-cb-tt b,
+  .dk-cb-tt small {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+  }
+  /* touch: the 8-9 px boxes on the page image are markers only; the 44 px extraction rows are the targets */
+  .dk-cb-viewer .dk-doc-box {
+    pointer-events: none;
   }
   .dk-cb-banner > div {
     flex-basis: 160px;
@@ -1700,9 +1996,6 @@ button.dk-cb-hist-row:focus-visible {
     -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
     padding-right: 28px;
-  }
-  .dk-cb-viewer .dk-heat-range input {
-    min-height: var(--dk-target);
   }
   .dk-cb-thumb {
     flex-basis: 188px;
@@ -1718,10 +2011,6 @@ button.dk-cb-hist-row:focus-visible {
   .dk-cb-summary {
     top: -12px;
     padding: 8px 10px;
-  }
-  /* phones: the long pair lines stay a faint trace; the red card borders carry the finding */
-  .dk-cb-lines:not(.is-top) path.is-on {
-    opacity: 0.35;
   }
   /* five compact chips in one row: every count visible */
   .dk-cb-filters {
@@ -1810,5 +2099,131 @@ html[data-dk-calm] .dk-cb *,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* the grid follows its own width (the guide panel narrows the stage on desktop): cards stay ≥ ~110 px wide */
+@container (max-width: 1099px) {
+  .dk-cb-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+@container (max-width: 879px) {
+  .dk-cb-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+@container (max-width: 639px) {
+  .dk-cb-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+/* ------------------------------------------------------------------ round 2: banner actions, namesakes, audit groups */
+.dk-cb-banner-acts {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.dk-cb-card-also i {
+  flex: none;
+  color: var(--dk-muted);
+  font-style: normal;
+}
+.dk-cb-dup.is-same li {
+  border-color: var(--dk-line-act, var(--dk-line));
+}
+.dk-cb-same-body {
+  margin: 0 0 6px;
+  color: var(--dk-muted);
+  font: var(--dk-t12) var(--dk-font);
+}
+.dk-cb-audit-x {
+  justify-self: start;
+}
+.dk-cb-audit li.is-bulk {
+  padding: 0;
+}
+.dk-cb-audit li.is-bulk summary {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 8px 28px;
+  position: relative;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.dk-cb-audit li.is-bulk summary::-webkit-details-marker {
+  display: none;
+}
+.dk-cb-audit li.is-bulk summary::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 15px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--dk-muted);
+  border-bottom: 2px solid var(--dk-muted);
+  transform: rotate(-45deg);
+  transition: transform 150ms ease;
+}
+.dk-cb-audit li.is-bulk details[open] summary::before {
+  transform: rotate(45deg);
+}
+.dk-cb-audit li.is-bulk summary:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+  border-radius: var(--dk-r-input);
+}
+.dk-cb-audit li.is-bulk details > ol {
+  padding: 0 8px 8px;
+  gap: 4px;
+}
+.dk-cb-audit li.is-bulk details > ol > li {
+  padding: 6px 8px;
+  font-size: var(--dk-t12);
+}
+@media (max-width: 767px) {
+  .dk-cb-banner-acts {
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .dk-cb-banner-acts .dk-btn {
+    flex: none;
+    min-height: var(--dk-target);
+  }
+  .dk-cb-banner-acts .dk-cb-link {
+    min-width: 0;
+    font-size: var(--dk-t12);
+    line-height: 1.25;
+    white-space: normal;
+  }
+}
+/* phones: names may take two lines and every extra (pair, namesake, second finding) gets its own line */
+@container (max-width: 639px) {
+  .dk-cb-card-name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .dk-cb-card-also {
+    flex-direction: column;
+    gap: 0;
+  }
+  .dk-cb-card-also span {
+    white-space: normal;
+  }
+  /* a filter shows only its files; with NIK ganda the two files of a pair sit side by side */
+  .dk-cb-gridwrap.is-f .dk-cb-card.is-dim {
+    display: none;
+  }
+  .dk-cb-gridwrap.is-f-ganda .dk-cb-card {
+    order: var(--po, 999);
   }
 }

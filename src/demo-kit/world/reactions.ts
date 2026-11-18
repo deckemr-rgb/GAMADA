@@ -7,7 +7,7 @@ import type { AnyFollowUp, Bi, ComplaintCluster, EventType, FollowUp, WorldEvent
 import { MEDIA_OUTLETS, PUMP_PACKAGE, SOCIAL_HANDLES } from './texts'
 import { EVENT_MENTION_TEXT, HOAX_SCENARIO, NOTIFY_TEXT } from './scenario-texts'
 import { computeScore } from './score'
-import { DAY_MIN, WORLD, distanceKm, hhmm, monthOf, ref, rows } from './util'
+import { DAY_MIN, WORLD, distanceKm, hhmm, monthOf, picOf, ref, rows } from './util'
 
 export interface Reaction {
   /** stable name (tests, debugging) */
@@ -168,7 +168,7 @@ export const REACTIONS: Reaction[] = [
     if (!p.id) return []
     return p.opdIds.map((opdId) => {
       const opd = s.region.opd.find((o) => o.id === opdId)
-      return fu('actionItem.created', { title: p.text, opdId, pic: `Kepala ${opd?.short ?? opdId}`, dueAt: p.dueAt ?? e.at + DAY_MIN, source: { kind: 'instruction', id: p.id ?? null } }, 'naskah-pintar')
+      return fu('actionItem.created', { title: p.text, opdId, pic: picOf(opd, opdId), dueAt: p.dueAt ?? e.at + DAY_MIN, source: { kind: 'instruction', id: p.id ?? null } }, 'naskah-pintar')
     })
   }),
 
@@ -265,7 +265,11 @@ export const REACTIONS: Reaction[] = [
     return [fu('hoax.detected', {
       claim: fillBi(HOAX_SCENARIO.claim, { dam: f.dam }), score: 0.93, spreadPerHour: Math.round(burst.reduce((n, m) => n + m.reach, 0) / spanH),
       accounts: [...new Set(first.map((m) => m.author))].slice(0, 4), topic: HOAX_SCENARIO.topic, rumor,
-      evidence: fillBi(HOAX_SCENARIO.evidence, { dam: f.dam, level: f.level.toFixed(1).replace('.', ','), siaga: f.siaga.toFixed(1).replace('.', ',') }),
+      // decimals per locale: "8,6 m" in Indonesian, "8.6 m" in English
+      evidence: {
+        id: fillBi(HOAX_SCENARIO.evidence, { dam: f.dam, level: f.level.toFixed(1).replace('.', ','), siaga: f.siaga.toFixed(1).replace('.', ',') }).id,
+        en: fillBi(HOAX_SCENARIO.evidence, { dam: f.dam, level: f.level.toFixed(1), siaga: f.siaga.toFixed(1) }).en,
+      },
     }, 'radar-isu')]
   }),
   // clarification ⇒ sentiment recovers over the next 30 world minutes (future-dated positive mentions)
@@ -284,10 +288,10 @@ export const REACTIONS: Reaction[] = [
   react('harvest→econ', 'harvest.updated', (e, s) => {
     if (e.payload.scenario !== 'pasca-banjir') return []
     const month = monthOf(s.day)
-    const drop = (e.payload.dropPct ?? WORLD.harvestFloodDropPct) / 100
     return e.payload.kecamatanIds.flatMap((k) => {
       const x = s.econIndex.byId[`${k}:${month}`]
       if (!x) return []
+      const drop = (e.payload.dropPctByKecamatan?.[k] ?? e.payload.dropPct ?? WORLD.harvestFloodDropPct) / 100
       const index = Math.round(x.index * (1 - drop * 0.22) * 10) / 10
       if (index === x.index) return []
       return [fu('econ.updated', { kecamatanId: k, month, index, delta: Math.round((index - x.index) * 10) / 10, reason: { id: `Estimasi panen Kec. ${kecName(s, k)} turun pascabanjir`, en: `Harvest estimate in ${kecName(s, k)} down after the flood` } }, 'indeks-ekonomi')]

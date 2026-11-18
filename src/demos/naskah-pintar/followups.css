@@ -362,3 +362,35 @@ html[data-dk-calm] .dk-np-pulse {
   left: 0;
   background: linear-gradient(to left, transparent, var(--dk-bg));
 }
+
+/* touch: the filter chips are full 44 px targets */
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-np-ftools .dk-chip {
+    height: var(--dk-target);
+  }
+}
+/* the agency board shows whole columns only (no lane cut at the right edge): 4, 3 or 2 by the board's width */
+.dk-np-laneboard {
+  container-type: inline-size;
+}
+@container (min-width: 960px) {
+  .dk-np-laneboard .dk-np-kanban {
+    grid-auto-columns: calc((100% - 36px) / 4);
+  }
+}
+@container (min-width: 700px) and (max-width: 959.98px) {
+  .dk-np-laneboard .dk-np-kanban {
+    grid-auto-columns: calc((100% - 24px) / 3);
+  }
+}
+@container (min-width: 460px) and (max-width: 699.98px) {
+  .dk-np-laneboard .dk-np-kanban {
+    grid-auto-columns: calc((100% - 12px) / 2);
+  }
+}
+
+.dk-np-item-again {
+  margin: -2px 0 0;
+  color: var(--dk-faint);
+  font: 500 italic var(--dk-t12) var(--dk-font);
+}

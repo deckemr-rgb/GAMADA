@@ -10,7 +10,7 @@ import { BarChart } from '../../demo-kit/viz'
 import { demoHref } from '../../demo-kit/shell'
 import { useSession, useWorld, type WorldState } from '../../demo-kit/world'
 import { hpsVsMarket, type ItemDeviation } from '../../demo-kit/world/satu-daerah'
-import { localOffers, needOf, pct, qtyUnit, rpFull, rpShort } from './model'
+import { CORRECTION_MARGIN, correctedUnit, localOffers, needOf, pct, qtyUnit, rpFull, rpShort } from './model'
 import { useT } from './strings'
 
 const all = (s: WorldState) => s
@@ -43,33 +43,73 @@ export default function HpsTab({ id }: { id: string }) {
   // the chart frame pads its plot by ≈ 17 px a side
   const chartW = Math.max(0, useElementWidth(chartRef) - 34)
 
+  const boxRef = useRef<HTMLDivElement>(null)
+  const boxW = useElementWidth(boxRef)
+  // tablets: the volume moves under the item name, so every money column fits without a hidden scroll
+  const fold = boxW > 0 && boxW < (corrected ? 860 : 760)
   const columns = useMemo<TableColumn<ItemDeviation>[]>(() => {
     const c: TableColumn<ItemDeviation>[] = [
-      { id: 'item', header: t.colItem, card: 'title', min: 150, grow: 2, value: (r) => r.name[lang] },
-      { id: 'qty', header: t.colQty, numeric: true, min: 76, value: (r) => r.qty, cell: (r) => qtyUnit(r.qty, r.unit, lang) },
-      { id: 'hps', header: t.colHpsUnit, numeric: true, min: 108, value: (r) => r.hps, cell: (r) => rpFull(r.hps, lang) },
-      { id: 'market', header: t.colMarket, numeric: true, min: 108, value: (r) => r.market, cell: (r) => rpFull(r.market, lang) },
+      // the item name gets the spare width (the money columns are fixed-width): fewer names end in an ellipsis
+      {
+        id: 'item',
+        header: t.colItem,
+        card: 'title',
+        min: 150,
+        grow: 4,
+        value: (r) => r.name[lang],
+        cell: (r) =>
+          fold ? (
+            <span className="dk-ab-itemcell" title={r.name[lang]}>
+              <span>{r.name[lang]}</span>
+              <small className="dk-num">{qtyUnit(r.qty, r.unit, lang)}</small>
+            </span>
+          ) : (
+            <span title={r.name[lang]}>{r.name[lang]}</span>
+          ),
+      },
+      ...(fold ? [] : [{ id: 'qty', header: t.colQty, numeric: true, min: 76, value: (r: ItemDeviation) => r.qty, cell: (r: ItemDeviation) => qtyUnit(r.qty, r.unit, lang) }]),
+      // tablets: the unit HPS and the market median share one column (two lines)
+      ...(fold
+        ? [
+            {
+              id: 'hps',
+              header: t.colHpsVsMarket,
+              numeric: true,
+              min: 124,
+              value: (r: ItemDeviation) => r.hps,
+              cell: (r: ItemDeviation) => (
+                <span className="dk-ab-itemcell is-num">
+                  <span>{rpFull(r.hps, lang)}</span>
+                  <small>{t.marketShort(rpFull(r.market, lang))}</small>
+                </span>
+              ),
+            },
+          ]
+        : [
+            { id: 'hps', header: t.colHpsUnit, numeric: true, min: 108, value: (r: ItemDeviation) => r.hps, cell: (r: ItemDeviation) => rpFull(r.hps, lang) },
+            { id: 'market', header: t.colMarket, numeric: true, min: 118, value: (r: ItemDeviation) => r.market, cell: (r: ItemDeviation) => rpFull(r.market, lang) },
+          ]),
       {
         id: 'dev',
         header: t.colDev,
         numeric: true,
         card: 'meta',
-        min: 76,
+        min: 88,
         value: (r) => r.devPct,
         cell: (r) => <Badge tone={r.level === 'tinggi' ? 'danger' : r.level === 'waspada' ? 'warn' : 'neutral'}>{pct(r.devPct, lang, true)}</Badge>,
       },
       { id: 'gap', header: t.colGap, numeric: true, min: 118, value: (r) => r.overpay, cell: (r) => rpFull(r.overpay, lang) },
     ]
-    if (corrected) c.push({ id: 'fix', header: t.colCorrected, numeric: true, min: 118, value: (r) => r.market * r.qty, cell: (r) => <span className="dk-ab-fixed">{rpFull(r.market * r.qty, lang)}</span> })
+    if (corrected) c.push({ id: 'fix', header: t.colCorrected, numeric: true, min: 118, value: (r) => correctedUnit(r.market) * r.qty, cell: (r) => <span className="dk-ab-fixed">{rpFull(correctedUnit(r.market) * r.qty, lang)}</span> })
     return c
-  }, [t, lang, corrected])
+  }, [t, lang, corrected, fold])
 
   if (!p) return null
   const top = [...hv.items].sort((a, b) => b.devPct - a.devPct)[0]
   const keep = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('controls') === 'all' ? '&controls=all' : ''
 
   return (
-    <div className="dk-ab-hps">
+    <div ref={boxRef} className="dk-ab-hps">
       <Table<ItemDeviation>
         rows={hv.items}
         columns={columns}
@@ -105,7 +145,7 @@ export default function HpsTab({ id }: { id: string }) {
       {corrected && p.recommendation && (
         <p className="dk-ab-fixnote" role="status">
           <Icon name="check" size={16} />
-          {t.correctedNote(rpFull(p.hps, lang), rpFull(p.recommendation.hpsCorrected, lang), rpFull(p.hps - p.recommendation.hpsCorrected, lang))}
+          {t.correctedNote(rpFull(p.hps, lang), rpFull(p.recommendation.hpsCorrected, lang), rpFull(p.hps - p.recommendation.hpsCorrected, lang), Math.round(CORRECTION_MARGIN * 100))}
         </p>
       )}
       <div className="dk-ab-hps-grid">
@@ -116,7 +156,7 @@ export default function HpsTab({ id }: { id: string }) {
           seed={s.seed}
           orientation="horizontal"
           valueLabels
-          height={Math.max(160, hv.items.length * 44 + 40)}
+          height={Math.max(140, hv.items.length * 36 + 24)}
           format={(v) => pct(v, lang)}
           axisFormat={(v) => `${Math.round(v)}%`}
           summary={top ? t.devSummary(top.name[lang], pct(top.devPct, lang)) : undefined}

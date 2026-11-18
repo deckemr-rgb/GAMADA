@@ -11,6 +11,7 @@ const SKY: Record<PhotoId, [string, string]> = {
   lampu: ['#1b1838', '#3a3366'],
   lubang: ['#9fb4cf', '#e2e6ef'],
   sesudah: ['#8fc3d9', '#eef3f2'],
+  surut: ['#8fc3d9', '#eef3f2'],
 }
 
 function Scene({ id }: { id: PhotoId }) {
@@ -92,6 +93,33 @@ function Scene({ id }: { id: PhotoId }) {
           <rect x="0" y="40" width="240" height="24" fill="#6f8a5c" />
           <path d="M196 70 l10 -28 l10 28 z" fill="#f2b33d" stroke="#3b3836" strokeWidth="1.5" />
           <text x="203" y="66" fontSize="12" fontWeight="700" fill="#3b3836" fontFamily="sans-serif">!</text>
+        </>
+      )
+    case 'surut':
+      // the flood scene from the same spot (house, flag, motorbike), water gone and a damp road
+      return (
+        <>
+          <circle cx="210" cy="22" r="11" fill="#ffe7a6" />
+          <rect x="0" y="70" width="240" height="90" fill="#7a8a6a" />
+          <rect x="132" y="38" width="86" height="44" fill="#d9d2c3" />
+          <path d="M126 40 L175 18 L224 40 Z" fill="#8a4b3a" />
+          <rect x="146" y="52" width="14" height="14" fill="#5f7ea0" />
+          <rect x="168" y="52" width="14" height="14" fill="#5f7ea0" />
+          <rect x="190" y="52" width="14" height="14" fill="#5f7ea0" />
+          <line x1="40" y1="20" x2="40" y2="70" stroke="#444" strokeWidth="2" />
+          <path d="M40 22 h18 v10 h-18z" fill="#c8383b" />
+          <path d="M40 32 h18 v10 h-18z" fill="#f4f1ea" />
+          <rect x="0" y="92" width="240" height="68" fill="#8c7b5a" />
+          <path d="M0 118 Q60 112 120 117 T240 116 V124 Q180 128 120 124 T0 126 Z" fill="#6b7c86" opacity=".35" />
+          <g transform="translate(78 100)">
+            <circle cx="0" cy="14" r="9" fill="none" stroke="#2c2c34" strokeWidth="3" />
+            <circle cx="34" cy="14" r="9" fill="none" stroke="#2c2c34" strokeWidth="3" />
+            <path d="M0 14 L14 2 H26 L34 14" fill="none" stroke="#2c2c34" strokeWidth="3" />
+          </g>
+          <g transform="translate(206 112)">
+            <circle r="14" fill="#2aa58d" />
+            <path d="M-6 0 l4 4 l8 -9" stroke="#fff" strokeWidth="3" fill="none" strokeLinecap="round" />
+          </g>
         </>
       )
     case 'sesudah':

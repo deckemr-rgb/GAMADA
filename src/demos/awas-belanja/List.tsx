@@ -8,37 +8,17 @@ import { Badge, Button, EmptyState, Icon, Input, Kpi, KpiStrip, Segmented, Statu
 import { demoHref, useShell } from '../../demo-kit/shell'
 import { clock, emit, hhmm, rows, shallowEqual, useClock, useSession, useWorld, world, type Procurement, type WorldState } from '../../demo-kit/world'
 import { floodScenarioAlert, packages, type PackageRow } from '../../demo-kit/world/satu-daerah'
-import { BAND_TONE, SLUG, daysLeft, findPump, isAnalysed, kecName, riskBand, rpShort, PUMP_KEY } from './model'
+import { BAND_TONE, SLUG, analyse, daysLeft, findPump, isAnalysed, isOpenStage, kecName, prelimBefore, riskBand, rpShort, watchSummary, PUMP_KEY } from './model'
 import { preloadDetail } from './preload'
 import { useT, type Strings, type Lang } from './strings'
 import type { RoleKey, TabId } from './types'
 
 type Filter = 'aktif' | 'semua' | 'berisiko'
+/** the history check threshold and the first screening (same values as index.tsx) */
+const HISTORY_MIN = 60
+const SCREEN_START = 7 * 60
 const ACTIVE: Procurement['status'][] = ['perencanaan', 'pengumuman', 'evaluasi']
 const DEFAULT_FILTER: Record<RoleKey, Filter> = { ukpbj: 'aktif', inspektorat: 'semua' }
-
-interface Kpis {
-  active: number
-  value: number
-  high: number
-  unanalysed: number
-  gap: number
-  corrected: number
-}
-function kpis(s: WorldState): Kpis {
-  let active = 0, value = 0, high = 0, unanalysed = 0, gap = 0, corrected = 0
-  for (const p of rows(s.procurements)) {
-    if (p.status === 'selesai') continue
-    active++
-    value += p.recommendation ? p.recommendation.hpsCorrected : p.hps
-    if ((p.riskScore ?? 0) >= 60) high++
-    if (!isAnalysed(p)) unanalysed++
-    const over = p.items.reduce((a, i) => a + (i.hpsPrice - i.marketPrice) * i.qty, 0)
-    if (p.recommendation) corrected += Math.max(0, p.hps - p.recommendation.hpsCorrected)
-    else gap += Math.max(0, over)
-  }
-  return { active, value, high, unanalysed, gap, corrected }
-}
 
 interface Banner {
   pumpId: string | null
@@ -71,7 +51,7 @@ export interface ListProps {
 
 export default function List({ roleKey, fresh, onOpen, onShortcut }: ListProps) {
   const { t, lang } = useT()
-  const k = useWorld(kpis, shallowEqual)
+  const k = useWorld(watchSummary, shallowEqual)
   const all = useWorld(packages)
   const b = useWorld(banner, shallowEqual)
   const opdOf = useWorld((s) => s.region.opd)
@@ -104,11 +84,14 @@ export default function List({ roleKey, fresh, onOpen, onShortcut }: ListProps) 
     <div className="dk-ab-list">
       <Header t={t} roleKey={roleKey} />
       <KpiStrip label={t.kpiLabel} className="dk-ab-kpis">
-        <Kpi label={t.kpiActive} value={k.active} caption={t.sim} />
-        <Kpi label={t.kpiValue} value={k.value} format={(n) => rpShort(n, lang)} caption={t.kpiValueCap} />
-        <Kpi label={t.kpiHigh} value={k.high} caption={t.kpiHighCap(k.unanalysed)} />
-        <Kpi label={t.kpiGap} value={k.gap} format={(n) => rpShort(n, lang)} caption={k.corrected > 0 ? t.kpiSavedCap(rpShort(k.corrected, lang)) : t.kpiGapCap} />
+        {/* the money first: what an overpriced HPS would cost (the 30-second benefit) */}
+        <Kpi wrapLabel className="dk-ab-kpi-gap" label={t.kpiGap} value={k.gap} format={(n) => rpShort(n, lang)} caption={k.proposed > 0 ? t.kpiSavedCap(rpShort(k.proposed, lang)) : t.kpiGapCap} />
+        <Kpi wrapLabel label={t.kpiHigh} value={k.high + k.mid} caption={t.kpiHighCap(k.high, k.mid, k.prelim + k.none)} />
+        <Kpi wrapLabel label={t.kpiValue} value={k.value} format={(n) => rpShort(n, lang)} caption={t.kpiValueCap} />
+        <Kpi wrapLabel label={t.kpiActive} value={k.watched} caption={t.kpiActiveCap(k.tender, k.contract, k.done)} />
       </KpiStrip>
+
+      <Screening t={t} lang={lang} onOpen={onOpen} />
 
       <FloodBanner b={b} t={t} lang={lang} onOpen={onOpen} onShortcut={onShortcut} />
 
@@ -164,6 +147,7 @@ export default function List({ roleKey, fresh, onOpen, onShortcut }: ListProps) 
           />
         }
       />
+      <p className="dk-ab-src">{t.dataSource}</p>
     </div>
   )
 }
@@ -175,6 +159,7 @@ function Header({ t, roleKey }: { t: Strings; roleKey: RoleKey }) {
         <p className="dk-ab-eyebrow">{t.workspace[roleKey]}</p>
         <h2 className="dk-ab-h">{t.lead}</h2>
         <p className="dk-ab-lead">{t.leadRole[roleKey]}</p>
+        <p className="dk-ab-gloss">{t.glossary}</p>
       </div>
     </header>
   )
@@ -184,7 +169,7 @@ function Header({ t, roleKey }: { t: Strings; roleKey: RoleKey }) {
 
 const FloodBanner = memo(function FloodBanner({ b, t, lang, onOpen, onShortcut }: { b: Banner; t: Strings; lang: Lang; onOpen: ListProps['onOpen']; onShortcut: () => void }) {
   const session = useSession()
-  // phones: a shorter label, so the hotspot badge (bottom-right corner) never covers the words
+  // phones: a shorter label that fits one line on a full-width button
   const narrow = useShell().size === 'sm'
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -207,32 +192,31 @@ const FloodBanner = memo(function FloodBanner({ b, t, lang, onOpen, onShortcut }
             <span className="dk-btn-label">{t.floodOpenSiaga}</span>
             <Icon name="external" size={14} />
           </Link>
-          {/* the hotspot sits on this wrapper: its padding keeps the ring off the button label (kit places it on the corner) */}
-          <span className="dk-ab-hs" data-hotspot="ab-start">
-            <Button
-              size="sm"
-              variant="primary"
-              icon="alert"
-              busy={busy}
-              title={t.floodShortcutHint}
-              onPointerEnter={preloadDetail}
-              onFocus={preloadDetail}
-              onClick={() => {
-                if (busy) return
-                setBusy(true)
-                onShortcut()
-                // paint the busy state first, then run the whole flood reaction chain (INP)
-                requestAnimationFrame(() =>
-                  setTimeout(() => {
-                    const s = world.get()
-                    emit('flood.alert', floodScenarioAlert(s, clock.get().minutes, { level: 3 }), SLUG, { origin: 'siaga-wilayah' })
-                  }, 0),
-                )
-              }}
-            >
-              {narrow ? t.floodShortcutShort : t.floodShortcut}
-            </Button>
-          </span>
+          <Button
+            size="sm"
+            variant="primary"
+            icon="alert"
+            data-hotspot="ab-start"
+            data-ab="flood-shortcut"
+            busy={busy}
+            title={t.floodShortcutHint}
+            onPointerEnter={preloadDetail}
+            onFocus={preloadDetail}
+            onClick={() => {
+              if (busy) return
+              setBusy(true)
+              onShortcut()
+              // paint the busy state first, then run the whole flood reaction chain (INP)
+              requestAnimationFrame(() =>
+                setTimeout(() => {
+                  const s = world.get()
+                  emit('flood.alert', floodScenarioAlert(s, clock.get().minutes, { level: 3 }), SLUG, { origin: 'siaga-wilayah' })
+                }, 0),
+              )
+            }}
+          >
+            {narrow ? t.floodShortcutShort : t.floodShortcut}
+          </Button>
         </div>
       </section>
     )
@@ -260,15 +244,113 @@ const FloodBanner = memo(function FloodBanner({ b, t, lang, onOpen, onShortcut }
   )
 })
 
+/* ------------------------------------------------------------------ latest screening (the world clock at work) */
+
+/** the latest procurement.flagged of a package still being watched, by world time (the log's order is not relied on) */
+const lastFlag = (s: WorldState): { id: string; at: number; source: string } | null => {
+  let best: { id: string; at: number; source: string; key: string } | null = null
+  for (const aid of s.auditLog.ids) {
+    const a = s.auditLog.byId[aid]
+    if (a?.type !== 'procurement.flagged') continue
+    const ref = a.entityRefs.find((r) => r.startsWith('procurements:'))
+    if (!ref) continue
+    const id = ref.slice('procurements:'.length)
+    if (s.procurements.byId[id]?.status === 'selesai') continue
+    if (!best || a.at > best.at || (a.at === best.at && a.id > best.key)) best = { id, at: a.at, source: a.source, key: a.id }
+  }
+  return best && { id: best.id, at: best.at, source: best.source }
+}
+
+/** completed packages whose 7-detector score is high (the 07:00 history check flags the same ones) */
+interface History {
+  n: number
+  opd: string
+  lo: number
+  hi: number
+  top: string
+}
+function history(s: WorldState): History | null {
+  const hits = rows(s.procurements)
+    .filter((p) => p.status === 'selesai')
+    .map((p) => ({ p, score: analyse(s, p.id).riskScore }))
+    .filter((x) => x.score >= HISTORY_MIN)
+    .sort((a, b) => b.score - a.score)
+  if (!hits.length) return null
+  const opds = new Map<string, number>()
+  for (const h of hits) opds.set(h.p.opdId, (opds.get(h.p.opdId) ?? 0) + 1)
+  const opdId = [...opds.entries()].sort((a, b) => b[1] - a[1])[0]![0]
+  return { n: hits.length, opd: s.region.opd.find((o) => o.id === opdId)?.short ?? opdId, lo: hits[hits.length - 1]!.score, hi: hits[0]!.score, top: hits[0]!.p.id }
+}
+/** re-screening heartbeat once every open package has a result (world minutes) */
+const RESCAN_EVERY = 10
+
+const Screening = memo(function Screening({ t, lang, onOpen }: { t: Strings; lang: Lang; onOpen: ListProps['onOpen'] }) {
+  const last = useWorld(lastFlag, shallowEqual)
+  const p = useWorld((s) => (last ? s.procurements.byId[last.id] : undefined))
+  const waiting = useWorld((s) => rows(s.procurements).filter((q) => isOpenStage(q) && q.riskScore == null).length)
+  const watched = useWorld((s) => rows(s.procurements).filter((q) => q.status !== 'selesai').length)
+  // completed packages never change during a session: computed once (analysis is pure)
+  const hist = useMemo(() => history(world.get()), [])
+  const { running, minutes } = useClock()
+  const band = p?.riskScore != null ? riskBand(p.riskScore) : null
+  const rescanAt = Math.floor(minutes / RESCAN_EVERY) * RESCAN_EVERY
+  const rescan = !!last && !waiting && rescanAt > last.at
+  let line = t.screenIdle
+  let from: string | null = null
+  if (p && last && band) {
+    const full = isAnalysed(p)
+    const pass = full && !p.findings.some((f) => f.level !== 'lolos')
+    line = !full ? t.screenPrelim(hhmm(last.at), p.name[lang], p.riskScore ?? 0, t.riskBand[band] ?? band) : pass ? t.screenPass(hhmm(last.at), p.name[lang]) : t.screenLine(hhmm(last.at), p.name[lang], p.riskScore ?? 0, t.riskBand[band] ?? band)
+    const was = prelimBefore.get(p.id)
+    if (full && was != null && was !== p.riskScore) from = t.screenFrom(was)
+  }
+  return (
+    <section className={`dk-ab-screen${running ? ' is-run' : ''}`} aria-label={t.screenLabel}>
+      {hist && minutes >= SCREEN_START && (
+        <div className="dk-ab-screen-row is-hist">
+          <Icon name="alert" size={16} className="dk-ab-screen-ic" />
+          <p className="dk-ab-screen-tx">
+            <span>{t.historyLine(hist.n, hist.opd, hist.lo, hist.hi)}</span>
+          </p>
+          <button type="button" className="dk-ab-inlink" onPointerEnter={preloadDetail} onClick={() => onOpen(hist.top, 'patterns')}>
+            {t.historyOpen}
+            <Icon name="forward" size={12} />
+          </button>
+        </div>
+      )}
+      <div className="dk-ab-screen-row">
+        <span className="dk-ab-screen-dot" aria-hidden="true" />
+        <p className="dk-ab-screen-tx" aria-live="polite">
+          <b>{last && last.source !== 'clock' ? t.lastAnalysis : t.screenLabel}</b>
+          <span>{line}</span>
+          {from && <small className="dk-ab-screen-from">{from}</small>}
+          {rescan && <small className="dk-ab-screen-from">{t.rescan(hhmm(rescanAt), watched)}</small>}
+        </p>
+        {p && (
+          <button type="button" className="dk-ab-inlink" onPointerEnter={preloadDetail} onClick={() => onOpen(p.id, isAnalysed(p) ? 'patterns' : 'hps')}>
+            {t.screenOpen}
+            <Icon name="forward" size={12} />
+          </button>
+        )}
+      </div>
+    </section>
+  )
+})
+
 /* ------------------------------------------------------------------ table columns */
 
 function RiskCell({ p, t }: { p: Procurement; t: Strings }) {
   if (p.riskScore == null) return <span className="dk-ab-risk is-none">{t.notAnalysed}</span>
   const band = riskBand(p.riskScore)
+  const full = isAnalysed(p)
+  // a package where every detector passed reads "Lolos", not a bare "0"
+  const pass = full && !p.findings.some((f) => f.level !== 'lolos')
+  const was = full ? prelimBefore.get(p.id) : undefined
   return (
-    <span className={`dk-ab-risk is-${band}`}>
-      <b className="dk-num">{p.riskScore}</b>
-      <span>{isAnalysed(p) ? t.riskBand[band] : t.prelim}</span>
+    <span className={`dk-ab-risk is-${pass ? 'pass' : band}`}>
+      <b className="dk-num">{pass ? t.passShort : p.riskScore}</b>
+      <span>{pass ? t.screenPassShort : full ? t.riskBand[band] : t.prelim}</span>
+      {was != null && was !== p.riskScore && <small className="dk-ab-risk-was dk-num">{t.wasScore(was)}</small>}
     </span>
   )
 }
@@ -300,7 +382,23 @@ function useColumns(t: Strings, lang: Lang, roleKey: RoleKey, nowRef: { readonly
         ),
       },
       { id: 'opd', header: t.colOpd, min: 90, grow: 1, value: (r) => short(r.procurement.opdId) },
-      { id: 'hps', header: t.colHps, numeric: true, min: 110, value: (r) => r.procurement.hps, cell: (r) => rpShort(r.procurement.hps, lang) },
+      {
+        id: 'hps',
+        header: t.colHps,
+        numeric: true,
+        min: 110,
+        value: (r) => r.procurement.hps,
+        // a proposed correction shows under the HPS (the same two numbers as the package header)
+        cell: (r) =>
+          r.procurement.recommendation ? (
+            <span className="dk-ab-hpscell">
+              {rpShort(r.procurement.hps, lang)}
+              <small className="dk-ab-hpscell-p">{t.proposedShort(rpShort(r.procurement.recommendation.hpsCorrected, lang))}</small>
+            </span>
+          ) : (
+            rpShort(r.procurement.hps, lang)
+          ),
+      },
       { id: 'method', header: t.colMethod, min: 120, grow: 1, value: (r) => t.method[r.procurement.method] ?? r.procurement.method },
       {
         id: 'status',

@@ -11,7 +11,7 @@ import { clockWib, compact, dateWib } from '../../demo-kit/viz/format'
 import { useShell } from '../../demo-kit/shell'
 import { clock, rows, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { useI18n } from '../../lib/i18n'
-import { hoaxPhase, negIssues, radarKpis, recoveryOf, sentimentIndex, signedIdx, useDeepResult, useNow } from './model'
+import { clarAuditOf, hoaxPhase, negIssues, radarKpis, recoveryOf, sentSummary, sentimentIndex, signedIdx, useDeepResult, useNow } from './model'
 import { CHANNEL_LABEL, TOPIC, type Channel } from './strings'
 
 const S = {
@@ -42,7 +42,11 @@ const S = {
     hoaxNone: 'Tidak ada hoaks yang terdeteksi hari ini.',
     hoaxOn: 'Hoaks “{c}” terdeteksi pukul {t} (skor {s}%, {n} unggahan). Bukti pembanding: {e} Status: BELUM diklarifikasi.',
     hoaxDone:
-      'Hoaks “{c}” terdeteksi pukul {t} (skor {s}%, {n} unggahan) dan diklarifikasi pukul {ct} dengan nada {tone} melalui {ch}. Indeks sentimen bergerak dari {a} ke {b}.',
+      'Hoaks “{c}” terdeteksi pukul {t} (skor {s}%, {n} unggahan hoaks asli; gelembung “Hoaks bendungan” juga menghitung mention klarifikasi dan bantahan) dan diklarifikasi pukul {ct} dengan nada {tone} melalui {ch}. {move} Jejak persetujuan: disusun {by} pukul {dt}, disetujui {ap} pukul {at}{sim}, draf v{v}.',
+    approvedSim: ' (persetujuan disimulasikan)',
+    moveUp: 'Indeks sentimen naik {d} poin dalam 30 menit setelah klarifikasi, dari {a} menjadi {b}.',
+    moveDown: 'Indeks sentimen turun {d} poin dalam 30 menit setelah klarifikasi, dari {a} menjadi {b}.',
+    moveFlat: 'Indeks sentimen masih {a}; pemulihan dipantau 30 menit setelah terbit.',
     th: ['Topik', 'Mention', 'Jangkauan', 'Sentimen'],
     deepNone: 'Belum ada analisis mendalam hari ini. Jalankan dari tab Analisis Mendalam.',
     deepRow: '“{k}”: {n} unggahan dalam {d} hari, momentum {m}%, {neg}% negatif.',
@@ -88,7 +92,12 @@ const S = {
     sumNoNeg: 'none',
     hoaxNone: 'No hoax was detected today.',
     hoaxOn: 'The “{c}” hoax was detected at {t} (score {s}%, {n} posts). Counter-evidence: {e} Status: NOT clarified yet.',
-    hoaxDone: 'The “{c}” hoax was detected at {t} (score {s}%, {n} posts) and clarified at {ct} in a {tone} tone via {ch}. The sentiment index moved from {a} to {b}.',
+    hoaxDone:
+      'The “{c}” hoax was detected at {t} (score {s}%, {n} original hoax posts; the “Dam hoax” bubble also counts the clarification and rebuttal mentions) and clarified at {ct} in a {tone} tone via {ch}. {move} Approval trail: drafted by the {by} at {dt}, approved by the {ap} at {at}{sim}, draft v{v}.',
+    approvedSim: ' (simulated approval)',
+    moveUp: 'The sentiment index rose {d} points in the 30 minutes after the clarification, from {a} to {b}.',
+    moveDown: 'The sentiment index fell {d} points in the 30 minutes after the clarification, from {a} to {b}.',
+    moveFlat: 'The sentiment index is still {a}; recovery is watched for 30 minutes after publishing.',
     th: ['Topic', 'Mentions', 'Reach', 'Sentiment'],
     deepNone: 'No deep analysis today yet. Run one from the Deep Analysis tab.',
     deepRow: '“{k}”: {n} posts over {d} days, {m}% momentum, {neg}% negative.',
@@ -172,8 +181,17 @@ export default function Report() {
     }
     if (ph.kind === 'active' || !a.clarification) return fill(t.hoaxOn, base)
     const rc = recoveryOf(mentions, now, a.clarification.at)
+    const d = rc.after - rc.before
+    const au = clarAuditOf(a.id)
     return fill(t.hoaxDone, {
       ...base,
+      move: fill(d > 0 ? t.moveUp : d < 0 ? t.moveDown : t.moveFlat, { d: Math.abs(d), a: sg(rc.before), b: sg(rc.after) }),
+      by: au.draftedBy[lang],
+      ap: au.approvedBy[lang],
+      dt: clockWib(au.draftedAt ?? a.clarification.at, lang),
+      at: clockWib(au.approvedAt ?? a.clarification.at, lang),
+      sim: au.simulated === false ? '' : t.approvedSim,
+      v: au.version,
       ct: clockWib(a.clarification.at, lang),
       tone: t.tone[a.clarification.tone] ?? a.clarification.tone,
       ch: a.clarification.channels.map((c) => CHANNEL_LABEL[c as Channel]?.[lang] ?? c).join(', '),
@@ -292,6 +310,7 @@ export default function Report() {
                 },
               ]}
               yDomain={[-100, 100]}
+              summary={sentSummary(series, lang, t.sentTitle)}
               height={170}
               format={(v) => sg(Math.round(v))}
             />

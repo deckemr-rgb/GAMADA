@@ -7,7 +7,9 @@ import { MapView } from '../../demo-kit/map/MapView'
 import type { HeatPoint, MapLayer, MapViewHandle, MarkerItem } from '../../demo-kit/map/types'
 import type { LngLat } from '../../demo-kit/world'
 
-export default function MiniMap({ regionId, center, zoom = 12.5, markers, heat, label, onMarker, className }: {
+export default function MiniMap({ regionId, center, zoom = 12.5, markers, heat, label, onMarker, onReady, className }: {
+  /** the real map has drawn its region (the static sketch above it can fade out) */
+  onReady?: () => void
   regionId: string
   center: LngLat
   zoom?: number
@@ -42,6 +44,8 @@ export default function MiniMap({ regionId, center, zoom = 12.5, markers, heat, 
       ariaLabel={label}
       className={className}
       fullscreenButton={false}
+      minHeight={0}
+      onReady={onReady ? () => onReady() : undefined}
       onMarker={onMarker ? (_l, id) => onMarker(id) : undefined}
     />
   )

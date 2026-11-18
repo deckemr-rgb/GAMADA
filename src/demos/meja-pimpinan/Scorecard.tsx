@@ -10,8 +10,8 @@ import { demoHref } from '../../demo-kit/shell'
 import { Button, Drawer, Icon, StatusChip, formatSla } from '../../demo-kit/ui'
 import { LineChart } from '../../demo-kit/viz'
 import { CATEGORY_LABEL, DAY_MIN, hhmm, useSession, useWorld, world, type Minutes } from '../../demo-kit/world'
-import { opdLeaderboard, opdScorecard } from '../../demo-kit/world/satu-daerah'
-import { kecName, useNow, withControls } from './data'
+import { opdScorecard } from '../../demo-kit/world/satu-daerah'
+import { OPD_MIN_SAMPLE, kecName, mpLeaderboard, rankedCount, useNow, withControls } from './data'
 
 const C = {
   eyebrow: { id: 'Scorecard OPD · 30 hari', en: 'Agency scorecard · 30 days' },
@@ -20,9 +20,12 @@ const C = {
   sla: { id: 'SLA tepat waktu', en: 'SLA on time' },
   rating: { id: 'Kepuasan', en: 'Satisfaction' },
   closed: { id: 'tiket selesai 30 hari', en: 'tickets closed in 30 days' },
-  trend: { id: 'SLA tepat waktu per hari', en: 'On-time SLA per day' },
+  pastSla: { id: 'tiket terbuka lewat SLA', en: 'open tickets past SLA' },
+  rule: { id: 'SLA = tepat waktu ÷ (selesai + terbuka lewat SLA). Kurang dari {n} tiket: data belum cukup, tanpa skor dan peringkat.', en: 'SLA = on time ÷ (closed + open past SLA). Fewer than {n} tickets: not enough data, no score or rank.' },
+  src: { id: 'Data simulasi', en: 'Simulated data' },
+  trend: { id: 'SLA tepat waktu (30 hari bergulir) per hari', en: 'On-time SLA (rolling 30 days) per day' },
   noTrend: { id: 'Belum ada tiket selesai dalam 30 hari, jadi tren SLA belum bisa digambar.', en: 'No tickets closed in 30 days yet, so there is no SLA trend to draw.' },
-  trendUnit: { id: '% tiket selesai tepat waktu (hari tanpa penutupan memakai nilai terdekat)', en: '% closed on time (days without closures carry the nearest value)' },
+  trendUnit: { id: '% tepat waktu dengan rumus yang sama seperti angka di atas, dihitung di akhir tiap hari', en: '% on time by the same rule as the number above, taken at the end of each day' },
   open: { id: 'Tiket terbuka', en: 'Open tickets' },
   noOpen: { id: 'Tidak ada tiket terbuka.', en: 'No open tickets.' },
   tasks: { id: 'Tindak lanjut', en: 'Follow-ups' },
@@ -39,19 +42,37 @@ export default function Scorecard({ open, onClose, opdId, onInstruct }: { open: 
   const { lang } = useI18n()
   const now = useNow(5)
   const session = useSession()
-  const lb = useWorld((s) => opdLeaderboard(s, now))
+  const lb = useWorld((s) => mpLeaderboard(s, now))
   const tickets = useWorld((s) => s.tickets)
   const actions = useWorld((s) => s.actionItems)
   // opdScorecard reads tickets + actionItems: recompute when they change
   const card = useMemo(() => opdScorecard(world.get(), opdId, now), [tickets, actions, opdId, now])
   const day = useWorld((s) => s.day)
-  const i = lb.findIndex((r) => r.opdId === opdId)
-  const row = lb[i]
+  const row = lb.find((r) => r.opdId === opdId)
   const name = useWorld((s) => s.region.opd.find((o) => o.id === opdId)?.name ?? opdId)
   const complaints = useWorld((s) => s.complaints)
-  // days before the first closure take the first known value (a leading 0 would read as "failed every ticket")
-  let last = card.trend.find((d) => d.onTimePct !== null)?.onTimePct ?? 0
-  const sla = card.trend.map((d) => (d.onTimePct === null ? last : (last = d.onTimePct)))
+  // the headline rule at the end of every day (30 days rolling: on time ÷ (closed + open past SLA)), so the last point
+  // IS the headline number; days without enough tickets carry the nearest value
+  const sla = useMemo(() => {
+    const mine = Object.values(tickets.byId).filter((t) => t.opdId === opdId)
+    const pts = card.trend.map((d, i) => {
+      const end = i === card.trend.length - 1 ? now : Math.min(now, (d.day + 1) * DAY_MIN - 1)
+      let n = 0
+      let ok = 0
+      for (const t of mine) {
+        if (t.createdAt > end) continue
+        if (t.closedAt !== null && t.closedAt <= end) {
+          if (t.closedAt > end - 30 * DAY_MIN) {
+            n++
+            if (t.closedAt <= t.slaDueAt) ok++
+          }
+        } else if (t.slaDueAt < end) n++
+      }
+      return n ? Math.round((ok / n) * 100) : null
+    })
+    let last = pts.find((v) => v !== null) ?? 0
+    return pts.map((v) => (v === null ? last : (last = v)))
+  }, [tickets, opdId, card, now])
   const x = card.trend.map((d) => {
     const dt = new Date(`${day}T00:00:00`)
     dt.setDate(dt.getDate() + d.day)
@@ -91,7 +112,7 @@ export default function Scorecard({ open, onClose, opdId, onInstruct }: { open: 
           </div>
           <div>
             <dt>{C.rank[lang]}</dt>
-            <dd className="dk-num">{i >= 0 ? `${i + 1}/${lb.length}` : '–'}</dd>
+            <dd className="dk-num">{row?.rank != null ? `${row.rank}/${rankedCount(lb)}` : '–'}</dd>
           </div>
           <div>
             <dt>{C.sla[lang]}</dt>
@@ -103,9 +124,11 @@ export default function Scorecard({ open, onClose, opdId, onInstruct }: { open: 
           </div>
         </dl>
         <p className="dk-mp-meta">
-          {closed} {C.closed[lang]}
+          {closed} {C.closed[lang]} · {row?.lateTickets ?? 0} {C.pastSla[lang]}
+          <br />
+          {C.rule[lang].replace('{n}', String(OPD_MIN_SAMPLE))}
         </p>
-        {closed === 0 ? <p className="dk-mp-meta">{C.noTrend[lang]}</p> : <LineChart seed={session.seed} title={C.trend[lang]} unit={C.trendUnit[lang]} x={x} series={[{ id: 'sla', label: C.sla[lang], values: sla }]} format={(v) => `${Math.round(v)}%`} yDomain={[0, 100]} target={{ value: 90, label: 'Target 90%' }} height={160} />}
+        {closed === 0 ? <p className="dk-mp-meta">{C.noTrend[lang]}</p> : <LineChart seed={session.seed} title={C.trend[lang]} unit={C.trendUnit[lang]} x={x} series={[{ id: 'sla', label: C.sla[lang], values: sla }]} format={(v) => `${Math.round(v)}%`} yDomain={[0, 100]} target={{ value: 90, label: 'Target 90%' }} height={160} source={C.src[lang]} />}
         <h4 className="dk-mp-sc-h">
           {C.open[lang]} <span className="dk-mp-meta">{card.openTickets.length}</span>
         </h4>
@@ -160,5 +183,5 @@ function kecNameFrom(id: string) {
 }
 function dayText(at: Minutes, now: Minutes, lang: 'id' | 'en') {
   const d = Math.floor(at / DAY_MIN) - Math.floor(now / DAY_MIN)
-  return d < 0 ? (lang === 'id' ? `${-d} hr lalu` : `${-d} d ago`) : lang === 'id' ? `+${d} hr` : `+${d} d`
+  return d < 0 ? (lang === 'id' ? `${-d} hari lalu` : `${-d} days ago`) : lang === 'id' ? `${d} hari lagi` : `in ${d} days`
 }

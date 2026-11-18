@@ -180,6 +180,30 @@
   font-size: 13px;
   text-align: center;
 }
+.dk-map-state.has-ghost {
+  align-items: flex-end;
+}
+.dk-map-ghost {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+}
+.dk-map-ghost path {
+  fill: #2c2a5c;
+  stroke: rgba(185, 178, 255, 0.35);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+.dk-map-loadtag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(26, 22, 56, 0.85);
+}
 .dk-map-state.is-error .dk-icon {
   color: var(--dk-danger-ink, #ff8d82);
 }

@@ -158,6 +158,14 @@ export function useCountUp<T extends HTMLElement = HTMLSpanElement>(value: numbe
       gsap.ticker.remove(tick)
     }
   }, [value, start, duration])
+  // a new formatter (language switch, unit change) rewrites the current value at once: the text never keeps the
+  // old locale ("3,8" in an English session)
+  useLayoutEffect(() => {
+    const el = ref.current
+    const f = opts.format
+    if (!el || !f) return
+    el.textContent = f(cur.current.v)
+  }, [opts.format])
   return ref
 }
 

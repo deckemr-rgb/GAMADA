@@ -136,14 +136,18 @@ export function meetingFacts(s: WorldState, meetingId: string | undefined, now: 
   const trend = rising ? { id: 'masih naik', en: 'still rising' } : { id: 'mulai stabil', en: 'levelling off' }
   const where = names.length ? { id: listId(names), en: listEn(names) } : null
   const spoken = river.name.replace(/\s*·\s*/g, ' ')
+  /* English: "Bengawan Solo · pos Bojonegoro" reads as "the Bengawan Solo gauge at Bojonegoro" (no untranslated "pos") */
+  const [rName = river.name, station] = river.name.split(/\s*·\s*/)
+  const stationEn = station ? station.replace(/^pos\s+/i, '') : null
+  const gaugeEn = stationEn ? `${rName} gauge at ${stationEn}` : `${rName} gauge`
   const facts: MeetingFacts = {
     topic: {
       id: `Muka air ${river.name} ${nId(river.level, 2)} m, ${st.id} (${nId(lim, 1)} m) dan ${trend.id}${where ? `; genangan dilaporkan di ${where.id}` : ''} (data simulasi).`,
-      en: `${river.name} at ${river.level.toFixed(2)} m, ${st.en} (${lim.toFixed(1)} m) and ${trend.en}${where ? `; flooding reported in ${where.en}` : ''} (simulated data).`,
+      en: `${gaugeEn}: ${river.level.toFixed(2)} m, ${st.en} (${lim.toFixed(1)} m) and ${trend.en}${where ? `; flooding reported in ${where.en}` : ''} (simulated data).`,
     },
     line: {
       text: `Muka air ${spoken} ${nId(river.level, 2)} meter, ${st.id} ${nId(lim, 1)} meter, dan ${trend.id}.${where ? ` Genangan dilaporkan di ${where.id}.` : ''}`,
-      en: `The ${spoken} gauge reads ${river.level.toFixed(2)} metres, ${st.en} of ${lim.toFixed(1)} metres, and ${trend.en}.${where ? ` Flooding is reported in ${where.en}.` : ''}`,
+      en: `The ${gaugeEn} reads ${river.level.toFixed(2)} metres, ${st.en} of ${lim.toFixed(1)} metres, and ${trend.en}.${where ? ` Flooding is reported in ${where.en}.` : ''}`,
     },
   }
   factsCache.set(key, facts)
@@ -249,6 +253,17 @@ export function dueText(at: Minutes, lang: Lang, day?: string): string {
   return `${S.dayFmt(d)} ${t}`
 }
 
+/** the day only: "Hari ini" / "Kemarin" / "4 Nov" (where a follow-up came from: repeated tasks read as recurring) */
+export function dayText(at: Minutes, lang: Lang, day?: string): string {
+  const d = Math.floor(at / DAY_MIN)
+  const S = STR[lang]
+  if (d === 0) return S.today
+  if (d === -1) return S.yesterday
+  if (d === 1) return S.tomorrow
+  if (day) return new Date(Date.parse(`${day}T00:00:00Z`) + d * 86_400_000).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  return S.dayFmt(d)
+}
+
 /** "10.42" (ID) / "10:42" (EN) */
 export const clockText = (at: Minutes, lang: Lang): string => hhmm(at).replace(':', lang === 'id' ? '.' : ':')
 
@@ -264,3 +279,35 @@ export function signer(role: NpRole): string {
 }
 
 export { picLabel }
+
+/* ------------------------------------------------------------------ letters ↔ meeting, PIC, official dates */
+
+/**
+ * Incoming letters that ask for something the flood meeting already decided (letter number → script follow-up key):
+ * the disposition links to that follow-up instead of creating a second task for the same agency.
+ */
+export const LETTER_LINKS: Readonly<Record<string, string>> = {
+  '140/087/412.416.12/2026': 'a1', // Desa Ngujo: sandbags + embankment = decision 1 (Kadis PUPR, today 16.00)
+  '600/1189/412.205/2026': 'a2', // PUPR memo: portable pumps = follow-up 2 (pump loan)
+}
+
+/** person in charge of a new follow-up for an agency (titles only; a regency BPBD is run by its Kalaksa) */
+export function picFor(opd: { short: string } | undefined, opdId: string): string {
+  if (opdId === 'bpbd') return 'Kalaksa BPBD'
+  if (opdId === 'kecamatan') return 'Camat'
+  return `Kepala ${opd?.short ?? opdId}`
+}
+
+/** a date written out for an official document: "17 November 2026 pukul 16.00 WIB" / "17 November 2026, 16:00 WIB" */
+export function fullDue(at: Minutes, lang: Lang, day: string): string {
+  const d = Math.floor(at / DAY_MIN)
+  const date = new Date(Date.parse(`${day}T00:00:00Z`) + d * 86_400_000).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const t = clockText(((at % DAY_MIN) + DAY_MIN) % DAY_MIN, lang)
+  return lang === 'id' ? `${date} pukul ${t} WIB` : `${date}, ${t} WIB`
+}
+
+/** section IV of the official minutes: the conclusion in the impersonal register of a government memo (no AI voice) */
+export const CONCLUSION: Bi = {
+  id: 'Rapat menyimpulkan bahwa penanganan rembesan tanggul Desa Ngujo, pengadaan pompa tambahan melalui pinjam pakai, verifikasi data penerima bantuan sosial, penyiaran peringatan dini, dan penyiapan titik evakuasi dilaksanakan sesuai tenggat dalam tabel tindak lanjut. Setiap perangkat daerah melaporkan pelaksanaannya kepada Sekretaris Daerah, dan hasilnya dievaluasi dalam rapat berikutnya.',
+  en: 'The meeting concluded that the Ngujo embankment seepage, the additional pumps on loan, the verification of aid-recipient data, the early-warning broadcast and the evacuation point are to be carried out by the deadlines in the follow-up table. Each agency reports its progress to the Regional Secretary, and the results are reviewed at the next meeting.',
+}

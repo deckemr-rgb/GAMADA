@@ -30,7 +30,7 @@ export const MEETING_BANJIR: SpeechClip = (() => {
     speakers: [
       { id: 'sekda', label: { id: 'Sekda', en: 'Regional Secretary' } },
       { id: 'pupr', label: { id: 'Kadis PUPR', en: 'Head of Public Works' } },
-      { id: 'bpbd', label: { id: 'Kalaksa BPBD', en: 'Head of Disaster Agency' } },
+      { id: 'bpbd', label: { id: 'Kalaksa BPBD', en: 'Head of the Disaster Agency' } },
       { id: 'dinsos', label: { id: 'Kadinsos', en: 'Head of Social Affairs' } },
       { id: 'camat', label: { id: 'Camat Kalitidu', en: 'Head of Kalitidu District' } },
     ],

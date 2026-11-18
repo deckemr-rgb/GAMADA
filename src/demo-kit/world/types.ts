@@ -947,6 +947,8 @@ export interface EventMap {
   'actionItem.reminded': { actionItemId: string; channel: 'wa'; text?: Bi }
   /** number / from / subject (optional): the identity the inbox shows for this letter (e.g. its scanned sample), so
    *  the audit log and other products name the same letter */
+  /** a new incoming letter during the day (e.g. a scheduled reply arriving at 11.30): it lands in the inbox as 'masuk' */
+  'letter.received': { id?: string; number: string; from: string; subject: Bi; kind: LetterKind; sifat?: Letter['sifat']; receivedAt?: Minutes; dueAt?: Minutes | null; scanned?: boolean }
   'letter.dispositioned': { letterId?: string; subject?: Bi; number?: string; from?: string; to: string[]; note: Bi; by?: string; instructionId?: string }
   /* Radar Isu */
   'hoax.detected': { id?: string; claim: Bi; score: number; spreadPerHour: number; accounts: string[]; evidence?: Bi | null; topic: string; rumor?: string }
@@ -959,7 +961,12 @@ export interface EventMap {
   /** citizen flood complaints confirm a prediction / alert on the ground (Siaga Wilayah "Terkonfirmasi warga") */
   'flood.confirmed': { alertId: string | null; clusterId: string; kecamatanId: string; complaintIds: string[] }
   /** Dinas Pertanian scenario switch: harvest estimates for the given kecamatan */
-  'harvest.updated': { scenario: Harvest['scenario']; kecamatanIds: string[]; dropPct?: number; cause?: EntityRef | null }
+  'harvest.updated': {
+    scenario: Harvest['scenario']; kecamatanIds: string[]; dropPct?: number
+    /** per-kecamatan drop (%), e.g. scaled by flooded share; a kecamatan missing here uses dropPct (else the default) */
+    dropPctByKecamatan?: Record<string, number>
+    cause?: EntityRef | null
+  }
   'eligibility.opened': { id?: string; kind: Program['kind']; kecamatanIds: string[]; quota: number; alertId: string | null }
   /* Awas Belanja · Cek Berkas */
   'procurement.created': Opt<Omit<Procurement, 'createdAt' | 'riskScore' | 'flagged' | 'findings'>, 'id' | 'code' | 'status'>

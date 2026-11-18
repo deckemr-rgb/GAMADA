@@ -27,6 +27,12 @@ export interface DeepKeyword {
   keyword: string
   /** matched world topic (null = generic) */
   topic: string | null
+  /**
+   * what the numbers stand on: 'topic' = a world topic (world posts + its history), 'free' = a plausible civic term
+   * outside the world topics (generic simulated crawl, quotes marked as templates), 'none' = not a known term and not
+   * word-shaped ("qwzx kplm"): only a handful of posts, too few to analyse, said so
+   */
+  basis: 'topic' | 'free' | 'none'
   total: number
   /** posts per day, oldest first (length = days) */
   daily: number[]
@@ -41,6 +47,8 @@ export interface DeepSource {
   id: 'berita' | 'sosmed' | 'forum' | 'aduan'
   label: Bi
   count: number
+  /** not a public post (Sapa Warga complaints): shown beside the sources, never added to "Total posts" */
+  excluded?: boolean
 }
 
 export interface DeepResult {
@@ -66,6 +74,8 @@ export interface DeepResult {
     outlet: string
     sentiment: Sentiment
     reach: number
+    /** a simulated quote built around the keyword (no matching post in the monitored world) */
+    template?: boolean
   }[]
   survey: Bi[]
   insight: Bi
@@ -126,8 +136,8 @@ const SUBTOPICS: Record<string, Bi[]> = {
     { id: 'Anggaran infrastruktur', en: 'Infrastructure budget' },
   ],
   harga: [
-    { id: 'Harga cabai & bawang', en: 'Chilli & shallot prices' },
-    { id: 'Stok beras', en: 'Rice stocks' },
+    { id: 'Harga di pasar tradisional', en: 'Traditional-market prices' },
+    { id: 'Pasokan dari petani', en: 'Supply from farmers' },
     { id: 'Operasi pasar', en: 'Market operations' },
     { id: 'Daya beli warga', en: 'Purchasing power' },
   ],
@@ -138,12 +148,50 @@ const SUBTOPICS: Record<string, Bi[]> = {
     { id: 'Persyaratan dokumen', en: 'Document requirements' },
   ],
 }
-const GENERIC_SUB: Bi[] = [
-  { id: 'Keluhan warga', en: 'Citizen complaints' },
-  { id: 'Respons pemda', en: 'Government response' },
-  { id: 'Informasi resmi', en: 'Official information' },
-  { id: 'Opini & ajakan', en: 'Opinion & calls to act' },
+/** a free keyword (no world topic): subtopics, quotes and survey questions built around the keyword itself */
+const genericSub = (kw: string): Bi[] => [
+  { id: `Keluhan soal ${kw}`, en: `Complaints about ${kw}` },
+  { id: 'Lokasi yang paling sering disebut', en: 'Places mentioned most' },
+  { id: `Respons pemda atas ${kw}`, en: `Government response to ${kw}` },
+  { id: 'Usulan solusi dari warga', en: 'Solutions residents suggest' },
 ]
+const GENERIC_QUOTES: { s: number; t: (kw: string, k: string, r: string) => Bi }[] = [
+  {
+    s: -0.5,
+    t: (kw, k) => ({
+      id: `Soal ${kw} di Kec. ${k}, warga minta petugas turun langsung, bukan cuma imbauan.`,
+      en: `On ${kw} in ${k}, residents want officers on the ground, not just appeals.`,
+    }),
+  },
+  {
+    s: 0.4,
+    t: (kw, k) => ({
+      id: `Akhirnya ada penertiban ${kw} di sekitar pasar Kec. ${k}. Semoga konsisten.`,
+      en: `Finally some action on ${kw} around the ${k} market. Hope it lasts.`,
+    }),
+  },
+  {
+    s: -0.35,
+    t: (kw) => ({
+      id: `Sudah lapor soal ${kw} lewat kanal pemda minggu lalu, belum ada kabar.`,
+      en: `Reported ${kw} through the government channel last week; no news yet.`,
+    }),
+  },
+  {
+    s: 0.05,
+    t: (kw, _k, r) => ({
+      id: `Grup RT kami di ${r} sedang membahas ${kw}; ada usul dibuat jadwal ronda dan papan info.`,
+      en: `Our neighbourhood group in ${r} is discussing ${kw}; someone proposed a rota and a notice board.`,
+    }),
+  },
+]
+/** words too generic to tell two keywords of one topic apart ("harga cabai" vs a rice-stock post) */
+const STOP = new Set(['harga', 'price', 'prices', 'isu', 'issue', 'warga', 'layanan', 'service', 'the', 'dan', 'and'])
+const tokensOf = (kw: string) =>
+  kw
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 4 && !STOP.has(w))
 const SURVEY: Record<string, Bi[]> = {
   'hoaks-bendungan': [
     {
@@ -205,12 +253,27 @@ const SURVEY: Record<string, Bi[]> = {
   ],
 }
 
+/** plausible local civic terms outside the world topics (a free keyword from this list gets a generic simulated
+ *  crawl); anything else that does not look like words gets the honest "too few posts" answer */
+const CIVIC =
+  /parkir|pkl|pedagang|kaki lima|pasar|terminal|angkot|ojek|ojol|macet|kemacetan|lalu lintas|traffic|parking|pdam|air bersih|listrik|pln|padam|sinyal|internet|wifi|wisata|tourism|pajak|retribusi|tax|stunting|gizi|posyandu|imunisasi|narkoba|judi|kriminal|begal|curanmor|maling|pencurian|keamanan|lampu|pju|penerangan|tambang|migas|minyak|polusi|asap|kebakaran|longsor|kekeringan|kemarau|gempa|puting beliung|angin|pupuk|petani|nelayan|ternak|sapi|padi|panen|jagung|tembakau|elpiji|lpg|gas|bbm|solar|pertalite|lowongan|pengangguran|kerja|upah|umr|umk|pilkada|pemilu|dprd|apbd|anggaran|korupsi|pungli|izin|perizinan|pbb|sertifikat|tanah|rumah|perumahan|rusun|kumuh|sanitasi|jamban|sungai|irigasi|bendung|embung|jembatan|trotoar|drainase|selokan|gorong|pohon|taman|ruang terbuka|stadion|olahraga|budaya|seni|batik|kuliner|haji|masjid|ibadah|toleransi|desa|kelurahan|kecamatan|rt|rw|kependudukan|akta|nikah|perceraian|kdrt|anak|perempuan|disabilitas|lansia|difabel|guru|siswa|beasiswa|kip|bpjs|jkn|obat|dokter|bidan|ambulans|vaksin|covid|dbd|demam|diare|rabies|banjir|harga|inflasi/i
+/** looks like words: every token has a vowel, no long consonant run, not a keyboard mash */
+const wordLike = (kw: string) =>
+  kw
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .filter(Boolean)
+    .every((w) => /[aiueo]/.test(w) && !/[^aiueo\s]{4,}/.test(w) && (w.match(/[aiueo]/g)?.length ?? 0) / w.length >= 0.25)
+
 export function matchTopic(keyword: string): string | null {
   for (const [t, re] of TOPIC_WORDS) if (re.test(keyword)) return t
   return null
 }
 
 /* ------------------------------------------------------------------ helpers */
+
+/** share of Indonesian-language posts among the crawled sources */
+const LANG_SHARE_ID = 0.88
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 function split(mean: number, wobble: number): Split {
@@ -234,20 +297,26 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
   const dates = Array.from({ length: days }, (_, i) => isoDay(s.day, -(days - 1 - i)))
   const ments = rows(s.mentions).filter((m) => m.at <= now)
   const complaints = rows(s.complaints)
-  const langShare = input.lang === 'all' ? 1 : input.lang === 'id' ? 0.88 : 0.12
+  const langShare = input.lang === 'all' ? 1 : input.lang === 'id' ? LANG_SHARE_ID : 1 - LANG_SHARE_ID
 
   const keywords: DeepKeyword[] = input.keywords.map((raw) => {
     const keyword = raw.trim()
     const topic = matchTopic(keyword)
     const r = makeRng(hashString(`${s.seed}|${s.regionId}|${keyword.toLowerCase()}`))
-    const base = topic ? r.int(70, 160) : r.int(18, 60)
     const world = ments.filter((m) => matchesMention(m, keyword, topic))
+    const basis: DeepKeyword['basis'] = topic ? 'topic' : world.length || (CIVIC.test(keyword) && wordLike(keyword)) ? 'free' : 'none'
+    // 'none': a handful of stray posts at most (a typo or a mash finds almost nothing, and the result says so)
+    const base = basis === 'topic' ? r.int(70, 160) : basis === 'free' ? r.int(18, 60) : 0
     const daily = dates.map((_, i) => {
       const dayOffset = i - (days - 1)
       const wave = 1 + 0.28 * Math.sin((i + r.float(0, 6)) / 2.3)
       const fromWorld = world.filter((m) => Math.floor(m.at / 1440) === dayOffset).length
-      // today's events (a burst, a flood alert) show as a spike: each world post stands for ~14 crawled posts
-      return Math.max(0, Math.round((base * wave + r.normal(0, base * 0.12) + fromWorld * 14) * langShare))
+      if (basis === 'none') return r.chance(0.25) ? 1 : 0
+      // today's events (a burst, citizen flood reports) show as a spike: each world post stands for ~14 crawled posts,
+      // each Sapa Warga report of the topic for ~6 (people post about what they report)
+      const cats = topic ? TOPIC_CATEGORY[topic] : undefined
+      const fromSapa = cats && dayOffset === 0 ? complaints.filter((c) => cats.includes(c.category) && c.at >= 0 && c.at <= now).length : 0
+      return Math.max(0, Math.round((base * wave + r.normal(0, base * 0.12) + fromWorld * 14 + fromSapa * 6) * langShare))
     })
     const last3 = daily.slice(-3).reduce((a, b) => a + b, 0)
     const prev3 = daily.slice(-6, -3).reduce((a, b) => a + b, 0)
@@ -256,17 +325,28 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
     const prior = topic ? (TOPIC_PRIOR[topic] ?? 0) : r.float(-0.2, 0.2)
     const mean = worldMean === null ? prior : prior * 0.4 + worldMean * 0.6
     const total = daily.reduce((a, b) => a + b, 0)
+    if (basis === 'none') {
+      const flat: Split = { pos: 0, neu: 1, neg: 0 }
+      return { keyword, topic, basis, total, daily, momentum: 0, sentiment: flat, byLang: { id: flat, en: flat }, reach: total * r.int(40, 400) }
+    }
+    const byLang = {
+      id: split(mean, r.normal(0, 0.04)),
+      en: split(mean * 0.7, r.normal(0, 0.05)),
+    }
+    // the total IS the volume-weighted mix of the two source languages (it always lies between them)
+    const wId = input.lang === 'all' ? LANG_SHARE_ID : input.lang === 'id' ? 1 : 0
+    const mix = (k: keyof Split) => byLang.id[k] * wId + byLang.en[k] * (1 - wId)
+    const pos = Math.round(mix('pos') * 1000) / 1000
+    const neg = Math.round(mix('neg') * 1000) / 1000
     return {
       keyword,
       topic,
+      basis,
       total,
       daily,
       momentum,
-      sentiment: split(mean, r.normal(0, 0.03)),
-      byLang: {
-        id: split(mean, r.normal(0, 0.04)),
-        en: split(mean * 0.7, r.normal(0, 0.05)),
-      },
+      sentiment: { pos, neg, neu: Math.round((1 - pos - neg) * 1000) / 1000 },
+      byLang,
       reach: Math.round(total * r.float(180, 420)),
     }
   })
@@ -290,7 +370,7 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
     {
       id: 'forum',
       label: { id: 'Forum & grup terbuka', en: 'Open forums & groups' },
-      count: Math.round(grand * 0.11),
+      count: grand - Math.round(grand * 0.34) - Math.round(grand * 0.55),
     },
     {
       id: 'aduan',
@@ -299,12 +379,16 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
         en: 'Sapa Warga complaint channel',
       },
       count: complaintCount,
+      excluded: true,
     },
   ]
 
+  // every keyword keeps its share of the lists (no keyword silently drops out of topics, quotes or survey)
+  const perKw = keywords.length <= 2 ? 4 : 2
   const topics = keywords.flatMap((k) => {
+    if (k.basis === 'none') return []
     const r = makeRng(hashString(`sub|${s.seed}|${k.keyword.toLowerCase()}`))
-    const subs = (k.topic && SUBTOPICS[k.topic]) || GENERIC_SUB
+    const subs = (k.topic && SUBTOPICS[k.topic]) || genericSub(k.keyword)
     const w = subs.map(() => r.float(0.4, 1.6))
     const tot = w.reduce((a, b) => a + b, 0)
     return subs
@@ -314,10 +398,12 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
         share: Math.round(((w[i] ?? 0) / tot) * 1000) / 1000,
       }))
       .sort((a, b) => b.share - a.share)
+      .slice(0, perKw)
   })
 
   const outlets = new Map<string, { kind: Mention['kind']; n: number; sum: number }>()
-  for (const k of keywords) {
+  const known = keywords.filter((k) => k.basis !== 'none')
+  for (const k of known) {
     for (const m of ments.filter((x) => matchesMention(x, k.keyword, k.topic))) {
       const g = outlets.get(m.outlet) ?? { kind: m.kind, n: 0, sum: 0 }
       g.n++
@@ -326,7 +412,7 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
     }
   }
   const r0 = makeRng(hashString(`media|${s.seed}|${input.keywords.join('|').toLowerCase()}`))
-  for (const o of r0.sample([...MEDIA_OUTLETS, ...SOCIAL_HANDLES.slice(0, 4)], 6)) {
+  for (const o of known.length ? r0.sample([...MEDIA_OUTLETS, ...SOCIAL_HANDLES.slice(0, 4)], 6) : []) {
     if (outlets.has(o)) continue
     outlets.set(o, {
       kind: o.startsWith('@') ? 'sosmed' : 'berita',
@@ -338,18 +424,25 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
     .map(([outlet, g]) => ({
       outlet,
       kind: g.kind,
-      count: g.n * 9 + Math.round(grand / 80),
+      // per-outlet jitter: two outlets with the same sample size never print the same total
+      count: g.n * 9 + Math.round(grand / 80) + (hashString(`${outlet}|${s.seed}|${input.keywords.join('|')}`) % 13) - 6,
       lean: Math.round((g.sum / g.n) * 100) / 100,
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6)
 
-  const quotes = keywords
+  const qPer = keywords.length <= 2 ? 2 : 1
+  const quotes = known
     .flatMap((k) => {
+      // a post of the same topic only quotes for this keyword when it names the keyword's own words
+      // ("harga cabai" never quotes a rice-stock post)
+      const toks = tokensOf(k.keyword)
+      const strict = k.topic === 'harga'
       const own = ments
         .filter((m) => matchesMention(m, k.keyword, k.topic))
+        .filter((m) => !strict || !toks.length || toks.some((w) => m.text.id.toLowerCase().includes(w) || m.text.en.toLowerCase().includes(w)))
         .sort((a, b) => b.reach - a.reach)
-        .slice(0, 2)
+        .slice(0, qPer)
         .map((m) => ({
           keyword: k.keyword,
           text: m.text,
@@ -358,47 +451,72 @@ export function analyze(s: WorldState, now: number, input: DeepInput): DeepResul
           reach: m.reach,
         }))
       if (own.length) return own
+      // no matching post in the monitored world: simulated quotes built around the keyword, varied by seed
       const r = makeRng(hashString(`q|${s.seed}|${k.keyword.toLowerCase()}`))
-      const score = (k.sentiment.pos - k.sentiment.neg) * 0.9
-      return [
-        {
+      const kw = k.keyword.toLowerCase()
+      return r.sample(GENERIC_QUOTES, qPer).map((q) => {
+        const kec = s.region.kecamatan.length ? r.pick(s.region.kecamatan).name : s.region.shortName
+        const sc = q.s + (k.sentiment.pos - k.sentiment.neg) * 0.3
+        const social = r.chance(0.6)
+        return {
           keyword: k.keyword,
-          text: {
-            id: `Warga ${s.region.shortName} ramai membahas “${k.keyword}” di grup percakapan minggu ini.`,
-            en: `${s.region.shortName} residents are talking about “${k.keyword}” in chat groups this week.`,
-          },
-          outlet: r.pick(SOCIAL_HANDLES),
-          sentiment: sentimentOf(score),
+          text: q.t(kw, kec, s.region.shortName),
+          outlet: social ? r.pick(SOCIAL_HANDLES) : r.pick(MEDIA_OUTLETS),
+          sentiment: sentimentOf(sc),
           reach: r.int(800, 6000),
-        },
-      ]
+          template: true,
+        }
+      })
     })
-    .slice(0, 5)
+    .slice(0, 6)
 
-  const survey = keywords
-    .flatMap(
-      (k) =>
-        (k.topic && SURVEY[k.topic]) || [
-          {
-            id: `Seberapa penting isu “${k.keyword}” bagi keluarga Anda? (1–5)`,
-            en: `How important is the “${k.keyword}” issue for your family? (1–5)`,
-          },
-          {
-            id: `Dari mana Anda mendapat informasi tentang “${k.keyword}”?`,
-            en: `Where do you get information about “${k.keyword}”?`,
-          },
-        ],
-    )
-    .slice(0, 5)
+  const surveyOf = (k: DeepKeyword): Bi[] =>
+    (k.topic && SURVEY[k.topic]) || [
+      {
+        id: `Seberapa sering Anda mengalami masalah “${k.keyword}” dalam sebulan terakhir?`,
+        en: `How often did you run into “${k.keyword}” problems in the past month?`,
+      },
+      {
+        id: `Menurut Anda, siapa yang paling tepat menangani “${k.keyword}”: kelurahan/desa, dinas, atau warga sendiri?`,
+        en: `Who should handle “${k.keyword}” first: the village office, the agency, or residents themselves?`,
+      },
+    ]
+  // round-robin: every keyword gets a question before any keyword gets a second one
+  const lists = known.map(surveyOf)
+  const survey: Bi[] = []
+  for (let i = 0; survey.length < 5 && lists.some((l) => l[i]); i++) for (const l of lists) if (l[i] && survey.length < 5) survey.push(l[i]!)
 
-  const lead = [...keywords].sort((a, b) => b.total - a.total)[0]
+  const lead = [...known].sort((a, b) => b.total - a.total)[0]
   const pct = (x: number) => Math.round(x * 100)
-  const insight: Bi = lead
+  const none = keywords.filter((k) => k.basis === 'none')
+  const noneNote: Bi = none.length
     ? {
-        id: `“${lead.keyword}” paling ramai (${lead.total.toLocaleString('id-ID')} unggahan, momentum ${lead.momentum >= 0 ? '+' : ''}${lead.momentum}% dalam 3 hari) dengan ${pct(lead.sentiment.neg)}% bernada negatif. ${lead.sentiment.neg > 0.4 ? 'Siapkan informasi resmi yang menjawab keluhan utama dan pantau ulang 24 jam lagi.' : 'Percakapan relatif terkendali; manfaatkan untuk menyebarkan informasi layanan.'}`,
-        en: `“${lead.keyword}” is the loudest (${lead.total.toLocaleString('en-GB')} posts, ${lead.momentum >= 0 ? '+' : ''}${lead.momentum}% momentum over 3 days) with ${pct(lead.sentiment.neg)}% negative. ${lead.sentiment.neg > 0.4 ? 'Prepare official information that answers the main complaint and re-check in 24 hours.' : 'The conversation is under control; use it to share service information.'}`,
+        id: ` ${none.map((k) => `“${k.keyword}”`).join(', ')} hampir tidak muncul (${none.reduce((a, k) => a + k.total, 0)} unggahan): terlalu sedikit untuk dianalisis; periksa ejaannya.`,
+        en: ` ${none.map((k) => `“${k.keyword}”`).join(', ')} barely appear${none.length === 1 ? 's' : ''} (${none.reduce((a, k) => a + k.total, 0)} posts): too few to analyse; check the spelling.`,
       }
     : { id: '', en: '' }
+  // a live situation today (an active / recent hoax, citizen evacuation or flood reports) is never "under control"
+  const today0 = Math.floor(now / 1440) * 1440
+  const hoaxToday = rows(s.hoaxAlerts).some((h) => h.at >= today0 && h.at <= now)
+  const floodToday = complaints.filter((c) => c.category === 'banjir' && c.at >= today0 && c.at <= now).length
+  const live = lead && (lead.topic === 'banjir' || lead.topic === 'hoaks-bendungan') && (hoaxToday || floodToday > 0)
+  const advice = (l: DeepKeyword): Bi =>
+    live
+      ? {
+          id: `Hari ini ada ${[hoaxToday ? 'hoaks bendungan' : '', floodToday ? `${floodToday} laporan banjir warga di Sapa Warga` : ''].filter(Boolean).join(' dan ')}: pantau per jam, bukan harian.`,
+          en: `Today there ${[hoaxToday ? 'is a dam hoax' : '', floodToday ? `are ${floodToday} citizen flood reports in Sapa Warga` : ''].filter(Boolean).join(' and ')}: monitor hourly, not daily.`,
+        }
+      : l.sentiment.neg > 0.4
+        ? { id: 'Siapkan informasi resmi yang menjawab keluhan utama dan pantau ulang 24 jam lagi.', en: 'Prepare official information that answers the main complaint and re-check in 24 hours.' }
+        : { id: 'Percakapan relatif terkendali; manfaatkan untuk menyebarkan informasi layanan.', en: 'The conversation is under control; use it to share service information.' }
+  const insight: Bi = lead
+    ? {
+        id: `“${lead.keyword}” paling ramai (${lead.total.toLocaleString('id-ID')} unggahan, momentum ${lead.momentum >= 0 ? '+' : ''}${lead.momentum}% dalam 3 hari) dengan ${pct(lead.sentiment.neg)}% bernada negatif. ${advice(lead).id}${noneNote.id}`,
+        en: `“${lead.keyword}” is the loudest (${lead.total.toLocaleString('en-GB')} posts, ${lead.momentum >= 0 ? '+' : ''}${lead.momentum}% momentum over 3 days) with ${pct(lead.sentiment.neg)}% negative. ${advice(lead).en}${noneNote.en}`,
+      }
+    : none.length
+      ? { id: noneNote.id.trim(), en: noneNote.en.trim() }
+      : { id: '', en: '' }
 
   return {
     input,

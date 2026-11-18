@@ -1244,6 +1244,11 @@ export class MapEngine {
     if (id && this.map.getSource(IDS.desa)) this.map.setFeatureState({ source: IDS.desa, id }, { hover: true })
   }
 
+  /** accessible name of the map canvas (region name included; MapLibre sets only its Map.Title locale string) */
+  setTitle(text: string): void {
+    this.map.getCanvas().setAttribute('aria-label', text)
+  }
+
   setLang(lang: Lang): void {
     this.lang = lang
     if (this.choro) this.choro = { spec: this.choro.spec, r: resolveChoropleth(this.choro.spec, lang) }

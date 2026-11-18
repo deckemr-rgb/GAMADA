@@ -39,7 +39,9 @@ export const DOCS = {
   /** perspective for the 3D scan tilt (px) */
   perspective: 1400,
   /** on-screen box height (px) from which its numbered marker is always shown */
-  markerMinPx: 15,
+  markerMinPx: 11,
+  /** gutter number height (px, page space) */
+  markPx: 15,
   /** confidence under this → amber box */
   lowConfidence: 0.85,
 } as const
@@ -123,7 +125,10 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
   }, [])
   const pad = stage.w < 520 ? 12 : 28
   const aspect = doc.w / doc.h
-  const pageW = Math.max(0, Math.min(stage.w - pad * 2, (stage.h - pad * 2) * aspect))
+  /* gutters left and right of the page hold the OCR box numbers (a box on the right half numbers in the right
+     gutter), so a number never covers the document's own text */
+  const gutter = stage.w < 520 ? 16 : 20
+  const pageW = Math.max(0, Math.min(stage.w - pad * 2 - gutter * 2, (stage.h - pad * 2) * aspect))
   const pageH = pageW / aspect
 
   /* ---------------------------------------------------------------- zoom / pan */
@@ -354,8 +359,28 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
   }
 
   const active = activeKey ?? hoverKey
+  /** a box's number sits in the gutter on its side of the page, in px from the box (the mark is inside the box) */
+  const markStyle = (b: DocViewerBox, m: { dy: number; right: boolean }): CSSProperties =>
+    m.right
+      ? { left: ((100 - b.box.x) / 100) * pageW + 2, top: m.dy }
+      : { left: -((b.box.x / 100) * pageW) - gutter + 2, top: m.dy }
+  /* gutter numbers of the boxes tall enough to show one: level with their box, nudged down so none overlap
+     (per side; a number is DOCS.markPx tall) */
+  const markAt = new Map<number, { dy: number; right: boolean }>()
+  for (const right of [false, true]) {
+    const shown = list
+      .map((b, i) => ({ i, y: (b.box.y / 100) * pageH, side: b.box.x + b.box.w / 2 > 50, roomy: (pageH * (zoomPct / 100) * b.box.h) / 100 >= DOCS.markerMinPx }))
+      .filter((o) => o.roomy && o.side === right)
+      .sort((a, b) => a.y - b.y)
+    let bottom = -Infinity
+    for (const o of shown) {
+      const top = Math.max(o.y - 1, bottom + 1)
+      markAt.set(o.i, { dy: top - o.y, right })
+      bottom = top + DOCS.markPx
+    }
+  }
   // never taller than the page needs at full width (landscape cards on phones)
-  const fitH = stage.w ? Math.round((stage.w - pad * 2) / aspect + pad * 2) : 0
+  const fitH = stage.w ? Math.round((stage.w - pad * 2 - gutter * 2) / aspect + pad * 2) : 0
   const stageStyle = { ...(height ? { '--dk-doc-h': height } : {}), ...(fitH ? { '--dk-doc-fit': `${fitH}px` } : {}) } as CSSProperties
   const noiseBg = scan && scan.noise > 0 ? noiseUrl() : ''
 
@@ -364,7 +389,7 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
       <div className="dk-doc-bar">
         <div className="dk-doc-zoomctl" role="group" aria-label="Zoom">
           <IconButton icon="minus" label={s.zoomOut} size="sm" onClick={() => zoomAt(view.current.z / DOCS.zoomStep)} disabled={zoomPct <= 100} />
-          <button type="button" className="dk-doc-zoomval dk-num" onClick={fit} title={s.fit} aria-label={`${s.fit} (${zoomPct}%)`}>
+          <button type="button" className="dk-doc-zoomval dk-num" onClick={fit} title={s.fit} aria-label={`${s.fit} (${zoomPct}%)`} disabled={zoomPct <= 100}>
             {zoomPct}%
           </button>
           <IconButton icon="plus" label={s.zoomIn} size="sm" onClick={() => zoomAt(view.current.z * DOCS.zoomStep)} disabled={zoomPct >= DOCS.zoomMax * 100} />
@@ -398,6 +423,7 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
             {tamper && <TamperHeatmap cells={tamper.cells} opacity={tamper.opacity} />}
             <div className="dk-doc-boxes" role="group" aria-label={s.boxes}>
               {list.map((b, i) => {
+                const mark = markAt.get(i) ?? { dy: -1, right: b.box.x + b.box.w / 2 > 50 }
                 const isIn = i < shown
                 const low = b.confidence !== undefined && b.confidence < DOCS.lowConfidence
                 // numbered markers only where they do not pile up (box ≥ markerMinPx tall on screen) or on the active box
@@ -422,7 +448,7 @@ export function DocViewer({ doc, boxes, revealBoxes, replay, onReveal, tamper, d
                     onPointerLeave={() => setHoverKey(null)}
                     onClick={() => onBoxFocus?.(b.key)}
                   >
-                    <span className="dk-doc-mark dk-num" aria-hidden="true">
+                    <span className="dk-doc-mark dk-num" aria-hidden="true" style={markStyle(b, mark)}>
                       {i + 1}
                     </span>
                     {b.confidence !== undefined && (

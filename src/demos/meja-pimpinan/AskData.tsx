@@ -12,11 +12,13 @@ import { registerScenario, useAiChat, type ChatMessage, type Structured } from '
 import { Button, Icon, IconButton, Input, dropChips } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import { clock, emit, useSession, useWorld, world, type EventMap } from '../../demo-kit/world'
-import { causeQuestion, mpBriefingItems, opdsInText, risingCategory, useNow } from './data'
+import AppLink from '../../components/AppLink'
+import { demoHref } from '../../demo-kit/shell'
+import { causeQuestion, mpBriefingItems, opdsInText, risingCategory, useNow, withControls } from './data'
 import { askContext } from './ideas'
 import { parseSpec, runQuery } from './query'
 import { QueryChart } from './QueryChart'
-import { scenario } from './scenario'
+import { draftInstruction, kecInText, scenario } from './scenario'
 import type { AskProps } from './AskBox'
 
 registerScenario(scenario)
@@ -47,6 +49,8 @@ const A = {
     id: ['Kenapa aduan jalan naik minggu ini?', 'Kecamatan mana paling banyak aduan?', 'OPD mana yang paling lambat?', 'Perkiraan aduan 3 hari ke depan'],
     en: ['Why are road complaints up this week?', 'Which district has the most complaints?', 'Which agency is the slowest?', 'Forecast complaints for the next 3 days'],
   },
+  openSiaga: { id: 'Buka Siaga Wilayah', en: 'Open Siaga Wilayah' },
+  draftChip: { id: 'membuka draf instruksi', en: 'opens an instruction draft' },
   suggestions: { id: 'Saran pertanyaan', en: 'Suggested questions' },
   you: { id: 'Anda', en: 'You' },
   ai: { id: 'Asisten', en: 'Assistant' },
@@ -162,6 +166,12 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
     if (chat.busy) return
     void send(q)
   }
+  // an "Instruksikan …" follow-up is an action, not a question: it opens the instruction dialog pre-filled
+  const toDraft = (q: string) => {
+    const s = world.get()
+    const t = draftInstruction(s, q, lang, kecInText(s, q)[0])
+    onInstruct({ text: { id: t, en: t }, opdIds: opdsInText(s, q) })
+  }
 
   return (
     <section className={`dk-mp-panel dk-mp-ask${count && expanded ? ' is-active' : ''}`} aria-labelledby="dk-mp-ask-h">
@@ -191,7 +201,7 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
             </div>
           </>
         ) : (
-          chat.messages.filter((m) => !(m.status === 'stopped' && !m.content)).map((m) => (m.role === 'user' ? <p key={m.id} className="dk-mp-q"><span className="dk-sr">{A.you[lang]}: </span>{m.content}</p> : <Answer key={m.id} m={m} lang={lang} onFly={onFly} onInstruct={onInstruct} onAsk={ask} busy={chat.busy} />))
+          chat.messages.filter((m) => !(m.status === 'stopped' && !m.content)).map((m) => (m.role === 'user' ? <p key={m.id} className="dk-mp-q"><span className="dk-sr">{A.you[lang]}: </span>{m.content}</p> : <Answer key={m.id} m={m} lang={lang} onFly={onFly} onInstruct={onInstruct} onAsk={ask} onDraft={toDraft} busy={chat.busy} />))
         )}
       </div>
       <form ref={formRef} className="dk-mp-askform" onSubmit={submit}>
@@ -230,7 +240,10 @@ function provenance(name: string, input: Record<string, unknown>, lang: Lang): s
   return `${PV.src[lang]}: ${parts.filter(Boolean).join(' · ')}`
 }
 
-function Answer({ m, lang, onFly, onInstruct, onAsk, busy }: { m: ChatMessage; lang: Lang; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct']; onAsk: (q: string) => void; busy: boolean }) {
+/** follow-up chips that give an order rather than ask a question */
+const ORDER = /^(instruksikan|perintahkan|tugaskan|minta|instruct|order|tell|ask the)\b/i
+
+function Answer({ m, lang, onFly, onInstruct, onAsk, onDraft, busy }: { m: ChatMessage; lang: Lang; onFly: AskProps['onFly']; onInstruct: AskProps['onInstruct']; onAsk: (q: string) => void; onDraft: (q: string) => void; busy: boolean }) {
   const chipsRef = useRef<HTMLDivElement>(null)
   const done = m.status === 'done' || m.status === 'stopped'
   useLayoutEffect(() => {
@@ -263,11 +276,18 @@ function Answer({ m, lang, onFly, onInstruct, onAsk, busy }: { m: ChatMessage; l
       {m.fellBack && <p className="dk-mp-fell">{A.fell[lang]}</p>}
       {done && !!m.followUps?.length && (
         <div ref={chipsRef} className="dk-mp-chips">
-          {m.followUps.map((q) => (
-            <button key={q} type="button" className="dk-mp-qchip" onClick={() => onAsk(q)} disabled={busy}>
-              {q}
-            </button>
-          ))}
+          {m.followUps.map((q) =>
+            ORDER.test(q) ? (
+              <button key={q} type="button" className="dk-mp-qchip is-order" onClick={() => onDraft(q)} aria-label={`${q} (${A.draftChip[lang]})`}>
+                <Icon name="send" size={12} />
+                {q}
+              </button>
+            ) : (
+              <button key={q} type="button" className="dk-mp-qchip" onClick={() => onAsk(q)} disabled={busy}>
+                {q}
+              </button>
+            ),
+          )}
         </div>
       )}
     </article>
@@ -323,6 +343,9 @@ function StructuredView({ st, lang, onFly, onInstruct }: { st: Structured; lang:
       </div>
     )
   }
+  if (st.kind === 'link' && typeof st.data.product === 'string' && isProductSlug(st.data.product)) {
+    return <LinkOut product={st.data.product} lang={lang} />
+  }
   if (st.kind === 'briefing') {
     const items = (st.data.items ?? []) as { title: string; source: string }[]
     return (
@@ -342,4 +365,16 @@ function StructuredView({ st, lang, onFly, onInstruct }: { st: Structured; lang:
     )
   }
   return null
+}
+
+/** a hand-off to another product (e.g. evacuation questions go to Siaga Wilayah) */
+function LinkOut({ product, lang }: { product: Parameters<typeof demoHref>[0]; lang: Lang }) {
+  const session = useSession()
+  return (
+    <AppLink className="dk-mp-linkbtn" to={withControls(demoHref(product, session, null))}>
+      <Icon name={PRODUCT_BY_SLUG[product].icon as Parameters<typeof Icon>[0]['name']} size={14} />
+      {product === 'siaga-wilayah' ? A.openSiaga[lang] : PRODUCT_BY_SLUG[product].name}
+      <Icon name="arrowUpRight" size={12} />
+    </AppLink>
+  )
 }

@@ -59,10 +59,10 @@ export interface NaskahCtx {
   /** `from` signs the message (Sekretariat Daerah, or the agency head reminding its own staff) */
   item?: CtxItem & { dueAt: number; nowAt: number; from?: string }
   board?: { open: number; late: number; dueToday: number; done: number; byOpd: { opd: string; open: number; late: number }[]; lateItems: CtxItem[]; todayItems: CtxItem[] }
-  letters?: { pending: number; total: number; pendingList: { subject: Bi; from: string; sifat: string }[] }
+  letters?: { pending: number; total: number; pendingList: { subject: Bi; from: string; sifat: string; due?: string | null; to?: string[] }[] }
   meetings?: { title: Bi; at: string; transcribed: boolean; actions: number }[]
   instructions?: { at: string; text: Bi; opds: string[] }[]
-  minutes?: { decisions: Bi[]; actions: { task: Bi; pic: string; due: string }[] }
+  minutes?: { decisions: Bi[]; actions: { task: Bi; pic: string; due: string; status?: string }[] }
 }
 
 /* ------------------------------------------------------------------ structured readers */
@@ -101,6 +101,8 @@ export interface NaskahAi {
   ask: (text: string, context: NaskahCtx) => Promise<void>
   prepare: () => void
   stop: () => void
+  /** finish the answer being streamed at once (the full text appears) */
+  flush: () => void
   reset: () => void
   messages: ChatMessage[]
   last: ChatMessage | null
@@ -126,5 +128,5 @@ export function useNaskahAi(opts: { onDone?: (m: ChatMessage) => void } = {}): N
     void ensureScenario().catch(() => undefined)
     prep()
   }, [prep])
-  return { ask, prepare, stop: chat.stop, reset: chat.reset, messages: chat.messages, last: chat.last, busy: chat.busy, followUps: chat.followUps }
+  return { ask, prepare, stop: chat.stop, flush: chat.flush, reset: chat.reset, messages: chat.messages, last: chat.last, busy: chat.busy, followUps: chat.followUps }
 }

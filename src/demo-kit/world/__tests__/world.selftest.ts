@@ -9,10 +9,10 @@ import { generateWorld } from '../seed'
 import { createEvent, processEvents } from '../engine'
 import { REACTIONS } from '../reactions'
 import { naturalEventsAt } from '../natural-gen'
-import { _onNaturalMinute, setNaturalEvents } from '../natural'
+import { _onNaturalMinute, naturalBacklog, setNaturalEvents } from '../natural'
 import { clock } from '../clock'
 import { emit, loadWorld, onEvent, settled, world, exportWorld, importWorld, resetWorld } from '../store'
-import { complaintKpi, slaOnTimePct, tableCounts, auditFor, overdueActions, instructionSuggestions } from '../selectors'
+import { complaintKpi, slaOnTimePct, serviceIndex, tableCounts, auditFor, overdueActions, instructionSuggestions } from '../selectors'
 import {
   actionBoard, affiliationEdges, alertRecipients, analyzeProcurement, bansosBatch, bansosCsv, briefingItems, citizenInbox, consoleTickets, floodScenarioAlert,
   harvestValues, hoaxBurst, hpsVsMarket, instructionIdeas, kpiStrip, letterInbox, mentionsByHour, opdLeaderboard, opdScorecard, personas, sentimentSeries,
@@ -133,6 +133,9 @@ for (const { label, pack } of packs) {
   if (pack.kecamatan.some((k) => k.id === 'kalitidu')) {
     ok(nikRegion(kecById.get('kalitidu')!) === '352216' && nikRegion(kecById.get('bojonegoro')!) === '352215' && nikRegion(kecById.get('trucuk')!) === '352223', 'Kemendagri codes: Kalitidu 35.22.16, Bojonegoro 35.22.15, Trucuk 35.22.23')
   }
+  const floodMeeting = rows(a.meetings).find((m) => m.at >= 0 && m.at < 24 * 60 && /banjir/i.test(m.title.id))
+  ok(!!floodMeeting && floodMeeting.at === WORLD.floodMeetingAt && floodMeeting.at + floodMeeting.durationMin <= WORLD.clockStart, `flood meeting held 06.30–07.00, before the clock start (${floodMeeting?.at}+${floodMeeting?.durationMin})`)
+  ok(!!floodMeeting && floodMeeting.status === 'selesai' && !floodMeeting.transcribed && floodMeeting.participants.includes('Sekda'), 'flood meeting: held, not minuted yet, the clip speakers take part')
   ok(a.auditLog.ids.length > 0, `seeded audit rows for this morning (${a.auditLog.ids.length})`)
   ok(rows(a.auditLog).every((x) => x.source === 'clock' && !!x.origin), 'seeded morning activity is background: source clock + origin product')
   const groups = new Set(rows(a.citizens).map((x) => x.group))
@@ -383,6 +386,16 @@ for (const { label, pack } of packs) {
   ok(rows(s.supplySignals).some((x) => /beras/.test(x.commodityId) && x.pct < 0), 'C10 rice supply signal is negative')
   ok(econBefore === undefined || s.econIndex.byId[`${flood[0]}:${s.day.slice(0, 7)}`]!.index < econBefore, 'C10 economic index of the flooded kecamatan drops')
   ok(Object.values(harvestValues(s, 'change')).some((v) => v < 0), 'C10 harvest change choropleth has drops')
+  // per-kecamatan drop map: one event, a different drop per district (a missing key falls back to dropPct)
+  if (flood.length >= 2) {
+    const [k1, k2] = [flood[0]!, flood[1]!]
+    const ton = (st: WorldState, k: string) => rows(st.harvests).filter((h) => h.kecamatanId === k).reduce((a, h) => a + h.estimateTon, 0)
+    const base = (st: WorldState, k: string) => rows(st.harvests).filter((h) => h.kecamatanId === k).reduce((a, h) => a + h.baselineTon, 0)
+    const rr = run(s, seq, 'harvest.updated', { scenario: 'pasca-banjir', kecamatanIds: [k1, k2], dropPct: 10, dropPctByKecamatan: { [k1]: 40 } }, 'siaga-wilayah', 702)
+    const d1 = 1 - ton(rr.state, k1) / Math.max(1, base(rr.state, k1))
+    const d2 = 1 - ton(rr.state, k2) / Math.max(1, base(rr.state, k2))
+    ok(d1 > d2 + 0.15, `harvest.updated dropPctByKecamatan scales per district (${(d1 * 100).toFixed(1)}% vs ${(d2 * 100).toFixed(1)}%)`)
+  }
 
   // C11 · Awas Belanja recommendation ⇒ Katalog Lokal need
   r = run(s, seq, 'procurement.recommended', { procurementId: pump.id, hpsCorrected: hv.market, note: { id: 'Koreksi HPS ke median pasar', en: 'Correct HPS to the market median' }, inviteLocal: true }, 'awas-belanja', 710)
@@ -405,7 +418,20 @@ for (const { label, pack } of packs) {
   const k = kpiStrip(s, 740)
   ok(k.alerts >= 1 && k.complaints.today >= 5 && k.serviceIndex > 0 && k.serviceIndex <= 100, 'kpiStrip: six numbers')
   const lb = opdLeaderboard(s, 740)
-  ok(lb.length >= 5 && lb.every((x, i) => i === 0 || lb[i - 1]!.score >= x.score), `opdLeaderboard sorted (${lb.length} OPD)`)
+  ok(lb.length >= 5 && lb.every((x, i) => i === 0 || (lb[i - 1]!.score ?? -1) >= (x.score ?? -1)), `opdLeaderboard sorted (${lb.length} OPD)`)
+  ok(lb.every((x) => (x.score === null) === (x.closed30 + x.lateTickets < 3) && (x.rank === null) === (x.score === null)), 'opdLeaderboard: no score or rank below the minimum sample')
+  {
+    // a letter arriving during the day lands in the inbox as unread
+    const r3 = run(s, seq, 'letter.received', { number: '611/77/BWS/2026', from: 'Balai Besar Wilayah Sungai', subject: { id: 'Balasan permintaan pompa', en: 'Reply on the pump request' }, kind: 'laporan', sifat: 'segera' }, 'naskah-pintar', 690)
+    const got = letterInbox(r3.state)[0]
+    ok(got?.number === '611/77/BWS/2026' && got.status === 'masuk' && got.receivedAt === 690, 'letter.received ⇒ newest unread letter in the inbox')
+  }
+  {
+    // a new instruction (due tomorrow) never moves the service index
+    const before = serviceIndex(s, 740)
+    const r2 = run(s, seq, 'instruction.issued', { text: { id: 'Uji', en: 'Test' }, opdIds: [s.region.opd[0]!.id], dueAt: 740 + 1440 }, 'meja-pimpinan', 740)
+    ok(serviceIndex(r2.state, 740) === before, `instruction.issued leaves serviceIndex unchanged (${before})`)
+  }
   ok(opdScorecard(s, lb[0]!.opdId, 740).trend.length === 30, 'opdScorecard: 30-day trend')
   const items = briefingItems(s, 740)
   ok(items.length >= 6 && new Set(items.map((x) => x.source)).size >= 6, `briefing: ${items.length} items from ${new Set(items.map((x) => x.source)).size} products`)
@@ -562,7 +588,9 @@ await (async () => {
 
   // the running clock's natural events: the generator is loaded lazily; minutes crossed meanwhile are replayed in order
   await resetWorld()
+  setNaturalEvents(false)
   clock.setTime(600)
+  setNaturalEvents(true)
   const s0 = world.get()
   const want: string[] = []
   for (let m = 540; m <= 600; m++) for (const o of naturalEventsAt(s0, m)) want.push(`${m}:${o.type}`)
@@ -583,6 +611,33 @@ await (async () => {
   ok(got.length === want.length, 'no natural events while switched off')
   setNaturalEvents(true)
   off2()
+
+  // a forward jump replays the minutes it skips (in idle slices); setting the clock back and jumping again never
+  // emits a minute twice
+  await resetWorld()
+  const natAt: number[] = []
+  const off3 = onEvent('*', (e) => {
+    if (e.source === 'clock' && (e.depth ?? 0) === 0) natAt.push(e.at)
+  })
+  const drain = async () => {
+    for (let i = 0; i < 400 && naturalBacklog() > 0; i++) {
+      await new Promise((r) => setTimeout(r, 5))
+      await settled()
+    }
+    await settled()
+  }
+  clock.setTime(720)
+  await drain()
+  ok(natAt.length > 0 && natAt.every((m) => m > WORLD.clockStart && m <= 720), `jump 07:00 → 12:00 replays natural events (${natAt.length})`)
+  ok(natAt.every((m, i) => i === 0 || m >= natAt[i - 1]!), 'replayed in minute order')
+  const rumor = world.get().meta.facts.hoax.rumor
+  if (rumor) ok(rows(world.get().mentions).some((m) => m.rumor === rumor), 'a jump past 10:00 starts the scheduled hoax burst')
+  const n1 = natAt.length
+  clock.setTime(600)
+  clock.setTime(720)
+  await drain()
+  ok(natAt.length === n1, `rewind + jump again emits nothing twice (${natAt.length - n1} extra)`)
+  off3()
 })()
 
 console.log(`\n${failures ? '✗' : '✓'} ${passes} passed, ${failures} failed`)

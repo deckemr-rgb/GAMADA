@@ -5,15 +5,18 @@
  * event with source 'sapa-warga', so the citizen phone and the other products see it at once.
  */
 import { lazy, memo, startTransition, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router'
 import { useI18n } from '../../lib/i18n'
+import { demoHref } from '../../demo-kit/shell'
 import { BrowserFrame } from '../../demo-kit/frames'
 import { Button, Chip, EmptyState, Icon, Inbox, Kanban, Kpi, LiveBadge, Segmented, Select, SlaLabel, StatusChip, flashNewRow, type InboxItem, type KanbanColumn } from '../../demo-kit/ui'
 import {
-  CATEGORY_LABEL, DAY_MIN, avgRating, complaintKpi, emit, hhmm, shallowEqual, slaOnTimePct, useClock, useWorld,
+  CATEGORY_LABEL, DAY_MIN, avgRating, complaintKpi, emit, hhmm, shallowEqual, slaOnTimePct, useClock, useSession, useWorld, world,
   type ComplaintCategory, type ComplaintChannel, type TicketStatus, type WorldState,
 } from '../../demo-kit/world'
 import { consoleTickets, type ConsoleTicket } from '../../demo-kit/world/satu-daerah'
-import { SLUG, afterPaint, type PersonaKey } from './model'
+import { preloadDemo } from '../registry'
+import { SLUG, advanceClock, afterPaint, isEmergency, stepMinutes, type PersonaKey } from './model'
 import { CHANNEL_LABEL, STATUS_LABEL, STATUS_ORDER, fill, useT } from './strings'
 
 const loadCluster = () => import('./ClusterPanel')
@@ -72,7 +75,7 @@ export const Kpis = memo(function Kpis({ now }: { now: number }) {
       <Kpi label={t.kOpen} value={k.open} />
       <Kpi label={t.kLate} value={k.late} className={k.late ? 'is-danger' : undefined} />
       <Kpi label={t.kSla} value={k.sla} unit="%" />
-      <Kpi label={t.kRating} value={k.rating} decimals={1} unit="/5" format={(n) => n.toLocaleString(lang === 'id' ? 'id-ID' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} />
+      <Kpi key={lang} label={t.kRating} value={k.rating} decimals={1} unit="/5" format={(n) => n.toLocaleString(lang === 'id' ? 'id-ID' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} />
       <Kpi label={t.kClusters} value={k.clusters} />
     </div>
   )
@@ -96,6 +99,14 @@ export interface ConsoleProps {
 
 export function Console({ view, setView, openTicket, arrived, onBackToPhone, clusterNote, focusCluster, personaOf, sm }: ConsoleProps) {
   const { lang } = useI18n()
+  const session = useSession()
+  const navigate = useNavigate()
+  /* the cluster's cross-product link stays on screen (the toast that announced it leaves after a few seconds) */
+  const goDesk = (focus: string) => {
+    const href = demoHref('meja-pimpinan', session, focus)
+    const dev = new URLSearchParams(window.location.search).get('controls') === 'all'
+    navigate(dev ? `${href}&controls=all` : href)
+  }
   // the view switch paints the selected tab at once; the heavier list renders right after, interruptible (INP)
   const [shown, setShown] = useState(view)
   useEffect(() => {
@@ -103,8 +114,19 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
     return afterPaint(() => startTransition(() => setShown(view)))
   }, [view, shown])
   const t = useT()
-  const { minutes: now } = useClock()
-  const all = useWorld((s) => consoleTickets(s, now))
+  const { minutes: now, running, speed } = useClock()
+  const raw = useWorld((s) => consoleTickets(s, now))
+  /* life-safety complaints that are still open always lead the inbox (the AI triage already sent them to BPBD) */
+  const all = useMemo(() => {
+    const em = raw.filter((r) => r.ticket.status !== 'selesai' && isEmergency(r.complaint))
+    if (!em.length) return raw
+    const set = new Set(em)
+    return [...em, ...raw.filter((r) => !set.has(r))]
+  }, [raw])
+  /* the cluster's way to Meja Pimpinan: fetch that demo's code while the banner is on screen */
+  useEffect(() => {
+    if (clusterNote) preloadDemo('meja-pimpinan')
+  }, [clusterNote])
   const opds = useWorld((s) => s.region.opd)
   const [channel, setChannel] = useState<ChannelF>('all')
   const [cat, setCat] = useState<'all' | ComplaintCategory>('all')
@@ -133,6 +155,7 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
     () =>
       filtered.slice(0, 60).map((r) => {
         const p = personaOf(r.complaint.citizenId)
+        const em = r.ticket.status !== 'selesai' && isEmergency(r.complaint)
         return {
           id: r.ticket.id,
           title: `${r.complaint.code} · ${CATEGORY_LABEL[r.complaint.category][lang]}`,
@@ -140,9 +163,10 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
           time: when(r.complaint.at, now, t),
           unread: r.ticket.status === 'baru',
           from: r.citizen?.name,
-          tone: r.ticket.status !== 'selesai' && r.slaLeft < 0 ? 'danger' : undefined,
+          tone: em || (r.ticket.status !== 'selesai' && r.slaLeft < 0) ? 'danger' : undefined,
           meta: (
             <>
+              {em && <span className="dk-sw-tag is-sos">{r.ticket.status === 'baru' ? t.emergencyTarget : r.ticket.opdId === 'bpbd' ? t.emergencyRouted : t.emergency}</span>}
               <StatusChip label={STATUS_LABEL[r.ticket.status][lang]} tone={statusTone(r.ticket.status)} />
               <SlaLabel minutesLeft={r.slaLeft} done={r.ticket.status === 'selesai'} />
               <span className="dk-sw-chan">
@@ -161,7 +185,7 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
   /* board: open tickets + the ones resolved today */
   const day = Math.floor(now / DAY_MIN) * DAY_MIN
   const arrivedId = arrived?.ticketId ?? null
-  const { boardItems, boardHidden } = useMemo(() => {
+  const { boardItems, boardHidden, totals } = useMemo(() => {
     const per = new Map<string, number>()
     const out: ConsoleTicket[] = []
     let hidden = 0
@@ -174,11 +198,18 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
       if (n < BOARD_CAP || r.ticket.id === arrivedId) out.push(r)
       else hidden++
     }
-    return { boardItems: out, boardHidden: hidden }
+    return { boardItems: out, boardHidden: hidden, totals: per }
   }, [all, applied, day, arrivedId])
+  /* the header says the TRUE total of the column (the kit's own count = cards shown is hidden in sapa-warga.css);
+     a capped column says "12/17" so the board adds up with the KPI "Belum selesai" */
   const columns = useMemo<KanbanColumn[]>(
-    () => STATUS_ORDER.map((s) => ({ id: s, title: STATUS_LABEL[s][lang], tone: s === 'selesai' ? 'done' : 'neutral' })),
-    [lang],
+    () =>
+      STATUS_ORDER.map((s) => {
+        const total = totals.get(s) ?? 0
+        const shown = Math.min(total, BOARD_CAP)
+        return { id: s, title: `${STATUS_LABEL[s][lang]} · ${total > shown ? `${shown}/${total}` : total}`, tone: s === 'selesai' ? 'done' : 'neutral' }
+      }),
+    [lang, totals],
   )
   const renderCard = useCallback(
     (r: ConsoleTicket) => {
@@ -197,6 +228,7 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
               {r.ticket.status !== 'baru' && r.ticket.status !== 'diverifikasi' ? ` · ${opds.find((o) => o.id === r.ticket.opdId)?.short ?? r.ticket.opdId}` : ''}
             </span>
             {p && <span className="dk-sw-tag is-acc">{t.fromPersona}</span>}
+            {r.ticket.status !== 'selesai' && isEmergency(r.complaint) && <span className="dk-sw-tag is-sos">{t.emergency}</span>}
           </div>
         </div>
       )
@@ -205,12 +237,12 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
   )
   const onMove = useCallback((id: string, to: string) => {
     const st = to as TicketStatus
+    const w = world.get()
+    const tk = w.tickets.byId[id]
+    const cmp = tk ? w.complaints.byId[tk.complaintId] : undefined
+    // a step forward takes simulated work time (the same rule as the drawer buttons)
+    if (tk && cmp && STATUS_ORDER.indexOf(st) > STATUS_ORDER.indexOf(tk.status)) advanceClock(stepMinutes(st, cmp.category))
     emit('ticket.statusChanged', { ticketId: id, status: st, ...(st === 'selesai' ? { note: 'Ditutup dari papan' } : {}) }, SLUG)
-    // Shift+Arrow keeps focus on the moved card: once it has glided into its new column, keep it in view
-    window.setTimeout(() => {
-      const a = document.activeElement
-      if (a instanceof HTMLElement && a.dataset.flipId === id) a.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    }, 420)
   }, [])
   const itemId = useCallback((r: ConsoleTicket) => r.ticket.id, [])
   const itemColumn = useCallback((r: ConsoleTicket) => r.ticket.status, [])
@@ -250,7 +282,13 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
               {t.console} · {t.simData}
             </p>
           </div>
-          <LiveBadge label={t.liveFeed} />
+          <div className="dk-sw-con-badges">
+            <span className="dk-sw-tag dk-sw-sp4nchip" title={t.sp4n.replace(' · ID simulasi {id}', '').replace(' · simulated ID {id}', '')}>
+              <Icon name="link" size={12} />
+              {t.sp4nChip}
+            </span>
+            <LiveBadge label={running ? fill(t.liveFeed, { x: speed }) : t.livePaused} className={running ? undefined : 'is-paused'} />
+          </div>
         </header>
         {onBackToPhone && arrived && (
           <div className="dk-sw-banner" role="status">
@@ -270,10 +308,13 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
             <Button size="sm" variant="secondary" icon="map" onClick={() => setView('cluster')}>
               {t.clusterOpen}
             </Button>
+            <Button size="sm" variant="ghost" iconEnd="arrowUpRight" onClick={() => goDesk(clusterNote.id)} onPointerEnter={() => preloadDemo('meja-pimpinan')} data-sw="cluster-desk">
+              {t.seeDesk}
+            </Button>
           </div>
         )}
         <Kpis now={now} />
-        <div className="dk-sw-toolbar" onPointerOver={warmCluster}>
+        <div className="dk-sw-toolbar">
           <Segmented
             label={t.views}
             value={view}
@@ -281,7 +322,7 @@ export function Console({ view, setView, openTicket, arrived, onBackToPhone, clu
               if (v === 'cluster') warmCluster()
               setView(v)
             }}
-
+            onIntent={(v) => v === 'cluster' && warmCluster()}
             size="sm"
             options={[
               { value: 'inbox', label: t.viewInbox, icon: 'inbox' },
@@ -372,6 +413,7 @@ const Views = memo(function Views(p: ViewsProps) {
       <div className="dk-sw-board" data-sw-drop="">
         {p.boardItems.length ? (
           <>
+            {p.boardHidden > 0 && <p className="dk-sw-fine dk-sw-board-more">{fill(t.boardTotal, { shown: p.boardItems.length, total: p.boardItems.length + p.boardHidden })}</p>}
             <Kanban
               columns={p.columns}
               items={p.boardItems}
@@ -383,7 +425,6 @@ const Views = memo(function Views(p: ViewsProps) {
               onOpen={p.onOpenCard}
               label={t.boardLabel}
             />
-            {p.boardHidden > 0 && <p className="dk-sw-fine dk-sw-board-more">{fill(t.boardMore, { n: p.boardHidden })}</p>}
           </>
         ) : (
           <EmptyState compact title={t.boardEmpty} body={t.boardEmptyBody} action={p.filtersOn ? { label: t.resetFilters, onClick: p.resetFilters, icon: 'refresh' } : undefined} />

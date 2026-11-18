@@ -3,7 +3,7 @@
  * (createEvent). Synchronous and tiny, so emit() can hand back ids at once while the pipeline (engine.ts) loads.
  */
 import type { EventMap, EventSource, EventType, Minutes, TableKey, WorldEvent, WorldState } from './types'
-import { nextEventId, nextId, type Seq } from './ids'
+import { formatId, nextEventId, nextId, type Seq } from './ids'
 
 /** payload fields that receive a generated id when missing: [field, table, alsoCode] */
 const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
@@ -13,6 +13,7 @@ const ID_FIELDS: { [K in EventType]?: [string, TableKey, boolean?][] } = {
   'briefing.generated': [['id', 'briefings']],
   'instruction.issued': [['id', 'instructions']],
   'actionItem.created': [['id', 'actionItems']],
+  'letter.received': [['id', 'letters']],
   'letter.dispositioned': [['letterId', 'letters']],
   'hoax.detected': [['id', 'hoaxAlerts']],
   'mention.created': [['id', 'mentions']],
@@ -46,10 +47,36 @@ export function prepare<K extends EventType>(s: WorldState, seq: Seq, type: K, p
   return p as EventMap[K]
 }
 
+/**
+ * The first complaint number after a fresh world is kept for the visitor: when a background (clock) complaint would
+ * take it, it skips one number, and the next complaint a product emits gets the kept number. So the sample voice note
+ * is SW-…-0141 whether or not the 07.02 background report landed first. `seq.complaintKept` = the kept number
+ * (0 = used / none), `seq.complaintKeep` = 1 once decided (persisted with the counters).
+ */
+function keepFirstComplaint<K extends EventType>(s: WorldState, seq: Seq, type: K, payload: EventMap[K], source: EventSource): EventMap[K] {
+  if (type !== 'complaint.created') return payload
+  const p = payload as EventMap['complaint.created']
+  if (p.id) return payload
+  if (!seq.complaintKeep) {
+    seq.complaintKeep = 1
+    if (source === 'clock') {
+      seq.complaintKept = (seq.complaints ?? 0) + 1
+      seq.complaints = seq.complaintKept
+    }
+    return payload
+  }
+  if (source !== 'clock' && seq.complaintKept) {
+    const id = formatId('complaints', seq.complaintKept, s.day.slice(0, 4))
+    seq.complaintKept = 0
+    return { ...p, id } as EventMap[K]
+  }
+  return payload
+}
+
 export function createEvent<K extends EventType>(
   s: WorldState, seq: Seq, type: K, payload: EventMap[K], source: EventSource, at: Minutes, depth = 0, causeId: string | null = null,
 ): WorldEvent<K> {
-  return { id: nextEventId(seq), type, at: Math.round(at), source, payload: prepare(s, seq, type, payload), depth, causeId }
+  return { id: nextEventId(seq), type, at: Math.round(at), source, payload: prepare(s, seq, type, keepFirstComplaint(s, seq, type, payload, source)), depth, causeId }
 }
 
 /**

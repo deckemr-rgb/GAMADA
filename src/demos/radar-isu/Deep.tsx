@@ -18,7 +18,7 @@ import { topicName } from './strings'
 const S = {
   id: {
     title: 'Percakapan publik, dibedah per kata kunci',
-    lead: 'Hingga 4 kata kunci. Radar menyisir sumber terbuka (simulasi), lalu menyusun volume, sentimen, topik, kutipan, dan pertanyaan survei.',
+    lead: 'Hingga 4 kata kunci. Radar menyisir semua unggahan publik yang memuat kata kunci (simulasi), lalu menyusun volume, sentimen, topik, kutipan, dan pertanyaan survei. Karena itu angkanya jauh lebih besar daripada Pantauan Live, yang hanya memuat mention terkurasi dari media & akun pantauan.',
     kw: 'Kata kunci',
     kwPh: 'Ketik kata kunci lalu Enter',
     add: 'Tambah',
@@ -38,8 +38,12 @@ const S = {
       ambil: 'Mengambil {n} unggahan',
       analisis: 'Menganalisis sentimen & topik',
       selesai: '{n} unggahan',
+      selesaiAduan: '{n} aduan',
     } as Record<string, string>,
     total: 'Total unggahan',
+    totalCap: 'unggahan publik · aduan Sapa Warga ({n}) dihitung terpisah',
+    excluded: 'di luar total',
+    done: 'Analisis selesai: {n} unggahan untuk {k}.',
     momentum: 'Momentum 3 hari',
     net: 'Sentimen bersih',
     reach: 'Perkiraan jangkauan',
@@ -64,10 +68,12 @@ const S = {
     empty: 'Pilih kata kunci dan jalankan analisis. Hasil terakhir juga masuk ke tab Laporan dan berkas ekspor.',
     insight: 'Temuan utama',
     posts: 'unggahan',
+    template: 'contoh templat (simulasi): tidak ada unggahan pantauan yang memuat kata kunci ini',
+    tooFew: 'Terlalu sedikit unggahan untuk bagian ini.',
   },
   en: {
     title: 'Public conversation, dissected by keyword',
-    lead: 'Up to 4 keywords. The radar sweeps open sources (simulated) and builds volume, sentiment, topics, quotes and survey questions.',
+    lead: 'Up to 4 keywords. The radar sweeps every public post that contains a keyword (simulated) and builds volume, sentiment, topics, quotes and survey questions. That is why the numbers are far larger than the Live Monitor, which only carries curated mentions from monitored outlets & accounts.',
     kw: 'Keywords',
     kwPh: 'Type a keyword and press Enter',
     add: 'Add',
@@ -87,8 +93,12 @@ const S = {
       ambil: 'Fetching {n} posts',
       analisis: 'Scoring sentiment & topics',
       selesai: '{n} posts',
+      selesaiAduan: '{n} complaints',
     } as Record<string, string>,
     total: 'Total posts',
+    totalCap: 'public posts · Sapa Warga complaints ({n}) counted separately',
+    excluded: 'not in the total',
+    done: 'Analysis done: {n} posts for {k}.',
     momentum: '3-day momentum',
     net: 'Net sentiment',
     reach: 'Estimated reach',
@@ -113,6 +123,8 @@ const S = {
     empty: 'Pick keywords and run the analysis. The latest result also feeds the Report tab and the export files.',
     insight: 'Key finding',
     posts: 'posts',
+    template: 'template example (simulated): no monitored post contains this keyword',
+    tooFew: 'Too few posts for this section.',
   },
 }
 const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (m, k: string) => (k in v ? String(v[k]) : m))
@@ -167,6 +179,7 @@ export default function Deep() {
   const [src, setSrc] = useState<SourceLang>(() => prev?.input.lang ?? 'all')
   const [run, setRun] = useState<{ stage: number; result: DeepResult } | null>(null)
   const [msg, setMsg] = useState('')
+  const [done, setDone] = useState('')
   const result = run && run.stage >= 9 ? run.result : !run ? prev : null
 
   const add = (k: string) => {
@@ -210,6 +223,11 @@ export default function Deep() {
         else {
           setDeepResult(r)
           if (r.keywords.length >= 2) shell.markMission('analisis')
+          // the result lands below the form (phones: below the fold): bring the key finding into view and say so
+          const total = r.keywords.reduce((a, k) => a + k.total, 0)
+          setMsg('')
+          setDone(fill(S[lang].done, { n: total.toLocaleString(lang === 'id' ? 'id-ID' : 'en-GB'), k: r.input.keywords.join(', ') }))
+          scrollPending.current = true
         }
       }, gap)
     }
@@ -217,8 +235,17 @@ export default function Deep() {
   }
 
   const resRef = useRef<HTMLDivElement>(null)
+  const scrollPending = useRef(false)
   useEffect(() => {
-    if (result && run?.stage === 9 && resRef.current) return dropChips(resRef.current.querySelectorAll('.dk-ri-deep-card'))
+    const el = resRef.current
+    if (!result || run?.stage !== 9 || !el) return
+    if (scrollPending.current) {
+      scrollPending.current = false
+      // the result lands below the form (phones: below the fold): bring the key finding into view
+      el.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      el.focus({ preventScroll: true })
+    }
+    return dropChips(el.querySelectorAll('.dk-ri-deep-card'))
   }, [result, run?.stage])
 
   const exportAs = async (kind: 'xlsx' | 'json') => {
@@ -333,9 +360,12 @@ export default function Deep() {
                 <span className="dk-ri-src-ic" aria-hidden="true">
                   {st === 'selesai' ? <Icon name="check" size={14} /> : st === 'antre' ? <Icon name="clock" size={14} /> : <Icon name="refresh" size={14} />}
                 </span>
-                <span className="dk-ri-src-l">{s.label[lang]}</span>
+                <span className="dk-ri-src-l">
+                  {s.label[lang]}
+                  {s.excluded && <small className="dk-ri-src-x"> · {t.excluded}</small>}
+                </span>
                 <span className="dk-ri-src-s dk-num">
-                  {fill(t.st[st] ?? '', {
+                  {fill((s.excluded && st === 'selesai' ? t.st.selesaiAduan : t.st[st]) ?? '', {
                     n: s.count.toLocaleString(lang === 'id' ? 'id-ID' : 'en-GB'),
                   })}
                 </span>
@@ -353,14 +383,17 @@ export default function Deep() {
       )}
 
       {!result && !run && <p className="dk-ri-empty-note">{t.empty}</p>}
+      <p className="dk-sr" aria-live="polite">
+        {done}
+      </p>
 
       {result && kpi && (
-        <div ref={resRef} className="dk-ri-deep-res">
+        <div ref={resRef} className="dk-ri-deep-res" tabIndex={-1} aria-label={t.insight}>
           <InsightCallout title={t.insight} className="dk-ri-deep-card">
             <p>{result.insight[lang]}</p>
           </InsightCallout>
           <KpiStrip label={t.volTitle} className="dk-ri-kpis dk-ri-deep-card">
-            <Kpi label={t.total} value={kpi.total} />
+            <Kpi label={t.total} value={kpi.total} caption={fill(t.totalCap, { n: result.sources.find((x) => x.excluded)?.count ?? 0 })} />
             <Kpi label={t.momentum} value={kpi.momentum} format={(n) => `${n > 0 ? '+' : ''}${Math.round(n)}%`} />
             <Kpi label={t.net} value={kpi.net} format={(n) => `${n > 0 ? '+' : ''}${Math.round(n)}`} />
             <Kpi label={t.reach} value={kpi.reach} format={(n) => compact(n, lang)} />
@@ -391,15 +424,14 @@ export default function Deep() {
                 <SplitBar key={k.keyword} s={k.sentiment} label={k.keyword} t={t} />
               ))}
               <h3 className="dk-ri-sec-t">{t.sentLangTitle}</h3>
-              {result.keywords
-                .slice(0, 2)
-                .flatMap((k) => [
-                  <SplitBar key={`${k.keyword}-id`} s={k.byLang.id} label={`${k.keyword} · ID`} t={t} />,
-                  <SplitBar key={`${k.keyword}-en`} s={k.byLang.en} label={`${k.keyword} · EN`} t={t} />,
-                ])}
+              {result.keywords.flatMap((k) => [
+                <SplitBar key={`${k.keyword}-id`} s={k.byLang.id} label={`${k.keyword} · ID`} t={t} />,
+                <SplitBar key={`${k.keyword}-en`} s={k.byLang.en} label={`${k.keyword} · EN`} t={t} />,
+              ])}
             </section>
             <section className="dk-ri-deep-card dk-ri-panel">
               <h3 className="dk-ri-sec-t">{t.topicsTitle}</h3>
+              {!result.topics.length && <p className="dk-ri-note">{t.tooFew}</p>}
               <ul className="dk-ri-bars">
                 {result.topics.slice(0, 8).map((x) => (
                   <li key={`${x.keyword}|${x.label.id}`}>
@@ -422,6 +454,7 @@ export default function Deep() {
               <h3 className="dk-ri-sec-t">
                 {t.mediaTitle} <span className="dk-ri-sec-meta">{t.mediaNote}</span>
               </h3>
+              {!result.media.length && <p className="dk-ri-note">{t.tooFew}</p>}
               <ul className="dk-ri-media">
                 {result.media.map((m) => (
                   <li key={m.outlet}>
@@ -440,12 +473,19 @@ export default function Deep() {
             </section>
             <section className="dk-ri-deep-card dk-ri-panel">
               <h3 className="dk-ri-sec-t">{t.quotesTitle}</h3>
+              {!result.quotes.length && <p className="dk-ri-note">{t.tooFew}</p>}
               <ul className="dk-ri-quotes">
                 {result.quotes.map((q, i) => (
                   <li key={i} className={`is-${q.sentiment}`}>
                     <blockquote>“{q.text[lang]}”</blockquote>
                     <p className="dk-ri-note">
                       {q.outlet} · {q.keyword} · {compact(q.reach, lang)}
+                      {q.template && (
+                        <>
+                          {' '}
+                          · <i>{t.template}</i>
+                        </>
+                      )}
                     </p>
                   </li>
                 ))}
@@ -453,6 +493,7 @@ export default function Deep() {
             </section>
             <section className="dk-ri-deep-card dk-ri-panel">
               <h3 className="dk-ri-sec-t">{t.surveyTitle}</h3>
+              {!result.survey.length && <p className="dk-ri-note">{t.tooFew}</p>}
               <ol className="dk-ri-ul">
                 {result.survey.map((q, i) => (
                   <li key={i}>{q[lang]}</li>

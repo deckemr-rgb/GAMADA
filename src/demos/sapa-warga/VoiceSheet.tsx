@@ -4,9 +4,9 @@
  *  - the "Voice note contoh" chip → the quick sample: the waveform plays and the Basa Jawa transcript appears word by
  *    word in ~3 s, then the ticket is created at once ("Lewati" sends it straight away);
  *  - the microphone → hold-to-talk with Web Speech in the region's language (kit VoiceRecorder). Its own sample
- *    playback is long, so a "Lewati" control appears while it plays.
+ *    sample plays at SAMPLE_WPS (about 6 s) and a "Lewati" control appears while it plays.
  */
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useI18n } from '../../lib/i18n'
 import { VoiceRecorder } from '../../demo-kit/media/VoiceRecorder'
@@ -20,6 +20,8 @@ import { fill, useT } from './strings'
 
 /** seconds from tap to a complete transcript in the quick sample */
 const QUICK_S = 2.8
+/** the mic sheet's own sample (kit VoiceRecorder) plays at a brisk demo pace (kit default 2.3 wps ≈ 12 s) */
+const SAMPLE_WPS = 4.5
 
 type Result = { text: string; source: 'mic' | 'sample'; lang: string }
 
@@ -100,8 +102,6 @@ export default function VoiceSheet({ persona, pack, quick, onClose, onResult }: 
   const root = useRef<HTMLDivElement>(null)
   const [mode, setMode] = useState<'quick' | 'mic'>(quick ? 'quick' : 'mic')
   const [skippable, setSkippable] = useState(false)
-  // kit VoiceRecorder: a press that ends on the sample button it swapped in (mic denied) must not start the sample
-  const downOnHold = useRef(false)
   useEffect(() => {
     const back = document.activeElement
     root.current?.querySelector<HTMLElement>('[data-sw="voice-skip"], .dk-vr-foot button, .dk-vr-btn')?.focus()
@@ -111,18 +111,6 @@ export default function VoiceSheet({ persona, pack, quick, onClose, onResult }: 
   }, [])
   const speakLang = sample.lang.startsWith('id') ? 'Bahasa Indonesia' : (regionalLanguageLabel(pack, lang) ?? sample.lang)
   const sendSample = () => onResult({ text: sample.text, source: 'sample', lang: sample.lang })
-  const onDownCapture = (e: PointerEvent<HTMLDivElement>) => {
-    const b = (e.target as Element).closest('.dk-vr-btn')
-    downOnHold.current = !!b && !b.classList.contains('is-sample')
-  }
-  const onClickCapture = (e: MouseEvent<HTMLDivElement>) => {
-    const b = (e.target as Element).closest('.dk-vr-btn.is-sample')
-    if (b && downOnHold.current && e.detail > 0) {
-      e.stopPropagation()
-      e.preventDefault()
-    }
-    downOnHold.current = false
-  }
   return (
     <div ref={root} className="dk-sw-sheet is-voice" role="dialog" aria-modal="false" aria-label={t.voiceTitle} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <header>
@@ -134,15 +122,14 @@ export default function VoiceSheet({ persona, pack, quick, onClose, onResult }: 
       ) : (
         <>
           <p className="dk-sw-muted">{fill(t.voiceHelp, { lang: speakLang })}</p>
-          <div onPointerDownCapture={onDownCapture} onClickCapture={onClickCapture}>
-            <VoiceRecorder
-              speechCodes={persona === 'raka' ? ['id-ID'] : pack?.languages.speechCodes}
-              sample={{ id: sample.id, text: sample.text, lang: sample.lang, title: sample.title, translation: sample.translation }}
-              onResult={(r) => onResult({ text: r.text, source: r.source, lang: r.lang })}
-              onInterim={(x) => setSkippable(!!x && x !== sample.text && sample.text.startsWith(x))}
-              label={t.voiceHold}
-            />
-          </div>
+          <VoiceRecorder
+            speechCodes={persona === 'raka' ? ['id-ID'] : pack?.languages.speechCodes}
+            sample={{ id: sample.id, text: sample.text, lang: sample.lang, title: sample.title, translation: sample.translation }}
+            sampleWps={SAMPLE_WPS}
+            onResult={(r) => onResult({ text: r.text, source: r.source, lang: r.lang })}
+            onInterim={(x) => setSkippable(!!x && x !== sample.text && sample.text.startsWith(x))}
+            label={t.voiceHold}
+          />
           {skippable && (
             <div className="dk-sw-qs-act">
               <Button size="sm" variant="secondary" icon="send" onClick={sendSample} title={t.skipHint} data-sw="voice-skip">

@@ -12,7 +12,7 @@ import { PaperFrame, printPaper } from '../../demo-kit/frames'
 import { useWorld, type WorldState } from '../../demo-kit/world'
 import { hashString } from '../../demo-kit/world/prng'
 import { longDate } from '../../demo-kit/docs/nik'
-import { CLIP, SCRIPT, clockText, dueText, existingAction, picLabel, type ScriptLine } from './model'
+import { CLIP, CONCLUSION, SCRIPT, clockText, existingAction, fullDue, picLabel, type ScriptLine } from './model'
 import { useStr } from './strings'
 import './official.css'
 
@@ -31,13 +31,13 @@ function view(s: WorldState, meetingId: string | null) {
   return {
     day: s.day,
     region: s.region.name,
-    at: m?.at ?? 540,
-    dur: m?.durationMin ?? 60,
+    at: m?.at ?? 390,
+    dur: m?.durationMin ?? 30,
     st: meetingId ? SCRIPT.actions.map((a) => existingAction(s, meetingId, a.text)?.status ?? 'baru').join('|') : '',
   }
 }
 
-export default function OfficialMinutes({ open, onClose, meetingId, summary, topics }: Props) {
+export default function OfficialMinutes({ open, onClose, meetingId, topics }: Props) {
   const S = useStr()
   const { lang } = useI18n()
   const { markMission } = useShell()
@@ -151,14 +151,15 @@ export default function OfficialMinutes({ open, onClose, meetingId, summary, top
                   <td className="dk-num">{i + 1}</td>
                   <td>{a.text[lang]}</td>
                   <td>{picLabel(a.pic, lang, a.opdId)}</td>
-                  <td className="dk-num">{dueText(a.dueAt, lang, v.day)}</td>
+                  <td className="dk-num">{fullDue(a.dueAt, lang, v.day)}</td>
                   <td>{S.fStatus[(status[i] ?? 'baru') as keyof typeof S.fStatus] ?? status[i]}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <h3>IV. {S.nSummary}</h3>
-          <p className="dk-np-offsum">{summary}</p>
+          {/* a government memo states its conclusion in the impersonal register; the AI summary stays on screen */}
+          <h3>IV. {S.oConclusion}</h3>
+          <p className="dk-np-offsum">{CONCLUSION[lang]}</p>
 
           <div className="dk-np-signs">
             {[

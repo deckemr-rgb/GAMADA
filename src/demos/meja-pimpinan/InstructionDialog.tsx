@@ -41,6 +41,8 @@ const D = {
   done: { id: 'Selesai', en: 'Done' },
   another: { id: 'Instruksi lain', en: 'Another instruction' },
   marketOp: { id: 'menyetujui rekomendasi operasi pasar', en: 'approves the market-operation recommendation' },
+  sendTo: { id: 'Akan dikirim ke:', en: 'Will be sent to:' },
+  sendNone: { id: 'Belum ada OPD tujuan: pilih minimal satu.', en: 'No agency yet: pick at least one.' },
 }
 type Due = 'today' | 'tomorrow' | 'd3'
 
@@ -69,7 +71,10 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
   const [pick, setPick] = useState<string | null>(preset?.text ? 'preset' : null)
   const [text, setText] = useState<Bi>(preset?.text ?? { id: '', en: '' })
   const [opds, setOpds] = useState<string[]>(preset?.opdIds ?? [])
-  const [due, setDue] = useState<Due>('tomorrow')
+  // urgent wording (a hoax clarification, "hari ini", "segera") defaults to today
+  const [due, setDue] = useState<Due>(() => given?.due ?? preset?.due ?? (/hari ini|segera|darurat|today|urgent|immediately/i.test(preset?.text?.[lang] ?? '') ? 'today' : 'tomorrow'))
+  // the agencies were filled by a suggestion (not chosen by hand): typing a new text clears them once
+  const autoOpds = useRef(true)
   const [state, setState] = useState<'edit' | 'sending' | 'sent'>('edit')
   const [result, setResult] = useState<{ at: Minutes; letter: string | null; letterId: string | null; tasks: string[]; dueAt: Minutes } | null>(null)
   // agency order fixed when the dialog opens (pre-selected first), so chips do not jump while toggling
@@ -78,6 +83,7 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
     setPick(i.id)
     setText(i.text)
     setOpds(i.opdIds)
+    autoOpds.current = true
   }
   useEffect(() => {
     if (!preset && first && !pick) choose(first)
@@ -154,7 +160,7 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
           </li>
         </ol>
         {result.letterId && (
-          <AppLink className="dk-mp-linkbtn" to={withControls(demoHref('naskah-pintar', session, result.letterId))}>
+          <AppLink className="dk-mp-linkbtn is-big" to={withControls(demoHref('naskah-pintar', session, result.letterId))}>
             <Icon name={PRODUCT_BY_SLUG['naskah-pintar'].icon as IconName} size={14} />
             {D.open[lang]}
             <Icon name="arrowUpRight" size={12} />
@@ -206,6 +212,10 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
               rows={3}
               value={text[lang]}
               onChange={(e) => {
+                // a hand-written instruction starts with no agencies, so a tap on a chip adds it (never removes a
+                // suggestion's pre-selection by surprise)
+                if (pick !== null && autoOpds.current) setOpds([])
+                autoOpds.current = false
                 setPick(null)
                 setText({ id: e.target.value, en: e.target.value })
               }}
@@ -218,12 +228,16 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
           </legend>
           <div className="dk-mp-chips">
             {allOpds.map((o) => (
-              <Chip key={o.id} selected={opds.includes(o.id)} onToggle={() => setOpds((l) => (l.includes(o.id) ? l.filter((x) => x !== o.id) : [...l, o.id]))}>
+              <Chip key={o.id} selected={opds.includes(o.id)} icon={opds.includes(o.id) ? 'check' : undefined} onToggle={() => { autoOpds.current = false; setOpds((l) => (l.includes(o.id) ? l.filter((x) => x !== o.id) : [...l, o.id])) }}>
                 {o.short}
               </Chip>
             ))}
           </div>
         </fieldset>
+        <p className="dk-mp-sendto" aria-live="polite">
+          <Icon name="send" size={12} />
+          {opds.length ? `${D.sendTo[lang]} ${opds.map((o) => opdShort(world.get(), o)).join(', ')}` : D.sendNone[lang]}
+        </p>
         <div className="dk-mp-due">
           <span className="dk-mp-due-l">{D.due[lang]}</span>
           <Segmented<Due>
@@ -232,7 +246,7 @@ export default function InstructionDialog({ open, onClose, preset: given }: { op
             value={due}
             onChange={setDue}
             options={[
-              { value: 'today', label: D.dToday[lang] },
+              { value: 'today', label: dueAt('today', now) > Math.floor(now / DAY_MIN) * DAY_MIN + 16 * 60 ? `${lang === 'id' ? 'Hari ini' : 'Today'} ${hhmm(dueAt('today', now)).replace(':', lang === 'id' ? '.' : ':')}` : D.dToday[lang] },
               { value: 'tomorrow', label: D.dTomorrow[lang] },
               { value: 'd3', label: D.d3[lang] },
             ]}

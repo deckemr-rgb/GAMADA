@@ -33,6 +33,8 @@ let exact = state.minutes
 let attached = false
 const subs = new Set<() => void>()
 const minuteSubs = new Set<(minute: number) => void>()
+const jumpSubs = new Set<(from: number, to: number) => void>()
+const resetSubs = new Set<(minutes: number) => void>()
 
 const hasDoc = typeof document !== 'undefined'
 const isHidden = () => hasDoc && document.visibilityState === 'hidden'
@@ -88,15 +90,30 @@ export const clock = {
     subs.add(fn)
     return () => subs.delete(fn)
   },
-  /** called once for every whole minute the running clock crosses (not for jumps) */
+  /** called once for every whole minute the running clock crosses (jumps: see onJump) */
   onMinute(fn: (minute: number) => void): () => void {
     minuteSubs.add(fn)
     return () => minuteSubs.delete(fn)
   },
+  /**
+   * a forward jump (from → to, to > from): "Lompat ke …", ?t=, a product moving time on. Natural events replay the
+   * minutes crossed (natural.ts), so the day reads the same whether the clock ran or jumped.
+   */
+  onJump(fn: (from: number, to: number) => void): () => void {
+    jumpSubs.add(fn)
+    return () => jumpSubs.delete(fn)
+  },
+  /** a reset (new / restored world): `minutes` is where the clock now stands */
+  onReset(fn: (minutes: number) => void): () => void {
+    resetSubs.add(fn)
+    return () => resetSubs.delete(fn)
+  },
   setTime(t: string | number) {
     const m = parseTime(t)
+    const from = state.minutes
     exact = m
     set({ ...state, minutes: m })
+    if (m > from) for (const fn of [...jumpSubs]) fn(from, m)
   },
   play() {
     if (state.minutes >= CLOCK.endOfDay) return
@@ -124,6 +141,7 @@ export const clock = {
     exact = minutes
     set({ minutes, speed: CLOCK.defaultSpeed, running: false })
     sync()
+    for (const fn of [...resetSubs]) fn(minutes)
   },
 }
 

@@ -43,7 +43,18 @@ const S = {
     you: 'Anda',
     ai: 'Analis AI',
     empty: 'Mulai dengan salah satu pertanyaan di bawah.',
-    tools: {} as Record<string, string>,
+    tools: {
+      baca_pantauan: 'Membaca pantauan 24 jam',
+      klaster_topik: 'Mengurutkan klaster topik',
+      nilai_mention: 'Menilai unggahan',
+      cek_hoaks: 'Cek status hoaks',
+      susun_klarifikasi: 'Menyusun draf klarifikasi',
+      deret_sentimen: 'Membaca deret sentimen',
+      gabung_sumber: 'Menggabungkan data Siaga Wilayah & Sapa Warga',
+      analisis_topik: 'Menganalisis kata kunci',
+      'siaga_wilayah.tinggi_muka_air': 'Cek data pos pantau Siaga Wilayah',
+      sapa_warga: 'Cek laporan warga di Sapa Warga',
+    } as Record<string, string>,
   },
   en: {
     title: 'Radar Isu AI analyst',
@@ -76,15 +87,16 @@ const S = {
     ai: 'AI analyst',
     empty: 'Start with one of the questions below.',
     tools: {
-      baca_pantauan: 'read the monitor',
-      klaster_topik: 'topic clusters',
-      nilai_mention: 'assess the post',
-      cek_hoaks: 'check hoaxes',
-      susun_klarifikasi: 'draft the clarification',
-      deret_sentimen: 'sentiment series',
-      gabung_sumber: 'join sources',
-      analisis_topik: 'analyse the topic',
-      'siaga_wilayah.tinggi_muka_air': 'Siaga Wilayah water level',
+      baca_pantauan: 'Read the 24 h monitor',
+      klaster_topik: 'Ranked the topic clusters',
+      nilai_mention: 'Assessed the post',
+      cek_hoaks: 'Checked the hoax status',
+      susun_klarifikasi: 'Drafted the clarification',
+      deret_sentimen: 'Read the sentiment series',
+      gabung_sumber: 'Joined Siaga Wilayah & Sapa Warga data',
+      analisis_topik: 'Analysed the keyword',
+      'siaga_wilayah.tinggi_muka_air': 'Checked the Siaga Wilayah gauge',
+      sapa_warga: 'Checked citizen reports in Sapa Warga',
     } as Record<string, string>,
   },
 }
@@ -167,6 +179,21 @@ function Card({ v, t, onOpenClarify }: { v: Structured; t: T; onOpenClarify?: ((
   return null
 }
 
+/** answer text → paragraphs and bullet lists (lines starting with "- " or "• " become one <ul>) */
+function blocks(text: string): (string | string[])[] {
+  const out: (string | string[])[] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const ln = raw.replace(/\*\*(.+?)\*\*/g, '$1')
+    const li = /^\s*(?:[-•]|\d+[.)])\s+(.*)$/.exec(ln)
+    if (li) {
+      const prev = out[out.length - 1]
+      if (Array.isArray(prev)) prev.push(li[1] ?? '')
+      else out.push([li[1] ?? ''])
+    } else if (ln.trim()) out.push(ln)
+  }
+  return out
+}
+
 function Msg({ m, t, onOpenClarify }: { m: ChatMessage; t: T; onOpenClarify?: (() => void) | undefined }) {
   if (m.role === 'user')
     return (
@@ -189,9 +216,17 @@ function Msg({ m, t, onOpenClarify }: { m: ChatMessage; t: T; onOpenClarify?: ((
         </span>
       ) : (
         <div className="dk-ri-msg-b">
-          {m.content.split('\n').map((ln, i) => (
-            <p key={i}>{ln.replace(/\*\*(.+?)\*\*/g, '$1')}</p>
-          ))}
+          {blocks(m.content).map((b, i) =>
+            typeof b === 'string' ? (
+              <p key={i}>{b}</p>
+            ) : (
+              <ul key={i} className="dk-ri-ul">
+                {b.map((li, j) => (
+                  <li key={j}>{li}</li>
+                ))}
+              </ul>
+            ),
+          )}
           {m.translation && <p className="dk-ri-note">{m.translation}</p>}
         </div>
       )}
@@ -199,7 +234,7 @@ function Msg({ m, t, onOpenClarify }: { m: ChatMessage; t: T; onOpenClarify?: ((
         <ol className="dk-ri-steps">
           {m.toolCalls.map((c) => (
             <li key={c.id}>
-              <Icon name="check" size={13} /> {t.tools[c.name] ? <span>{t.tools[c.name]}</span> : <code>{c.name}</code>}
+              <Icon name="check" size={13} /> <span>{t.tools[c.name] ?? c.name.replace(/[._]/g, ' ')}</span>
             </li>
           ))}
         </ol>

@@ -24,12 +24,15 @@ import { Icon, ICON_NAMES } from '../ui/icons'
 import { IconButton } from '../ui/Button'
 import type { MapEngine } from './engine'
 import { BASEMAP_ATTRIBUTION_TEXT, IMAGERY } from './strings'
-import type { LngLat, MapViewHandle, MapViewProps } from './types'
+import type { ChoroplethLayer, LngLat, MapViewHandle, MapViewProps } from './types'
+import { bboxOfPolys, polysOf, type Poly } from './geo'
+import { classColor, classOf, quantileBreaks } from './palette'
 import './map.css'
 
 /** this file's bilingual strings (kept per file so a demo loads only the strings of the parts it uses) */
 const S = {
   mapOf: { id: 'Peta', en: 'Map of' },
+  canvasOf: { id: 'Kanvas peta', en: 'Map canvas:' },
   loading: { id: 'Memuat peta…', en: 'Loading map…' },
   failed: { id: 'Peta gagal dimuat. Muat ulang halaman untuk mencoba lagi.', en: 'The map failed to load. Reload the page to try again.' },
   noTiles: { id: 'Peta dasar tidak tersedia (offline atau diblokir) — batas wilayah tetap tampil.', en: 'Basemap unavailable (offline or blocked) — region boundaries still shown.' },
@@ -62,6 +65,47 @@ const IconSheet = memo(function IconSheet() {
 
 type Status = 'loading' | 'ready' | 'error' | 'nowebgl'
 
+type RegionGeoData = Awaited<ReturnType<typeof loadRegionGeo>>
+/**
+ * While the engine loads (cold load, Back): the region's kecamatan as a static SVG (choropleth colours when a
+ * choropleth layer is given), so the panel is never an empty box with a spinner.
+ */
+const RegionSilhouette = memo(function RegionSilhouette({ geo, choro }: { geo: RegionGeoData; choro: ChoroplethLayer | undefined }) {
+  const shapes = useMemo(() => {
+    const feats = geo.kecamatan.features
+    const all: { id: string; polys: Poly[] }[] = feats.map((f) => ({ id: String((f.properties as { id?: unknown } | null)?.id ?? ''), polys: polysOf(f.geometry as never) }))
+    const [w, so, e, n] = bboxOfPolys(all.flatMap((x) => x.polys))
+    const k = Math.cos((((so + n) / 2) * Math.PI) / 180)
+    const W = (e - w) * k
+    const H = n - so
+    if (!(W > 0 && H > 0)) return null
+    const sc = 1000 / Math.max(W, H)
+    const vals = choro ? Object.values(choro.values).filter((v): v is number => typeof v === 'number') : []
+    const breaks = choro ? (choro.breaks ?? quantileBreaks(vals)) : []
+    const paths = all.map(({ id, polys }) => {
+      let d = ''
+      for (const poly of polys)
+        for (const ring of poly) {
+          ring.forEach(([x, y], i) => {
+            d += `${i ? 'L' : 'M'}${((x - w) * k * sc).toFixed(1)} ${((n - y) * sc).toFixed(1)}`
+          })
+          d += 'Z'
+        }
+      const v = choro?.values[id]
+      return { id, d, fill: typeof v === 'number' ? classColor(classOf(v, breaks), breaks.length + 1) : null }
+    })
+    return { paths, vw: W * sc, vh: H * sc }
+  }, [geo, choro])
+  if (!shapes) return null
+  return (
+    <svg className="dk-map-ghost" viewBox={`-20 -20 ${shapes.vw + 40} ${shapes.vh + 40}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {shapes.paths.map((p) => (
+        <path key={p.id} d={p.d} style={p.fill ? { fill: p.fill } : undefined} />
+      ))}
+    </svg>
+  )
+})
+
 interface FpsWindow {
   samples: number[]
   avg: number
@@ -69,7 +113,7 @@ interface FpsWindow {
 }
 
 export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
-  const { regionId, layers, onReady, interactive = true, initialView, className, ariaLabel, selectedId, onSelect, onMarker, fullscreenButton, minHeight, ref } = props
+  const { regionId, layers, onReady, onLayersReady, interactive = true, initialView, className, ariaLabel, notice: noticeAt, selectedId, onSelect, onMarker, fullscreenButton, minHeight, ref } = props
   const { lang } = useI18n()
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -81,6 +125,18 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   const [status, setStatus] = useState<Status>('loading')
   const [notice, setNotice] = useState<'noTiles' | null>(null)
   const [pack, setPack] = useState<RegionPack | null>(null)
+  // the outline shown while loading: the same cached request the engine uses (no extra download)
+  const [ghost, setGhost] = useState<RegionGeoData | null>(null)
+  useEffect(() => {
+    let alive = true
+    loadRegionGeo(regionId, { desa: false }).then(
+      (g) => alive && setGhost(g),
+      () => {},
+    )
+    return () => {
+      alive = false
+    }
+  }, [regionId])
   const [full, setFull] = useState(false)
   const [srcOpen, setSrcOpen] = useState(false)
   const [fps, setFps] = useState<number | null>(null)
@@ -90,8 +146,8 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   const canFull = typeof document !== 'undefined' && !!document.fullscreenEnabled && (fullscreenButton ?? interactive)
 
   // latest callbacks without re-creating the engine
-  const cb = useRef({ onSelect, onMarker, onReady })
-  cb.current = { onSelect, onMarker, onReady }
+  const cb = useRef({ onSelect, onMarker, onReady, onLayersReady })
+  cb.current = { onSelect, onMarker, onReady, onLayersReady }
 
   /* lazy desa: the engine (or a caller) asks, MapView fetches desa.min.json and hands it over */
   const regionIdRef = useRef(regionId)
@@ -254,7 +310,19 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
         if (desaWanted.current.has(regionId) || desaWaiters.current.length) fetchDesa(regionId)
         flushDesa()
         setStatus('ready')
-        if (first) cb.current.onReady?.(handle)
+        if (first) {
+          cb.current.onReady?.(handle)
+          // after the layer effect below has pushed the current layers: the first 'idle' = everything drawn
+          if (cb.current.onLayersReady) {
+            const fire = () => alive && cb.current.onLayersReady?.(handle)
+            requestAnimationFrame(() => {
+              if (!alive) return
+              const m = engine.map
+              m.once('idle', fire)
+              m.triggerRepaint()
+            })
+          }
+        }
       })
       .catch((e: unknown) => {
         if (import.meta.env.DEV) console.warn('[map] region failed', e)
@@ -277,6 +345,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   useEffect(() => {
     engineRef.current?.setLang(lang)
   }, [lang, engineTick])
+
 
   /* size + visibility */
   useEffect(() => {
@@ -319,6 +388,12 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   }, [srcOpen])
 
   const label = ariaLabel ?? `${ms('mapOf', lang)} ${pack?.shortName ?? ''}`.trim()
+  // the map canvas's accessible name names the region (MapLibre's Map.Title locale alone reads "Map of"); it differs
+  // from the map box's own label above, so the two nested regions never share a name
+  const canvasLabel = `${ms('canvasOf', lang)} ${pack?.shortName ?? ''}`.trim()
+  useEffect(() => {
+    engineRef.current?.setTitle(canvasLabel)
+  }, [canvasLabel, engineTick])
   const zoomBy = (d: number) => {
     const m = engineRef.current?.map
     if (m) m.zoomTo(m.getZoom() + d, { duration: isEnabled('demoAnimations') ? 250 : 0 })
@@ -396,9 +471,12 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
       </div>
 
       {status === 'loading' && (
-        <div className="dk-map-state" aria-live="polite">
-          <span className="dk-map-spin" aria-hidden="true" />
-          {ms('loading', lang)}
+        <div className={`dk-map-state${ghost ? ' has-ghost' : ''}`} aria-live="polite">
+          {ghost && <RegionSilhouette geo={ghost} choro={layers.find((l): l is ChoroplethLayer => l.kind === 'choropleth' && l.visible !== false)} />}
+          <span className="dk-map-loadtag">
+            <span className="dk-map-spin" aria-hidden="true" />
+            {ms('loading', lang)}
+          </span>
         </div>
       )}
       {(status === 'error' || status === 'nowebgl') && (
@@ -408,7 +486,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
         </div>
       )}
       {notice === 'noTiles' && status === 'ready' && (
-        <p className="dk-map-notice" role="status">
+        <p className="dk-map-notice" role="status" style={noticeAt ? (noticeAt.placement === 'bottom' ? { top: 'auto', bottom: noticeAt.inset ?? 12 } : { top: noticeAt.inset ?? 12 }) : undefined}>
           <Icon name="wifi" size={16} />
           {ms('noTiles', lang)}
         </p>

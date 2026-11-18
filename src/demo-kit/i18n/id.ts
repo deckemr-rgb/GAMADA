@@ -73,6 +73,7 @@ export const id = {
   toasts: 'Kejadian lintas produk',
   forwardedTo: (what: string, product: string) => `${what} diteruskan ke ${product}`,
   openIn: (product: string) => `Buka di ${product}`,
+  recordedFor: (what: string, product: string, stage: number) => `${what} dicatat untuk ${product} (demo tahap ${stage})`,
   eventFrom: (product: string) => `Kejadian dari ${product}`,
   rootLabel: {
     complaint: (code: string) => `Aduan #${code}`,

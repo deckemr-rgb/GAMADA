@@ -1,5 +1,6 @@
 /**
- * P2 Meja Pimpinan (spec §11): every GuidePanel mission by script, plus the "Cek lulus" checks:
+ * P2 Meja Pimpinan (spec §11): every GuidePanel mission by script, plus the "Cek lulus" checks (the agency-head view
+ * now labels its one-click switch "See the Regent's briefing"):
  * briefing ≥ 6 items, each linked to real world data · an instruction is visible in Naskah Pintar ≤ 1 s.
  * Phones: meeting mode is not offered below 768 px, so the phone guide lists and completes 4 of 4.
  */
@@ -73,7 +74,8 @@ test('Meja Pimpinan · all 5 missions + briefing refs + instruction reaches Nask
   await expect(page).toHaveURL(/\/demo\/naskah-pintar/)
   await expect(page.locator('.dk-np').first()).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('tab', { name: /Surat Masuk/ })).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-  await expect(page.locator('.dk-np').getByText(/nota dinas/i).first()).toBeVisible()
+  // (the hidden Notulen panel stays mounted and mentions "nota dinas" too: look at what is on screen)
+  await expect(page.locator('.dk-np').getByText(/nota dinas/i).filter({ visible: true }).first()).toBeVisible()
   expect(errors.filter(notNoise)).toEqual([])
 })
 
@@ -101,4 +103,47 @@ test.describe('phone 390', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     expect(errors.filter(notNoise)).toEqual([])
   })
+})
+
+test('Meja Pimpinan · Kepala OPD composes the briefing as the leader; meeting KPIs carry captions + trends (1440, EN)', async ({ page, errors }) => {
+  await openDemo(page, 'meja-pimpinan', { lang: 'en', role: 'kepala-opd' })
+  await closeGuide(page)
+  // agency view: tasks instead of the briefing, and one click to the leader's briefing
+  await expect(page.locator('.dk-mp[data-role="kepala-opd"]')).toBeVisible()
+  await page.getByRole('button', { name: /^See the .+'s briefing$/ }).click()
+  await expect(page.locator('.dk-mp[data-role="kepala-daerah"]')).toBeVisible({ timeout: 5_000 })
+  await expect(page.locator('.dk-mp-item').nth(5)).toBeVisible({ timeout: 10_000 })
+  await expect.poll(() => missionsDone(page, 'meja-pimpinan')).toContain('briefing')
+  // the start ring retires once a briefing exists (no hint left over the KPI labels)
+  await expect(page.locator('.dk-hotspot')).toBeHidden()
+  await page.locator('[data-mp="meeting"]').click()
+  await expect(page.locator('.dk-mp-mm-kpis > li')).toHaveCount(6)
+  await expect(page.locator('.dk-mp-mm-kpis > li > small')).toHaveCount(6)
+  // every tile carries a trend (river level, service index) or bars (overdue follow-ups per agency)
+  await expect(page.locator('.dk-mp-mm-kpis .dk-mp-mm-spark')).toHaveCount(5)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.dk-mp-mm')).toHaveCount(0)
+  expect(errors.filter(notNoise)).toEqual([])
+})
+
+test('Meja Pimpinan · one river reading: briefing item 3 = "Tanya data" flood answer, with its status (1440, ID)', async ({ page, errors }) => {
+  for (const t of ['07:00', '13:00', '17:00']) {
+    await openDemo(page, 'meja-pimpinan', { extra: `t=${t}` })
+    await closeGuide(page)
+    await page.locator('.dk-mp-actions .dk-btn--primary').first().click()
+    const item = page.locator('.dk-mp-item[data-source="siaga-wilayah"]').first()
+    await expect(item).toBeVisible({ timeout: 10_000 })
+    const brief = (await item.locator('.dk-mp-item-t').innerText()).match(/(\d+,\d) m/)?.[1]
+    expect(brief).toBeTruthy()
+    const input = page.locator('.dk-mp-askform input')
+    await input.fill('Bagaimana status banjir?')
+    await input.press('Enter')
+    const a = page.locator('.dk-mp-a').last()
+    await expect(a).toHaveAttribute('aria-busy', 'false', { timeout: 20_000 })
+    await expect(a).toContainText(`${brief} m`)
+    // past SIAGA with no warning out, the alerts tile says so instead of "no flood warning"
+    const it3 = await item.innerText()
+    if (/status (AWAS|SIAGA)/.test(it3) && /Belum ada peringatan/.test(it3)) await expect(page.locator('.dk-mp-kpis .dk-kpi').nth(2)).toContainText(/sungai (AWAS|SIAGA)/)
+  }
+  expect(errors.filter(notNoise)).toEqual([])
 })

@@ -9,7 +9,7 @@
  */
 import type { Intent, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import { CATEGORY_LABEL, type Bi, type ComplaintCategory } from '../../demo-kit/world'
-import { SW, replyLang, slaText, type SwContext, type SwService } from './model'
+import { SW, isEmergency, replyLang, slaText, type SwContext, type SwService } from './model'
 
 type Ctx = SimContext<SwContext>
 type RL = 'id' | 'en' | 'jv'
@@ -67,6 +67,8 @@ const placeOf = (sv: SwService | undefined, x: SwContext): Bi => {
       return { id: `Mal Pelayanan Publik (MPP) ${x.region}`, en: `the ${x.region} Public Service Mall (MPP)` }
   }
 }
+/** "Gratis (tidak dipungut biaya)" → "gratis" (no nested brackets inside a sentence) */
+const feeShort = (fee: string): string => fee.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase()
 const days = (n: number, l: 'id' | 'en') => (n <= 1 ? (l === 'id' ? '1 hari kerja' : '1 working day') : l === 'id' ? `${n} hari kerja` : `${n} working days`)
 
 /** the chips under an answer (in the reply language) */
@@ -80,6 +82,7 @@ const CHIP = {
   officer: { id: 'Teruskan ke petugas', en: 'Forward to an officer' },
   flood: { id: 'Lapor banjir', en: 'Report a flood' },
   bansos: { id: 'Cek status bansos', en: 'Check my social-aid status' },
+  capital: { id: 'Butuh modal usaha?', en: 'Need business capital?' },
 } satisfies Record<string, Bi>
 
 /* ------------------------------------------------------------------ services (checklist cards) */
@@ -95,8 +98,8 @@ function service(ctx: Ctx, serviceId: string, extra?: Bi): SimResponse {
   const where = placeOf(sv, x)
   const fee = sv.fee[l]
   const ans: Bi = {
-    id: `Syarat ${sv.name.id}: ${sv.requirements.length} hal, saya rangkum di kartu di bawah. Waktu proses sekitar ${days(sv.slaDays, 'id')} (${fee.toLowerCase()}), diurus ${where.id}.${extra ? ` ${extra.id}` : ''}`,
-    en: `${sv.name.en} needs ${sv.requirements.length} things, summarised in the card below. Processing takes about ${days(sv.slaDays, 'en')} (${sv.fee.en.toLowerCase()}), handled ${where.en}.${extra ? ` ${extra.en}` : ''}`,
+    id: `Syarat ${sv.name.id}: ${sv.requirements.length} hal, saya rangkum di kartu di bawah. Waktu proses sekitar ${days(sv.slaDays, 'id')}, biaya: ${feeShort(sv.fee.id)}. Diurus ${where.id}.${extra ? ` ${extra.id}` : ''}`,
+    en: `${sv.name.en} needs ${sv.requirements.length} things, summarised in the card below. Processing takes about ${days(sv.slaDays, 'en')}, fee: ${feeShort(sv.fee.en)}. Handled ${where.en}.${extra ? ` ${extra.en}` : ''}`,
   }
   const jv = `Sugeng${honor(x, 'jv')}. Syarat ${sv.name.id} sampun kula serat ing kertu ngandhap menika, nggih. Prosesipun kinten-kinten ${sv.slaDays} dinten.`
   return {
@@ -109,11 +112,18 @@ function service(ctx: Ctx, serviceId: string, extra?: Bi): SimResponse {
       { name: 'lookup_service', input: { query: ctx.text.slice(0, 60) }, output: { serviceId: sv.id, slaDays: sv.slaDays }, ms: 160 },
       { name: 'service_checklist', input: { serviceId: sv.id }, output: { requirements: sv.requirements.length }, ms: 140 },
     ],
-    followUps: chips(ctx, sv.channel === 'mpp' || sv.channel === 'online' ? [CHIP.queue, CHIP.mpp] : [CHIP.mpp, CHIP.officer]),
+    followUps: chips(ctx, sv.id === 'nib-oss' || sv.id === 'izin-usaha-mikro' ? [CHIP.queue, CHIP.capital] : sv.channel === 'mpp' || sv.channel === 'online' ? [CHIP.queue, CHIP.mpp] : [CHIP.mpp, CHIP.officer]),
   }
 }
 
 /* ------------------------------------------------------------------ reports (ticket cards) */
+
+/** a stable simulated referral number per persona and day (RJK-YYYY-####) */
+function refNo(x: SwContext): string {
+  let h = 7
+  for (const ch of `${x.persona?.name ?? ''}|${x.region}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return `RJK-${/^SW-(\d{4})/.exec(x.nextCode)?.[1] ?? '2026'}-${String(10 + (h % 90)).padStart(4, '0')}`
+}
 
 const TIPS: Partial<Record<ComplaintCategory, Bi>> = {
   banjir: { id: 'Bila air terus naik, amankan dokumen penting dan matikan listrik dari meteran.', en: 'If the water keeps rising, secure important documents and switch off power at the meter.' },
@@ -151,11 +161,27 @@ function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
   const label = CATEGORY_LABEL[cat]
   const tip = TIPS[cat]
   const cluster = cat === 'banjir' && x.clusterHere ? x.clusterHere : null
-  const ans: Bi = {
-    id: `Terima kasih${honor(x, 'id')}. Laporan ${label.id.toLowerCase()} di ${place} sudah tercatat sebagai tiket ${code} dan diteruskan ke ${opd}. Estimasi tanggapan ${slaText(hours, 'id')}.${tip ? ` ${tip.id}` : ''} Ini laporan ${label.id.toLowerCase()} ke-${nToday} hari ini${cluster ? `; laporan di ${cluster.desa} sudah menjadi klaster ${cluster.complaints} aduan dan dipantau pimpinan` : ''}.`,
-    en: `Thank you${honor(x, 'en')}. Your ${label.en.toLowerCase()} report in ${place} is logged as ticket ${code} and forwarded to ${opd}. Expected response within ${slaText(hours, 'en')}.${tip ? ` ${tip.en}` : ''} It is report no. ${nToday} of this kind today${cluster ? `; reports in ${cluster.desa} already form a cluster of ${cluster.complaints} and the leadership is watching it` : ''}.`,
+  // life safety: the triage forwards it to BPBD at once (triage.ts); the answer says so and gives 112
+  if (isEmergency({ text: `${ctx.text} ${jc?.translation?.id ?? ''}`, category: cat })) {
+    const sos: Bi = {
+      id: `Terima kasih${honor(x, 'id')}. Ini kami tandai DARURAT: tiket ${code} di ${place} langsung diteruskan ke BPBD (triase darurat), tembusan ${opd}. Target respons 1 jam. Bila nyawa terancam sekarang, telepon 112. Utamakan lansia dan anak, pindah ke tempat yang lebih tinggi.`,
+      en: `Thank you${honor(x, 'en')}. We have marked this as an EMERGENCY: ticket ${code} in ${place} goes straight to BPBD (emergency triage), copied to ${opd}. Response target 1 hour. If a life is in danger right now, call 112. Put the elderly and children first and move to higher ground.`,
+    }
+    return {
+      ...say(ctx, sos, `Matur nuwun${honor(x, 'jv')}. Punika kula tandhani DARURAT: tiket ${code} langsung dipunaturaken dhateng BPBD. Menawi nyawa kaancam, enggal telpon 112.`),
+      structured: { kind: 'ticket', data: { category: label[l], categoryId: cat, summary: (jc?.translation ?? { id: ctx.text, en: ctx.text })[l], urgency: 'tinggi', opd: 'BPBD', location: { kecamatan: kec, desa, detail: place }, kecamatanId: kecId, desaId, language: rl === 'jv' ? 'jv' : 'id', translationId: rl === 'jv' ? (jc?.translation?.id ?? '') : '', slaHours: 1, code, existing: !!jc } },
+      toolCalls: [
+        { name: 'classify_message', input: { text: ctx.text.slice(0, 60) }, output: { category: cat, emergency: true }, ms: 200 },
+        { name: 'create_ticket', input: { category: cat, opd: 'BPBD' }, output: { code }, ms: 260 },
+      ],
+      followUps: chips(ctx, [{ id: 'Apakah perlu mengungsi?', en: 'Should we evacuate?' }, { id: `Status ${code}`, en: `Status of ${code}` }]),
+    }
   }
-  const jv = `Matur nuwun${honor(x, 'jv')}. Laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} ing ${place} sampun kula cathet dados tiket ${code} lan kula aturaken dhateng ${opd}. Paling dangu ${hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} dinten`} badhe dipuntindaklanjuti.${cat === 'banjir' ? ' Menawi toya taksih minggah, dokumen penting mangga dipunamanaken, listrik dipunpejahi saking meteran.' : ''}`
+  const ans: Bi = {
+    id: `Terima kasih${honor(x, 'id')}. Laporan ${label.id.toLowerCase()} di ${place} sudah tercatat sebagai tiket ${code}. Setelah diverifikasi petugas, tiket akan diteruskan ke ${opd} (OPD yang disarankan AI). Estimasi tanggapan ${slaText(hours, 'id')}.${tip ? ` ${tip.id}` : ''} Ini laporan ${label.id.toLowerCase()} ke-${nToday} hari ini${cluster ? `; laporan di ${cluster.desa} sudah menjadi klaster ${cluster.complaints} aduan dan dipantau pimpinan` : ''}.`,
+    en: `Thank you${honor(x, 'en')}. Your ${label.en.toLowerCase()} report in ${place} is logged as ticket ${code}. Once an officer verifies it, it will be forwarded to ${opd} (the agency the AI suggests). Expected response within ${slaText(hours, 'en')}.${tip ? ` ${tip.en}` : ''} It is report no. ${nToday} of this kind today${cluster ? `; reports in ${cluster.desa} already form a cluster of ${cluster.complaints} and the leadership is watching it` : ''}.`,
+  }
+  const jv = `Matur nuwun${honor(x, 'jv')}. Laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} ing ${place} sampun kula cathet dados tiket ${code}. Sasampunipun dipunpriksa petugas, badhe dipunaturaken dhateng ${opd}. Paling dangu ${hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} dinten`} badhe dipuntindaklanjuti.${cat === 'banjir' ? ' Menawi toya taksih minggah, dokumen penting mangga dipunamanaken, listrik dipunpejahi saking meteran.' : ''} Punika laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} kaping-${nToday} dinten punika${cluster ? `; laporan ing ${cluster.desa} sampun dados klaster ${cluster.complaints} aduan lan dipunpantau pimpinan` : ''}.`
   const summary = jc?.translation ?? { id: ctx.text, en: `${label.en} report in ${place}` }
   return {
     ...say(ctx, ans, jv),
@@ -310,9 +336,9 @@ const intents: Intent<SwContext>[] = [
       const x = w(ctx)
       const a = x.alertHere
       const ans: Bi = a
-        ? { id: `Ya, ada peringatan dini banjir level ${a.level} untuk Kec. ${a.kecamatan} (BPBD). Siapkan tas siaga, utamakan lansia dan anak, dan ikuti arahan petugas desa. Posko pengungsian dibuka di balai desa terdekat. Darurat: 112.`, en: `Yes, there is a level-${a.level} early flood warning for ${a.kecamatan} (BPBD). Prepare a go-bag, put the elderly and children first and follow the village officials. Shelters are open at the nearest village hall. Emergency: 112.` }
+        ? { id: `Ya, ada peringatan dini banjir level ${a.level} untuk Kec. ${a.kecamatan} (BPBD). Siapkan tas siaga, utamakan lansia dan anak, dan ikuti arahan petugas desa. ${a.posko ? `Menuju posko pengungsian ${a.posko}, sesuai peringatan BPBD.` : 'Posko pengungsian dibuka di balai desa terdekat.'} Darurat: 112.`, en: `Yes, there is a level-${a.level} early flood warning for ${a.kecamatan} (BPBD). Prepare a go-bag, put the elderly and children first and follow the village officials. ${a.posko ? `Go to the shelter at ${a.posko}, as the BPBD warning says.` : 'Shelters are open at the nearest village hall.'} Emergency: 112.` }
         : { id: `Saat ini belum ada peringatan dini resmi untuk wilayah Anda${x.clusterHere ? `, tetapi ${x.clusterHere.complaints} laporan banjir di ${x.clusterHere.desa} sedang dipantau BPBD` : ''}. Bila air masuk rumah dan terus naik, segera ke tempat tinggi dan hubungi 112. Peringatan resmi akan masuk ke HP ini.`, en: `There is no official early warning for your area yet${x.clusterHere ? `, but ${x.clusterHere.complaints} flood reports in ${x.clusterHere.desa} are being watched by BPBD` : ''}. If water enters the house and keeps rising, move to higher ground and call 112. Official warnings will arrive on this phone.` }
-      const jv = a ? `Inggih, wonten peringatan banjir level ${a.level} kangge Kec. ${a.kecamatan}. Mangga siapaken tas siaga lan nderek arahan petugas desa.` : 'Dereng wonten peringatan resmi. Menawi toya mlebet griya lan taksih minggah, enggal pindhah dhateng papan inggil lan telpon 112.'
+      const jv = a ? `Inggih, wonten peringatan banjir level ${a.level} kangge Kec. ${a.kecamatan}. Mangga siapaken tas siaga lan nderek arahan petugas desa.${a.posko ? ` Posko pengungsian wonten ${a.posko}.` : ''}` : 'Dereng wonten peringatan resmi. Menawi toya mlebet griya lan taksih minggah, enggal pindhah dhateng papan inggil lan telpon 112.'
       return { ...say(ctx, ans, jv), followUps: chips(ctx, [CHIP.flood, CHIP.status]) }
     },
   },
@@ -321,6 +347,9 @@ const intents: Intent<SwContext>[] = [
     'Mau lapor banjir di desa saya', 'Jalan depan rumah kebanjiran setinggi lutut', 'Air sungai meluap masuk ke rumah warga', 'Tanggul sungai bocor, air merembes',
     'I want to report a flood in my village', 'Our street is flooded after the heavy rain', 'The river embankment is leaking',
     'The road is knee-deep in water', 'The yard is waterlogged, water keeps rising', 'Flooded road, motorbikes cannot pass',
+    'Tolong evakuasi, lansia terjebak banjir di rumah', 'Air sudah sepinggang, kami butuh perahu karet', 'Ada lansia yang perlu dievakuasi, air masuk rumah', 'Ibu saya terjebak air, mohon dievakuasi',
+    'Please evacuate us, the water is waist-deep', 'My grandmother is trapped by the flood, send a boat',
+    'Tulung, banyune wis sepinggang, simbah kudu dievakuasi',
     'Banyune munggah tekan omah, dalane kebanjiran', 'Tanggule kali bocor, banyune mrembes terus', 'Kampung kula kebanjiran wiwit wingi', 'Toya Bengawan sampun minggah',
   ]),
   rep('lapor-jalan-rusak', 'jalan-rusak', [
@@ -422,6 +451,48 @@ const intents: Intent<SwContext>[] = [
         ...say(ctx, { id: `Baik. Pilih jam datang di bawah untuk ${sv?.name.id ?? 'layanan'} di MPP ${x.region}. Slot 30 menit; ${x.today.queueAhead} orang terjadwal dalam satu jam ke depan.`, en: `Sure. Pick a time below for ${sv?.name.en ?? 'the service'} at the ${x.region} service mall. 30-minute slots; ${x.today.queueAhead} people are scheduled in the next hour.` }, 'Inggih. Mangga pilih jam rawuh ing ngandhap menika.'),
         structured: { kind: 'sapa-warga/slot-pick', data: { serviceId: sv?.id ?? 'ktp-el', service: sv?.name[l] ?? '' } },
         toolCalls: [{ name: 'book_queue', input: { serviceId: sv?.id ?? '' }, output: { slots: SW.slotCount }, ms: 150 }],
+      }
+    },
+  },
+  /* -------- after the NIB: a referral to business capital (UMKM finance; simulated referral, no lender named) */
+  {
+    id: 'modal-usaha',
+    examples: [
+      'Butuh modal usaha?', 'Mau pinjam modal untuk kedai', 'Cara dapat KUR untuk UMKM', 'Pinjaman modal usaha mikro', 'Setelah NIB bisa ajukan KUR?',
+      'Need business capital?', 'How do I get a small business loan?', 'Microcredit for my coffee stall',
+      'Butuh modal kangge usaha', 'Badhe nyambut modal usaha pripun?',
+    ],
+    respond: (c) => {
+      const ctx = c as Ctx
+      const x = w(ctx)
+      const rl = rlOf(ctx)
+      const l: 'id' | 'en' = rl === 'jv' ? ctx.lang : rl
+      const opd = 'Dinas Koperasi & UMKM'
+      const reqs: Bi[] = [
+        { id: 'NIB (dari OSS, langkah sebelumnya)', en: 'NIB (from OSS, the previous step)' },
+        { id: 'KTP-el dan KK', en: 'e-ID card and family card' },
+        { id: 'Catatan usaha sederhana: omzet dan pengeluaran 3 bulan', en: 'Simple business records: 3 months of turnover and costs' },
+        { id: 'Foto tempat usaha', en: 'Photo of the business premises' },
+      ]
+      return {
+        ...say(
+          ctx,
+          {
+            id: `Bisa${honor(x, 'id')}. NIB biasanya diminta saat mengajukan pembiayaan usaha mikro seperti KUR di bank penyalur atau pinjaman koperasi. Saya buatkan rujukan ke ${opd} ${x.region} untuk pendampingan; bunga dan plafon mengikuti ketentuan lembaga pembiayaan. Rujukan ini simulasi demo.`,
+            en: `Yes${honor(x, 'en')}. An NIB is usually asked for when applying for micro-business finance such as KUR at a lending bank or a cooperative loan. I have made a referral to the ${x.region} ${opd} for guidance; rates and limits follow the lender's rules. This referral is a demo simulation.`,
+          },
+          `Saged${honor(x, 'jv')}. NIB limrahipun dipunsuwun menawi ngajokaken KUR utawi pinjaman koperasi. Kula damelaken rujukan dhateng ${opd}.`,
+        ),
+        structured: {
+          kind: 'checklist',
+          data: {
+            serviceId: 'rujukan-modal', service: l === 'id' ? 'rujukan modal usaha (simulasi)' : 'business capital referral (simulated)', requirements: reqs.map((r) => r[l]), office: opd, fee: l === 'id' ? 'Pendampingan gratis' : 'Free guidance', channel: 'dinas',
+            // a simulated referral number and status, so the referral can be followed up (not a real register)
+            refNo: refNo(x), refStatus: l === 'id' ? 'Dijadwalkan pendampingan (simulasi)' : 'Mentoring scheduled (simulated)',
+          },
+        },
+        toolCalls: [{ name: 'lookup_service', input: { query: ctx.text.slice(0, 60) }, output: { opd, refNo: refNo(x) }, ms: 150 }],
+        followUps: chips(ctx, [CHIP.queue]),
       }
     },
   },

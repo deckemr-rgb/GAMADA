@@ -9,9 +9,8 @@ import { loadRegionGeo } from '../../demo-kit/region/loader'
 import type { RegionGeo } from '../../demo-kit/region/loader'
 import { Button, Icon } from '../../demo-kit/ui'
 import { useSession, useWorld, type WorldState } from '../../demo-kit/world'
-import type { BansosBatch } from '../../demo-kit/world/satu-daerah'
 import type { Lang } from '../../lib/i18n'
-import type { CekRole } from './model'
+import type { CekBatch, CekRole } from './model'
 import { STR } from './strings'
 
 const W = 560
@@ -27,7 +26,7 @@ function rings(g: Geom): Ring[] {
 
 const seedOf = (s: WorldState) => s.seed
 
-export default function ZoneMap({ batch, lang, kecName, role }: { batch: BansosBatch; lang: Lang; kecName: (id: string) => string; role: CekRole }) {
+export default function ZoneMap({ batch, lang, kecName, role, warnNames }: { batch: CekBatch; lang: Lang; kecName: (id: string) => string; role: CekRole; warnNames: string[] | null }) {
   const t = STR[lang]
   const { regionId } = useSession()
   const seed = useWorld(seedOf)
@@ -110,7 +109,7 @@ export default function ZoneMap({ batch, lang, kecName, role }: { batch: BansosB
     <section className="dk-cb-cross" aria-label={t.crossTitle}>
       <header>
         <h3>{t.crossTitle}</h3>
-        <p>{t.crossLead}</p>
+        <p>{batch.source === 'scenario' || !warnNames ? t.crossLeadScenario : t.crossLeadWarn(warnNames.join(', '))}</p>
       </header>
       <div className="dk-cb-cross-body">
         <figure className="dk-cb-map">

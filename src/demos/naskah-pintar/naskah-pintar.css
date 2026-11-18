@@ -174,11 +174,147 @@
 }
 .dk-np-done {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   margin: 0;
   color: var(--dk-pos);
   font: 600 var(--dk-t13) var(--dk-font);
+}
+.dk-np-done-t {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dk-np-done-t > svg {
+  flex: none;
+  margin-top: 1px;
+}
+/* cross-product link (Meja Pimpinan tracks the follow-ups) */
+.dk-np-xlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-pill);
+  color: var(--dk-text);
+  font: 500 var(--dk-t13) var(--dk-font);
+  text-decoration: none;
+}
+.dk-np-xlink:hover {
+  border-color: var(--dk-accent);
+}
+.dk-np-xlink:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+/* the "start here" label hangs under the play button until the first play: keep the row below clear of it */
+.dk-np-controls.has-hint {
+  margin-bottom: 22px;
+}
+
+/* phones: sticky mini player while the main player row is scrolled away (transform/opacity entrance only) */
+.dk-np-mini {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s2);
+  box-shadow: var(--dk-e2);
+  animation: dk-np-mini-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dk-np-mini .dk-btn {
+  flex: none;
+  min-height: var(--dk-target);
+}
+.dk-np-mini-who {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dk-text);
+  font: 600 var(--dk-t13) var(--dk-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dk-np-mini-who i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+@keyframes dk-np-mini-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-np-mini {
+    animation: none;
+  }
+}
+html[data-dk-calm] .dk-np-mini {
+  animation: none;
+}
+
+/* before the first play: what the recording holds and what the AI will write (not an empty box) */
+.dk-np-pre {
+  display: grid;
+  gap: 10px;
+  padding: 2px 0 4px;
+}
+.dk-np-pre .dk-np-empty {
+  padding: 0;
+}
+.dk-np-pre-h {
+  margin: 0;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-np-pre-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-np-pre-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px dashed var(--dk-line-2);
+  border-radius: var(--dk-r-input);
+  color: var(--dk-muted);
+  font: 400 var(--dk-t13) / 1.4 var(--dk-font);
+}
+.dk-np-pre-list li > svg,
+.dk-np-pre-x > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--dk-accent);
+}
+.dk-np-pre-x {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  color: var(--dk-muted);
+  font: 400 var(--dk-t12) / 1.45 var(--dk-font);
+}
+.dk-np-lane-wait {
+  color: var(--dk-faint);
+  font: 400 var(--dk-t12) var(--dk-font);
 }
 
 .dk-np-mgrid {
@@ -530,15 +666,21 @@
 }
 .dk-np-lane-h {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
-  font: 600 var(--dk-t12) var(--dk-font);
+  font: 600 var(--dk-t12) / 1.3 var(--dk-font);
 }
+/* up to two lines ("Public Works", "Disaster Agency" read whole in EN), then an ellipsis; words never split
+   mid-word ("Kecamata / n") */
 .dk-np-lane-h b {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .dk-np-lane-h span {
   flex: none;
@@ -710,12 +852,12 @@
   gap: 4px;
   margin: 0;
 }
-.dk-np-steps code {
-  padding: 1px 6px;
-  border-radius: 4px;
+.dk-np-steps span {
+  padding: 1px 8px;
+  border-radius: var(--dk-r-pill);
   background: var(--dk-bg);
   color: var(--dk-muted);
-  font: 500 11px/16px ui-monospace, monospace;
+  font: 500 var(--dk-t12) / 18px var(--dk-font);
 }
 .dk-np-chips {
   display: flex;
@@ -752,13 +894,29 @@
     margin-left: 0;
   }
 }
+@media (max-width: 639px) {
+  /* phones: the play button gets its own full row (a big first target); the hint label hangs under it */
+  .dk-np-playbtn {
+    flex: 1 1 100%;
+  }
+  .dk-np-controls.has-hint {
+    margin-bottom: 0;
+  }
+  .dk-np-controls.has-hint .dk-np-playbtn {
+    margin-bottom: 30px;
+  }
+  .dk-np-xlink {
+    margin-left: 0;
+  }
+}
 @media (max-width: 767px), (pointer: coarse) {
   .dk-np-collapse,
   .dk-np-select,
   .dk-np-input {
     min-height: var(--dk-target);
   }
-  .dk-np-lane {
+  .dk-np-lane,
+  .dk-np-xlink {
     min-height: var(--dk-target);
   }
 }
@@ -794,6 +952,11 @@
   .dk-np-frame .dk-bframe-bar {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  /* the frame still clips its rounded corners, but `clip` (unlike `hidden`) is no scroll container, so the sticky
+     mini player sticks to the page scroller */
+  .dk-bframe.dk-np-frame {
+    overflow: clip;
+  }
   .dk-np-acts-r.is-head {
     display: none;
   }
@@ -826,22 +989,6 @@ html[data-dk-calm] .dk-np-summary.is-streaming::after {
   animation: none;
 }
 
-/* first-action hotspot anchor inside the play button (see Meeting.tsx) */
-.dk-np-playbtn {
-  position: relative;
-}
-/* room for the hotspot ring on the right edge before the first play */
-.dk-np-playbtn.is-idle {
-  padding-right: 24px;
-}
-.dk-np-hs {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 14px;
-  pointer-events: none;
-}
 
 /* phones: the three tabs share the row (short labels, no icons; Tabs `fill`) — no sideways scrolling */
 .dk-np-tabs .dk-tabs.is-fill .dk-tablist {
@@ -854,9 +1001,8 @@ html[data-dk-calm] .dk-np-summary.is-streaming::after {
   padding: 0 6px;
 }
 
-/* playback repaints stay inside their own small layers (the waveform's progress clip, the writing dots, the
-   time read-out) instead of re-rasterising the whole tab every frame */
-.dk-np-wave,
+/* playback repaints stay inside their own small layers (the writing dots, the time read-out) instead of
+   re-rasterising the whole tab every frame; the waveform is its own layer in the kit (.dk-wave) */
 .dk-np-writing,
 .dk-np-time {
   contain: paint;
@@ -876,5 +1022,133 @@ html[data-dk-calm] .dk-np-summary.is-streaming::after {
   }
   .dk-np-rec-h h3 {
     flex: 1 0 100%;
+  }
+}
+
+/* ------------------------------------------------------------------ wow-audit round 1 */
+
+/* phones: the world clock rides in the frame bar (the shell's clock sits in a menu there) */
+.dk-np-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 28px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-pill);
+  color: var(--dk-text);
+  font: 600 var(--dk-t12) var(--dk-font);
+  white-space: nowrap;
+}
+/* the follow-ups tab counts what is overdue: a danger badge, not a neutral count */
+.dk-np-tabs [role='tab'][id$='-t-tindak'] .dk-badge {
+  background: var(--dk-danger);
+  color: #fff;
+}
+/* what the meeting produced (simulated estimate, labelled) */
+.dk-np-benefit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s1);
+  list-style: none;
+  color: var(--dk-text);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-np-benefit li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dk-np-benefit svg {
+  flex: none;
+  color: var(--dk-accent);
+}
+/* phones: the OPD board is below the fold while the meeting plays; its count rides in the mini player */
+.dk-np-mini-acts {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 28px;
+  border-radius: var(--dk-r-pill);
+  background: var(--dk-accent-12);
+  color: var(--dk-text);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+/* the minutes scroll while they write: the cut line at the top fades instead of showing half a line */
+.dk-np-minutes .dk-np-mbody {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+  padding-top: 10px;
+}
+/* the "start here" label hangs under the play button: when the row wraps (tablets), keep the next row clear */
+@media (min-width: 640px) {
+  .dk-np-controls.has-hint {
+    row-gap: 34px;
+  }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  /* the time stamp opens the line ("Play from here"): a full touch target */
+  .dk-np-line {
+    min-height: var(--dk-target);
+    align-items: center;
+  }
+  .dk-np-ask .dk-chip {
+    height: auto;
+    min-height: var(--dk-target);
+    white-space: normal;
+  }
+}
+/* the status row under the player is there from the first paint (idle → writing → done): same height throughout */
+.dk-np-status {
+  min-height: 32px;
+}
+.dk-np-status.is-idle,
+.dk-np-status.is-playing {
+  color: var(--dk-muted);
+}
+.dk-np-status.is-playing > .dk-np-done-t > svg {
+  color: var(--dk-accent);
+}
+.dk-np-benefit.is-pre {
+  color: var(--dk-muted);
+  border-style: dashed;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-np-status {
+    min-height: var(--dk-target);
+  }
+}
+.dk-np-mini .dk-ibtn {
+  flex: none;
+}
+/* a card's link to the product where its work continues (Cek Berkas, Siaga Wilayah) */
+.dk-np-xlink.is-card {
+  margin-left: 0;
+}
+/* the OPD lanes read their names whole: four lanes only when each one is wide enough, else 2 × 2 (e.g. 1440 with
+   the guide panel open) — "Kecamatan" never clips */
+.dk-np-lanescard {
+  container-type: inline-size;
+}
+@container (max-width: 500px) {
+  .dk-np-lanes-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* phones / one column: once the meeting plays, the transcript and the minutes take their full height at once (the
+   tap's own frame), so the cards below do not slide down line by line while the AI writes (layout shift) */
+@media (max-width: 899px) {
+  .dk-np-mgrid.is-live .dk-np-transcript:not(.is-collapsed) .dk-np-lines {
+    height: 38vh;
+  }
+  .dk-np-mgrid.is-live .dk-np-minutes {
+    min-height: calc(60vh + 76px);
   }
 }

@@ -62,9 +62,18 @@ export interface UseAiChatOptions {
   initial?: ChatMessage[]
 }
 
+export interface SendOptions {
+  /** a simulated answer appears at once, without thinking or streaming time (short drafts) */
+  instant?: boolean
+  /** cap on the simulated answer's whole duration, ms: after it the rest appears at once (as flush()) */
+  maxMs?: number
+}
+
 export interface UseAiChat {
   messages: ChatMessage[]
-  send: (text: string) => Promise<void>
+  send: (text: string, opts?: SendOptions) => Promise<void>
+  /** show the rest of the simulated answer being streamed now (a tap on the bubble, "Tampilkan sekarang") */
+  flush: () => void
   /** abort the answer being generated (keeps what streamed so far) */
   stop: () => void
   /** abort and clear the conversation */
@@ -92,6 +101,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
   const msgsRef = useRef(messages)
   msgsRef.current = messages
   const ctrlRef = useRef<AbortController | null>(null)
+  const skipRef = useRef<AbortController | null>(null)
   const lang = opts.lang ?? siteLang
   const role = opts.role ?? PRODUCT_BY_SLUG[product].defaultRole
   const mode = opts.mode ?? 'sim'
@@ -103,12 +113,20 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
   }, [])
 
   const send = useCallback(
-    async (raw: string) => {
+    async (raw: string, sendOpts: SendOptions = {}) => {
       const text = raw.trim()
       if (!text) return
       ctrlRef.current?.abort()
       const ctrl = new AbortController()
       ctrlRef.current = ctrl
+      const skip = new AbortController()
+      skipRef.current = skip
+      if (sendOpts.instant) skip.abort()
+      else if (sendOpts.maxMs !== undefined) {
+        const t = setTimeout(() => skip.abort(), Math.max(0, sendOpts.maxMs))
+        skip.signal.addEventListener('abort', () => clearTimeout(t), { once: true })
+        ctrl.signal.addEventListener('abort', () => clearTimeout(t), { once: true })
+      }
 
       const history: Msg[] = msgsRef.current
         .filter((m) => m.content && (m.role === 'user' || m.status === 'done'))
@@ -125,6 +143,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
         messages: [...history, { role: 'user', content: text }],
         context: optsRef.current.getContext?.() ?? null,
         signal: ctrl.signal,
+        skip: skip.signal,
       }
       const t0 = performance.now()
       let tFirst = 0
@@ -190,6 +209,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
   )
 
   const stop = useCallback(() => ctrlRef.current?.abort(), [])
+  const flush = useCallback(() => skipRef.current?.abort(), [])
   const prepare = useCallback(() => void loadAiEngine().catch(() => {}), [])
   const reset = useCallback(() => {
     ctrlRef.current?.abort()
@@ -208,6 +228,7 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
     return {
       messages,
       send,
+      flush,
       stop,
       reset,
       prepare,
@@ -219,5 +240,5 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
       last,
       fellBack: !!last?.fellBack,
     }
-  }, [messages, send, stop, reset, prepare])
+  }, [messages, send, flush, stop, reset, prepare])
 }

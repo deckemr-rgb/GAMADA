@@ -2,7 +2,7 @@
 import { createContext, useContext } from 'react'
 import type { ProductDef } from '../../content/products'
 import type { RegionPack } from '../region/types'
-import type { ToastData } from '../ui'
+import type { ToastData, ToastPlacement } from '../ui'
 import type { ShellSize } from './hooks'
 import type { DemoQuery } from './url'
 
@@ -18,7 +18,12 @@ export interface ShellApi {
   guideOpen: boolean
   setGuideOpen: (open: boolean) => void
   openPalette: () => void
-  /** push a toast into the shell's stack (bottom-left, max 3) */
+  /**
+   * where the shell's toast stack sits for this demo: one placement, or { wide, sm } by shell size; null = the
+   * DemoShell prop / kit default (bottom-left). Below 768 px the stack moves to the top while a sheet is open.
+   */
+  setToastPlacement: (p: ToastPlacementSpec | null) => void
+  /** push a toast into the shell's stack (bottom-left by default, max 3) */
   toast: (t: Omit<ToastData, 'id'> & { id?: string }) => void
   /** presenter mode (?present=1) */
   present: boolean
@@ -30,6 +35,9 @@ export interface ShellApi {
   /** the shell runs `interim` (tahap-1 placeholder canvas): no role / clock / AI / reset controls in the bar */
   interim: boolean
 }
+
+/** a toast placement, or one per shell size (sm = phone layout, wide = everything else) */
+export type ToastPlacementSpec = ToastPlacement | { wide: ToastPlacement; sm: ToastPlacement }
 
 export const ShellContext = createContext<ShellApi | null>(null)
 

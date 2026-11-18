@@ -17,6 +17,7 @@
 import { PRODUCT_BY_SLUG, isProductSlug, type Bi, type ProductSlug } from '../../content/products'
 import type { AuditEntry, EventType, WorldEvent, WorldState } from '../world'
 import { DEMO_ID, demoStringsIfLoaded, type DemoDict } from '../i18n'
+import { DEMO_READY, DEMO_STAGE } from '../../demos/registry'
 import { SHELL } from './constants'
 
 /** Follow-ups whose `source` is the producer but whose consumer is another product. */
@@ -30,8 +31,8 @@ export interface CrossEffect {
   /** one toast per root event: the key stays the same while more targets are added */
   key: string
   rootId: string
-  /** the first product reached (the toast opens it) */
-  target: ProductSlug
+  /** the first product reached whose demo is open (the toast opens it); null when none is built yet */
+  target: ProductSlug | null
   /** every product this root reached so far, in order */
   targets: ProductSlug[]
   title: Bi
@@ -75,10 +76,9 @@ function rootLabel(e: Recent, lang: 'id' | 'en', summary: string | null): string
     case 'meeting.transcribed':
       return L.meeting
     default:
-      return summary
-        ? summary.length > 48
-          ? `${summary.slice(0, 47)}…`
-          : summary
+      // a title is a whole short sentence, never cut mid-word: a long summary stays in the body
+      return summary && summary.length <= 48
+        ? summary
         : dict(lang).eventFrom(isProductSlug(e.source) ? PRODUCT_BY_SLUG[e.source].name : e.source)
   }
 }
@@ -102,6 +102,9 @@ const refId = (r: string | undefined): string | null => {
 
 /** follow-ups that name the toast themselves (they are the news, not the root that caused them) */
 const HEADLINE = new Set<EventType>(['complaint.clustered', 'hoax.detected'])
+
+/** "Klaster banjir X: 5 aduan → Meja Pimpinan, Siaga Wilayah & Radar Isu" → "Klaster banjir X: 5 aduan" */
+const stripTargets = (s: string): string => s.replace(/\s+→\s+[^→]*$/, '')
 
 /** "A", "A & B", "A, B & C", "A, B +2" */
 function joinNames(names: string[]): string {
@@ -163,8 +166,11 @@ export function createEffectTracker(product: ProductSlug) {
         // a headline follow-up names the toast itself ("Klaster aduan …", "Indikasi hoaks …"), else the root does
         const lead = HEADLINE.has(e.type) ? (recent.get(e.id) ?? root) : root
         const leadRow = auditOf(s, lead.id)
+        // the title names the receiving products, so a body that lists receivers itself ("… → Meja Pimpinan, …",
+        // the cluster audit row) drops that tail: the toast never names a product twice or names this one
+        const body = row?.summary ? { id: stripTargets(row.summary.id), en: stripTargets(row.summary.en) } : null
         acc = {
-          targets: [], body: row?.summary ?? { id: dict('id').openIn(name), en: dict('en').openIn(name) }, focus: refId(row?.entityRefs[0]),
+          targets: [], body: body ?? { id: dict('id').openIn(name), en: dict('en').openIn(name) }, focus: refId(row?.entityRefs[0]),
           what: { id: rootLabel(lead, 'id', leadRow?.summary.id ?? null), en: rootLabel(lead, 'en', leadRow?.summary.en ?? null) },
         }
         byRoot.set(root.id, acc)
@@ -174,16 +180,21 @@ export function createEffectTracker(product: ProductSlug) {
         }
       }
       acc.targets.push(target)
-      const names = joinNames(acc.targets.map((t) => PRODUCT_BY_SLUG[t].name))
+      // a product whose demo is not built yet is never linked: its toast says the need was recorded for it
+      const ready = acc.targets.filter((t) => DEMO_READY[t])
+      const pending = acc.targets.filter((t) => !DEMO_READY[t])
+      const title = (l: 'id' | 'en'): string => {
+        const d = dict(l)
+        if (ready.length) return d.forwardedTo(acc.what[l], joinNames(ready.map((t) => PRODUCT_BY_SLUG[t].name)))
+        const p0 = PRODUCT_BY_SLUG[pending[0]!]
+        return d.recordedFor(acc.what[l], joinNames(pending.map((t) => PRODUCT_BY_SLUG[t].name)), DEMO_STAGE[p0.eco])
+      }
       return {
         key: root.id,
         rootId: root.id,
-        target: acc.targets[0]!,
+        target: ready[0] ?? null,
         targets: [...acc.targets],
-        title: {
-          id: dict('id').forwardedTo(acc.what.id, names),
-          en: dict('en').forwardedTo(acc.what.en, names),
-        },
+        title: { id: title('id'), en: title('en') },
         body: acc.body,
         focus: acc.focus,
       }

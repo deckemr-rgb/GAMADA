@@ -5,21 +5,25 @@
  * and the status actions (Verifikasi → Teruskan ke OPD → Diproses → Selesai with an after photo). Each action is a
  * world event; the drawer shows how fast the citizen phone received it.
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Sketch from './Sketch'
 import { useI18n } from '../../lib/i18n'
-import { Button, Drawer, Icon, InsightCallout, Select, SlaLabel, Stepper, StatusChip, Textarea, Timeline, type TimelineItem } from '../../demo-kit/ui'
-import { CATEGORY_LABEL, DAY_MIN, emit, hhmm, onEvent, useClock, useWorld, world, worldDate, type Bi, type ComplaintCategory, type TicketStatus, type WorldState } from '../../demo-kit/world'
+import { Button, Drawer, Icon, InsightCallout, Select, SlaLabel, Stepper, StatusChip, Textarea, Timeline, useMedia, type TimelineItem } from '../../demo-kit/ui'
+import { CATEGORY_LABEL, DAY_MIN, emit, hhmm, onEvent, rows, useClock, useWorld, world, worldDate, type Bi, type ComplaintCategory, type TicketStatus, type WorldState } from '../../demo-kit/world'
 import { duplicateCandidates } from '../../demo-kit/world/satu-daerah'
 import { Photo } from './photos'
-import { SLUG, SW, desaName, kecName, opdShort, type PhotoId } from './model'
-import { CHANNEL_LABEL, STATUS_LABEL, STATUS_ORDER, URGENCY_LABEL, fill, useT } from './strings'
+import { SLUG, SW, advanceClock, afterPaint, desaName, durText, isEmergency, kecName, needKey, opdShort, slashBreak, stepMinutes, unit, type PhotoId } from './model'
+import { triageNoteText } from './triage'
+import { CHANNEL_LABEL, STATUS_LABEL, STATUS_ORDER, URGENCY_LABEL, fill, stringsFor, useT } from './strings'
 
 const MiniMap = lazy(() => import('./MiniMap'))
 const Speak = lazy(() => import('./Speak'))
 
 const PHOTO_OF: Partial<Record<ComplaintCategory, PhotoId>> = { banjir: 'genangan', 'jalan-rusak': 'lubang', pju: 'lampu' }
 const MERGE_RE = /^Digabung ke (SW-\d{4}-\d{3,5})/
-const AFTER_NOTE = 'Foto sesudah terlampir'
+const FOLLOW_RE = /^Mengikuti (SW-\d{4}-\d{3,5})/
+const AFTER_NOTE ='Foto sesudah terlampir'
+const BPBD_NOTE = 'Tembusan BPBD (siaga banjir)'
 
 /** "08.54" today, "22 Okt · 08.54" for an older ticket */
 function stamp(day: string, at: number, now: number, lang: 'id' | 'en'): string {
@@ -75,6 +79,8 @@ function draftReply(s: WorldState, ticketId: string, lang: 'id' | 'en'): Bi {
 export default function TicketDetail({ ticketId, open, onClose, readOnly, persona }: { ticketId: string; open: boolean; onClose: () => void; readOnly: boolean; persona: boolean }) {
   const { lang } = useI18n()
   const t = useT()
+  /* side by side at ≥ 1280 px: the citizen phone stays undimmed next to the drawer (both devices readable) */
+  const wide = useMedia('(min-width: 1280px)')
   const { minutes: now } = useClock()
   const { ticket, complaint, citizen } = useTicket(ticketId)
   const opds = useWorld((s) => s.region.opd)
@@ -88,12 +94,20 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
   const [reply, setReply] = useState('')
   const [draftMs, setDraftMs] = useState<number | null>(null)
   const [sync, setSync] = useState<{ ms: number } | null>(null)
+  const [moved, setMoved] = useState<{ min: number; status: TicketStatus } | null>(null)
   const [sentReply, setSentReply] = useState(false)
+  const [askMerge, setAskMerge] = useState(false)
+  const [mapReady, setMapReady] = useState(false)
+  const onMapReady = useCallback(() => setMapReady(true), [])
   const pendingAt = useRef<number | null>(null)
 
   useEffect(() => {
-    if (ticket && !opd) setOpd(ticket.opdId)
-  }, [ticket, opd])
+    if (ticket && complaint && !opd) {
+      // a life-safety complaint goes to BPBD (evacuation) by default, whatever the category's own agency is
+      const bpbd = opds.find((o) => o.id === 'bpbd')?.id
+      setOpd(bpbd && isEmergency(complaint) ? bpbd : ticket.opdId)
+    }
+  }, [ticket, complaint, opd, opds])
 
   /* proof of sync: time from the action to the citizen's phone message */
   useEffect(
@@ -107,7 +121,7 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
   )
 
   const s = { complaints, tickets } as WorldState
-  const dups = useMemo(() => (complaint ? duplicateCandidates({ ...s } as WorldState, complaint.id, SW.dupKm).filter((c) => !c.clusterId || c.clusterId === complaint.clusterId) : []), [complaints, tickets, complaint?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const dups = useMemo(() => (complaint ? duplicateCandidates({ ...s } as WorldState, complaint.id, SW.dupKm).filter((c) => (!c.clusterId || c.clusterId === complaint.clusterId) && c.category === complaint.category && needKey(c) === needKey(complaint)) : []), [complaints, tickets, complaint?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const children = useMemo(() => (complaint ? mergedOf(s, complaint.code) : []), [tickets, complaint?.code]) // eslint-disable-line react-hooks/exhaustive-deps
   const mergeable = dups.filter((d) => !children.includes(d.ticketId))
   const mergedInto = ticket ? MERGE_RE.exec([...ticket.history].reverse().find((h) => h.note)?.note ?? '')?.[1] ?? null : null
@@ -119,13 +133,25 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
   const cat = CATEGORY_LABEL[complaint.category]
   const opdLabel = opds.find((o) => o.id === ticket.opdId)?.short ?? ticket.opdId
 
+  /* the pressed button paints first; the world event (and every screen that re-renders on it) follows right after
+     (INP: the click itself stays light). One status change in flight at a time. */
+  const inflight = useRef(false)
   const act = (status: TicketStatus, extra: { opdId?: string; note?: string } = {}) => {
+    if (inflight.current) return
+    inflight.current = true
     pendingAt.current = performance.now()
     setSync(null)
-    emit('ticket.statusChanged', { ticketId, status, ...extra }, SLUG)
-    for (const id of children) emit('ticket.statusChanged', { ticketId: id, status, note: `Mengikuti ${complaint.code}`, ...(extra.opdId ? { opdId: extra.opdId } : {}) }, SLUG)
+    afterPaint(() => {
+      inflight.current = false
+      // the step takes simulated time: the shared world clock moves on before the event is stamped
+      const min = advanceClock(stepMinutes(status, complaint.category))
+      setMoved(min ? { min, status } : null)
+      emit('ticket.statusChanged', { ticketId, status, ...extra }, SLUG)
+      for (const id of children) emit('ticket.statusChanged', { ticketId: id, status, note: `Mengikuti ${complaint.code}`, ...(extra.opdId ? { opdId: extra.opdId } : {}) }, SLUG)
+    })
   }
   const merge = () => {
+    setAskMerge(false)
     for (const d of mergeable) emit('ticket.statusChanged', { ticketId: d.ticketId, status: st === 'baru' ? 'diverifikasi' : st, note: `Digabung ke ${complaint.code}` }, SLUG)
   }
   const makeDraft = () => {
@@ -146,13 +172,62 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
     setSentReply(true)
   }
 
-  const history: TimelineItem[] = ticket.history.map((h, i) => ({
-    id: `${i}`,
-    time: hhmm(h.at).replace(':', '.'),
-    title: STATUS_LABEL[h.status][lang],
-    detail: h.note,
-    tone: h.status === 'selesai' ? 'done' : i === ticket.history.length - 1 ? 'accent' : 'neutral',
-  }))
+  /* who did what: the reporter (and channel), the service officer (demo account), the agency */
+  const noteText = (n?: string): string | undefined => {
+    if (!n) return n
+    if (n === AFTER_NOTE) return t.noteAfter
+    if (n === 'Ditutup dari papan') return t.noteBoard
+    if (n === BPBD_NOTE) return t.ccBpbd
+    if (n.startsWith('Tembusan ') && lang === 'en') return n.replace('Tembusan ', 'Copy to ')
+    const mg = MERGE_RE.exec(n)?.[1]
+    if (mg) return fill(t.merged, { code: mg })
+    const fo = FOLLOW_RE.exec(n)?.[1]
+    if (fo && lang === 'en') return `Follows ${fo}`
+    return triageNoteText(n, lang) ?? n
+  }
+  const actor = (x: TicketStatus): string =>
+    x === 'baru' ? `${t.actorCitizen} · ${CHANNEL_LABEL[complaint.channel][lang]}` : x === 'diverifikasi' ? t.actorOfficer : x === 'diteruskan' ? `${t.actorOfficer} → ${opdLabel}` : opdLabel
+  /* the merges this ticket received belong to its audit trail: one line per merged complaint, at the time and by the
+     officer recorded on the merged ticket's own history entry */
+  const mergeRows = tickets.ids.flatMap((id) => {
+    const ch = tickets.byId[id]
+    const h = ch?.history.find((x) => MERGE_RE.exec(x.note ?? '')?.[1] === complaint.code)
+    const cc = ch ? complaints.byId[ch.complaintId] : undefined
+    return h && cc ? [{ at: h.at, code: cc.code }] : []
+  })
+  const history: TimelineItem[] = [
+    ...ticket.history.map((h, i) => ({
+      at: h.at,
+      i,
+      item: {
+        id: `${i}`,
+        time: stamp(day, h.at, now, lang),
+        title: STATUS_LABEL[h.status][lang],
+        detail: [h.note?.startsWith('Triase darurat AI') ? t.actorTriage : actor(h.status), noteText(h.note)].filter(Boolean).join(' · '),
+        tone: (h.status === 'selesai' ? 'done' : i === ticket.history.length - 1 ? 'accent' : 'neutral') as TimelineItem['tone'],
+      },
+    })),
+    ...mergeRows.map((m, j) => ({
+      at: m.at,
+      i: 1000 + j,
+      item: { id: `m${j}`, time: stamp(day, m.at, now, lang), title: lang === 'id' ? 'Digabung' : 'Merged', detail: fill(t.mergeLog, { code: m.code, who: t.actorOfficer }), tone: 'neutral' as TimelineItem['tone'] },
+    })),
+  ]
+    .sort((a, b) => a.at - b.at || a.i - b.i)
+    .map((x) => x.item)
+  const emergency = isEmergency(complaint)
+  const catOpd = opds.find((o) => o.id === world.get().region.categoryOpd[complaint.category])?.short ?? ''
+  const ccLine = (l: 'id' | 'en') => fill(stringsFor(l).emergencyAi, { cc: catOpd && catOpd !== 'BPBD' ? fill(stringsFor(l).emergencyCc, { opd: catOpd }) : '' })
+  const resolvedMin = st === 'selesai' && ticket.closedAt !== null ? ticket.closedAt - complaint.at : null
+  const sp4nId = `LPR-${day.slice(0, 4)}-${String(Math.floor(unit(complaint.id) * 90000) + 10000)}`
+  /* illegal levies: the reporter is protected, urgency is at least Medium, and the AI looks for a pattern region-wide */
+  const pungli = complaint.category === 'pungli'
+  const pungliWeek = pungli ? rows(complaints).filter((c) => c.category === 'pungli' && c.at >= now - 7 * DAY_MIN && c.at <= now) : []
+  const pungliDesa = new Set(pungliWeek.map((c) => c.desaId)).size
+  const raised = pungli && complaint.urgency === 'rendah'
+  const urgLabel = raised ? fill(t.urgencyRaised, { u: URGENCY_LABEL.sedang[lang] }) : URGENCY_LABEL[complaint.urgency][lang]
+  const urgWord = raised ? URGENCY_LABEL.sedang : URGENCY_LABEL[complaint.urgency]
+  const pattern = pungli && pungliWeek.length > 1 ? (l: 'id' | 'en') => ` ${fill(stringsFor(l).pungliPattern, { n: pungliWeek.length, m: pungliDesa })}.` : () => ''
   const opdOptions = opds.map((o) => ({ value: o.id, label: o.short }))
   const opdNow = opds.find((o) => o.id === opd)?.short ?? opd
   const markers = [
@@ -162,9 +237,22 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
 
   const footer = readOnly ? null : (
     <div className="dk-sw-dfoot">
-      {sync && (
+      {(sync || moved) && (
         <p className="dk-sw-sync" role="status">
-          <Icon name="checkCircle" size={14} /> {fill(t.phoneSynced, { ms: sync.ms < 100 ? t.syncFast : (sync.ms / 1000).toFixed(1).replace('.', lang === 'id' ? ',' : '.') })}
+          {sync && (
+            <span>
+              <Icon name="checkCircle" size={14} /> {fill(t.phoneSynced, { ms: sync.ms < 100 ? t.syncFast : (sync.ms / 1000).toFixed(1).replace('.', lang === 'id' ? ',' : '.') })}
+            </span>
+          )}
+          {moved && (
+            <span className="dk-sw-moved">
+              <Icon name="clock" size={14} />
+              {fill(t.clockMoved, {
+                d: durText(moved.min, lang),
+                why: moved.status === 'diverifikasi' ? t.whyVerify : moved.status === 'diteruskan' ? t.whyForward : moved.status === 'diproses' ? t.whyProcess : t.whyFinish,
+              })}
+            </span>
+          )}
         </p>
       )}
       {st === 'baru' && (
@@ -178,7 +266,7 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
             <span className="dk-sr">{t.opd}</span>
             <Select aria-label={t.opd} value={opd} onChange={(e) => setOpd(e.target.value)} options={opdOptions} />
           </label>
-          <Button variant="primary" icon="send" onClick={() => act('diteruskan', { opdId: opd })} data-sw="forward">
+          <Button variant="primary" icon="send" onClick={() => act('diteruskan', { opdId: opd, ...(complaint.category === 'banjir' && complaint.urgency === 'tinggi' && opd !== 'bpbd' ? { note: BPBD_NOTE } : opd === 'bpbd' && catOpd && catOpd !== 'BPBD' ? { note: `Tembusan ${catOpd}` } : {}) })} data-sw="forward">
             {fill(t.forwardTo, { opd: opdNow })}
           </Button>
         </div>
@@ -198,6 +286,11 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
             {t.attachAfter}
           </Button>
         ))}
+      {st === 'selesai' && resolvedMin !== null && (
+        <p className="dk-sw-resolved">
+          <Icon name="clock" size={14} /> {fill(t.resolvedIn, { d: durText(resolvedMin, lang) })}
+        </p>
+      )}
       {st === 'selesai' && (
         <p className="dk-sw-muted">
           {ticket.rating ? (
@@ -217,12 +310,13 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
       open={open}
       onClose={onClose}
       width={540}
+      scrim={wide ? 'none' : 'dim'}
       eyebrow={
         <>
           <span className="dk-num">{complaint.code}</span> · {CHANNEL_LABEL[complaint.channel][lang]} · {stamp(day, complaint.at, now, lang)}
         </>
       }
-      title={`${cat[lang]} · ${place}`}
+      title={`${slashBreak(cat[lang])} · ${place}`}
       footer={footer}
     >
       <div className="dk-sw-detail">
@@ -232,21 +326,22 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
           {st !== 'selesai' && <SlaLabel minutesLeft={ticket.slaDueAt - now} done={false} />}
           <span className="dk-sw-tag">{opdLabel}</span>
           <span className="dk-sw-tag">
-            {t.urgency}: {URGENCY_LABEL[complaint.urgency][lang]}
+            {t.urgency}: {urgLabel}
           </span>
+          {emergency && st !== 'selesai' && <span className="dk-sw-tag is-sos">{t.emergencyTarget}</span>}
           {persona && <span className="dk-sw-tag is-acc">{t.fromPersona}</span>}
           {mergedInto && <span className="dk-sw-tag">{fill(t.merged, { code: mergedInto })}</span>}
         </div>
 
         <InsightCallout title={t.aiSummary}>
           {lang === 'id'
-            ? `${cat.id} di ${place}. Urgensi ${URGENCY_LABEL[complaint.urgency].id.toLowerCase()}${regional ? `, dilaporkan dalam bahasa daerah dan sudah diterjemahkan` : ''}. ${dups.length ? `${dups.length} aduan serupa dalam 500 m` : 'Tidak ada aduan serupa di sekitar'}${complaint.clusterId ? `; bagian dari klaster ${complaint.clusterId}` : ''}. Disarankan ditangani ${opdLabel}.`
-            : `${cat.en} in ${place}. ${URGENCY_LABEL[complaint.urgency].en} urgency${regional ? ', reported in the regional language and translated' : ''}. ${dups.length ? `${dups.length} similar complaints within 500 m` : 'No similar complaints nearby'}${complaint.clusterId ? `; part of cluster ${complaint.clusterId}` : ''}. Suggested agency: ${opdLabel}.`}
+            ? `${cat.id} di ${place}. Urgensi ${urgWord.id.toLowerCase()}${regional ? `, dilaporkan dalam bahasa daerah dan sudah diterjemahkan` : ''}. ${dups.length ? `${dups.length} aduan serupa dalam 500 m` : 'Tidak ada aduan serupa di sekitar'}${complaint.clusterId ? `; bagian dari klaster ${complaint.clusterId}` : ''}. ${emergency ? ccLine('id') : `Disarankan ditangani ${opdLabel}.`}${pattern('id')}`
+            : `${cat.en} in ${place}. ${urgWord.en} urgency${regional ? ', reported in the regional language and translated' : ''}. ${dups.length ? `${dups.length} similar complaints within 500 m` : 'No similar complaints nearby'}${complaint.clusterId ? `; part of cluster ${complaint.clusterId}` : ''}. ${emergency ? ccLine('en') : `Suggested agency: ${opdLabel}.`}${pattern('en')}`}
         </InsightCallout>
 
         <section className="dk-sw-dsec">
           <h3>{voice ? t.transcript : t.original}</h3>
-          {regional && <span className="dk-sw-badge">{lang === 'id' ? 'Bahasa daerah → Indonesia' : 'Regional language → Indonesian'}</span>}
+          {regional && <span className="dk-sw-badge">{complaint.lang === 'jv' ? (lang === 'id' ? 'Basa Jawa → Indonesia' : 'Javanese → English') : lang === 'id' ? 'Bahasa daerah → Indonesia' : 'Regional language → English'}</span>}
           <blockquote>{complaint.text}</blockquote>
           {(regional || complaint.summary[lang] !== complaint.text) && (
             <p className="dk-sw-trans">
@@ -270,7 +365,7 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
             )}
             {(after || (st === 'selesai' && ticket.history.some((h) => h.note === AFTER_NOTE))) && (
               <figure>
-                <Photo id="sesudah" label={t.photoAfter} />
+                <Photo id={complaint.category === 'banjir' ? 'surut' : 'sesudah'} label={t.photoAfter} tag={`${hhmm(ticket.closedAt ?? now).replace(':', '.')} · ${complaint.coord[1].toFixed(4)}, ${complaint.coord[0].toFixed(4)}`} />
                 <figcaption>{t.photoAfter}</figcaption>
               </figure>
             )}
@@ -283,20 +378,29 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
             <Icon name="pin" size={13} /> {place} · <span className="dk-num">{complaint.coord[1].toFixed(4)}, {complaint.coord[0].toFixed(4)}</span>
           </p>
           <div className="dk-sw-minimap">
-            <Suspense fallback={<p className="dk-sw-muted">{t.mapLoading}</p>}>
-              <MiniMap regionId={regionId} center={complaint.coord} zoom={13} markers={markers} label={t.mapLabel} />
+            <Suspense fallback={null}>
+              <MiniMap regionId={regionId} center={complaint.coord} zoom={13} markers={markers} label={t.mapLabel} onReady={onMapReady} />
             </Suspense>
+            <Sketch center={complaint.coord} zoom={13} points={[{ coord: complaint.coord, kind: 'pin' }, ...dups.slice(0, 8).map((d) => ({ coord: d.coord, kind: 'dot' as const }))]} caption={t.mapPreview} hidden={mapReady} />
           </div>
         </section>
 
         {citizen && (
           <section className="dk-sw-dsec">
             <h3>{t.citizen}</h3>
-            <p>
-              <b>{citizen.name}</b> · <span className="dk-num">{citizen.phone}</span>
-              <br />
-              <span className="dk-sw-muted">{citizen.address}</span>
-            </p>
+            {pungli ? (
+              <p>
+                <b>{`${citizen.name.charAt(0)}***`}</b> · <span className="dk-num">{citizen.phone}</span>
+                <br />
+                <span className="dk-sw-muted">{t.protectedReporter}</span>
+              </p>
+            ) : (
+              <p>
+                <b>{citizen.name}</b> · <span className="dk-num">{citizen.phone}</span>
+                <br />
+                <span className="dk-sw-muted">{citizen.address}</span>
+              </p>
+            )}
           </section>
         )}
 
@@ -314,16 +418,31 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
           ) : (
             <p className="dk-sw-muted">{t.noDuplicates}</p>
           )}
-          {!readOnly && mergeable.length > 0 && !mergedInto && (
-            <Button size="sm" variant="secondary" icon="layers" onClick={merge} data-sw="merge">
-              {fill(t.merge, { n: mergeable.length })}
-            </Button>
-          )}
+          {!readOnly && mergeable.length > 0 && !mergedInto && !emergency &&
+            (askMerge ? (
+              <div className="dk-sw-mergeask" role="group" aria-label={fill(t.merge, { n: mergeable.length })}>
+                <p>{fill(t.mergeAsk, { n: mergeable.length, code: complaint.code })}</p>
+                <div>
+                  <Button size="sm" variant="primary" icon="layers" onClick={merge} data-sw="merge-yes">
+                    {t.mergeYes}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAskMerge(false)}>
+                    {t.cancel}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" variant="secondary" icon="layers" onClick={() => setAskMerge(true)} data-sw="merge">
+                {fill(t.merge, { n: mergeable.length })}
+              </Button>
+            ))}
+          {!readOnly && (mergeable.length > 0 || emergency) && !mergedInto && <p className="dk-sw-fine">{t.mergeRule}</p>}
         </section>
 
         <section className="dk-sw-dsec">
           <h3>{t.history}</h3>
           <Timeline items={history} label={t.history} />
+          {st !== 'baru' && <p className="dk-sw-fine dk-sw-sp4n">{fill(t.sp4n, { id: sp4nId })}</p>}
         </section>
 
         {!readOnly && complaint.citizenId && (

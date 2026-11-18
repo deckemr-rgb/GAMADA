@@ -13,16 +13,16 @@ import { gsap } from 'gsap'
 import { PRODUCT_BY_SLUG, type Bi, type ProductDef, type ProductSlug } from '../../content/products'
 import { useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
-import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData } from '../ui'
+import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
 import { WORLD, clock, emit, getSession, loadWorld, naturalEventsOn, onEvent, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
 import { switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
-import { ShellContext, type ShellApi } from './context'
+import { ShellContext, type ShellApi, type ToastPlacementSpec } from './context'
 import { useAiHealth } from './controls'
 import type { PaletteItem } from './CommandPalette'
 import { EventToastStack } from './EventToasts'
-import { markMission, resetMissions, type Mission } from './missions'
+import { markMission, resetMissions, useMissionProgress, type Mission } from './missions'
 import type { SplitStageProps } from './SplitStage'
 import { LazyCommandPalette as CommandPalette, LazyGuidePanel as GuidePanel, LazyHotspot as Hotspot, LazySplitStage as SplitStage } from './lazy'
 import { MoreSheet, TopBar } from './TopBar'
@@ -38,6 +38,8 @@ export interface DemoShellProps {
   children?: ReactNode
   /** "Coba ini" missions (3–6); omit to hide the guide */
   missions?: readonly Mission[]
+  /** where the toast stack sits (default bottom-left); a canvas can change it with useShell().setToastPlacement */
+  toastPlacement?: ToastPlacementSpec
   /** element to ring first ("click here"): a selector, or selector + label */
   hotspot?: string | { target: string; label?: Bi | string; id?: string; placement?: 'auto' | 'below' | 'above' }
   /** split products: two views side by side (tabs below 768 px) */
@@ -52,6 +54,27 @@ export interface DemoShellProps {
    */
   interim?: boolean
   className?: string
+}
+
+/** phones: a one-line "Coba ini · 1/5 · next mission" bar under the top bar that opens the guide sheet */
+function MissionPill({ product, missions, guideId, open, onToggle }: { product: ProductSlug; missions: readonly Mission[]; guideId: string; open: boolean; onToggle: () => void }) {
+  const t = useDemoStrings()
+  const { lang } = useI18n()
+  const done = useMissionProgress(product)
+  const list = missions.filter((m) => !m.hideSm)
+  if (!list.length) return null
+  const count = list.filter((m) => done.includes(m.id)).length
+  const next = list.find((m) => !done.includes(m.id))
+  return (
+    <button type="button" className={`dk-mpill${open ? ' is-open' : ''}`} aria-controls={guideId} aria-expanded={open} onClick={onToggle}>
+      <Icon name="help" size={16} />
+      <span className="dk-mpill-k">
+        {t.tryThis} · <span className="dk-num">{count}/{list.length}</span>
+      </span>
+      <span className="dk-mpill-next">{next ? next.label[lang] : t.allDone}</span>
+      <Icon name={open ? 'chevronDown' : 'chevronUp'} size={16} />
+    </button>
+  )
 }
 
 /** Pause, then tween the clock back to `to` (the "rewind" before a reset). Instant when motion is reduced. */
@@ -93,7 +116,7 @@ export function DemoShell(props: DemoShellProps) {
   )
 }
 
-function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, splitTabs, layout = 'page', syncUrl = true, interim = false, className }: DemoShellProps) {
+function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, toastPlacement, splitTabs, layout = 'page', syncUrl = true, interim = false, className }: DemoShellProps) {
   const product: ProductDef = PRODUCT_BY_SLUG[slug]
   const t = useDemoStrings()
   const { lang, setLang } = useI18n()
@@ -157,7 +180,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
     const applyT = () => {
       if (appliedT.current) return
       appliedT.current = true
-      if (query.t != null) clock.setTime(query.t)
+      if (query.t == null) return
+      // a restored or already-running world never goes back in time (Back restores an older ?t=): events after
+      // that minute already exist, so moving the clock behind them would show the future
+      const cur = clock.get().minutes
+      clock.setTime(cur > WORLD.clockStart ? Math.max(query.t, cur) : query.t)
     }
     if (interim) {
       applyT()
@@ -258,6 +285,10 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
 
   /* ---------------------------------------------------------------- overlays + toasts */
   const hasGuide = !!missions?.length
+  const pill = size === 'sm' && hasGuide && !interim
+  // the product module (and its missions) is still loading on a phone page: hold the pill's row from the first paint,
+  // so the canvas does not jump 44 px down when it mounts (CLS)
+  const pillSlot = !pill && size === 'sm' && !interim && layout === 'page' && missions === undefined
   const [guideOpen, setGuideOpenState] = useState(
     () => hasGuide && !query.present && readFlag(`guide:${slug}`, typeof window !== 'undefined' && window.innerWidth >= SHELL.guideAutoOpenMin),
   )
@@ -394,6 +425,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
     return a
   }, [t, hasGuide, guideOpen, setGuideOpen, lang, setLang, fullscreen.supported, fullscreen.toggle, interim])
 
+  /* ---------------------------------------------------------------- toast placement (prop, or the canvas's override) */
+  const [toastOverride, setToastOverride] = useState<ToastPlacementSpec | null>(null)
+  const toastSpec = toastOverride ?? toastPlacement ?? 'bottom-left'
+  const toastAt: ToastPlacement = typeof toastSpec === 'string' ? toastSpec : size === 'sm' ? toastSpec.sm : toastSpec.wide
+
   /* ---------------------------------------------------------------- context for the canvas */
   const api = useMemo<ShellApi>(
     () => ({
@@ -408,6 +444,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
       guideOpen,
       setGuideOpen,
       openPalette: () => setPaletteOpen(true),
+      setToastPlacement: setToastOverride,
       toast: (d: Omit<ToastData, 'id'> & { id?: string }) => void push(d),
       present: session.present,
       size,
@@ -442,7 +479,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
     <ShellContext.Provider value={api}>
       <div
         ref={root}
-        className={`dk-root dk-shell is-${layout} is-${size}${session.present ? ' is-present' : ''}${guideOpen && hasGuide ? ' has-guide' : ''}${motionMode() !== 'full' ? ' is-calm' : ''}${className ? ` ${className}` : ''}`}
+        className={`dk-root dk-shell is-${layout} is-${size}${pill || pillSlot ? ' has-pill' : ''}${session.present ? ' is-present' : ''}${guideOpen && hasGuide ? ' has-guide' : ''}${motionMode() !== 'full' ? ' is-calm' : ''}${className ? ` ${className}` : ''}`}
         data-eco={product.eco}
         data-present={session.present ? '1' : undefined}
         style={
@@ -455,8 +492,10 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
         {/* the page heading only when the shell IS the page; a contained shell sits under its host page's h1 */}
         {layout === 'page' && <h1 className="dk-sr">{`${product.name} — ${lang === 'id' ? 'demo interaktif' : 'interactive demo'}`}</h1>}
         <TopBar {...bar} onOpenMore={() => setMoreOpen(true)} />
+        {pill && <MissionPill product={slug} missions={missions!} guideId={guideId} open={guideOpen} onToggle={() => setGuideOpen(!guideOpen)} />}
+        {pillSlot && <div className="dk-mpill is-slot" aria-hidden="true" />}
         <div className="dk-shell-body">
-          <section ref={canvasRef} className="dk-shell-canvas" aria-label={product.name} aria-busy={boot !== 'ready' || rewinding}>
+          <section ref={canvasRef} className="dk-shell-canvas" aria-label={lang === 'id' ? `Demo ${product.name}` : `${product.name} demo`} aria-busy={boot !== 'ready' || rewinding}>
             {boot === 'ready' ? (
               <div key={epoch} className="dk-shell-stage">
                 <Suspense fallback={<LoadingText>{t.loading}</LoadingText>}>{body}</Suspense>
@@ -503,13 +542,13 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, sp
             <Hotspot key={`${hs.target}:${epoch}`} target={hs.target} id={hs.id ?? `${slug}:${hs.target}`} label={bi(hs.label, lang)} placement={hs.placement} root={() => canvasRef.current} />
           </Suspense>
         )}
-        <EventToastStack product={slug} toasts={toasts} push={push} dismiss={dismiss} epoch={epoch} />
+        <EventToastStack product={slug} toasts={toasts} push={push} dismiss={dismiss} epoch={epoch} placement={toastAt} />
         {paletteMounted && (
           <Suspense fallback={null}>
             <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} product={product} onOpenProduct={openProduct} actions={paletteActions} sessionItems={!interim} />
           </Suspense>
         )}
-        {(size === 'sm' || size === 'md') && <MoreSheet {...bar} open={moreOpen} onClose={() => setMoreOpen(false)} />}
+        {(size === 'sm' || size === 'md') && <MoreSheet {...bar} open={moreOpen} onClose={() => setMoreOpen(false)} onRolePicked={(name) => push({ id: 'role', tone: 'accent', icon: 'user', title: t.roleChanged(name) })} />}
         <Modal
           open={resetOpen}
           onClose={() => setResetOpen(false)}

@@ -3,7 +3,7 @@
  * from it (ctx.world) and Live sends the same object to the proxy, so both modes see exactly what is on screen.
  */
 import { rows, type Bi, type WorldState } from '../../demo-kit/world'
-import { getDeepResult, hoaxPhase, negIssues, radarKpis, sentimentIndex } from './model'
+import { getDeepResult, getAssessTarget, hoaxPhase, negIssues, radarKpis, riverAlert, sapaFlood, sentimentIndex } from './model'
 import { TOPIC } from './strings'
 
 export interface RadarCtx {
@@ -74,6 +74,23 @@ export interface RadarCtx {
   outlets: { outlet: string; count: number }[]
   floodAlert: { level: number; kecamatan: string[] } | null
   complaintClusters: number
+  /** Sapa Warga flood reports in the kecamatan the rumour names (local flooding, not the dam) */
+  sapa: {
+    count: number
+    kecamatan: string
+    desa: string
+    since: string
+    /** flood reports region-wide in 24 h */
+    regionCount: number
+    /** what the reports say: evacuation requests, a seeping village embankment, water inside homes */
+    evac: number
+    dike: number
+    inHomes: number
+  } | null
+  /** a river gauge at or above its alert level (Siaga Wilayah status SIAGA / AWAS) */
+  river: { name: string; level: number; siaga: number; status: 'siaga' | 'awas'; at: string } | null
+  /** the stream card the visitor asked the analyst to assess (its own label and score, so both agree) */
+  assessTarget: { text: Bi; sentiment: string; score: number; topic: string; topicLabel: Bi; outlet: string } | null
   deep: {
     keywords: string[]
     days: number
@@ -210,6 +227,18 @@ export function radarCtx(s: WorldState, now: number): RadarCtx {
         }
       : null,
     complaintClusters: rows(s.clusters).filter((c) => c.category === 'banjir').length,
+    sapa: (() => {
+      const f = sapaFlood(s, now)
+      return f ? { count: f.count, kecamatan: f.kecamatan, desa: f.desa, since: hm(f.since), regionCount: f.regionCount, evac: f.evac, dike: f.dike, inHomes: f.inHomes } : null
+    })(),
+    river: (() => {
+      const r = riverAlert(s, now)
+      return r ? { name: r.name, level: r.level, siaga: r.siaga, status: r.status, at: hm(r.updatedAt) } : null
+    })(),
+    assessTarget: (() => {
+      const m = getAssessTarget()
+      return m ? { text: m.text, sentiment: m.sentiment, score: m.score, topic: m.topic, topicLabel: TOPIC[m.topic] ?? { id: m.topic, en: m.topic }, outlet: m.outlet } : null
+    })(),
     deep: deep
       ? {
           keywords: deep.input.keywords,

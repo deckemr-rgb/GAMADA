@@ -538,6 +538,11 @@
   display: grid;
   gap: 6px;
 }
+/* clarified: the stats close the card's left column (recovery sits above them), so no rule under them */
+.dk-ri-hoax.is-done .dk-ri-hoax-stats {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
 .dk-ri-hoax-act {
   display: flex;
   flex-wrap: wrap;
@@ -550,12 +555,20 @@
 .dk-ri-hoax-act.is-empty {
   display: none;
 }
+/* tall idle card (right column): room under the trigger for the kit's "Mulai di sini" label, so it does not sit on
+   the LIVE note below */
+.dk-ri-hoax.is-idle:not(.is-compact):not(.is-row) > .dk-ri-hoax-act {
+  margin-bottom: 20px;
+}
 /* phones, idle: one row (icon + trigger), so the stream starts in the first screen */
 .dk-ri-hoax.is-row {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 10px;
-  padding: 10px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.dk-ri-hoax.is-row .dk-ri-hoax-ic {
+  width: 26px;
+  height: 26px;
 }
 .dk-ri-hoax.is-row .dk-ri-hoax-act {
   width: auto;
@@ -578,9 +591,97 @@
   .dk-ri-hoax.is-compact .dk-ri-hoax-note {
     grid-column: 1 / -1;
   }
+  .dk-ri-hoax.is-compact .dk-ri-hoax-title {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .dk-ri-hoax.is-compact .dk-ri-links {
+    grid-column: 1;
+    grid-row: 3;
+  }
   .dk-ri-hoax.is-compact .dk-ri-hoax-act {
+    grid-column: 2;
+    grid-row: 2 / span 2;
     justify-self: end;
   }
+}
+/* idle: which products the radar reads from / reports to (the ecosystem at a glance) */
+.dk-ri-links {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.dk-ri-links ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-ri-links .dk-btn {
+  border: 1px solid var(--dk-line);
+  background: var(--dk-bg);
+  font-weight: 400;
+  color: var(--dk-muted);
+}
+.dk-ri-links .dk-btn:hover {
+  border-color: var(--dk-line-act, rgba(63, 224, 192, 0.6));
+}
+.dk-ri-links .dk-btn .dk-icon {
+  color: var(--dk-accent);
+}
+.dk-ri-links .dk-btn b {
+  font-weight: 650;
+  color: var(--dk-text);
+}
+/* burst: the newest post of the false narrative, as it lands */
+.dk-ri-burst-last {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--dk-warn);
+  border-radius: 0 var(--dk-r-input) var(--dk-r-input) 0;
+  background: var(--dk-bg);
+  animation: dk-ri-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dk-ri-burst-last figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 12px;
+  color: var(--dk-text);
+}
+.dk-ri-burst-last time {
+  margin-left: auto;
+  color: var(--dk-faint);
+}
+.dk-ri-burst-last blockquote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dk-text);
+}
+@keyframes dk-ri-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-ri-burst-last {
+    animation: none;
+  }
+}
+html[data-dk-calm] .dk-ri-burst-last,
+.dk-calm .dk-ri-burst-last {
+  animation: none;
 }
 .dk-ri-burst {
   height: 6px;
@@ -662,6 +763,37 @@
   display: grid;
   gap: 6px;
   justify-items: start;
+}
+.dk-ri-recov-v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.dk-ri-recov-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 22px/1.1 var(--dk-font);
+  color: var(--dk-muted);
+}
+.dk-ri-recov-n .dk-icon {
+  color: var(--dk-faint);
+}
+.dk-ri-recov-n b {
+  font-weight: 700;
+  color: var(--dk-text);
+}
+.dk-ri-recov-d {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--dk-r-chip);
+  background: var(--dk-accent-12);
+  color: var(--dk-pos);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 /* ---------------------------------------------------------------- drawers: topic, clarify, assistant */
@@ -1475,38 +1607,14 @@ html[data-dk-calm] .dk-ri-dots i,
   .dk-ri-evid-link {
     min-height: var(--dk-target);
   }
-  .dk-ri-deep .dk-input input,
-  .dk-ri-ask .dk-input input {
-    min-height: var(--dk-target);
-  }
   /* channel toggles (kit chips are 26 px): full touch height on phones */
   .dk-ri-chan .dk-chip {
     height: auto;
     min-height: var(--dk-target);
   }
-  /* keyword chip "remove": a 44 px hit area around the 18 px glyph, without growing the chip */
-  .dk-ri-deep .dk-chip-x::after {
-    content: '';
-    position: absolute;
-    inset: -13px -6px -13px -8px;
-  }
   .dk-ri-filter .dk-seg-btn,
   .dk-ri-filter button {
     min-height: var(--dk-target);
-  }
-}
-
-/* "Mulai di sini": the kit hangs its label under the dot, i.e. over the trigger's own text (the dot sits on the
-   button's top-right corner). On this product it hangs above the dot instead (kitHandoff: a `placement` option). */
-/* hotspot label placement: kit Hotspot `placement` (index.tsx hotspot export) */
-
-/* phones: a toast must not cover an open drawer's footer (channel chips + Publish) — while one is open on this
-   product, the stack moves to the top (kitHandoff: the kit toast host should do this for every drawer) */
-@media (max-width: 767px) {
-  body:has(.dk-ri):has(.dk-drawer) .dk-toasts--bottom-left,
-  body:has(.dk-ri):has(.dk-drawer) .dk-toasts--bottom-right {
-    top: 12px;
-    bottom: auto;
   }
 }
 
@@ -1518,4 +1626,207 @@ html[data-dk-calm] .dk-ri-dots i,
 }
 .dk-ri-draft.is-skel .dk-ri-press .dk-skel {
   background: rgba(31, 26, 58, 0.14);
+}
+
+/* ---------------------------------------------------------------- wow-audit round 1 */
+/* the running monitor: a pill that shows the world time and pauses on press */
+.dk-ri-clockpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px 0 0;
+  border: 1px solid var(--dk-line);
+  border-radius: 999px;
+  background: var(--dk-bg);
+  color: var(--dk-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.dk-ri-clockpill:hover {
+  border-color: var(--dk-line-act, rgba(63, 224, 192, 0.6));
+  color: var(--dk-text);
+}
+.dk-ri-clockpill:focus-visible {
+  outline: 2px solid var(--dk-accent);
+  outline-offset: 2px;
+}
+.dk-ri-clockpill .dk-live {
+  border: 0;
+  background: none;
+}
+/* phones: "Show more" under the stream (no scroll box inside the page) */
+.dk-ri-more {
+  justify-self: center;
+  margin-top: 8px;
+}
+.dk-ri-stream:has(.dk-ri-more) {
+  display: grid;
+}
+/* approval trail above the publish button */
+.dk-ri-audit {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+.dk-ri-audit .dk-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--dk-accent);
+}
+/* what the hoax score is based on */
+.dk-ri-hoax-basis {
+  margin: 0;
+}
+.dk-ri-hoax-basis b {
+  font-weight: 600;
+  color: var(--dk-muted);
+}
+/* second evidence row: Sapa Warga local flood reports */
+.dk-ri-evid-sapa {
+  padding-top: 8px;
+  border-top: 1px dashed var(--dk-line);
+}
+.dk-ri-evid-sapa .dk-icon {
+  vertical-align: -2px;
+  color: var(--dk-accent);
+}
+.dk-ri-evid-sapa .dk-btn {
+  margin-top: 4px;
+}
+.dk-ri-src-x {
+  font-size: 11.5px;
+  color: var(--dk-faint);
+}
+.dk-ri-deep-res:focus {
+  outline: none;
+}
+/* phones, idle hoax card: the three connected products as one compact, scrollable row */
+.dk-ri-hoax.is-row .dk-ri-links {
+  gap: 4px;
+}
+.dk-ri-hoax.is-row .dk-ri-links ul {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dk-ri-hoax.is-row .dk-ri-links ul::-webkit-scrollbar {
+  display: none;
+}
+.dk-ri-hoax.is-row .dk-ri-links li {
+  flex: none;
+}
+.dk-ri-hoax.is-row .dk-ri-links .dk-btn b ~ span {
+  display: none;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-ri-clockpill,
+  .dk-ri-more,
+  .dk-ri-evid-sapa .dk-btn,
+  .dk-ri-links .dk-btn {
+    min-height: var(--dk-target);
+  }
+}
+.dk-ri-hoax.is-row .dk-ri-links ul {
+  -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, #000 82%, transparent);
+  padding-right: 24px;
+}
+
+/* ---------------------------------------------------------------- wow-audit round 2 */
+/* the crawl behind the curated stream: ticks with the world clock */
+.dk-ri-scan {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--dk-muted);
+}
+.dk-ri-scan .dk-icon {
+  vertical-align: -2px;
+  color: var(--dk-accent);
+}
+.dk-ri-scan span {
+  color: var(--dk-faint);
+}
+/* the manual trigger replays posts dated before the click: said on the card */
+.dk-ri-replay {
+  margin: 0;
+}
+.dk-ri-replay .dk-icon {
+  vertical-align: -2px;
+}
+/* third evidence row: the river gauge at SIAGA / AWAS */
+.dk-ri-evid-river {
+  padding-top: 8px;
+  border-top: 1px dashed var(--dk-line);
+}
+.dk-ri-evid-river .dk-icon {
+  vertical-align: -2px;
+  color: var(--dk-warn-ink, var(--dk-warn));
+}
+.dk-ri-audit.is-ok .dk-icon {
+  color: var(--dk-ok-ink, var(--dk-accent));
+}
+/* the kit hotspot label says "Mulai di sini": once the scenario runs, the ring alone marks the next action */
+body:has(.dk-ri-hoax:not(.is-idle)) .dk-hotspot-label {
+  display: none;
+}
+/* phones, idle: the hotspot ring on the trigger's corner stays clear of the product chips above it */
+.dk-ri-hoax.is-row > .dk-ri-hoax-act {
+  margin-top: 6px;
+}
+/* detected: room between the "forwarded" row and the primary action, so the ring sits on one button */
+.dk-ri-hoax.is-active > .dk-ri-hoax-act {
+  margin-top: 4px;
+}
+@media (max-width: 767px) {
+  /* the clock button and its running pill share one width: auto-start never reflows the page under the reader */
+  .dk-ri-live-act {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+  .dk-ri-live-act > .dk-btn:first-child,
+  .dk-ri-live-act > .dk-ri-clockpill {
+    min-width: 0;
+    justify-content: center;
+  }
+  .dk-ri-clockpill .dk-live {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 479px) {
+  /* clarification sheet: the channel chips and the trail scroll with the draft; only the button stays pinned */
+  .dk-ri-clar-foot .dk-ri-chan .dk-ri-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dk-ri-clar-foot .dk-ri-audit {
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+  .dk-ri-clar-foot {
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dk-ri-clar-foot > * {
+    min-width: 0;
+  }
+  .dk-ri-clar-foot > .dk-btn {
+    justify-self: stretch;
+  }
+}
+/* the sentiment KPI uses the same numeric face as its neighbours (the kit hero serif read as a different widget);
+   it stays first among equals through a slightly larger size */
+.dk-ri-kpis .dk-kpi.is-hero .dk-kpi-val {
+  font: 650 var(--dk-t24) var(--dk-font);
+  letter-spacing: -0.015em;
+}
+/* tall idle card: the hotspot label may hang above the trigger (short viewports): give it its own gap so it never
+   sits on the "connected products" chips */
+.dk-ri-hoax.is-idle:not(.is-row) > .dk-ri-hoax-act {
+  margin-top: 22px;
 }

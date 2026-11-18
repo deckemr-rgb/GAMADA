@@ -409,3 +409,112 @@ All seven Satu Daerah products are `DEMO_READY`. API and behaviour changes:
 - `tests/e2e/tahap2/*.spec.ts`: per-product missions + §11 pass checks (1440 and 390), UI-driven cross-product chains,
   a no-dead-controls crawler, region + language + role, and Live mode with a mocked SSE proxy (stream + 10 s
   first-token fallback). Helpers in `tests/e2e/tahap2/helpers.ts` (`openDemo` pauses the world clock).
+
+## Tahap 2 kit leftovers (2026-11-18)
+
+### shell/
+- `Hotspot`: measured only when something can have moved the target (ResizeObserver on target + root, capture
+  scroll, window resize) plus a 250 ms poll for layout shifts and coverage; never `getBoundingClientRect` per frame.
+  The ring sits 3 px OUTSIDE the target's top-right corner (never over its text); the label hangs under the target's
+  bottom edge or above the ring and flips when the chosen side has no room. Hidden while the target is disconnected
+  (re-queried), has an empty box, is clipped / outside the root, or covered. Products need no padding wrappers or
+  anchor strips for it any more.
+- `dismissHotspot(id)` (shell barrel, tiny module; does not load the lazy Hotspot chunk) retires a ring for the tab
+  session. The id is the hotspot's `id`, DemoShell default `${slug}:${target}`.
+- Toast placement: `DemoShell` prop `toastPlacement?` and `useShell().setToastPlacement(spec | null)`, where spec is
+  `'bottom-left' | 'bottom-right' | 'top-right'` or `{ wide, sm }` (per shell size). Below 768 px, while any Modal /
+  Drawer is open, every toast stack moves to the top edge (`.dk-toasts.is-ov`).
+- The shell canvas landmark is named "Demo <product>" / "<product> demo" (distinct from a frame labelled with the
+  product name). TopBar role label base max-width 164 px ("Head of Regional Agency" fits at 1280).
+
+### ui/
+- Modal / Drawer close: the inert restore is batched into the next frame and focus returns in a rAF (no forced style
+  recalculation inside the closing click). Focus goes to `returnFocus?` (ref or function), else the opener, else
+  the opener's nearest ancestor still on the page (itself if focusable, else its first focusable descendant); it is
+  left alone when something else already took focus. `subscribeOverlays` / `overlayOpen` expose the open count.
+- `.dk-input` / `.dk-select` are `calc(44px + 2px)` on phones / coarse pointers (the inner control is a full 44 px).
+- `.dk-kpi-spark > .dk-viz-micro` fills the spark slot (the Sparkline sizes from it).
+- `Chip` passes `aria-disabled` (toggle chips, dimmed) and `aria-describedby` through.
+- Note: the 44 px `::after` hit area of small controls (`button.dk-chip`, `.dk-chip-x`, `.dk-kb-move`) is clipped by an
+  `overflow: auto/hidden` ancestor. Inside a horizontal chip scroller give the scroller `padding-block: 9px` and a
+  matching negative `margin-block`, so the hit area fits inside it.
+
+### media/ · docs/ · viz/ · map/
+- `Waveform` progress: a clip box slid by transform (outer translateX(p − 1), inner translateX(1 − p)); no SVG
+  attribute write and no repaint per frame.
+- `ExtractedField.kind?: 'amount' | 'presence' | 'text'` (inferred by `docs/values.fieldKind`). `ExtractPanel` formats
+  Rupiah ONLY for amount fields (total / bayar / kembali / saldo / modal …); postcodes, KBLI, RT/RW, years and IDs stay
+  verbatim; presence values read 'ada'/'tidak ada' or 'present'/'absent' (`simulateExtract` also returns them in the
+  session language). Value column wider, confidence stacked in 44 px, values break between words only (tabular
+  numbers). The count is announced only when reading starts and with the final count.
+- `DocViewer`: box numbers sit in gutters left / right of the page (the side of the box), stacked so none overlap;
+  boxes have a ≥ 24 px invisible hit area; confidence pills take no pointer events. `TamperToggle` slider is 44 px
+  tall on phones / coarse pointers.
+- `NetworkGraph`: labels pick the free side crossed by the fewest edges; on coarse pointers every node has an
+  invisible hit circle of r ≥ 22.
+- `TimeScrubber`: arrows step `step` (0.25 h), PageUp/PageDown 1 h, Home/End the ends (a product handler that called
+  preventDefault wins); `aria-valuetext` from the first render; quarter hours print 2 decimals ('+0,25 j').
+- `MapView`: the MapLibre canvas is named "Kanvas peta <region>" / "Map canvas: <region>"; prop
+  `notice?: { placement?: 'top' | 'bottom'; inset?: number }` places the basemap-unavailable notice.
+
+### world/
+- `WORLD.version` 4. Today's flood meeting (RP-0007, `MEETING_TPL[0]`) is held 06.30–07.00 (`WORLD.floodMeetingAt`,
+  `floodMeetingMin`), before the clock start: status 'selesai', `transcribed: false`, participants = the clip's
+  speakers. The `meeting.transcribed` audit row names the meeting's own time ("rapat pukul 06.30").
+- `harvest.updated` accepts `dropPctByKecamatan?: Record<string, number>` (per-district drop; missing keys use
+  `dropPct`), in the reducer and the econ reaction.
+- `document.verified` for a document the world does not know writes an audit row without refs (flagged in its text).
+
+## Tahap 2 kit leftovers, round 2 (2026-11-18)
+
+### shell/
+- Cross-product toasts (`effects.ts`): the body drops a "… → A, B & C" tail (the title already names the receivers, and
+  never this product). A target whose demo is not `DEMO_READY` is never linked: the title reads
+  "<what> dicatat untuk <product> (demo tahap N)" / "<what> recorded for <product> (stage N demo)" and the toast has
+  no `onActivate`. `CrossEffect.target` is `ProductSlug | null` (first READY target). The toast calls
+  `preloadDemo(target)` when it appears.
+- `GuidePanel` "Lanjut ke produk terkait" lists only READY products (topped up from the same ecosystem). The phone
+  sheet is at most 52 % of the shell height (internal scroll).
+- `Hotspot`: ring centre 12 px outside the corner on both axes (a gap, never on the target); a target that reaches the
+  right edge (full-width CTA) gets its ring ABOVE it with an 8 px gap; centre ≥ 19 px from the edges (pulse never
+  clipped at 360–390). Label text: the target's `data-hotspot-label` attribute, else the `label` prop.
+- Phone clock (`ClockChip`, `ClockControl`, jump list) prints "07.00" in ID, "07:00" in EN. `ClockControl` prop
+  `onPicked?` (MoreSheet passes `onClose`: a speed or jump closes the "⋯" sheet).
+- Phone page: while the product module (missions) is loading, the mission-pill row is reserved (`.dk-mpill.is-slot`),
+  so the canvas does not jump 44 px when the pill mounts.
+
+### ui/
+- Toasts on phones: only the newest toast shows, with a "+n" marker for the hidden ones (`.dk-toasts-more`); body
+  clamps at 3 lines; phone life 4 s.
+- `formatSla(minutesLeft, lang, done?, now?)` / `<SlaLabel now={…}>`: with `now`, a deadline 2+ calendar days away
+  reads "Lusa" / "in 2 days", then "N hari lagi" by calendar day. Without `now` nothing changes.
+
+### ai/
+- `streamText` caps a whole answer at `maxMs` (default 2000 ms; the schedule is compressed). `ENGINE.stepMaxMs` 260.
+- `useAiChat().send(text, { maxMs })`: after `maxMs` the rest appears at once (same as `flush()`).
+
+### viz/ · map/ · docs/ · media/
+- `BarChart`: a `prev` value is also drawn as a 2 px tick in the text colour on top of the bar (visible when prev < value).
+- `BubbleChart`: a click / tap hit-tests itself (no hover needed) and calls `onSelect`; each bubble `g` has `data-id`.
+- `MapView` prop `onLayersReady?(handle)`: once, after the first region and the first map 'idle' after it.
+- `ExtractPanel` ID heading "Isian terbaca"; `MEETING_BANJIR` EN speaker "Head of the Disaster Agency"; the PUPR pump
+  memo names Trucuk, Kalitidu and Bojonegoro (no Kanor).
+
+### world/
+- `complaintRouting(region, category, text)` (texts.ts): a flood / fallen-tree report about evacuation, trapped people
+  or a rubber boat goes to `bpbd` with a 60-minute SLA (reducer and seed). Seed: such tickets are forwarded at once;
+  3 of 4 past high-urgency flood tickets went to BPBD. Seed: a regional-language sample that names a place is used
+  only for a report from that desa / kecamatan.
+- Natural complaints pick a template unused for 30 days in the category, else one of the least recently used third.
+- The first complaint number after a fresh world is kept for the visitor: a background (clock) complaint that would
+  take it skips one; the next product complaint gets the kept number (`seq.complaintKept`, `seq.complaintKeep`).
+- Persist: a batch holding a non-clock depth-0 event is saved after 120 ms (`PERSIST_USER_MS`); `flushPersist` is in
+  the world barrel.
+- Audit: `briefing.generated` names the time of day (Briefing pagi / siang / sore / malam); `document.verified` prints
+  Lengkap / Kurang / Perlu cek manual (EN Complete / Incomplete / Needs manual check). Hoax evidence EN uses "8.6 m".
+- `world/satu-daerah`: `complaintsByKecamatan` breaks ties by name. `briefingItems` item 3 without an alert = the river's
+  status from `gaugeOutlook` (SIAGA / AWAS with threshold, crest or recede, heavy-rain line only before 11.00); with an
+  automatic (clock) alert not yet broadcast: "Peringatan banjir level N aktif sejak HH.MM; siaran ke warga belum
+  dikirim". Item 4: a hoax with a clarification instruction reads "Klarifikasi diinstruksikan pukul HH.MM (OPD),
+  menunggu rilis". Item 5 EN "Owner's estimate (HPS) …". Item 8 after verification: "n berkas diperiksa · x lolos ·
+  p pasang NIK ganda ditahan · z luar zona" (pairs / out-of-zone once the whole batch is checked).

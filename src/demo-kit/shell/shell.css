@@ -203,7 +203,8 @@
   background: var(--dk-s2);
 }
 .dk-pick-label {
-  max-width: 150px;
+  /* "Head of Regional Agency" (EN) fits whole once the bar tightens one step (1280 px) */
+  max-width: 164px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1035,7 +1036,10 @@
     /* above any canvas content that makes its own stacking context (maps, sticky panels) */
     z-index: var(--dk-z-pop);
     width: auto;
-    max-height: 74%;
+    /* at most about half the phone screen: the visitor keeps seeing the canvas the steps point at */
+    max-height: 52%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-left: 0;
     border-top: 1px solid var(--dk-line-2);
     border-radius: var(--dk-r-panel) var(--dk-r-panel) 0 0;
@@ -1114,4 +1118,58 @@ html.dk-cursor-idle .cursor {
   .dk-guide-bar > span {
     transition: none;
   }
+}
+
+/* ------------------------------------------------------------------ phones: world clock chip + mission pill */
+.dk-clockchip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding-right: 12px;
+  border-radius: var(--dk-r-pill);
+  background: var(--dk-s1);
+  color: var(--dk-text);
+}
+.dk-clockchip-time {
+  font: 600 13px/1 var(--dk-font);
+  letter-spacing: 0.01em;
+}
+.dk-shell.has-pill {
+  grid-template-rows: 56px auto minmax(0, 1fr);
+}
+.dk-mpill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--dk-target, 44px);
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--dk-line);
+  background: var(--dk-s1);
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12, 12px) var(--dk-font);
+  text-align: left;
+}
+.dk-mpill > .dk-icon:first-child {
+  color: var(--dk-accent);
+}
+.dk-mpill-k {
+  flex: none;
+  color: var(--dk-text);
+  font-weight: 700;
+}
+.dk-mpill-next {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-mpill.is-open {
+  color: var(--dk-text);
+}
+.dk-clockchip .dk-ibtn {
+  border-radius: var(--dk-r-pill);
+  background: transparent;
 }

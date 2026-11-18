@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { DEMO, EASE } from '../../lib/motion'
-import { Badge } from './Atoms'
+import { Badge, type Tone } from './Atoms'
 import { Icon, type IconName } from './icons'
 import { motionMode } from './motion'
 import './tokens.css'
@@ -16,6 +16,10 @@ export interface TabItem<V extends string> {
   label: string
   icon?: IconName
   badge?: number
+  /** badge colour (e.g. 'danger' for an overdue count); neutral by default */
+  badgeTone?: Tone
+  /** what the badge counts, read by screen readers ("6 lewat tenggat"); the tab name is announced first */
+  badgeLabel?: string
 }
 
 export interface TabsProps<V extends string> {
@@ -76,7 +80,12 @@ export function Tabs<V extends string>({ items, value, onChange, label, children
             <button key={t.id} id={`${base}-t-${t.id}`} type="button" role="tab" aria-selected={on} aria-controls={`${base}-p`} tabIndex={on ? 0 : -1} className="dk-tab" onClick={() => onChange(t.id)}>
               {t.icon && <Icon name={t.icon} size={16} />}
               <span>{t.label}</span>
-              {t.badge ? <Badge>{t.badge}</Badge> : null}
+              {t.badge ? (
+                <Badge tone={t.badgeTone ?? 'neutral'}>
+                  <span aria-hidden={t.badgeLabel ? true : undefined}>{t.badge}</span>
+                  {t.badgeLabel && <span className="dk-sr">{`, ${t.badgeLabel}`}</span>}
+                </Badge>
+              ) : null}
             </button>
           )
         })}

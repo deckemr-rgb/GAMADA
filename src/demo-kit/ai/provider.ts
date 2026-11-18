@@ -94,7 +94,7 @@ export const simProvider: AiProvider = {
   chat(req) {
     return (async function* () {
       const result = simulateReq(req)
-      yield* simChunks(result, req.signal ? { signal: req.signal } : {})
+      yield* simChunks(result, { ...(req.signal ? { signal: req.signal } : {}), ...(req.skip ? { skip: req.skip } : {}) })
     })()
   },
   extract: simExtract,

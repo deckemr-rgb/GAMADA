@@ -38,6 +38,19 @@ const TAB_PARAM: Record<TabId, string | null> = {
   report: 'laporan',
 }
 
+/** phones (< 480 px): short tab labels, so "Laporan" never ends up cut to "Lap" */
+const NARROW = '(max-width: 479px)'
+function useNarrowTabs(): boolean {
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(NARROW).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW)
+    const on = () => setN(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return n
+}
+
 function readTab(): TabId {
   if (typeof window === 'undefined') return 'live'
   const v = new URLSearchParams(window.location.search).get('tab')
@@ -48,6 +61,7 @@ export default function RadarIsu({ product }: DemoCanvasProps) {
   const { t } = useStr()
   const shell = useShell()
   const [tab, setTab] = useState<TabId>(readTab)
+  const narrow = useNarrowTabs()
   // a transition keeps the tab bar responsive while the heavier view renders (INP)
   const change = useCallback((v: TabId) => {
     startTransition(() => setTab(v))
@@ -68,7 +82,8 @@ export default function RadarIsu({ product }: DemoCanvasProps) {
 
   return (
     <div className="dk-ri" data-product={product}>
-      <BrowserFrame slug={`radar-isu${TAB_PARAM[tab] ? `/${TAB_PARAM[tab]}` : ''}`} label={t.frame} className="dk-ri-frame">
+      {/* the fake address bar shows the real, shareable address (?tab=…), not a path that would 404 */}
+      <BrowserFrame slug={`radar-isu${TAB_PARAM[tab] ? `?tab=${TAB_PARAM[tab]}` : ''}`} label={t.frame} className="dk-ri-frame">
         <div className="dk-ri-tabwrap" onPointerOver={prefetchTabs} onFocus={prefetchTabs}>
           <Tabs<TabId>
             label={t.tabsLabel}
@@ -76,9 +91,9 @@ export default function RadarIsu({ product }: DemoCanvasProps) {
             onChange={change}
             className="dk-ri-tabs"
             items={[
-              { id: 'live', label: t.tabLive, icon: 'pulse' },
-              { id: 'deep', label: t.tabDeep, icon: 'search' },
-              { id: 'report', label: t.tabReport, icon: 'doc' },
+              { id: 'live', label: narrow ? t.tabLiveShort : t.tabLive, icon: 'pulse' },
+              { id: 'deep', label: narrow ? t.tabDeepShort : t.tabDeep, icon: 'search' },
+              { id: 'report', label: narrow ? t.tabReportShort : t.tabReport, icon: 'doc' },
             ]}
           >
             <div className="dk-ri-body">
@@ -95,8 +110,17 @@ export default function RadarIsu({ product }: DemoCanvasProps) {
   )
 }
 
-/** "Coba ini" (spec P4 Misi 1–4) */
+/** "Coba ini" (spec P4 Misi 1–4): the hoax first — it is what the "Mulai di sini" hotspot points at */
 export const missions: readonly Mission[] = [
+  {
+    id: 'hoaks',
+    label: { id: 'Tangani hoaks bendungan', en: 'Handle the dam hoax' },
+    hint: {
+      id: 'Picu skenario, lalu “Susun klarifikasi” dan ajukan untuk disetujui & terbit.',
+      en: 'Trigger the scenario, then “Draft a clarification” and send it for approval & publishing.',
+    },
+    done: (e) => isEvent(e, 'clarification.published') && e.source === 'radar-isu',
+  },
   {
     id: 'topik',
     label: {
@@ -104,18 +128,9 @@ export const missions: readonly Mission[] = [
       en: 'Open the biggest topic cluster',
     },
     hint: {
-      id: 'Klik gelembung terbesar di “Klaster topik 24 jam”.',
-      en: 'Click the biggest bubble in “Topic clusters, 24 h”.',
+      id: 'Klik atau ketuk gelembung terbesar di “Klaster topik 24 jam”.',
+      en: 'Click or tap the biggest bubble in “Topic clusters, 24 h”.',
     },
-  },
-  {
-    id: 'hoaks',
-    label: { id: 'Tangani hoaks bendungan', en: 'Handle the dam hoax' },
-    hint: {
-      id: 'Picu skenario, lalu “Susun klarifikasi” dan “Terbitkan”.',
-      en: 'Trigger the scenario, then “Draft a clarification” and “Publish”.',
-    },
-    done: (e) => isEvent(e, 'clarification.published') && e.source === 'radar-isu',
   },
   {
     id: 'analisis',
@@ -142,4 +157,6 @@ export const missions: readonly Mission[] = [
 export const hotspot = {
   target: '[data-hotspot="radar-start"]',
   label: { id: 'Mulai di sini', en: 'Start here' },
+  // under the trigger: never over the "connected products" chips above it
+  placement: 'below' as const,
 }

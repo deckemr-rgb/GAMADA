@@ -10,7 +10,7 @@ import { sfx } from '../../lib/audio'
 import AppLink from '../../components/AppLink'
 import { Avatar, Icon, IconButton, Menu, Segmented, Tooltip } from '../ui'
 import { REGIONS } from '../region/loader'
-import { CLOCK, clock, formatTime, setSession, useClock, useSession, type ClockSpeed } from '../world'
+import { CLOCK, clock, formatTime, getSession, setSession, useClock, useSession, type ClockSpeed } from '../world'
 // live-base directly, not the ai/ barrel: the barrel drags the scripted engine, intents and useAiChat (~9 KB gzip)
 // into every demo, also the ones without AI. live-base is dependency-free (the ai/ barrel re-exports it).
 import { checkHealth, peekHealth } from '../ai/live-base'
@@ -63,7 +63,7 @@ export function RegionSwitcher({ inline }: { inline?: boolean }) {
 
 /* ------------------------------------------------------------------ role */
 
-export function RoleSwitcher({ product, inline }: { product: ProductSlug; inline?: boolean }) {
+export function RoleSwitcher({ product, inline, onPicked }: { product: ProductSlug; inline?: boolean; onPicked?: (name: string) => void }) {
   const t = useDemoStrings()
   const { lang } = useI18n()
   const { role } = useSession()
@@ -71,7 +71,9 @@ export function RoleSwitcher({ product, inline }: { product: ProductSlug; inline
   const name = (r: RoleId) => ROLES[r].name[lang]
   const pick = (r: RoleId) => {
     sfx.click()
+    const changed = r !== getSession().role
     setSession({ role: r })
+    if (changed) onPicked?.(name(r))
   }
   const lead = (r: RoleId, size: 24 | 32 = 24) => <Avatar name={name(r)} initials={roleInitials(r, lang)} size={size} />
   if (roles.length < 2) {
@@ -94,12 +96,43 @@ export function RoleSwitcher({ product, inline }: { product: ProductSlug; inline
 
 /* ------------------------------------------------------------------ clock */
 
+/** phones: the world clock in the top bar (time + play / pause), so world time is visible without opening "⋯" */
+/** the clock as people read it: "07.00" in Indonesian, "07:00" in English (the same as the frame bar) */
+const timeOf = (time: string, lang: Lang) => (lang === 'id' ? time.replace(':', '.') : time)
+
+export function ClockChip() {
+  const t = useDemoStrings()
+  const { lang } = useI18n()
+  const c = useClock()
+  const time = timeOf(formatTime(c.minutes), lang)
+  return (
+    <div className="dk-clockchip" role="group" aria-label={t.clock}>
+      <IconButton
+        icon={c.running ? 'pause' : 'play'}
+        label={c.running ? t.pause : t.play}
+        size="sm"
+        variant="quiet"
+        onClick={() => {
+          sfx.click()
+          clock.toggle()
+        }}
+      />
+      <span className="dk-clockchip-time dk-num" aria-hidden="true">
+        {time}
+      </span>
+      <span className="dk-sr">{t.clockNow(time)}</span>
+    </div>
+  )
+}
+
 const SPEEDS = CLOCK.speeds.map(String) as ('1' | '10' | '60')[]
 
-export function ClockControl({ inline, rewinding }: { inline?: boolean; rewinding?: boolean }) {
+export function ClockControl({ inline, rewinding, onPicked }: { inline?: boolean; rewinding?: boolean; /** a speed or a jump was chosen (the phone "⋯" sheet closes so the result is seen at once) */ onPicked?: () => void }) {
   const t = useDemoStrings()
+  const { lang } = useI18n()
   const c = useClock()
   const time = formatTime(c.minutes)
+  const shown = timeOf(time, lang)
   const speed = String(c.speed === 0 ? CLOCK.defaultSpeed : c.speed) as (typeof SPEEDS)[number]
   return (
     <div className={`dk-clock${inline ? ' is-inline' : ''}${rewinding ? ' is-rewinding' : ''}`} role="group" aria-label={t.clock}>
@@ -113,14 +146,14 @@ export function ClockControl({ inline, rewinding }: { inline?: boolean; rewindin
           clock.toggle()
         }}
       />
-      <span className="dk-clock-time" title={t.clockNow(time)}>
+      <span className="dk-clock-time" title={t.clockNow(shown)}>
         <span className="dk-clock-digits" aria-hidden="true">
-          {time}
+          {shown}
         </span>
         <span className="dk-clock-tz" aria-hidden="true">
           WIB
         </span>
-        <span className="dk-sr">{t.clockNow(time)}</span>
+        <span className="dk-sr">{t.clockNow(shown)}</span>
       </span>
       <Segmented
         size="sm"
@@ -129,14 +162,18 @@ export function ClockControl({ inline, rewinding }: { inline?: boolean; rewindin
         onChange={(v) => {
           sfx.click()
           clock.setSpeed(Number(v) as ClockSpeed)
+          onPicked?.()
         }}
         options={SPEEDS.map((s) => ({ value: s, label: t.speedX(Number(s)) }))}
       />
       {inline ? (
         <div className="dk-clock-jumps" role="group" aria-label={t.jump}>
           {CLOCK.jumps.map((j) => (
-            <button key={j} type="button" className={`dk-clock-jump${time === j ? ' is-on' : ''}`} aria-label={t.jumpTo(j)} onClick={() => clock.setTime(j)}>
-              {j}
+            <button key={j} type="button" className={`dk-clock-jump${time === j ? ' is-on' : ''}`} aria-label={t.jumpTo(timeOf(j, lang))} onClick={() => {
+              clock.setTime(j)
+              onPicked?.()
+            }}>
+              {timeOf(j, lang)}
             </button>
           ))}
         </div>
@@ -146,7 +183,7 @@ export function ClockControl({ inline, rewinding }: { inline?: boolean; rewindin
           icon="clock"
           items={CLOCK.jumps.map((j) => ({
             id: j,
-            label: j,
+            label: timeOf(j, lang),
             icon: time === j ? 'check' : undefined,
             onSelect: () => clock.setTime(j),
           }))}

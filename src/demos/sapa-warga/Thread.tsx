@@ -4,17 +4,19 @@
  * and the messages the WORLD sends to this citizen (ticket updates with rating, queue tickets with QR, early warnings,
  * officer replies). Everything reads the world store, so a status change in the console shows here at once.
  */
-import { lazy, memo, Suspense, useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react'
 import { useI18n, type Lang } from '../../lib/i18n'
 import type { ChatMessage, Structured } from '../../demo-kit/ai/chat'
 import { CATEGORY_LABEL, emit, hhmm, shallowEqual, useWorld, type Bi, type CitizenMessage, type ComplaintCategory, type TicketStatus } from '../../demo-kit/world'
 import { Icon } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
+import { preloadDemo } from '../registry'
 import { FakeQr, LocationTile, Photo, StaticWave } from './photos'
-import { SLUG, looksEnglish, slaText, type Created, type PhotoId } from './model'
+import { SLUG, looksEnglish, slaText, slashBreak, type Created, type PhotoId } from './model'
 import { STATUS_LABEL, STATUS_ORDER, fill, toolLabel, useT } from './strings'
 
 const Speak = lazy(() => import('./Speak'))
+const EMPTY_CHIPS: readonly string[] = []
 
 /* ------------------------------------------------------------------ types shared with Phone */
 
@@ -88,7 +90,7 @@ function TicketCard({ data, created, msgId, actions }: { data: Record<string, un
         <b className="dk-num">{code || '…'}</b>
       </header>
       <dl>
-        <Row k={t.category} v={cat ? CATEGORY_LABEL[cat][lang] : String(data.category ?? '')} />
+        <Row k={t.category} v={slashBreak(cat ? CATEGORY_LABEL[cat][lang] : String(data.category ?? ''))} />
         <Row k={t.opd} v={live?.opd ?? String(data.opd ?? '')} />
         <Row k={t.sla} v={slaText(hours, lang)} />
         {urg && <Row k={t.urgency} v={urg === 'tinggi' || urg === 'kritis' ? (lang === 'id' ? 'Tinggi' : 'High') : urg === 'rendah' ? (lang === 'id' ? 'Rendah' : 'Low') : lang === 'id' ? 'Sedang' : 'Medium'} />}
@@ -137,6 +139,8 @@ function ChecklistCard({ data, actions }: { data: Record<string, unknown>; actio
         ))}
       </ul>
       <dl>
+        {data.refNo ? <Row k={t.refNo} v={<span className="dk-num">{String(data.refNo)}</span>} /> : null}
+        {data.refStatus ? <Row k={t.refStatus} v={String(data.refStatus)} /> : null}
         {data.estimate ? <Row k={t.estimate} v={String(data.estimate)} /> : null}
         {data.office ? <Row k={t.office} v={String(data.office)} /> : null}
         {data.fee ? <Row k={t.fee} v={String(data.fee)} /> : null}
@@ -216,13 +220,17 @@ function StructuredCard({ value, msgId, created, actions }: { value: Structured;
 
 /* ------------------------------------------------------------------ bubbles */
 
-function AssistantBubble({ m, isLast, created, actions }: { m: ChatMessage; isLast: boolean; created: (Created & { pred?: string }) | undefined; actions: ThreadActions }) {
+function AssistantBubble({ m, isLast, created, actions, skipChips }: { m: ChatMessage; isLast: boolean; created: (Created & { pred?: string }) | undefined; actions: ThreadActions; skipChips: Set<string> }) {
   const { lang } = useI18n()
   const t = useT()
   const fix = (s: string) => (created?.pred && created.pred !== created.code ? s.split(created.pred).join(created.code) : s)
   const text = fix(m.content)
   const done = m.status === 'done'
   const jv = !!m.translation
+  /* no chip twice: not one the phone already shows in its fixed row, not a queue chip when a card above offers the queue */
+  const cardQueue = (m.structured ?? []).some((v) => v.kind === 'sapa-warga/slot-pick' || ((v.kind === 'checklist' || v.kind === 'service') && (!v.data.channel || v.data.channel === 'mpp' || v.data.channel === 'online')))
+  const norm = (x: string) => x.trim().toLowerCase()
+  const follow = (m.followUps ?? []).filter((f) => !skipChips.has(norm(f)) && !(cardQueue && /antrean|antrian|queue|slot/i.test(f)))
   return (
     <div className="dk-sw-row is-ai" data-msg={m.id}>
       <div className="dk-sw-bubble is-ai">
@@ -264,9 +272,9 @@ function AssistantBubble({ m, isLast, created, actions }: { m: ChatMessage; isLa
           </div>
         )}
       </div>
-      {isLast && done && !!m.followUps?.length && (
+      {isLast && done && follow.length > 0 && (
         <div className="dk-sw-follow" role="group" aria-label={t.quick}>
-          {m.followUps.map((f) => (
+          {follow.map((f) => (
             <button key={f} type="button" className="dk-sw-chip" onClick={() => actions.send(f)}>
               {f}
             </button>
@@ -275,6 +283,14 @@ function AssistantBubble({ m, isLast, created, actions }: { m: ChatMessage; isLa
       )}
     </div>
   )
+}
+
+/** the voice-note language line follows the UI language (it used to be frozen in the language of the moment it was sent) */
+function voiceLabel(v: NonNullable<MsgMeta['voice']>, lang: Lang, tpl: string): string {
+  const id = /^id\b|^id-/i.test(v.lang)
+  if (id) return lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian'
+  const from = /^jv/i.test(v.lang) || /jawa|javanese/i.test(v.label) ? (lang === 'id' ? 'Basa Jawa' : 'Javanese') : lang === 'id' ? 'Bahasa daerah' : 'Regional language'
+  return fill(tpl, { from })
 }
 
 function UserBubble({ m, meta }: { m: ChatMessage; meta: MsgMeta | undefined }) {
@@ -300,7 +316,7 @@ function UserBubble({ m, meta }: { m: ChatMessage; meta: MsgMeta | undefined }) 
               <StaticWave seed={m.content} />
               <span className="dk-num">0:{String(Math.min(59, v.secs)).padStart(2, '0')}</span>
             </span>
-            <span className="dk-sw-badge">{v.label}</span>
+            <span className="dk-sw-badge">{voiceLabel(v, lang, t.voiceLang)}</span>
             <p className="dk-sw-text">{m.content}</p>
             {v.translation && v.translation[lang] !== m.content && (
               <p className="dk-sw-trans">
@@ -417,16 +433,19 @@ function Rating({ ticketId }: { ticketId: string }) {
 
 /* ------------------------------------------------------------------ the thread */
 
-export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: {
+export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef, quickChips = EMPTY_CHIPS }: {
+  /** the texts / labels of the phone's fixed quick-chip row (a follow-up chip never repeats one) */
+  quickChips?: readonly string[]
   conv: Conv
   worldMsgs: Record<string, CitizenMessage>
   greeting: { text: string; translation: string | null; hint?: string | null }
   /** what this persona can try (shown while the conversation is empty) */
-  tips: { icon: 'mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search'; text: string }[]
+  tips: { icon: 'mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search' | 'share'; text: string; go?: () => void }[]
   actions: ThreadActions
   scrollRef: RefObject<HTMLDivElement | null>
 }) {
   const t = useT()
+  const skip = useMemo(() => new Set(quickChips.map((x) => x.trim().toLowerCase())), [quickChips])
   const byId = new Map(conv.messages.map((m) => [m.id, m]))
   let lastAi: string | null = null
   for (let i = conv.messages.length - 1; i >= 0; i--)
@@ -458,7 +477,24 @@ export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: 
   const lastH = useRef(0)
   useLayoutEffect(() => {
     const sc = scrollRef.current
-    if (sc) sc.scrollTop = sc.scrollHeight
+    if (!sc) return
+    sc.scrollTop = sc.scrollHeight
+    // a restored thread (reload / Back) keeps growing for a moment (cards, lazy play buttons, photos): stay pinned to
+    // the newest message until the reader scrolls themselves
+    let user = false
+    const mark = () => (user = true)
+    sc.addEventListener('wheel', mark, { passive: true })
+    sc.addEventListener('touchstart', mark, { passive: true })
+    const ids = [120, 400, 900, 1600].map((ms) =>
+      window.setTimeout(() => {
+        if (!user) sc.scrollTop = sc.scrollHeight
+      }, ms),
+    )
+    return () => {
+      ids.forEach((x) => window.clearTimeout(x))
+      sc.removeEventListener('wheel', mark)
+      sc.removeEventListener('touchstart', mark)
+    }
   }, [scrollRef])
   useEffect(() => {
     const sc = scrollRef.current
@@ -488,7 +524,14 @@ export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: 
                   {tips.map((x) => (
                     <li key={x.text}>
                       <Icon name={x.icon} size={15} />
-                      {x.text}
+                      {x.go ? (
+                        <button type="button" className="dk-sw-tiplink" onClick={x.go} onPointerEnter={() => preloadDemo('siaga-wilayah')} onFocus={() => preloadDemo('siaga-wilayah')} onTouchStart={() => preloadDemo('siaga-wilayah')} data-sw="tip-siaga">
+                          {x.text}
+                          <Icon name="arrowUpRight" size={13} />
+                        </button>
+                      ) : (
+                        x.text
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -504,7 +547,7 @@ export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef }: 
         return m.role === 'user' ? (
           <UserBubble key={m.id} m={m} meta={conv.meta[m.id]} />
         ) : (
-          <AssistantBubble key={m.id} m={m} isLast={m.id === lastAi} created={conv.created[m.id]} actions={actions} />
+          <AssistantBubble key={m.id} m={m} isLast={m.id === lastAi} created={conv.created[m.id]} actions={actions} skipChips={skip} />
         )
       })}
       <div ref={end} />

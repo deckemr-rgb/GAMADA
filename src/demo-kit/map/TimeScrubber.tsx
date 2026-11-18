@@ -7,7 +7,7 @@
  * Playback runs on gsap.ticker (pauses with the tab), stops at the end; with reduced motion it steps through
  * whole hours instead of gliding.
  */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { gsap } from 'gsap'
 import { useI18n, type Lang } from '../../lib/i18n'
 import { isEnabled } from '../../lib/motion'
@@ -55,7 +55,26 @@ export function TimeScrubber({ value, onChange, onFrame, hours = 6, step = 0.25,
   const cbs = useRef({ onChange, onFrame })
   cbs.current = { onChange, onFrame }
 
-  const text = (h: number) => (h < 0.005 ? ms('now', lang) : `+${fmt(h, lang, h % 1 ? 1 : 0)} ${lang === 'id' ? 'j' : 'h'}`)
+  /** the time as read out and shown: snapped to `step` (quarter hours print 2 decimals: '+0,25 j', '+1,5 j', '+2 j') */
+  const text = (h: number) => {
+    const q = Math.round(h / step) * step
+    if (q < 0.005) return ms('now', lang)
+    const digits = Math.abs(q - Math.round(q)) < 1e-6 ? 0 : Math.abs(q * 2 - Math.round(q * 2)) < 1e-6 ? 1 : 2
+    return `+${fmt(q, lang, digits)} ${lang === 'id' ? 'j' : 'h'}`
+  }
+
+  /** keyboard: arrows move one `step`, PageUp / PageDown one hour, Home / End the ends (the range itself steps 0.05 h
+   *  so drag and playback glide). A product handler that already called preventDefault wins. */
+  const onKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.defaultPrevented) return
+    const d = ({ ArrowRight: step, ArrowUp: step, ArrowLeft: -step, ArrowDown: -step, PageUp: 1, PageDown: -1 } as Record<string, number>)[e.key]
+    const base = Math.round(cur.current / step) * step
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? hours : d === undefined ? null : Math.max(0, Math.min(hours, base + d))
+    if (next === null) return
+    e.preventDefault()
+    setPlaying(false)
+    write(next)
+  }
 
   /** write the position without a React render */
   const write = (h: number, emit = true) => {
@@ -134,7 +153,9 @@ export function TimeScrubber({ value, onChange, onFrame, hours = 6, step = 0.25,
             max={hours}
             step={0.05}
             defaultValue={value}
+            aria-valuetext={text(value)}
             className="dk-mts-range"
+            onKeyDown={onKey}
             onInput={(e) => {
               setPlaying(false)
               write(Number((e.target as HTMLInputElement).value))

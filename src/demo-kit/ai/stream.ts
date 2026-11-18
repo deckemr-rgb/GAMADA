@@ -18,6 +18,8 @@ const STREAM = {
   pieceChars: 4,
   /** words longer than this are split */
   splitAbove: 6,
+  /** a long answer never streams for longer than this, ms: its schedule is compressed (the shape stays) */
+  maxMs: 2000,
 } as const
 
 /* ------------------------------------------------------------------ deterministic helpers */
@@ -149,6 +151,17 @@ export interface StreamTextOptions {
   instant?: boolean
   /** injectable sleep (tests) */
   sleep?: Sleep
+  /** when this aborts, everything not yet streamed is yielded at once */
+  skip?: AbortSignal
+  /** cap on the whole stream, ms (default 2000): longer schedules are compressed to fit */
+  maxMs?: number
+}
+
+/** wakes when either signal aborts (AbortSignal.any where available) */
+export function eitherSignal(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (!a || !b) return a ?? b
+  const any = (AbortSignal as { any?: (s: AbortSignal[]) => AbortSignal }).any
+  return any ? any([a, b]) : b
 }
 
 /** Stream `text` token by token at a realistic rate. Concatenating every yielded piece gives `text`. */
@@ -158,17 +171,27 @@ export async function* streamText(text: string, opts: StreamTextOptions = {}): A
     return
   }
   const wait = opts.sleep ?? sleep
-  const { tokens, delays } = streamSchedule(text, opts)
+  const sched = streamSchedule(text, opts)
+  const { tokens } = sched
+  // memos and long structured answers used to stream for 6–13 s: compress the schedule to the cap
+  const cap = opts.maxMs ?? STREAM.maxMs
+  const k = sched.totalMs > cap && cap > 0 ? cap / sched.totalMs : 1
+  const delays = k < 1 ? sched.delays.map((d) => d * k) : sched.delays
   // Drift-compensated: each token is due at an absolute time (t0 + Σ delays), so timer overhead and render
   // time between tokens do not accumulate and the observed rate stays inside the DEMO bounds.
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
   const t0 = now()
+  const wake = eitherSignal(opts.signal, opts.skip)
   let due = 0
   for (let i = 0; i < tokens.length; i++) {
     due += delays[i] ?? 0
     const d = opts.sleep ? (delays[i] ?? 0) : due - (now() - t0)
-    if (d > 0) await wait(d, opts.signal)
+    if (d > 0 && !opts.skip?.aborted) await wait(d, wake)
     if (opts.signal?.aborted) return
+    if (opts.skip?.aborted) {
+      yield tokens.slice(i).join('')
+      return
+    }
     yield tokens[i]!
   }
 }

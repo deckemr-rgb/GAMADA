@@ -49,7 +49,7 @@ export default function OpdTasks({ opdId }: { opdId: string }) {
   const move = (a: ActionItem) => emit('actionItem.statusChanged', { actionItemId: a.id, status: a.status === 'baru' ? 'proses' : 'selesai' }, 'meja-pimpinan')
   const due = (m: Minutes) => {
     const d = Math.floor(m / DAY_MIN) - Math.floor(now / DAY_MIN)
-    return d === 0 ? hhmm(m) : d < 0 ? (lang === 'id' ? `${-d} hr lalu` : `${-d} d ago`) : lang === 'id' ? `+${d} hr` : `+${d} d`
+    return d === 0 ? hhmm(m) : d < 0 ? (lang === 'id' ? `${-d} hari lalu` : `${-d} days ago`) : lang === 'id' ? `${d} hari lagi` : `in ${d} days`
   }
   return (
     <section className="dk-mp-panel dk-mp-tasks" aria-labelledby="dk-mp-tasks-h">

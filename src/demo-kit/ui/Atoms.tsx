@@ -37,20 +37,24 @@ export interface ChipProps {
   onRemove?: () => void
   removeLabel?: string
   className?: string
+  /** toggle chip: announced as unavailable (stays focusable; the click handler decides what to do) */
+  'aria-disabled'?: boolean
+  /** id(s) of the element that explains the chip (e.g. why it is unavailable) */
+  'aria-describedby'?: string
 }
 
-export function Chip({ children, icon, tone = 'neutral', selected, onToggle, onRemove, removeLabel, className }: ChipProps) {
+export function Chip({ children, icon, tone = 'neutral', selected, onToggle, onRemove, removeLabel, className, 'aria-disabled': ariaDisabled, 'aria-describedby': describedBy }: ChipProps) {
   const t = useUiStrings()
   const cls = cx('dk-chip', `dk-chip--${tone}`, selected && 'is-selected', className)
   if (onToggle)
     return (
-      <button type="button" className={cls} aria-pressed={!!selected} onClick={onToggle}>
+      <button type="button" className={cls} aria-pressed={!!selected} aria-disabled={ariaDisabled || undefined} aria-describedby={describedBy} onClick={onToggle}>
         {icon && <Icon name={icon} size={14} />}
         <span>{children}</span>
       </button>
     )
   return (
-    <span className={cls}>
+    <span className={cls} aria-describedby={describedBy}>
       {icon && <Icon name={icon} size={14} />}
       <span>{children}</span>
       {onRemove && (
@@ -79,9 +83,9 @@ export const StatusChip = memo(function StatusChip({ label, tone = 'neutral', cl
 /* ------------------------------------------------------------------ SlaLabel */
 
 /** "20 j lagi" / "Lewat 2 j" / "Tuntas" with tone colour. `minutesLeft` negative = overdue. */
-export const SlaLabel = memo(function SlaLabel({ minutesLeft, done, className }: { minutesLeft: number; done?: boolean; className?: string }) {
+export const SlaLabel = memo(function SlaLabel({ minutesLeft, done, className, now }: { minutesLeft: number; done?: boolean; className?: string; /** current minute: days 2+ away count calendar days ("Lusa") */ now?: number }) {
   const { lang } = useI18n()
-  const s = formatSla(minutesLeft, lang, done)
+  const s = formatSla(minutesLeft, lang, done, now)
   return (
     <span className={cx('dk-sla', `dk-sla--${s.tone}`, 'dk-num', className)}>
       {s.tone === 'done' && <Icon name="check" size={13} strokeWidth={1.8} />}

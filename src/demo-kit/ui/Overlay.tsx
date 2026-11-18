@@ -59,6 +59,28 @@ interface Layer {
 const stack: Layer[] = []
 const savedInert = new Map<Element, boolean>()
 
+/* how many Modals / Drawers are open (the toast stack keeps clear of them on phones) */
+const ovSubs = new Set<() => void>()
+const emitOverlays = () => ovSubs.forEach((fn) => fn())
+export function subscribeOverlays(fn: () => void): () => void {
+  ovSubs.add(fn)
+  return () => {
+    ovSubs.delete(fn)
+  }
+}
+export const overlayOpen = (): boolean => stack.length > 0
+
+/* Closing: the inert restore is batched into the next frame, so closing (or swapping) overlays inside a click never
+   forces a style recalculation of the whole page there and then (INP). applyInert() reads the stack as it is then. */
+let inertRaf = 0
+function scheduleInert() {
+  if (inertRaf) return
+  inertRaf = requestAnimationFrame(() => {
+    inertRaf = 0
+    applyInert()
+  })
+}
+
 function applyInert() {
   const top = stack[stack.length - 1]
   const topHost = top?.host()?.closest('.dk-portal') ?? null
@@ -91,7 +113,10 @@ function onDocKey(e: KeyboardEvent) {
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /** Shared behaviour of Modal and Drawer. */
-function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLElement | null>) {
+/** where focus returns on close when it is not the opener (e.g. the opener unmounts on close) */
+export type ReturnFocus = RefObject<HTMLElement | null> | (() => HTMLElement | null | undefined)
+
+function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLElement | null>, returnFocus?: ReturnFocus) {
   const id = useId()
   const closeRef = useRef(onClose)
   closeRef.current = onClose
@@ -120,18 +145,37 @@ function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLEle
     const p = panel.current
     const first = p?.querySelector<HTMLElement>('[data-autofocus]') ?? p?.querySelector<HTMLElement>(FOCUSABLE) ?? p
     first?.focus({ preventScroll: true })
+    emitOverlays()
+    // where focus goes back if the opener unmounts meanwhile: its nearest ancestor still on the page
+    const chain: HTMLElement[] = []
+    for (let a = opener?.parentElement ?? null; a && a !== document.body && a !== html; a = a.parentElement) chain.push(a)
     return () => {
       const i = stack.findIndex((l) => l.id === id)
       if (i >= 0) stack.splice(i, 1)
       if (!stack.length) document.removeEventListener('keydown', onDocKey, true)
-      applyInert()
+      emitOverlays()
       cancelAnimationFrame(raf)
       clearTimeout(tm)
-      if (!stack.length) {
-        html.style.overflow = prevOverflow
-        if (stopped) lenis?.start()
-      }
-      if (opener && document.contains(opener)) opener.focus({ preventScroll: true })
+      if (!stack.length) html.style.overflow = prevOverflow
+      const last = !stack.length
+      // inert restore, Lenis restart and the focus return run in the next frame, not inside the closing click (INP)
+      scheduleInert()
+      requestAnimationFrame(() => {
+        if (last && stopped && !stack.length) lenis?.start()
+        const act = document.activeElement
+        // focus moved on by itself (another overlay opened, the product focused something): leave it there
+        if (act && act !== document.body && !(p?.contains(act) ?? false)) return
+        const explicit = typeof returnFocus === 'function' ? returnFocus() : returnFocus?.current
+        const back =
+          (explicit?.isConnected ? explicit : null) ??
+          (opener?.isConnected ? opener : null) ??
+          (() => {
+            const anc = chain.find((a) => a.isConnected)
+            if (!anc) return null
+            return anc.matches(FOCUSABLE) ? anc : anc.querySelector<HTMLElement>(FOCUSABLE)
+          })()
+        back?.focus({ preventScroll: true })
+      })
     }
   }, [open, id, panel])
 
@@ -194,15 +238,17 @@ export interface ModalProps {
   size?: 'sm' | 'md' | 'lg'
   /** close when the scrim is clicked (default true) */
   dismissable?: boolean
+  /** focus target on close when not the opener (default: the opener, else its nearest ancestor still on the page) */
+  returnFocus?: ReturnFocus
 }
 
-export function Modal({ open, onClose, title, description, children, footer, size = 'md', dismissable = true }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md', dismissable = true, returnFocus }: ModalProps) {
   const t = useUiStrings()
   const scrim = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const ids = useId()
   const mounted = usePresence(open, scrim, panel, { y: 12 })
-  const onKeyDown = useOverlay(open && mounted, onClose, panel)
+  const onKeyDown = useOverlay(open && mounted, onClose, panel, returnFocus)
   if (!mounted) return null
   return (
     <Portal>
@@ -249,15 +295,17 @@ export interface DrawerProps {
    * stays modal (a click outside still closes it).
    */
   scrim?: 'dim' | 'none'
+  /** focus target on close when not the opener (default: the opener, else its nearest ancestor still on the page) */
+  returnFocus?: ReturnFocus
 }
 
-export function Drawer({ open, onClose, title, eyebrow, children, footer, width = 420, className, scrim: scrimMode = 'dim' }: DrawerProps) {
+export function Drawer({ open, onClose, title, eyebrow, children, footer, width = 420, className, scrim: scrimMode = 'dim', returnFocus }: DrawerProps) {
   const t = useUiStrings()
   const scrim = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const ids = useId()
   const mounted = usePresence(open, scrim, panel, { x: 24 })
-  const onKeyDown = useOverlay(open && mounted, onClose, panel)
+  const onKeyDown = useOverlay(open && mounted, onClose, panel, returnFocus)
   if (!mounted) return null
   return (
     <Portal>

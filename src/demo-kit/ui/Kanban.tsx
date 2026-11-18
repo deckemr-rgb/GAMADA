@@ -20,6 +20,9 @@ export interface KanbanColumn {
   title: string
   /** header dot: neutral by default; warn / danger / done follow the status colour rules */
   tone?: 'neutral' | 'warn' | 'danger' | 'done'
+  /** the column's true total when the product shows only some of its cards (a card cap); the header then reads
+   *  "{shown} / {count}" */
+  count?: number
 }
 
 export interface KanbanProps<T> {
@@ -254,8 +257,8 @@ export function Kanban<T>({ columns, items, itemId, itemColumn, itemLabel, rende
               <h3 id={`${helpId}-${col.id}`} className="dk-kb-title">
                 {col.title}
               </h3>
-              <span className="dk-kb-count dk-num" aria-label={t.cardsIn(list.length)}>
-                {list.length}
+              <span className="dk-kb-count dk-num" aria-label={col.count !== undefined && col.count > list.length ? t.cardsShown(list.length, col.count) : t.cardsIn(list.length)}>
+                {col.count !== undefined && col.count > list.length ? `${list.length} / ${col.count}` : list.length}
               </span>
             </header>
             <ul className="dk-kb-list">

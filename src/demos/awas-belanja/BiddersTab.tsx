@@ -6,11 +6,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
-import { Badge, Button, Chip, Icon, IconButton, Table, motionMode, type TableColumn } from '../../demo-kit/ui'
+import { Badge, Button, Chip, Icon, IconButton, Table, motionMode, useElementWidth, type TableColumn } from '../../demo-kit/ui'
+import { useShell } from '../../demo-kit/shell'
 import { NetworkGraph, TONE, type NetEdge, type NetNode } from '../../demo-kit/viz'
 import { useWorld, type Bidder, type WorldState } from '../../demo-kit/world'
 import { affiliationEdges, type AffiliationEdge } from '../../demo-kit/world/satu-daerah'
-import { AB, isAnalysed, pct, rpFull, rpShort } from './model'
+import { AB, isAnalysed, pct, publicIpText, rpFull, rpShort } from './model'
 import { useT } from './strings'
 
 interface Row {
@@ -38,6 +39,9 @@ export default function BiddersTab({ id, onAnalyse, running, onEdge }: { id: str
   const [selEdge, setSelEdge] = useState<string | null>(null)
   const graphRef = useRef<HTMLDivElement>(null)
   const coarse = useCoarse()
+  // phones: graph labels without the legal form ("Bumi Panca", not "PT Bumi Panca") so all four linked companies
+  // find a free label spot in the 320 px plot; the evidence card and the bidder table keep the full name
+  const narrow = useShell().size === 'sm'
   const ringy = analysed && ringIds.size >= 2
   // the ring starts as one node and "opens" a moment after an analysed package shows (once per package)
   const [opened, setOpened] = useState(() => motionMode() === 'static')
@@ -77,12 +81,12 @@ export default function BiddersTab({ id, onAnalyse, running, onEdge }: { id: str
     () =>
       bidRows.map((r) => ({
         id: r.b.id,
-        label: `${r.b.legal} ${r.b.name}`,
+        label: narrow ? r.b.name : `${r.b.legal} ${r.b.name}`,
         size: r.ring ? 9 : 7,
         ...(analysed && r.ring ? { tone: 'danger' as const, cluster: 'ring' } : { color: TONE.neutral }),
         note: r.bid != null ? `${t.colBid} ${rpShort(r.bid, lang)}` : t.noBid,
       })),
-    [bidRows, analysed, t, lang],
+    [bidRows, analysed, t, lang, narrow],
   )
   const netEdges = useMemo<NetEdge[]>(
     () =>
@@ -155,7 +159,7 @@ export default function BiddersTab({ id, onAnalyse, running, onEdge }: { id: str
           </aside>
         )}
       </div>
-      <BidTable rows={bidRows} analysed={analysed} />
+      <BidTable rows={bidRows} analysed={analysed} hps={p.hps} />
     </div>
   )
 }
@@ -202,7 +206,7 @@ function Evidence({ edge, rows, onClose }: { edge: AffiliationEdge; rows: Row[];
       </div>
       <ul className="dk-ab-ev-list">
         {edge.evidence.map((e) => (
-          <li key={e.id}>{e[lang]}</li>
+          <li key={e.id}>{publicIpText(e[lang])}</li>
         ))}
       </ul>
       {a?.bid != null && b?.bid != null && (
@@ -217,20 +221,60 @@ function Evidence({ edge, rows, onClose }: { edge: AffiliationEdge; rows: Row[];
   )
 }
 
-function BidTable({ rows, analysed }: { rows: Row[]; analysed: boolean }) {
+function BidTable({ rows, analysed, hps }: { rows: Row[]; analysed: boolean; hps: number }) {
   const { t, lang } = useT()
+  const boxRef = useRef<HTMLDivElement>(null)
+  const boxW = useElementWidth(boxRef)
+  // narrower panels: the address moves under the company name, so "vs lowest" and "Wins" (evidence) stay visible
+  const fold = boxW > 0 && boxW < 900
   const columns = useMemo<TableColumn<Row>[]>(
     () => [
-      { id: 'co', header: t.colCompany, card: 'title', min: 180, grow: 2, value: (r) => `${r.b.legal} ${r.b.name}` },
+      {
+        id: 'co',
+        header: t.colCompany,
+        card: 'title',
+        min: 180,
+        grow: 2,
+        value: (r) => `${r.b.legal} ${r.b.name}`,
+        ...(fold
+          ? {
+              cell: (r: Row) => (
+                <span className="dk-ab-itemcell">
+                  <span>{`${r.b.legal} ${r.b.name}`}</span>
+                  <small>{r.b.address}</small>
+                </span>
+              ),
+            }
+          : {}),
+      },
       { id: 'dir', header: t.colDirector, min: 140, grow: 1, value: (r) => r.b.director },
-      { id: 'addr', header: t.colAddress, min: 180, grow: 2, value: (r) => r.b.address },
-      { id: 'bid', header: t.colBid, numeric: true, card: 'meta', min: 130, value: (r) => r.bid ?? -1, cell: (r) => (r.bid != null ? rpFull(r.bid, lang) : t.noBid) },
+      ...(fold ? [] : [{ id: 'addr', header: t.colAddress, min: 180, grow: 2, value: (r: Row) => r.b.address }]),
+      {
+        id: 'bid',
+        header: t.colBid,
+        numeric: true,
+        card: 'meta',
+        min: 130,
+        value: (r) => r.bid ?? -1,
+        cell: (r) =>
+          r.bid == null ? (
+            t.noBid
+          ) : r.bid > hps ? (
+            <span className="dk-ab-bidover">
+              {rpFull(r.bid, lang)}
+              <Badge tone="danger">{t.aboveHps}</Badge>
+            </span>
+          ) : (
+            rpFull(r.bid, lang)
+          ),
+      },
       { id: 'low', header: t.colVsLow, numeric: true, min: 90, value: (r) => r.vsLow ?? -1, cell: (r) => (r.vsLow != null ? pct(r.vsLow, lang, true) : '—') },
       { id: 'wins', header: t.colWins, numeric: true, min: 70, value: (r) => r.b.wins },
     ],
-    [t, lang],
+    [t, lang, hps, fold],
   )
   return (
+    <div ref={boxRef} className="dk-ab-bidtable">
     <Table<Row>
       rows={rows}
       columns={columns}
@@ -247,5 +291,6 @@ function BidTable({ rows, analysed }: { rows: Row[]; analysed: boolean }) {
         </span>
       }
     />
+    </div>
   )
 }

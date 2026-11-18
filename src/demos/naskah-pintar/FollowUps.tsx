@@ -7,14 +7,16 @@
  */
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
-import { useShell } from '../../demo-kit/shell'
+import { Link } from 'react-router'
+import { demoHref, useShell } from '../../demo-kit/shell'
 import { Badge, Button, Chip, EmptyState, Icon, IconButton, Kanban, Kpi, Modal, Segmented, SlaLabel, StatusChip, flashNewRow, motionMode, useMedia, type KanbanColumn } from '../../demo-kit/ui'
-import { emit, useClock, useWorld, world, type ActionItem } from '../../demo-kit/world'
+import { emit, useClock, useSession, useWorld, world, type ActionItem } from '../../demo-kit/world'
 import { actionBoard } from '../../demo-kit/world/satu-daerah'
 import { DAY_MIN } from '../../demo-kit/world/util'
 import { structuredOf, useNaskahAi, type ReminderOut } from './ai'
 import { buildCtx, ctxItem } from './ctx'
-import { clockText, dueText, picLabel } from './model'
+import { SCRIPT, clockText, dayText, dueText, picLabel, sampleMeeting } from './model'
+import { pumpTasks } from './day'
 import type { NpNav } from './index'
 import { opdLabel, useStr, type NpDict } from './strings'
 import './followups.css'
@@ -29,13 +31,44 @@ const NEXT: Record<ActionItem['status'], ActionItem['status'] | null> = { baru: 
 const RANK = (i: Item) => (i.late ? 0 : i.status === 'baru' ? 1 : i.status === 'proses' ? 2 : 3)
 const byRank = (a: Item, b: Item) => RANK(a) - RANK(b) || a.dueAt - b.dueAt
 
-export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKey }: { nav: NpNav; focusItem: string | null; focusOpd: string | null; focusOpds: readonly string[] | null; focusKey: number }) {
+/** meeting follow-ups whose work continues in another product (the transcript names it): a link there */
+const XLINK: Record<string, 'cek-berkas' | 'siaga-wilayah'> = { a3: 'cek-berkas', a4: 'siaga-wilayah' }
+
+export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusLate = false, focusKey }: { nav: NpNav; focusItem: string | null; focusOpd: string | null; focusOpds: readonly string[] | null; focusLate?: boolean; focusKey: number }) {
   const S = useStr()
   const { lang } = useI18n()
   const now = useClock().minutes
   const day = useWorld((s) => s.day)
   const opds = useWorld((s) => s.region.opd)
   const board = useWorld((s) => actionBoard(s, now))
+  const session = useSession()
+  /* the flood meeting's follow-ups that continue in Cek Berkas / Siaga Wilayah (item id → product) */
+  const xItems = useWorld((s) => {
+    const m = sampleMeeting(s)
+    if (!m) return ''
+    const out: string[] = []
+    for (const id of m.actionItemIds) {
+      const a = s.actionItems.byId[id]
+      const key = a ? SCRIPT.actions.find((x) => x.text.id === a.title.id)?.key : undefined
+      const slug = key ? XLINK[key] : undefined
+      if (a && slug) out.push(`${a.id}=${slug}`)
+    }
+    return out.join('|')
+  })
+  const xlinks = useMemo(() => {
+    const m = new Map<string, { href: string; slug: 'cek-berkas' | 'siaga-wilayah' }>()
+    for (const pair of xItems ? xItems.split('|') : []) {
+      const [id, slug] = pair.split('=') as [string, 'cek-berkas' | 'siaga-wilayah']
+      m.set(id, { slug, href: demoHref(slug, session) })
+    }
+    return m
+  }, [xItems, session])
+  /* today's pump tasks are one matter (meeting follow-up 2, the Regent's memo, a pump letter): each card says so */
+  const pumpIds = useWorld((s) => pumpTasks(s).map((a) => a.id).join('|'))
+  const thread = useMemo(() => {
+    const ids = pumpIds ? pumpIds.split('|') : []
+    return ids.length > 1 ? new Map(ids.map((id) => [id, ids.length - 1])) : new Map<string, number>()
+  }, [pumpIds])
   const sm = useMedia('(max-width: 767px)')
   /* a Kepala OPD has one agency: on a wide screen the status board says more than one full-width lane (phones keep
      the per-agency list, which already reads as one card list) */
@@ -56,6 +89,24 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKe
   const cols = useMemo(() => (nav.myOpd ? board.filter((c) => c.opdId === nav.myOpd) : board), [board, nav.myOpd])
   const all = useMemo(() => cols.flatMap((c) => c.items).sort(byRank), [cols])
   const items = useMemo(() => (dLate ? all.filter((i) => i.late) : all), [all, dLate])
+  /* the same task given to the same agency again by a later meeting reads "assigned again · earlier <day>", so two
+     cards with one title are not mistaken for a double entry */
+  const again = useMemo(() => {
+    const groups = new Map<string, Item[]>()
+    for (const i of all) {
+      const k = `${i.opdId}|${i.title.id}`
+      const g = groups.get(k)
+      if (g) g.push(i)
+      else groups.set(k, [i])
+    }
+    const out = new Map<string, number>()
+    for (const g of groups.values()) {
+      if (g.length < 2) continue
+      g.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      for (let n = 1; n < g.length; n++) out.set(g[n]!.id, g[n - 1]!.createdAt)
+    }
+    return out
+  }, [all])
   const k = useMemo(() => {
     const open = all.filter((i) => i.status !== 'selesai')
     return {
@@ -78,6 +129,13 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKe
     setLateOnly(false)
     landing.current = { id: focusItem, opd }
   }, [focusItem, focusOpd, focusOpds, focusKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* "Lihat yang lewat tenggat" from the Kepala Daerah desk: the overdue-only filter */
+  useEffect(() => {
+    if (!focusLate) return
+    setLateOnly(true)
+    setPin([])
+    if (view !== 'opd' && view !== 'due') setView('opd')
+  }, [focusLate, focusKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* after the render that shows the pinned lane: scroll the board to it, centre the card, flash and focus it */
   useLayoutEffect(() => {
@@ -126,12 +184,17 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKe
   const move = useCallback((id: string, to: string) => {
     if (to === 'baru' || to === 'proses' || to === 'selesai') emit('actionItem.statusChanged', { actionItemId: id, status: to }, 'naskah-pintar')
   }, [])
+  /* card buttons: let the pressed button paint first, then write the world (the whole board re-renders) (INP);
+     the Kanban's own drag / keyboard moves keep the direct `move` for its FLIP */
+  const moveSoon = useCallback((id: string, to: string) => {
+    requestAnimationFrame(() => window.setTimeout(() => move(id, to), 0))
+  }, [move])
 
   /* Sekretariat / Kepala Daerah remind the PIC; a Kepala OPD reminds the staff carrying out its own agency's task */
   const canRemind = true
   const renderCard = useCallback(
-    (it: Item) => <Card it={it} S={S} lang={lang} day={day} now={now} opdName={name(it.opdId)} showOpd={dView !== 'opd'} canRemind={canRemind} onMove={move} onRemind={setRemind} />,
-    [S, lang, day, now, name, dView, canRemind, move],
+    (it: Item) => <Card it={it} S={S} lang={lang} day={day} now={now} opdName={name(it.opdId)} showOpd={dView !== 'opd'} canRemind={canRemind} onMove={moveSoon} onRemind={setRemind} again={again.get(it.id)} xlink={xlinks.get(it.id)} thread={thread.get(it.id)} />,
+    [S, lang, day, now, name, dView, canRemind, moveSoon, again, xlinks, thread],
   )
 
   /* lanes: pinned first, then the ones with overdue work, open work, the newest item; lanes holding only finished
@@ -177,7 +240,7 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKe
       !items.length ? (
         empty
       ) : dView === 'due' ? (
-        <DueList items={items} S={S} lang={lang} day={day} now={now} name={name} canRemind={canRemind} onMove={move} onRemind={setRemind} />
+        <DueList items={items} S={S} lang={lang} day={day} now={now} name={name} canRemind={canRemind} onMove={moveSoon} onRemind={setRemind} />
       ) : sm && dView === 'opd' ? (
         <div className="dk-np-fgroups">
           {opdColumns.map((c) => {
@@ -211,17 +274,18 @@ export default function FollowUps({ nav, focusItem, focusOpd, focusOpds, focusKe
         <Kanban<Item> className="dk-np-kanban is-status" columns={statusColumns} items={items} itemId={itemId} itemColumn={byStatus} itemLabel={label} renderCard={renderCard} onMove={move} moveButton={false} label={S.fBoard} />
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, laneItems, dView, dLate, sm, S, lang, day, now, name, canRemind, move, opdColumns, statusColumns, pin, nav.myOpd, renderCard, itemId, byOpd, byStatus, label],
+    [items, laneItems, dView, dLate, sm, S, lang, day, now, name, canRemind, move, moveSoon, opdColumns, statusColumns, pin, nav.myOpd, renderCard, itemId, byOpd, byStatus, label],
   )
 
   return (
     <div className="dk-np-follow" ref={root}>
       <p className="dk-np-lead dk-np-tablead">{S.fLead}</p>
       <div className="dk-np-kpis">
-        <Kpi label={S.fLate} value={k.late} hero className={k.late > 0 ? 'dk-np-kpi-late' : undefined} />
-        <Kpi label={S.fOpen} value={k.open} />
-        <Kpi label={S.fToday} value={k.today} />
-        <Kpi label={S.fDone} value={k.done} />
+        {/* change tags coloured by meaning: more overdue / open / due is bad news, more done is good */}
+        <Kpi label={S.fLate} value={k.late} hero goodWhen="down" className={k.late > 0 ? 'dk-np-kpi-late' : undefined} />
+        <Kpi label={S.fOpen} value={k.open} goodWhen="down" />
+        <Kpi label={S.fToday} value={k.today} goodWhen="down" />
+        <Kpi label={S.fDone} value={k.done} goodWhen="up" />
       </div>
       <div className="dk-np-ftools">
         <Segmented
@@ -335,14 +399,22 @@ interface CardProps {
   canRemind: boolean
   onMove: (id: string, to: string) => void
   onRemind: (id: string) => void
+  /** created again after an identical task of the same agency (that one's creation time) */
+  again?: number | undefined
+  /** the work continues in another product (Cek Berkas / Siaga Wilayah) */
+  xlink?: { href: string; slug: 'cek-berkas' | 'siaga-wilayah' } | undefined
+  /** one matter with n other tasks of the day (the pumps) */
+  thread?: number | undefined
 }
 
-function Card({ it, S, lang, day, now, opdName, showOpd, canRemind, onMove, onRemind }: CardProps) {
+function Card({ it, S, lang, day, now, opdName, showOpd, canRemind, onMove, onRemind, again, xlink, thread }: CardProps) {
   const next = NEXT[it.status]
   return (
     <div className={`dk-np-item${it.late ? ' is-late' : ''}${it.status === 'selesai' ? ' is-done' : ''}`} data-item={it.id} data-opd={it.opdId} data-late={it.late || undefined}>
       {it.late && <span className="dk-np-pulse" aria-hidden="true" />}
       <p className="dk-np-item-t">{it.title[lang]}</p>
+      {again !== undefined && <p className="dk-np-item-again">{S.fAgain(dayText(again, lang, day))}</p>}
+      {thread !== undefined && <p className="dk-np-item-again">{S.fThread(thread)}</p>}
       <p className="dk-np-item-m">
         <Icon name="user" size={12} />
         {picLabel(it.pic, lang, it.opdId)}
@@ -353,7 +425,9 @@ function Card({ it, S, lang, day, now, opdName, showOpd, canRemind, onMove, onRe
         <span className="dk-np-item-due dk-num">{dueText(it.dueAt, lang, day)}</span>
       </div>
       <div className="dk-np-item-row">
-        <Badge>{S.fSrc[it.source.kind]}</Badge>
+        <Badge>
+          {S.fSrc[it.source.kind]} · {dayText(it.createdAt, lang, day)}
+        </Badge>
         {it.status !== 'selesai' && <StatusChip label={S.fStatus[it.status]} tone={it.status === 'proses' ? 'warn' : 'new'} />}
         {it.remindedAt != null && (
           <span className="dk-np-reminded">
@@ -372,6 +446,12 @@ function Card({ it, S, lang, day, now, opdName, showOpd, canRemind, onMove, onRe
           <Button size="sm" variant={it.late ? 'secondary' : 'quiet'} icon="send" onClick={() => onRemind(it.id)} data-np="remind">
             {S.fRemind}
           </Button>
+        )}
+        {xlink && (
+          <Link className="dk-np-xlink is-card" to={xlink.href} data-np={`x-${xlink.slug}`}>
+            {S.fXlink[xlink.slug]}
+            <Icon name="arrowRight" size={14} />
+          </Link>
         )}
       </div>
     </div>
@@ -399,7 +479,10 @@ function DueList({ items, S, lang, day, now, name, canRemind, onMove, onRemind }
             <span className="dk-flash" aria-hidden="true" />
             <span role="cell" className="dk-np-due-t">
               <b>{it.title[lang]}</b>
-              <span className="dk-np-muted"> · {S.fSrc[it.source.kind]}</span>
+              <span className="dk-np-muted">
+                {' '}
+                · {S.fSrc[it.source.kind]} · {dayText(it.createdAt, lang, day)}
+              </span>
             </span>
             <span role="cell" data-label={S.fOpd}>
               {name(it.opdId)}
@@ -449,6 +532,8 @@ function Reminder({ item, onClose, name, asOpd }: { item: ActionItem; onClose: (
   const to = asOpd ? S.wStaff(name) : picLabel(item.pic, lang, item.opdId)
   const from = asOpd ? S.wFromOpd(name) : S.wFromSetda
   const done = ai.last?.status === 'done' || ai.last?.status === 'error' || ai.last?.status === 'stopped'
+  /* Send pressed while the AI is still typing: finish the draft at once (kit flush), then send it */
+  const [sendWhenDone, setSendWhenDone] = useState(false)
 
   /* the AI draft starts after the modal's first paint, so opening it answers at once (INP) */
   useEffect(() => {
@@ -474,13 +559,29 @@ function Reminder({ item, onClose, name, asOpd }: { item: ActionItem; onClose: (
     if (done && !text) setText(out?.message ?? ai.last?.content ?? '')
   }, [done, out, ai.last, text])
 
+  useEffect(() => {
+    if (sendWhenDone && done && text.trim()) {
+      setSendWhenDone(false)
+      send()
+    }
+  }) // eslint-disable-line react-hooks/exhaustive-deps
   const send = () => {
+    if (!done) {
+      setSendWhenDone(true)
+      ai.flush()
+      return
+    }
     const msg = text.trim()
     if (!msg) return
-    emit('actionItem.reminded', { actionItemId: item.id, channel: 'wa', text: { id: msg, en: msg } }, 'naskah-pintar')
     setSentAt(now)
     setEditing(false)
-    shell.toast({ title: S.wToast(to), tone: 'accent', icon: 'send' })
+    // the bubble's "sent" tick answers at once; the world write (the board re-renders) and the toast follow the paint
+    requestAnimationFrame(() =>
+      window.setTimeout(() => {
+        emit('actionItem.reminded', { actionItemId: item.id, channel: 'wa', text: { id: msg, en: msg } }, 'naskah-pintar')
+        shell.toast({ title: S.wToast(to), tone: 'accent', icon: 'send' })
+      }, 0),
+    )
   }
 
   const masked = `+62 8${(item.id.length * 7) % 10}${(item.id.charCodeAt(item.id.length - 1) % 9) + 1}-xxxx-${String(1000 + ((item.id.charCodeAt(0) * 37) % 9000)).slice(0, 4)}`
@@ -496,8 +597,9 @@ function Reminder({ item, onClose, name, asOpd }: { item: ActionItem; onClose: (
           <Button variant="quiet" onClick={onClose}>
             {S.wClose}
           </Button>
-          {done && sentAt === null && text.trim() && (
-            <Button variant="primary" icon="send" onClick={send} data-np="send-reminder">
+          {/* the send button is there from the first paint; it is enabled once the AI draft is complete */}
+          {sentAt === null && (
+            <Button variant="primary" icon="send" onClick={send} disabled={done && !text.trim()} busy={sendWhenDone} data-np="send-reminder">
               {S.wSend}
             </Button>
           )}

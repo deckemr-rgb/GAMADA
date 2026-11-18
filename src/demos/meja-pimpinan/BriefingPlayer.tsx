@@ -47,6 +47,10 @@ export default function BriefingPlayer({ items: live, at, leader, onActive, onLi
   cb.current = { onActive, onListened, onEnd }
 
   useEffect(() => {
+    // a destroyed-and-reused playback (React StrictMode re-runs effects in dev; usePlayback's cleanup destroys it)
+    // still says "playing" with its ticker stopped: play() would then return early and the silent text mode would
+    // sit on the opening forever. Pause first so play() really restarts the timeline.
+    if (pb.getState().playing) pb.pause()
     pb.toSegment(0)
     pb.play()
   }, [pb])

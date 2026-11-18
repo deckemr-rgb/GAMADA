@@ -10,7 +10,7 @@ import { useClock, world } from '../../demo-kit/world'
 import { useNaskahAi } from './ai'
 import { buildCtx } from './ctx'
 import { lettersCtx } from './inbox'
-import { SCRIPT, dueText } from './model'
+import { SCRIPT, dueText, existingAction, opdName, picLabel } from './model'
 import type { NpNav } from './index'
 import { useStr } from './strings'
 
@@ -45,8 +45,15 @@ export default function Assistant({ open, onClose, nav }: { open: boolean; onClo
         'ask',
         {
           // the inbox as the screen shows it (sample letters' number / sender / subject)
-          letters: lettersCtx(s),
-          ...(meeting ? { minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: a.pic, due: dueText(a.dueAt, lang, s.day) })) } } : {}),
+          letters: lettersCtx(s, (id) => opdName(s, id, lang)),
+          ...(meeting
+            ? {
+                minutes: {
+                  decisions: SCRIPT.decisions.map((d) => d.text),
+                  actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: picLabel(a.pic, lang, a.opdId), due: dueText(a.dueAt, lang, s.day), status: existingAction(s, meeting.id, a.text)?.status ?? 'baru' })),
+                },
+              }
+            : {}),
         },
         nav.myOpd,
       ),
@@ -78,8 +85,8 @@ export default function Assistant({ open, onClose, nav }: { open: boolean; onClo
               {m.translation && <p className="dk-np-msg-tr">{m.translation}</p>}
               {m.role === 'assistant' && !!m.toolCalls?.length && (
                 <p className="dk-np-steps" aria-label={S.aSteps}>
-                  {m.toolCalls.map((t) => (
-                    <code key={t.id}>{t.name}</code>
+                  {[...new Set(m.toolCalls.map((t) => S.aTools[t.name] ?? S.aToolOther))].map((label) => (
+                    <span key={label}>{label}</span>
                   ))}
                 </p>
               )}

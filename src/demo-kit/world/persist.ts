@@ -63,15 +63,18 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let firstAt = 0
 let pending: (() => Persisted | null) | null = null
 
-/** debounce a save; `snapshot` is read when the timer fires (latest state wins) */
-export function schedulePersist(snapshot: () => Persisted | null): void {
+/** a visitor's own action is saved this soon (a cross-product hop right after it must not lose it) */
+export const PERSIST_USER_MS = 120
+
+/** debounce a save; `snapshot` is read when the timer fires (latest state wins). `ms` overrides the debounce. */
+export function schedulePersist(snapshot: () => Persisted | null, ms: number = WORLD.persistDebounceMs): void {
   pending = snapshot
   const now = Date.now()
   if (timer) {
     if (now - firstAt >= PERSIST_MAX_WAIT_MS) return // let the pending timer fire
     clearTimeout(timer)
   } else firstAt = now
-  timer = setTimeout(flushPersist, WORLD.persistDebounceMs)
+  timer = setTimeout(flushPersist, ms)
 }
 
 /** save immediately (pagehide, reset) */

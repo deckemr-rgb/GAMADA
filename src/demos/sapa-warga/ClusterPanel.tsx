@@ -3,7 +3,9 @@
  * clusters the world formed (≥ 5 similar reports within 1 km → Meja Pimpinan, Siaga Wilayah, Radar Isu), the cluster
  * still forming with its progress, and a control to simulate one more neighbour report.
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { preloadDemo } from '../registry'
+import Sketch, { type SketchPoint } from './Sketch'
 import { useNavigate } from 'react-router'
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
@@ -68,11 +70,20 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
   const heat = useMemo(() => flood.map((c) => ({ coord: c.coord, weight: c.urgency === 'tinggi' ? 1.4 : 1 })), [flood])
   const markers = useMemo(
     () => [
-      ...clusters.map((c) => ({ id: c.id, coord: c.center, icon: 'alert' as const, label: `${lang === 'id' ? 'Klaster' : 'Cluster'} · ${c.complaintIds.length}`, detail: place(c.kecamatanId, c.desaId), tone: 'danger' as const })),
+      ...clusters.map((c) => ({ id: c.id, coord: c.center, icon: 'alert' as const, label: fill(t.clusterTag, { place: desaName(s, c.kecamatanId, c.desaId), n: c.complaintIds.length }), detail: place(c.kecamatanId, c.desaId), tone: 'danger' as const })),
       ...flood.filter((c) => !c.clusterId).map((c) => ({ id: c.id, coord: c.coord, icon: 'water' as const, label: c.code, detail: c.summary[lang], tone: 'warn' as const })),
     ],
     [clusters, flood, lang], // eslint-disable-line react-hooks/exhaustive-deps
   )
+  /* the cluster is drawn at once as a static sketch; the live map replaces it when it is ready */
+  const [mapReady, setMapReady] = useState(false)
+  const onMapReady = useCallback(() => setMapReady(true), [])
+  const sketch = useMemo<SketchPoint[]>(
+    () => [...flood.map((c) => ({ coord: c.coord, kind: 'dot' as const })), ...clusters.map((c) => ({ coord: c.center, kind: 'cluster' as const }))],
+    [flood, clusters],
+  )
+  const focusCl = cur ?? clusters[0] ?? null
+  const tag = focusCl ? fill(t.clusterTag, { place: `${desaName(s, focusCl.kecamatanId, focusCl.desaId)}, Kec. ${kecName(s, focusCl.kecamatanId)}`, n: focusCl.complaintIds.length }) : null
   const go = (slug: ProductSlug, id: string) => {
     const href = demoHref(slug, session, focusFor(world.get(), slug, id))
     const dev = new URLSearchParams(window.location.search).get('controls') === 'all'
@@ -90,10 +101,17 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
     <div className="dk-sw-cluster">
       <div className="dk-sw-cl-map">
         <h3 className="dk-sw-h3">{t.clusterHead}</h3>
-        <div ref={mapBox} className="dk-sw-minimap is-big" data-sw-map="">
-          <Suspense fallback={<p className="dk-sw-muted">{t.mapLoading}</p>}>
-            <MiniMap regionId={regionId} center={center} zoom={11.8} markers={markers} heat={heat} label={t.clusterMap} onMarker={openFromMap} />
+        <div ref={mapBox} className="dk-sw-minimap is-big" data-sw-map="" data-ready={mapReady ? '' : undefined}>
+          <Suspense fallback={null}>
+            <MiniMap regionId={regionId} center={center} zoom={11.8} markers={markers} heat={heat} label={t.clusterMap} onMarker={openFromMap} onReady={onMapReady} />
           </Suspense>
+          <Sketch center={center} zoom={11.8} points={sketch} caption={t.mapPreview} hidden={mapReady} />
+          {tag && (
+            <span className="dk-sw-maptag">
+              <Icon name="alert" size={13} />
+              {tag}
+            </span>
+          )}
         </div>
         <p className="dk-sw-fine">
           {t.clusterMap} · {t.simData}
@@ -133,7 +151,7 @@ export default function ClusterPanel({ focus, openTicket }: { focus: string | nu
                     <p className="dk-sw-label">{t.sentTo}</p>
                     <div className="dk-sw-links">
                       {TARGETS.map((p) => (
-                        <button key={p} type="button" className="dk-sw-chip" onClick={() => go(p, c.id)}>
+                        <button key={p} type="button" className="dk-sw-chip" onClick={() => go(p, c.id)} onPointerEnter={() => preloadDemo(p)} onFocus={() => preloadDemo(p)}>
                           {fill(t.openIn, { product: PRODUCT_BY_SLUG[p].name })}
                           <Icon name="arrowUpRight" size={13} />
                         </button>

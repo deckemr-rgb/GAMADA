@@ -6,10 +6,11 @@
  * and the digital disposition stamp thumps onto the page. Memos from the Regional Head's instructions
  * (instruction.issued → world reaction) appear here as "Nota dinas" with their stamp.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { gsap } from 'gsap'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
-import { Badge, Button, Chip, EmptyState, Icon, Inbox, Segmented, StatusChip, useElementWidth, type InboxItem } from '../../demo-kit/ui'
+import { Badge, Button, Chip, EmptyState, Icon, Inbox, Segmented, StatusChip, motionMode, useElementWidth, type InboxItem } from '../../demo-kit/ui'
 import { DAY_MIN, emit, setSession, useClock, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { letterInbox } from '../../demo-kit/world/satu-daerah'
 import type { SampleDoc } from '../../demo-kit/docs/types'
@@ -22,9 +23,11 @@ import { PaperFrame } from '../../demo-kit/frames'
 import { structuredOf, useNaskahAi, type ClassOut, type DispoOut } from './ai'
 import { buildCtx } from './ctx'
 import { metaOf, rowsOf, sampleMap, type Row } from './inbox'
-import { clockText, dueText, opdName, resolveOpd, signer, NP, type NpRole } from './model'
+import { LETTER_LINKS, SCRIPT, clockText, dueText, existingAction, opdName, picFor, picLabel, resolveOpd, sampleMeeting, signer, NP, type NpRole } from './model'
 import type { NpNav } from './index'
-import { byText, opdLabel, useStr, type NpDict } from './strings'
+import { STR, byText, opdLabel, useStr, type NpDict } from './strings'
+import { getTrail, setTrail, type Trail } from './trail'
+import { approveNow, submitForApproval } from './approvals'
 import './letters.css'
 
 type Lang = 'id' | 'en'
@@ -41,9 +44,30 @@ function dueMinutes(day: string, iso: string | null, now: number): number {
   return at > now ? at : now + NP.letterDueDays * DAY_MIN
 }
 
+/** ISO date of the day a world minute falls on (letters received / dispositioned on earlier days) */
+function isoOf(day: string, at: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + Math.floor(at / DAY_MIN) * 86_400_000).toISOString().slice(0, 10)
+}
+
+/** sample notes that read oddly as a disposition note (by letter number) */
+const NOTE_FIX: Readonly<Record<string, { id: string; en: string }>> = {
+  '140/087/412.416.12/2026': { id: 'Prioritas: tanggul yang belum tertangani hari ini berisiko membanjiri permukiman.', en: 'Priority: if the embankment is not handled today, homes may flood.' },
+}
+const noteOf = (meta: { number: string; disposition: { note: { id: string; en: string } } }) => NOTE_FIX[meta.number] ?? meta.disposition.note
+
+/** the meeting follow-up a letter asks for again (LETTER_LINKS), once the meeting has created it: "id|no|opd|pic|due" */
+function linkOf(s: WorldState, number: string | undefined): string | null {
+  const key = number ? LETTER_LINKS[number] : undefined
+  const i = key ? SCRIPT.actions.findIndex((a) => a.key === key) : -1
+  const sa = SCRIPT.actions[i]
+  const m = sampleMeeting(s)
+  const it = sa && m ? existingAction(s, m.id, sa.text) : undefined
+  return it ? `${it.id}|${i + 1}|${it.opdId}|${it.pic}|${it.dueAt}` : null
+}
+
 /* ------------------------------------------------------------------ tab */
 
-export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; focusLetter: string | null; focusKey: number }) {
+export default function Letters({ nav, focusLetter, focusKey, autoRead = false }: { nav: NpNav; focusLetter: string | null; focusKey: number; autoRead?: boolean }) {
   const S = useStr()
   const { lang } = useI18n()
   const letters = useWorld(letterInbox)
@@ -61,7 +85,23 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
   /** letters opened in this visit stay in "Perlu disposisi" (with their stamp) until the filter changes */
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set())
   const list = useMemo(() => {
-    if (opdRole && nav.myOpd) return rows.filter((r) => r.letter.disposition?.to.includes(nav.myOpd!)).sort((a, b) => (b.letter.disposition?.at ?? 0) - (a.letter.disposition?.at ?? 0))
+    if (opdRole && nav.myOpd) {
+      const me = nav.myOpd
+      const s = world.get()
+      /* dispositions to this agency (an older one whose subject clearly belongs to another agency is left out), then
+         the letters waiting for the Secretariat that the AI would route here */
+      const mine = rows
+        .filter((r) => {
+          const d = r.letter.disposition
+          if (!d?.to.includes(me)) return false
+          if (r.letter.instructionId || r.doc) return true
+          const hit = resolveOpd(s, r.subject.id)
+          return !hit || d.to.includes(hit)
+        })
+        .sort((a, b) => (b.letter.disposition?.at ?? 0) - (a.letter.disposition?.at ?? 0))
+      const soon = rows.filter((r) => r.letter.status === 'masuk' && !!metaOf(r.doc)?.disposition.to.includes(me))
+      return [...soon, ...mine]
+    }
     // a letter approved here keeps its place (newest first) instead of dropping to the end of the list
     if (filter === 'pending') return rows.filter((r) => r.letter.status === 'masuk' || kept.has(r.letter.id)).sort((a, b) => b.letter.receivedAt - a.letter.receivedAt)
     // "Semua": a memo that just arrived from the Regional Head leads the list
@@ -179,7 +219,7 @@ export default function Letters({ nav, focusLetter, focusKey }: { nav: NpNav; fo
                 {S.lBack}
               </Button>
             )}
-            <LetterDetail key={selected.letter.id} row={selected} nav={nav} compact={compact} onApproved={keep} />
+            <LetterDetail key={selected.letter.id} row={selected} nav={nav} compact={compact} onApproved={keep} autoRead={autoRead && selected.letter.id === focusLetter ? focusKey : 0} />
           </div>
         )}
       </div>
@@ -204,7 +244,8 @@ interface Draft {
   pristine: boolean
 }
 
-function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav; compact: boolean; onApproved: (id: string) => void }) {
+
+function LetterDetail({ row, nav, compact, onApproved, autoRead }: { row: Row; nav: NpNav; compact: boolean; onApproved: (id: string) => void; autoRead: number }) {
   const S = useStr()
   const { lang } = useI18n()
   const shell = useShell()
@@ -219,7 +260,21 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
   const [n, setN] = useState(0)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [editing, setEditing] = useState(false)
-  const [made, setMade] = useState<string[]>([])
+  /** what happened to this letter in this session (history card); kept in trail.ts, so reopening shows the same */
+  const [trail, setTrailState] = useState<Trail>(() => getTrail(day, letter.id))
+  const updTrail = (f: (t: Trail) => Trail) => {
+    const next = f(getTrail(day, letter.id))
+    setTrail(day, letter.id, next)
+    setTrailState(next)
+  }
+  const made = trail.madeIds
+  const root = useRef<HTMLDivElement>(null)
+  /** arrival from the Kepala Daerah desk: the approve button is brought into view once (not on every render) */
+  const landed = useRef(false)
+  /** link the disposition to the meeting follow-up it repeats (default) instead of creating a second task */
+  const [link, setLink] = useState(true)
+  const linked = useWorld((s) => linkOf(s, meta?.number))
+  const [lId, lNo, lOpd, lPic, lDue] = linked ? linked.split('|') : []
   const ai = useNaskahAi()
   const boxes = useMemo(() => (doc ? boxesOf(doc) : []), [doc])
   const total = boxes.length
@@ -238,11 +293,53 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
     const s = world.get()
     const ids = (disp?.to ?? []).map((t) => resolveOpd(s, t)).filter((x): x is string => !!x)
     const to = [...new Set(ids.length ? ids : meta.disposition.to)]
-    setDraft({ to, instruction: disp?.instruction ?? meta.disposition.instruction[lang], note: disp?.note ?? meta.disposition.note[lang], pristine: true })
+    const fixed = NOTE_FIX[meta.number]
+    setDraft({ to, instruction: disp?.instruction ?? meta.disposition.instruction[lang], note: fixed ? fixed[lang] : (disp?.note ?? meta.disposition.note[lang]), pristine: true })
   }, [ready, draft, disp, meta, lang])
+
+  /* the scan is read: the summary does not keep the reader waiting for the rest of the stream */
+  const aiBusy = ai.busy
+  const flush = ai.flush
+  useEffect(() => {
+    if (run > 0 && total > 0 && n >= total && aiBusy) flush()
+  }, [run, n, total, aiBusy, flush])
+
+  /* arrival from the Kepala Daerah desk: the OCR boxes come in quicker (the Regent wants the decision, not the show) */
+  const fast = autoRead > 0
+  useEffect(() => {
+    if (!fast || run === 0 || total === 0) return
+    if (motionMode() === 'static') {
+      setN(total)
+      return
+    }
+    setN(0)
+    const tl = gsap.timeline()
+    for (let i = 1; i <= total; i++) tl.call(() => setN(i), [], i * 0.08)
+    return () => void tl.kill()
+  }, [fast, run, total])
+
+  /* arrival from the Kepala Daerah desk ("Baca & setujui"): bring the letter into view at once, then the approve
+     button (focused) as soon as the draft is ready — on a phone it would otherwise sit far below the fold */
+  useEffect(() => {
+    if (!autoRead) return
+    const smooth = motionMode() === 'full' ? 'smooth' : 'auto'
+    requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start', behavior: smooth }))
+  }, [autoRead])
+  useEffect(() => {
+    if (!autoRead || !ready || !draft || landed.current) return
+    landed.current = true
+    requestAnimationFrame(() => {
+      const btn = root.current?.querySelector<HTMLElement>('[data-np="approve"]')
+      if (!btn) return
+      btn.scrollIntoView({ block: 'center', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      btn.focus({ preventScroll: true })
+    })
+  }, [autoRead, ready, draft])
 
   const read = () => {
     if (!doc || !meta) return
+    const conf = boxes.map((b) => Math.round((b.confidence ?? 0.9) * 100))
+    updTrail((t) => ({ ...t, readAt: now, conf: conf.length ? [Math.min(...conf), Math.max(...conf)] : null }))
     if (doc.scan) setDeskew(true)
     setDraft(null)
     setEditing(false)
@@ -261,52 +358,97 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
           sifat: meta.sifat,
           due: meta.due,
           summary: meta.summary,
-          suggested: { to: meta.disposition.to.map((o) => opdName(s, o, lang)), instruction: meta.disposition.instruction, note: meta.disposition.note },
+          suggested: { to: meta.disposition.to.map((o) => opdName(s, o, lang)), instruction: meta.disposition.instruction, note: noteOf(meta) },
         },
       }),
     )
   }
 
-  const approve = () => {
-    if (!draft || !meta || !draft.to.length) return
+  /* Sekretariat drafts and submits; the Regional Secretary approves (simulated e-signature a moment later). The
+     Regent approves directly. Maker and checker are never the same role. */
+  const commit = (d: Draft, by: string) => {
+    if (!meta || !d.to.length) return
     const s = world.get()
-    const by = signer(nav.role)
-    const note = draft.pristine
-      ? { id: `${meta.disposition.instruction.id} ${meta.disposition.note.id}`, en: `${meta.disposition.instruction.en} ${meta.disposition.note.en}` }
-      : { id: `${draft.instruction} ${draft.note}`.trim(), en: `${draft.instruction} ${draft.note}`.trim() }
+    const link0 = link ? linkOf(s, meta.number) : null
+    const [linkedId, no, linkOpd] = link0 ? link0.split('|') : []
+    const linkNo = linkOpd && d.to.includes(linkOpd) ? Number(no) : null
+    /* a linked agency gets its own line: it continues the meeting follow-up (no second task, no "work with yourself") */
+    const per = linkNo !== null && linkOpd ? { id: ` ${STR.id.lLinkInstr(opdName(s, linkOpd, 'id'), linkNo)}`, en: ` ${STR.en.lLinkInstr(opdName(s, linkOpd, 'en'), linkNo)}` } : { id: '', en: '' }
+    const n0 = noteOf(meta)
+    const note = d.pristine
+      ? { id: `${meta.disposition.instruction.id} ${n0.id}${per.id}`, en: `${meta.disposition.instruction.en} ${n0.en}${per.en}` }
+      : { id: `${d.instruction} ${d.note}${per.id}`.trim(), en: `${d.instruction} ${d.note}${per.en}`.trim() }
     onApproved(letter.id)
-    emit('letter.dispositioned', { letterId: letter.id, subject: meta.subject, number: meta.number, from: meta.from, to: draft.to, note, by }, 'naskah-pintar')
-    const title = draft.pristine ? meta.disposition.instruction : { id: draft.instruction, en: draft.instruction }
-    const due = dueMinutes(s.day, meta.due, now)
+    emit('letter.dispositioned', { letterId: letter.id, subject: meta.subject, number: meta.number, from: meta.from, to: d.to, note, by }, 'naskah-pintar')
+    const title = d.pristine ? meta.disposition.instruction : { id: d.instruction, en: d.instruction }
+    /* "... hari ini" in the instruction: due today 16.00 (the letter's own deadline stays the outer limit) */
+    const today = /hari ini|today/i.test(d.pristine ? meta.disposition.instruction.id : d.instruction)
+    const due = today ? (16 * 60 > now ? 16 * 60 : now + 120) : dueMinutes(s.day, meta.due, now)
     const ids: string[] = []
-    for (const opdId of draft.to) {
+    for (const opdId of d.to) {
+      if (linkNo !== null && opdId === linkOpd) continue
       const opd = s.region.opd.find((o) => o.id === opdId)
-      const e = emit('actionItem.created', { title, opdId, pic: `Kepala ${opd?.short ?? opdId}`, dueAt: due, source: { kind: 'letter', id: letter.id } }, 'naskah-pintar')
+      const e = emit('actionItem.created', { title, opdId, pic: picFor(opd, opdId), dueAt: due, source: { kind: 'letter', id: letter.id } }, 'naskah-pintar')
       if (e.payload.id) ids.push(e.payload.id)
     }
-    setMade(ids)
+    updTrail((t) => ({ ...t, made: ids.length, madeIds: ids, linkedNo: linkNo }))
     setEditing(false)
-    const names = draft.to.map((o) => opdName(s, o, lang)).join(', ')
-    shell.toast({ title: S.lToastTitle, body: S.lToastBody(names), tone: 'accent', icon: 'stamp', action: { label: S.lSeeTasks, onClick: () => nav.go('tindak', { itemId: ids[0], opdIds: draft.to }) } })
+    const names = d.to.map((o) => opdName(s, o, lang)).join(', ')
+    const first = ids[0] ?? (linkNo !== null ? linkedId : undefined)
+    shell.toast({
+      title: S.lToastTitle,
+      body: linkNo !== null ? `${S.lToastBody(names)} ${S.lLinkedDone(linkNo)}` : S.lToastBody(names),
+      tone: 'accent',
+      icon: 'stamp',
+      action: { label: S.lSeeTasks, onClick: () => nav.go('tindak', { ...(first ? { itemId: first } : {}), opdIds: d.to }) },
+    })
   }
+  const approve = () => {
+    if (!draft || !meta || !draft.to.length || trail.submittedAt !== null) return
+    updTrail((t) => ({ ...t, submittedAt: now, edited: !draft.pristine }))
+    setEditing(false)
+    if (nav.role === 'kepala-daerah') return commit(draft, signer(nav.role))
+    const d = draft
+    /* waits for the Regional Secretary: "Setujui sebagai Sekda" below, or the Sekda signs once the clock has moved on
+       a few minutes (approvals.ts; it still lands if the user has opened another letter or tab meanwhile) */
+    submitForApproval(letter.id, now, () => commit(d, signer(nav.role)))
+  }
+
+  /* arrival from the Kepala Daerah desk: start reading at once */
+  useEffect(() => {
+    if (autoRead && canAct && run === 0) read()
+  }, [autoRead]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const disposition = letter.disposition
   const stampTo = (disposition?.to ?? draft?.to ?? []).map((o) => opdLabel(opds.find((x) => x.id === o), o, lang)).join(', ')
   const stampLines = disposition
-    ? [`${S.lTo}: ${stampTo}`, disposition.note[lang], `${longDate(day, lang)} · ${byText(disposition.by, lang)}`]
+    ? [`${S.lTo}: ${stampTo}`, disposition.note[lang], `${longDate(isoOf(day, disposition.at), lang)} · ${byText(disposition.by, lang)}`]
     : []
+  const trailEl = disposition ? (
+    <ol className="dk-np-trail" aria-label={S.lTrail}>
+      <li>{S.lTrailReceived(dueText(letter.receivedAt, lang, day))}</li>
+      {trail.readAt !== null && trail.conf && <li>{S.lTrailRead(clockText(trail.readAt, lang), trail.conf[0], trail.conf[1])}</li>}
+      {trail.viaInstrAt !== null && <li>{S.lTrailInstr(clockText(trail.viaInstrAt, lang))}</li>}
+      {trail.submittedAt !== null && nav.role !== 'kepala-daerah' && <li>{S.lTrailDraft(clockText(trail.submittedAt, lang), trail.edited)}</li>}
+      <li>{trail.submittedAt !== null && nav.role !== 'kepala-daerah' ? S.lTrailApproved(byText(disposition.by, lang), clockText(disposition.at, lang)) : S.lTrailDone(byText(disposition.by, lang), dueText(disposition.at, lang, day))}</li>
+      {trail.made > 0 && <li>{S.lTrailTasks(trail.made)}</li>}
+      {trail.linkedNo !== null && <li>{S.lTrailLinked(trail.linkedNo)}</li>}
+    </ol>
+  ) : null
   const height = compact ? 'clamp(300px, 56vh, 480px)' : 'clamp(420px, 62vh, 640px)'
 
   if (!doc) return <ArchiveLetter row={row} S={S} lang={lang} day={day} opds={opds} nav={nav} />
 
+  /* phones, Kepala Daerah: the AI summary and the draft first, the scan below (the decision is the point) */
+  const sideFirst = compact && nav.role === 'kepala-daerah' && canAct
   return (
-    <div className="dk-np-lpane">
+    <div ref={root} className={`dk-np-lpane${sideFirst ? ' is-side-first' : ''}`}>
       <DocViewer
         doc={doc}
         boxes={boxes}
-        revealBoxes={run > 0 && !disposition}
+        revealBoxes={fast && run > 0 && !disposition ? n : run > 0 && !disposition}
         replay={run}
-        onReveal={(c) => setN(c)}
+        onReveal={fast ? undefined : (c) => setN(c)}
         deskew={deskew || letter.status === 'didisposisi'}
         height={height}
         label={`${S.cls[row.kind] ?? ''} ${row.number}`}
@@ -338,9 +480,21 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
         </dl>
 
         {disposition ? (
-          <DispositionDone S={S} lang={lang} by={byText(disposition.by, lang)} at={disposition.at} to={stampTo} note={disposition.note[lang]} made={made.length} onTasks={() => nav.go('tindak', made[0] ? { itemId: made[0], opdIds: disposition.to } : { opdId: disposition.to[0], opdIds: disposition.to })} opdNote={nav.role === 'kepala-opd'} />
+          <DispositionDone
+            S={S}
+            lang={lang}
+            by={byText(disposition.by, lang)}
+            at={disposition.at}
+            to={stampTo}
+            note={disposition.note[lang]}
+            made={made.length}
+            linkedNo={trail.linkedNo}
+            trail={trailEl}
+            onTasks={() => nav.go('tindak', made[0] ? { itemId: made[0], opdIds: disposition.to } : lId && trail.linkedNo !== null ? { itemId: lId, opdIds: disposition.to } : { opdId: disposition.to[0], opdIds: disposition.to })}
+            opdNote={nav.role === 'kepala-opd'}
+          />
         ) : !canAct ? (
-          <p className="dk-np-muted">{S.lOpdView}</p>
+          <p className="dk-np-muted">{nav.role === 'kepala-opd' && letter.status === 'masuk' ? `${S.lForUnit} · ${S.lAwait}` : S.lOpdView}</p>
         ) : run === 0 ? (
           <div className="dk-np-lprompt">
             <p>{S.lPrompt}</p>
@@ -387,8 +541,33 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
                 </div>
               )}
             </section>
-            {ready && draft && (
-              <DraftCard S={S} lang={lang} draft={draft} setDraft={setDraft} editing={editing} setEditing={setEditing} opds={opds} onApprove={approve} role={nav.role} />
+            {ready && draft && trail.submittedAt === null && (
+              <DraftCard
+                S={S}
+                lang={lang}
+                draft={draft}
+                setDraft={setDraft}
+                editing={editing}
+                setEditing={setEditing}
+                opds={opds}
+                onApprove={approve}
+                role={nav.role}
+                linkNote={lNo && lOpd && draft.to.includes(lOpd) ? S.lLinked(Number(lNo), picLabel(lPic ?? '', lang, lOpd), dueText(Number(lDue), lang, day)) : null}
+                link={link}
+                setLink={setLink}
+              />
+            )}
+            {trail.submittedAt !== null && !disposition && (
+              <div className="dk-np-lcard dk-np-waitcard">
+                <p className="dk-np-progress dk-np-wait" role="status">
+                  <Icon name="send" size={14} />
+                  <span>{S.lWaitSekda}</span>
+                </p>
+                <p className="dk-np-muted">{S.lWaitHow}</p>
+                <Button variant="primary" icon="stamp" onClick={() => approveNow(letter.id)} data-np="sekda-approve">
+                  {S.lAsSekda}
+                </Button>
+              </div>
             )}
           </>
         )}
@@ -397,7 +576,7 @@ function LetterDetail({ row, nav, compact, onApproved }: { row: Row; nav: NpNav;
   )
 }
 
-function DispositionDone({ S, lang, by, at, to, note, made, onTasks, opdNote }: { S: NpDict; lang: Lang; by: string; at: number; to: string; note: string; made: number; onTasks: () => void; opdNote: boolean }) {
+function DispositionDone({ S, lang, by, at, to, note, made, onTasks, opdNote, linkedNo = null, trail = null }: { S: NpDict; lang: Lang; by: string; at: number; to: string; note: string; made: number; onTasks: () => void; opdNote: boolean; linkedNo?: number | null; trail?: ReactNode }) {
   const day = useWorld((s) => s.day)
   /* today: the time only; an earlier day: its date too */
   const when = at >= 0 && at < DAY_MIN ? clockText(at, lang) : dueText(at, lang, day)
@@ -418,7 +597,14 @@ function DispositionDone({ S, lang, by, at, to, note, made, onTasks, opdNote }: 
         </div>
       </dl>
       {made > 0 && <p className="dk-np-muted">{S.lTasksMade(made)}</p>}
+      {linkedNo !== null && <p className="dk-np-muted">{S.lLinkedDone(linkedNo)}</p>}
       {opdNote && <p className="dk-np-muted">{S.lOpdView}</p>}
+      {trail && (
+        <div className="dk-np-trailbox">
+          <h5>{S.lTrail}</h5>
+          {trail}
+        </div>
+      )}
       <Button size="sm" variant="secondary" icon="kanban" onClick={onTasks} data-np="see-tasks">
         {S.lSeeTasks}
       </Button>
@@ -427,7 +613,7 @@ function DispositionDone({ S, lang, by, at, to, note, made, onTasks, opdNote }: 
 }
 
 function DraftCard({
-  S, lang, draft, setDraft, editing, setEditing, opds, onApprove, role,
+  S, lang, draft, setDraft, editing, setEditing, opds, onApprove, role, linkNote, link, setLink,
 }: {
   S: NpDict
   lang: Lang
@@ -438,6 +624,10 @@ function DraftCard({
   opds: WorldState['region']['opd']
   onApprove: () => void
   role: NpRole
+  /** "already handled in the meeting" (null when the letter repeats no meeting follow-up) */
+  linkNote: string | null
+  link: boolean
+  setLink: (b: boolean) => void
 }) {
   const name = (id: string) => opdLabel(opds.find((o) => o.id === id), id, lang)
   const by = role === 'kepala-daerah' ? S.by['kepala-daerah'] : S.by.sekretariat
@@ -445,6 +635,18 @@ function DraftCard({
   return (
     <section className="dk-np-lcard dk-np-draft" aria-label={S.lDraft}>
       <h4>{S.lDraft}</h4>
+      {linkNote && (
+        <div className="dk-np-linknote" role="note">
+          <p>
+            <Icon name="link" size={14} />
+            {linkNote}
+          </p>
+          <label className="dk-np-check">
+            <input type="checkbox" checked={link} onChange={(e) => setLink(e.target.checked)} data-np="link-existing" />
+            <span>{S.lLinkOpt}</span>
+          </label>
+        </div>
+      )}
       {editing ? (
         <div className="dk-np-edit">
           <div className="dk-np-field is-block">
@@ -487,7 +689,7 @@ function DraftCard({
           <div className="dk-np-btns">
             {draft.to.length > 0 && (
               <Button variant="primary" icon="stamp" onClick={onApprove} data-np="save-approve">
-                {S.lSaveApprove}
+                {role === 'kepala-daerah' ? S.lSaveApprove : S.lSubmit}
               </Button>
             )}
             <Button variant="quiet" onClick={() => setEditing(false)}>
@@ -518,8 +720,8 @@ function DraftCard({
             </div>
           </dl>
           <div className="dk-np-btns">
-            <Button variant="primary" icon="stamp" onClick={onApprove} data-np="approve">
-              {role === 'kepala-daerah' ? S.lApproveAs(by) : S.lApprove}
+            <Button variant="primary" icon={role === 'kepala-daerah' ? 'stamp' : 'send'} onClick={onApprove} data-np="approve">
+              {role === 'kepala-daerah' ? S.lApproveAs(by) : S.lSubmit}
             </Button>
             <Button variant="secondary" icon="edit" onClick={() => setEditing(true)} data-np="edit">
               {S.lEdit}
@@ -570,10 +772,10 @@ function ArchiveLetter({ row, S, lang, day, opds, nav }: { row: Row; S: NpDict; 
             </>
           )}
           <p className="dk-np-adate">
-            {longDate(day, lang)} · {dueText(letter.receivedAt, lang, day)}
+            {S.lLetterDate}: {longDate(isoOf(day, letter.receivedAt), lang)} · {S.lReceived} {dueText(letter.receivedAt, lang, day)}
           </p>
           <p className="dk-np-afoot">{S.oFoot}</p>
-          {d && <DispositionStamp show heading={S.lStamp} lines={[`${S.lTo}: ${to}`, `${longDate(day, lang)} · ${byText(d.by, lang)}`]} x={70} y={90} width={46} />}
+          {d && <DispositionStamp show heading={S.lStamp} lines={[`${S.lTo}: ${to}`, `${longDate(isoOf(day, d.at), lang)} · ${byText(d.by, lang)}`]} x={70} y={90} width={46} />}
         </div>
       </PaperFrame>
       <aside className="dk-np-lside">

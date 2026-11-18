@@ -6,11 +6,12 @@
  * to a related product (products.ts `related`).
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
+import { PRODUCTS, PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
+import { DEMO_READY } from '../../demos/registry'
 import { useI18n } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
 import AppLink from '../../components/AppLink'
-import { Button, Confetti, Icon, IconButton, enterPanel } from '../ui'
+import { Button, Confetti, Icon, IconButton, enterPanel, overlayOpen } from '../ui'
 import { useSession } from '../world'
 import { useDemoStrings } from '../i18n'
 import { resetMissions, useMissionProgress, useMissionTracker, type Mission } from './missions'
@@ -76,6 +77,21 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
     target?.focus()
   }, [open, id])
 
+  // phones: the guide is a bottom sheet over the canvas, so Esc closes it wherever focus is (unless a dialog above it
+  // takes the key), and a downward swipe on its header closes it too
+  const closeRef = useRef(close)
+  closeRef.current = close
+  useEffect(() => {
+    if (!open || size !== 'sm') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || overlayOpen()) return
+      closeRef.current()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, size])
+  const swipe = useRef<{ y: number; id: number } | null>(null)
+
   useLayoutEffect(() => {
     if (!open || !panel.current) return
     const tw = enterPanel(panel.current, { x: 16 })
@@ -84,7 +100,13 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
     }
   }, [open])
 
-  const related = PRODUCT_BY_SLUG[product].related.slice(0, 2).map((s) => PRODUCT_BY_SLUG[s])
+  // only products whose sandbox is open to visitors; top up from the same ecosystem when a related one is not built yet
+  const related = useMemo(() => {
+    const own = PRODUCT_BY_SLUG[product]
+    const pick = own.related.filter((s) => s !== product && DEMO_READY[s])
+    for (const p of PRODUCTS) if (pick.length < 2 && p.slug !== product && p.eco === own.eco && DEMO_READY[p.slug] && !pick.includes(p.slug)) pick.push(p.slug)
+    return pick.slice(0, 2).map((s) => PRODUCT_BY_SLUG[s])
+  }, [product])
 
   return (
     <>
@@ -101,7 +123,18 @@ export function GuidePanel({ product, missions: all, open, onClose, id, size }: 
           }
         }}
       >
-        <header className="dk-guide-head">
+        <header
+          className="dk-guide-head"
+          onPointerDown={(e) => {
+            if (size === 'sm' && e.pointerType !== 'mouse') swipe.current = { y: e.clientY, id: e.pointerId }
+          }}
+          onPointerUp={(e) => {
+            const s0 = swipe.current
+            swipe.current = null
+            if (s0 && s0.id === e.pointerId && e.clientY - s0.y > 48) close()
+          }}
+          onPointerCancel={() => (swipe.current = null)}
+        >
           <div>
             <p className="dk-guide-eyebrow">{t.guide}</p>
             <h2 id={`${id ?? 'dk-guide'}-t`} className="dk-guide-title">

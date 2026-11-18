@@ -345,7 +345,7 @@ export const LETTERS: SampleDoc[] = [
     hal: 'Kebutuhan Pompa Air Portabel Tambahan',
     to: ['Bupati Bojonegoro', 'melalui Sekretaris Daerah'],
     body: [
-      'Berdasarkan pemantauan genangan dua hari terakhir, kapasitas pompa yang tersedia (6 unit) belum mencukupi untuk titik genangan di Trucuk, Kalitidu, dan Kanor.',
+      'Berdasarkan pemantauan genangan dua hari terakhir, kapasitas pompa yang tersedia (6 unit) belum mencukupi untuk titik genangan di Trucuk, Kalitidu, dan Bojonegoro.',
       'Kami mengusulkan penambahan 4 unit pompa air portabel kapasitas 50 L/detik melalui pinjam pakai dari balai wilayah sungai, dengan dukungan BBM dari belanja tidak terduga.',
       { table: [['Dibutuhkan', 'paling lambat 18 November 2026', 'tenggat']] },
     ],
@@ -356,7 +356,7 @@ export const LETTERS: SampleDoc[] = [
     subject: { id: 'Kebutuhan pompa air portabel tambahan', en: 'Additional portable water pumps needed' },
     from: 'Kepala Dinas PUPR',
     summary: [
-      { id: 'Enam pompa yang ada tidak cukup untuk genangan di Trucuk, Kalitidu, Kanor.', en: 'The six available pumps cannot cover flooding in Trucuk, Kalitidu and Kanor.' },
+      { id: 'Enam pompa yang ada tidak cukup untuk genangan di Trucuk, Kalitidu, Bojonegoro.', en: 'The six available pumps cannot cover flooding in Trucuk, Kalitidu and Bojonegoro.' },
       { id: 'Usul: pinjam 4 pompa 50 L/detik dari balai wilayah sungai.', en: 'Proposal: borrow 4 pumps (50 L/s) from the river basin office.' },
       { id: 'BBM dari belanja tidak terduga; dibutuhkan paling lambat 18 November.', en: 'Fuel from contingency funds; needed by 18 November.' },
     ],

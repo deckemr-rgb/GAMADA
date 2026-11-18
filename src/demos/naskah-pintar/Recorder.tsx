@@ -7,26 +7,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useShell } from '../../demo-kit/shell'
-import { Badge, Button, Icon, Select } from '../../demo-kit/ui'
-import { DAY_MIN, emit, shallowEqual, useClock, useWorld, world } from '../../demo-kit/world'
+import { Badge, Button, Icon, Select, motionMode } from '../../demo-kit/ui'
+import { emit, shallowEqual, useClock, useWorld, world } from '../../demo-kit/world'
 import { createRecognizer, recognitionSupported, speechLangs, type Recognizer } from '../../demo-kit/media/speech'
 import { structuredOf, useNaskahAi, type MinutesOut } from './ai'
 import { buildCtx } from './ctx'
-import { clockText, dueText, openMeetings, opdName, resolveOpd } from './model'
+import { clockText, openMeetings, opdName, picFor, resolveOpd } from './model'
+import { dueLabel, parseDue } from './due'
 import { useStr } from './strings'
 
-/** "Besok 10.00" / "Today 16.00" / "3 hari lagi" → world minutes */
-export function dueToMinutes(due: string | undefined, now: number): number {
-  const t = (due ?? '').toLowerCase()
-  const hm = /(\d{1,2})[.:](\d{2})/.exec(t)
-  const at = (h: number, m: number) => h * 60 + m
-  const time = hm ? at(Number(hm[1]), Number(hm[2])) : null
-  if (/besok|tomorrow|sesuk/.test(t)) return DAY_MIN + (time ?? 720)
-  if (/lusa|two days/.test(t)) return 2 * DAY_MIN + (time ?? 720)
-  if (/hari ini|today/.test(t)) return Math.max(now + 30, time ?? 960)
-  const d = /(\d+)\s*(hari|days)/.exec(t)
-  if (d) return Number(d[1]) * DAY_MIN + (time ?? 720)
-  return 3 * DAY_MIN + 720
+/** "Besok 10.00" / "Today 16.00" / "Kam, 19 Nov 16.00" / "paling lambat Kamis" → world minutes (due.ts) */
+export function dueToMinutes(due: string | undefined, now: number, day: string): number {
+  return parseDue(due, now, day)
+}
+
+/** the meeting being minuted: the one in progress or the latest that has started, else the next one */
+function defaultTarget(meetings: { id: string; at: number }[], now: number): string {
+  const started = meetings.filter((m) => m.at <= now + 15).sort((a, b) => b.at - a.at)[0]
+  return (started ?? meetings[0])?.id ?? ''
 }
 
 export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => void; sampleMeetingId: string | undefined }) {
@@ -36,7 +34,9 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   const now = useClock().minutes
   const meetings = useWorld((s) => openMeetings(s, sampleMeetingId), shallowEqual)
   const day = useWorld((s) => s.day)
-  const [target, setTarget] = useState<string>(() => meetings[0]?.id ?? '')
+  const [target, setTarget] = useState<string>(() => defaultTarget(meetings, now))
+  /** the user picked a meeting (or "no scheduled meeting"): keep it */
+  const picked = useRef(false)
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -51,11 +51,33 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   const ai = useNaskahAi()
   const out = ai.last?.status === 'done' ? structuredOf<MinutesOut>(ai.last, 'minutes') : null
   const opdNames = useWorld((s) => (out ? out.actionItems.map((a) => opdName(s, resolveOpd(s, a.owner) ?? '', lang)).join('|') : ''))
+  const outRef = useRef<HTMLDivElement>(null)
+  /* the result lands below the fold on a phone: bring it into view once (no motion when reduced) */
+  const doneId = ai.last?.status === 'done' ? ai.last.id : null
+  useEffect(() => {
+    if (!doneId) return
+    const el = outRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    if (r.top < 64 || r.top > window.innerHeight - 120) el.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+  }, [doneId])
+  /* the AI result is text in the language it was asked in: ask again when the language changes */
+  const askedLang = useRef(lang)
 
   useEffect(() => () => rec.current?.abort(), [])
   useEffect(() => {
-    if (!target && meetings[0]) setTarget(meetings[0].id)
-  }, [meetings, target])
+    if (!picked.current && !target && meetings[0]) setTarget(defaultTarget(meetings, now))
+  }, [meetings, target, now])
+  const pick = (v: string) => {
+    picked.current = true
+    setTarget(v)
+  }
+  /* "Isi contoh" is the inflation meeting's transcript: minute it for that meeting when it is on today's list */
+  const fillSample = () => {
+    setText(S.rSampleText)
+    const infl = meetings.find((m) => /inflasi|inflation/i.test(m.title.id))
+    if (infl && !picked.current) setTarget(infl.id)
+  }
 
   const startRec = () => {
     setErr(null)
@@ -84,6 +106,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   }
 
   const extract = () => {
+    askedLang.current = lang
     if (listening) stopRec()
     setSaved(null)
     const s = world.get()
@@ -94,6 +117,11 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
       buildCtx(s, now, lang, 'minutes', { meeting: { title: m ? m.title[lang] : '', transcript: text, sample: false } }),
     )
   }
+
+  useEffect(() => {
+    if (askedLang.current === lang || !ai.last || ai.busy || text.trim().length <= 12) return
+    extract()
+  }, [lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => {
     if (!out || already) return
@@ -111,7 +139,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
       const opd = s.region.opd.find((o) => o.id === opdId)
       emit(
         'actionItem.created',
-        { title: { id: a.task, en: a.task }, opdId, pic: opd ? `Kepala ${opd.short}` : a.owner, dueAt: dueToMinutes(a.due, now), source: target ? { kind: 'meeting', id: target } : { kind: 'manual', id: null } },
+        { title: { id: a.task, en: a.task }, opdId, pic: opd ? picFor(opd, opdId) : a.owner, dueAt: dueToMinutes(a.due, now, s.day), source: target ? { kind: 'meeting', id: target } : { kind: 'manual', id: null } },
         'naskah-pintar',
       )
       n++
@@ -142,7 +170,11 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
         {meetings.length > 0 && (
           <label className="dk-np-field">
             <span>{S.rFor}</span>
-            <Select value={target} onChange={(e) => setTarget(e.target.value)} options={meetings.map((m) => ({ value: m.id, label: `${clockText(m.at, lang)} · ${m.title[lang]}` }))} />
+            <Select
+              value={target}
+              onChange={(e) => pick(e.target.value)}
+              options={[...meetings.map((m) => ({ value: m.id, label: `${clockText(m.at, lang)} · ${m.title[lang]}${m.at > now ? ` (${S.rLater})` : ''}` })), { value: '', label: S.rNoMeeting }]}
+            />
           </label>
         )}
         {supported &&
@@ -155,7 +187,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
               {S.rStart}
             </Button>
           ))}
-        <Button variant="quiet" icon="doc" onClick={() => setText(S.rSampleText)} data-np="rec-sample">
+        <Button variant="quiet" icon="doc" onClick={fillSample} data-np="rec-sample">
           {S.rSample}
         </Button>
       </div>
@@ -180,7 +212,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
         </Button>
       )}
       {ai.last && (
-        <div className="dk-np-recout" aria-live="polite">
+        <div ref={outRef} className="dk-np-recout" aria-live="polite">
           <p className="dk-np-summary">{ai.last.content}</p>
           {out && (
             <>
@@ -200,7 +232,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
                     <li key={`${a.task}-${i}`}>
                       <b>{a.task}</b>
                       <span>
-                        {names[i] || a.owner} · {dueText(dueToMinutes(a.due, now), lang, day)}
+                        {names[i] || a.owner} · {dueLabel(dueToMinutes(a.due, now, day), lang, day)}
                       </span>
                     </li>
                   ))}

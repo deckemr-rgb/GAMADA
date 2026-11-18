@@ -11,7 +11,7 @@ import { world, type Harvest } from '../../demo-kit/world'
 import type { ChangeSite } from './sites'
 
 export type TabId = 'alerts' | 'forecast' | 'agri' | 'env'
-export type LayerId = 'kec' | 'desa' | 'rivers' | 'hazard' | 'rain' | 'flood' | 'reports' | 'facilities' | 'zones' | 'imagery' | 'harvest' | 'landslide' | 'changes'
+export type LayerId = 'kec' | 'desa' | 'rivers' | 'hazard' | 'rain' | 'flood' | 'reports' | 'facilities' | 'zones' | 'imagery' | 'harvest' | 'landslide' | 'changes' | 'gauges'
 export type Crop = Harvest['crop']
 export type AgriMetric = 'estimate' | 'change' | 'ndvi'
 
@@ -41,14 +41,30 @@ export interface UiState {
   impact: FloodImpact | null
   /** impact at +6 h (alert defaults, forecast tab, AI context) */
   impact6: FloodImpact | null
+  /** the water gauge whose 24 h curve the Situation card shows (null = the flood river's) */
+  gauge: string | null
   /** id of an entity to highlight in the panel (arrivals via ?focus=, new alert) */
   flash: string | null
   /** the Geo-AI insight card was dismissed */
   insightOff: boolean
   /** an AI-drafted warning waiting to be opened in the broadcast dialog */
   draft: AlertDraft | null
-  /** the rain drifts (ambient repaint): before the first run, during playback / scrubbing and 15 s after */
-  rainLive: boolean
+  /** audit trail of the warnings issued here: who set them and on what basis (alert id → basis) */
+  basis: Record<string, AlertBasis>
+  /** the guided CTA already offered the citizen-confirmation step once */
+  confirmTried: boolean
+}
+
+export interface AlertBasis {
+  /** role id that issued it */
+  by: string
+  /** the river level at issue time, its state and the model run behind it */
+  level: number
+  state: 'normal' | 'siaga' | 'awas'
+  desa: number
+  people: number
+  /** world minute the river reaches AWAS (null = not within 6 h / already above) */
+  awasAt: number | null
 }
 
 export interface AlertDraft {
@@ -72,6 +88,7 @@ export const INITIAL_LAYERS: Record<LayerId, boolean> = {
   harvest: false,
   landslide: false,
   changes: false,
+  gauges: true,
 }
 
 const initial = (): UiState => ({
@@ -92,13 +109,47 @@ const initial = (): UiState => ({
   desaReady: false,
   impact: null,
   impact6: null,
+  gauge: null,
   flash: null,
   insightOff: false,
   draft: null,
-  rainLive: true,
+  basis: {},
+  confirmTried: false,
 })
 
-let state: UiState = initial()
+/*
+ * The forecast run (hour, ran) and the warnings' audit trail survive a trip to another product and back, a role
+ * switch and a reload in the same tab (sessionStorage; per-viewer convenience, the page works without it).
+ */
+const KEEP = 'dk-sg-view'
+type Kept = Pick<UiState, 'hour' | 'ran' | 'basis'> & { n?: number }
+function loadKept(): Partial<Kept> {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(KEEP) ?? 'null') as Partial<Kept> | null
+    if (v && typeof v === 'object') keptAudit = Number(v.n) || 0
+    return v && typeof v === 'object' ? { hour: Number(v.hour) || 0, ran: !!v.ran, basis: v.basis && typeof v.basis === 'object' ? v.basis : {} } : {}
+  } catch {
+    return {}
+  }
+}
+let kept = ''
+/** size of the world's audit log when the view was kept: a smaller log later means the world was reset meanwhile */
+let keptAudit = 0
+function saveKept(): void {
+  keptAudit = world.get().auditLog.ids.length
+  const v = JSON.stringify({ hour: state.hour, ran: state.ran, basis: state.basis, n: keptAudit } satisfies Kept)
+  if (v === kept) return
+  kept = v
+  try {
+    sessionStorage.setItem(KEEP, v)
+  } catch {
+    /* private mode / blocked storage: the view simply starts fresh next time */
+  }
+}
+/** the kept forecast run + audit trail (for a fresh view of the same world) */
+export const keptView = (): Partial<UiState> => (world.get().auditLog.ids.length < keptAudit ? {} : { hour: state.hour, ran: state.ran, basis: state.basis })
+
+let state: UiState = { ...initial(), ...(typeof window !== 'undefined' ? loadKept() : {}) }
 const subs = new Set<() => void>()
 
 export const ui = {
@@ -109,6 +160,7 @@ export const ui = {
     for (const k in p) if ((p as Record<string, unknown>)[k] !== (state as unknown as Record<string, unknown>)[k]) changed = true
     if (!changed) return
     state = { ...state, ...p }
+    if ('hour' in p || 'ran' in p || 'basis' in p) saveKept()
     for (const fn of [...subs]) fn()
   },
   layer(id: LayerId, on: boolean): void {
@@ -123,6 +175,7 @@ export const ui = {
   },
   reset(keep?: Partial<UiState>): void {
     state = { ...initial(), ...keep }
+    saveKept()
     for (const fn of [...subs]) fn()
   },
   subscribe(fn: () => void): () => void {
@@ -197,7 +250,8 @@ export function clearImpactCache(): void {
   impactCache.clear()
 }
 
-/** Ask the map for the desa polygons once; resolves true when the impact can be computed. */
+/** Ask the map for the desa polygons once; resolves true when the impact can be computed (false when the map is not
+ *  ready yet: callers that must not give up use ensureDesaWhenMap). */
 let desaPromise: Promise<boolean> | null = null
 export function ensureDesa(): Promise<boolean> {
   if (state.desaReady) return Promise.resolve(true)
@@ -215,6 +269,19 @@ export function ensureDesa(): Promise<boolean> {
   )
   return desaPromise
 }
+/** ensureDesa for a click that can come before the map is ready (a quick first click): waits for the map, up to
+ *  MAP_WAIT_MS, instead of resolving false at once */
+const MAP_WAIT_MS = 15_000
+export function ensureDesaWhenMap(): Promise<boolean> {
+  if (state.desaReady || mapRef.current) return ensureDesa()
+  return new Promise((res) => {
+    const t = setTimeout(() => res(false), MAP_WAIT_MS)
+    withMap(() => {
+      clearTimeout(t)
+      void ensureDesa().then(res)
+    })
+  })
+}
 export function forgetDesa(): void {
   desaPromise = null
   clearImpactCache()
@@ -226,22 +293,23 @@ export function withMap(fn: (h: MapViewHandle) => void): void {
   if (mapRef.current) fn(mapRef.current)
   else pending.push(fn)
 }
-export function mapReady(h: MapViewHandle): void {
+/** time of the last camera move this product asked for (fly / fit): MapStage's phone framing never overrides it */
+export const camMoved = { at: 0 }
+function tracked(h: MapViewHandle): MapViewHandle {
+  return {
+    ...h,
+    flyTo: (c, z) => {
+      camMoved.at = performance.now()
+      h.flyTo(c, z)
+    },
+    fitKecamatan: (id) => {
+      camMoved.at = performance.now()
+      h.fitKecamatan(id)
+    },
+  }
+}
+export function mapReady(raw: MapViewHandle): void {
+  const h = tracked(raw)
   mapRef.current = h
   for (const fn of pending.splice(0)) fn(h)
-}
-
-/**
- * Idle cost: the rain's ambient drift repaints the whole map every frame. After the forecast ran it drifts only while
- * the scrubber moves and for RAIN_HOLD_MS after, then holds still (no repaint loop while people read the panels).
- */
-const RAIN_HOLD_MS = 15000
-let rainTimer: ReturnType<typeof setTimeout> | null = null
-export function rainActivity(): void {
-  if (!state.rainLive) ui.set({ rainLive: true })
-  if (rainTimer) clearTimeout(rainTimer)
-  rainTimer = setTimeout(() => {
-    rainTimer = null
-    if (state.ran) ui.set({ rainLive: false })
-  }, RAIN_HOLD_MS)
 }

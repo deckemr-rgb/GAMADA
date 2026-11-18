@@ -4,7 +4,7 @@
  * view (transform scale on the DOM nodes) and glide to new sizes/positions when the data changes (attribute
  * tweens on translate / r); React renders the final layout once. Arrows walk topics by volume, Enter selects.
  */
-import { useMemo, useRef, type PointerEvent } from 'react'
+import { useMemo, useRef, type MouseEvent, type PointerEvent } from 'react'
 import { ChartFrame, ChartTip, TipRow, useVizLang, type FrameProps } from './ChartFrame'
 import { localPoint, rv, useAttrTween, useIndexNav, useRevealDom, useSize } from './core'
 import { sentimentColor } from './palette'
@@ -165,7 +165,7 @@ export function BubbleChart(props: BubbleProps) {
   const nav = useIndexNav(data.length, { start: 0 })
   const act = nav.active !== null ? (order[nav.active] ?? null) : null
   const sentWord = (v: number) => (v <= -0.2 ? s.negative : v >= 0.2 ? s.positive : s.neutral)
-  const onMove = (e: PointerEvent<SVGSVGElement>) => {
+  const hitAt = (e: PointerEvent<SVGSVGElement> | MouseEvent<SVGSVGElement>): number | null => {
     const pt = localPoint(e, e.currentTarget)
     let hit: number | null = null
     data.forEach((_, i) => {
@@ -174,7 +174,20 @@ export function BubbleChart(props: BubbleProps) {
       const r = tw[i * 3 + 2] ?? 0
       if (Math.hypot(pt.x - x, pt.y - y) <= r) hit = i
     })
+    return hit
+  }
+  const onMove = (e: PointerEvent<SVGSVGElement>) => {
+    const hit = hitAt(e)
     nav.point(hit === null ? null : order.indexOf(hit))
+  }
+  // a click hit-tests itself: a touch tap (or a first click with no hover before it) has no pointer-move state
+  const onClick = (e: MouseEvent<SVGSVGElement>) => {
+    if (!onSelect) return
+    const hit = hitAt(e)
+    const d = hit !== null ? data[hit] : undefined
+    if (!d) return
+    nav.point(order.indexOf(hit!))
+    onSelect(d)
   }
   const summary = useMemo(() => {
     const top = order.slice(0, 5).map((i) => data[i]!)
@@ -201,7 +214,7 @@ export function BubbleChart(props: BubbleProps) {
         }}
         onBlur={nav.onBlur}
       >
-        <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={() => cur && onSelect?.(cur)} aria-hidden="true">
+        <svg className={`dk-viz-svg dk-viz-fade`} width={w} height={H} viewBox={`0 0 ${w} ${H}`} onPointerMove={onMove} onPointerLeave={() => !nav.kbd && nav.point(null)} onClick={onClick} aria-hidden="true">
           {data.map((d, i) => {
             const x = tw[i * 3] ?? 0
             const y = tw[i * 3 + 1] ?? 0
@@ -210,7 +223,7 @@ export function BubbleChart(props: BubbleProps) {
             const oi = order.indexOf(i)
             const st = data.length > 1 ? (oi / (data.length - 1)) * 0.5 : 0
             return (
-              <g key={d.id} className={`dk-viz-bubble${on ? ' is-on' : ''}`} data-tw="transform" transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
+              <g key={d.id} className={`dk-viz-bubble${on ? ' is-on' : ''}`} data-id={d.id} data-tw="transform" transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
                 <g {...rv('s', { delay: st, len: 0.5, origin: 'svg:0 0' })}>
                   <circle data-tw="r" r={r + 3} className="is-ring" />
                   <circle data-tw="r" r={r} style={{ fill: sentimentColor(d.sentiment), fillOpacity: 0.9 }} />

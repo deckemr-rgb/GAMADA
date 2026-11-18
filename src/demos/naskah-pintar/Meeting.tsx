@@ -7,24 +7,29 @@
  */
 import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { gsap } from 'gsap'
+import { Link } from 'react-router'
 import { useI18n } from '../../lib/i18n'
-import { useShell } from '../../demo-kit/shell'
-import { Badge, Button, Icon, Segmented, StatusChip, motionMode } from '../../demo-kit/ui'
-import { emit, useClock, useWorld, world, type Meeting as MeetingRec } from '../../demo-kit/world'
+import { demoHref, useShell } from '../../demo-kit/shell'
+import { isHotspotDismissed, onHotspotDismiss } from '../../demo-kit/shell/hotspot-store'
+import { Badge, Button, Icon, IconButton, Segmented, StatusChip, motionMode } from '../../demo-kit/ui'
+import { emit, useClock, useSession, useWorld, world, type Meeting as MeetingRec } from '../../demo-kit/world'
 import { Waveform } from '../../demo-kit/media/Waveform'
 import { createPlayback, mmss, type ClipSegment, type Playback, type PlaybackMode } from '../../demo-kit/media/playback'
 import { CATEGORICAL_HEX } from '../../demo-kit/viz/palette'
 import { structuredOf, useNaskahAi, type MinutesOut } from './ai'
 import { buildCtx } from './ctx'
 import { Lanes, Minutes } from './Minutes'
-import { CLIP, SCRIPT, SUMMARY, clockText, dueText, existingAction, meetingFacts, opdIdIn, sampleMeeting, segmentsWith, topicsWith, transcriptText, type ScriptAction } from './model'
+import { CLIP, SCRIPT, SUMMARY, clockText, dueText, existingAction, picLabel, meetingFacts, opdIdIn, sampleMeeting, segmentsWith, topicsWith, transcriptText, type ScriptAction } from './model'
 import type { NpNav } from './index'
 import { useStr } from './strings'
 
 const Recorder = lazy(() => import('./Recorder'))
+const preloadRecorder = () => void import('./Recorder').catch(() => undefined)
 const OfficialMinutes = lazy(() => import('./OfficialMinutes'))
 
 const LAST = CLIP.segments.length - 1
+/** DemoShell's default hotspot id (`${slug}:${target}`), see index.tsx `hotspot` */
+const HOTSPOT_ID = 'naskah-pintar:[data-hotspot="np-play"]'
 
 type Run = 'idle' | 'playing' | 'done'
 
@@ -56,7 +61,14 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const S = useStr()
   const { lang } = useI18n()
   const shell = useShell()
+  const session = useSession()
   const meeting = useWorld(sampleMeeting)
+  /* the "start here" label hangs under the play button: leave room for it until the first play */
+  const [hint, setHint] = useState(() => !isHotspotDismissed(HOTSPOT_ID))
+  useEffect(() => (hint ? onHotspotDismiss(HOTSPOT_ID, () => setHint(false)) : undefined), [hint])
+  /* the room under the play button stays for this visit once it was there: the page below does not jump up when the
+     label goes away on the first play (layout shift) */
+  const [hintRoom] = useState(hint)
   const now = useClock().minutes
   const [speed, setSpeed] = useState<'fast' | 'voice'>('fast')
   /* the river report is read from the world once per meeting (frozen: replays and the official minutes agree) */
@@ -76,8 +88,10 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const [aiAsked, setAiAsked] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const ctlRef = useRef<HTMLDivElement>(null)
+  /* phones: once the player row has scrolled away, a sticky mini player keeps pause / skip at hand */
+  const [ctlAway, setCtlAway] = useState(false)
   const timeRef = useRef<HTMLSpanElement>(null)
-  const hsRef = useRef<HTMLSpanElement>(null)
   const resume = useRef<{ seg: number; playing: boolean } | null>(null)
   const runRef = useRef(run)
   runRef.current = run
@@ -99,7 +113,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
       emitted.current.add(k)
       const s = world.get()
       if (existingAction(s, m.id, a.text)) return
-      emit('actionItem.created', { title: a.text, opdId: opdIdIn(s, a.opdId), pic: a.pic, dueAt: a.dueAt, source: { kind: 'meeting', id: m.id } }, 'naskah-pintar')
+      emit('actionItem.created', { title: a.text, opdId: opdIdIn(s, a.opdId), pic: picLabel(a.pic, 'id', a.opdId), dueAt: a.dueAt, source: { kind: 'meeting', id: m.id } }, 'naskah-pintar')
     },
     [],
   )
@@ -127,7 +141,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
       lang === 'id' ? 'Buat notulen dan tindak lanjut dari transkrip rapat ini' : 'Draft the minutes and action items from this meeting transcript',
       buildCtx(s, now, lang, 'minutes', {
         meeting: { title: CLIP.title[lang], transcript: transcriptText(lang, clip.voice), sample: true },
-        minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: a.pic, due: dueText(a.dueAt, lang, s.day) })) },
+        minutes: { decisions: SCRIPT.decisions.map((d) => d.text), actions: SCRIPT.actions.map((a) => ({ task: a.text, pic: picLabel(a.pic, lang, a.opdId), due: dueText(a.dueAt, lang, s.day) })) },
       }),
     )
   }, [ai, lang, now, clip])
@@ -199,6 +213,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
   }, [drawnSeg, state.playing])
 
   const start = () => {
+    skipTok.current++
     emitting.current = !world.get().meetings.byId[meeting?.id ?? '']?.transcribed
     emitted.current.clear()
     setReach(-1)
@@ -212,15 +227,18 @@ export function Meeting({ nav }: { nav: NpNav }) {
       requestAnimationFrame(() => gridRef.current?.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' }))
   }
   const onPlay = () => {
-    // retire the first-action hotspot (its capture listener only reacts to clicks on the anchor itself)
-    hsRef.current?.dispatchEvent(new MouseEvent('click', { bubbles: false }))
     setRecorder(false)
     if (run === 'playing') pb.toggle()
     else start()
   }
+  /* skip: the button row and the full transcript answer at once; the world writes (six follow-ups, the minutes,
+     the toast, the AI summary) run right after that paint, so the click itself stays cheap (INP) */
+  const skipTok = useRef(0)
   const skip = () => {
     pb.pause()
-    finish()
+    setRun('done')
+    const k = ++skipTok.current
+    requestAnimationFrame(() => window.setTimeout(() => skipTok.current === k && finish(), 0))
   }
   const fromLine = (i: number) => {
     if (run !== 'playing') {
@@ -247,6 +265,20 @@ export function Meeting({ nav }: { nav: NpNav }) {
     setSpeed(v)
   }
 
+  const sm = shell.size === 'sm'
+  useEffect(() => {
+    /* watch the play button (on phones the controls row is three rows tall) */
+    const el = ctlRef.current?.querySelector<HTMLElement>('[data-np="play"]')
+    if (!sm || run !== 'playing' || !el || typeof IntersectionObserver === 'undefined') {
+      setCtlAway(false)
+      return
+    }
+    /* the shell's top bar (~56 px) covers the top of the page: a row hidden under it counts as scrolled away */
+    const io = new IntersectionObserver(([e]) => setCtlAway(!!e && !e.isIntersecting && e.boundingClientRect.top < 0), { rootMargin: '-64px 0px 0px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [sm, run])
+
   /* ---------------------------------------------------------------- view */
   const color = useMemo(() => new Map(CLIP.speakers.map((sp, i) => [sp.id, CATEGORICAL_HEX[i % CATEGORICAL_HEX.length] ?? '#b9b2ff'])), [])
   const speaker = useMemo(() => new Map(CLIP.speakers.map((sp) => [sp.id, sp.label[lang]])), [lang])
@@ -254,38 +286,39 @@ export function Meeting({ nav }: { nav: NpNav }) {
   /* the controls answer at once; transcript, minutes and lanes (the heavy part) follow in a non-blocking render */
   const seg = useDeferredValue(shownSeg)
   const playing = run === 'playing' && state.playing
-  const status: keyof typeof S.mStatus = run === 'playing' ? 'berlangsung' : run === 'done' || transcribed ? 'selesai' : 'terjadwal'
+  /* the flood meeting was held 06.30–07.00, before the clock starts: its recording is ready, the minutes are not */
+  const held = !!meeting && meeting.at + meeting.durationMin <= now
+  const status: keyof typeof S.mStatus = run === 'playing' ? 'berlangsung' : run === 'done' || transcribed ? 'selesai' : held ? 'siap' : 'terjadwal'
   const playLabel = run === 'playing' ? (state.playing ? S.mPause : S.mResume) : run === 'done' ? S.mReplay : S.mPlay
   const liveMinutes = structuredOf<MinutesOut>(ai.last, 'minutes')
   const summaryText = aiAsked && ai.last ? ai.last.content : run === 'done' ? (meeting?.summary?.[lang] ?? SUMMARY[lang]) : ''
   const progress = useCallback(() => (runRef.current === 'done' && !pb.getState().playing ? 1 : pb.duration ? pb.getState().time / pb.duration : 0), [pb])
   const dur = pb.duration * (speed === 'fast' ? 3 : 1)
   const curStart = state.seg >= 0 ? (segs[state.seg]?.start ?? 0) : 0
-  const earlyAt = status === 'terjadwal' && meeting && now < meeting.at ? meeting.at : null
+  const actsShown = SCRIPT.actions.filter((a) => a.seg <= seg).length
 
   return (
     <div className="dk-np-meeting">
       <header className="dk-np-mhead">
         <div className="dk-np-mtitle">
           <span className="dk-np-eyebrow">
-            {S.mTitleHint} · {clockText(meeting?.at ?? 540, lang)} · {S.mPlace}
+            {S.mTitleHint} · {clockText(meeting?.at ?? 390, lang)}
+            {meeting ? `–${clockText(meeting.at + meeting.durationMin, lang)}` : ''} · {S.mPlace}
           </span>
           <h2>{(meeting?.title ?? CLIP.title)[lang]}</h2>
-          <p className="dk-np-lead">{status === 'selesai' ? S.mLead.selesai(SCRIPT.actions.length) : earlyAt !== null ? S.mEarly(clockText(earlyAt, lang)) : S.mLead[status]}</p>
+          <p className="dk-np-lead">{status === 'selesai' ? S.mLead.selesai(SCRIPT.actions.length) : status === 'siap' ? S.mLead.siap(clockText((meeting?.at ?? 0) + (meeting?.durationMin ?? 0), lang)) : S.mLead[status]}</p>
         </div>
         <div className="dk-np-mmeta">
-          <StatusChip label={S.mStatus[status]} tone={status === 'selesai' ? 'done' : status === 'berlangsung' ? 'new' : 'neutral'} />
+          <StatusChip label={S.mStatus[status]} tone={status === 'selesai' ? 'done' : status === 'berlangsung' || status === 'siap' ? 'new' : 'neutral'} />
           <Badge>{S.mParticipants(CLIP.speakers.length)}</Badge>
           <span className="dk-np-sim">{S.simulated}</span>
         </div>
       </header>
 
-      <div className="dk-np-controls">
-        <Button variant="primary" icon={playing ? 'pause' : run === 'done' ? 'replay' : 'play'} onClick={onPlay} aria-pressed={playing} data-np="play" className={`dk-np-playbtn${run === 'idle' ? ' is-idle' : ''}`}>
+      <div ref={ctlRef} className={`dk-np-controls${hintRoom ? ' has-hint' : ''}`}>
+        {/* the "start here" ring only until the meeting has been played (it must not cover the next step's buttons) */}
+        <Button variant="primary" icon={playing ? 'pause' : run === 'done' ? 'replay' : 'play'} onClick={onPlay} aria-pressed={playing} data-np="play" data-hotspot={run === 'idle' ? 'np-play' : undefined} className="dk-np-playbtn">
           {playLabel}
-          {/* hotspot anchor: a strip on the button's bottom edge, so the kit's hint label sits below the button
-              instead of over its text (the kit draws the label 16 px under the target's top edge) */}
-          <span ref={hsRef} className="dk-np-hs" data-hotspot="np-play" aria-hidden="true" />
         </Button>
         {run === 'playing' && (
           <Button variant="secondary" icon="forward" onClick={skip} data-np="skip">
@@ -315,7 +348,7 @@ export function Meeting({ nav }: { nav: NpNav }) {
           {speed === 'voice' && state.mode === 'tts' ? S.mModeTts : S.mModeText}
         </span>
         {!recorder && (
-          <Button variant="quiet" icon="mic" onClick={() => setRecorder(true)} className="dk-np-rec" data-np="record">
+          <Button variant="quiet" icon="mic" onClick={() => setRecorder(true)} onPointerEnter={preloadRecorder} onFocus={preloadRecorder} className="dk-np-rec" data-np="record">
             {S.mRecord}
           </Button>
         )}
@@ -330,19 +363,42 @@ export function Meeting({ nav }: { nav: NpNav }) {
         onSeek={seekFrac}
         className="dk-np-wave"
       />
-      {run === 'done' && (
-        <p className="dk-np-done" role="status">
-          <Icon name="checkCircle" size={16} />
-          {S.mDone(SCRIPT.actions.length)}
+      {/* one status row and one benefit strip, present from the first paint (idle → playing → done): what the
+          meeting will produce, what it is producing, what it produced — the page below never jumps (layout shift) */}
+      {run === 'done' ? (
+        <p className="dk-np-done dk-np-status" role="status">
+          <span className="dk-np-done-t">
+            <Icon name="checkCircle" size={16} />
+            {S.mDone(SCRIPT.actions.length)}
+          </span>
+          <Link className="dk-np-xlink" to={demoHref('meja-pimpinan', session, meeting?.id ?? null)}>
+            {S.mToMp}
+            <Icon name="arrowRight" size={14} />
+          </Link>
+        </p>
+      ) : (
+        <p className={`dk-np-done dk-np-status is-${run}`}>
+          <span className="dk-np-done-t">
+            <Icon name={run === 'playing' ? 'spark' : 'doc'} size={16} />
+            {run === 'playing' ? S.mWriting(actsShown, SCRIPT.actions.length) : S.mWillMake(SCRIPT.decisions.length, SCRIPT.actions.length)}
+          </span>
         </p>
       )}
+      <ul className={`dk-np-benefit${run === 'done' ? '' : ' is-pre'}`} aria-label={run === 'done' ? S.mBenefitLabel : S.mBenefitPreLabel}>
+        {(run === 'done' ? S.mBenefit(SCRIPT.actions.length) : S.mBenefitPre(SCRIPT.actions.length)).map((b, i) => (
+          <li key={b}>
+            <Icon name={i === 2 ? 'clock' : i === 1 ? 'user' : 'doc'} size={14} />
+            {b}
+          </li>
+        ))}
+      </ul>
 
       {recorder ? (
         <Suspense fallback={null}>
           <Recorder onClose={() => setRecorder(false)} sampleMeetingId={meeting?.id} />
         </Suspense>
       ) : (
-        <div ref={gridRef} className="dk-np-mgrid">
+        <div ref={gridRef} className={`dk-np-mgrid${run === 'idle' ? '' : ' is-live'}`}>
           <section className={`dk-np-card dk-np-transcript${transcriptOpen ? '' : ' is-collapsed'}`} aria-label={S.mTranscript}>
             <header className="dk-np-card-h">
               <h3>
@@ -356,7 +412,18 @@ export function Meeting({ nav }: { nav: NpNav }) {
             </header>
             {transcriptOpen &&
               (seg < 0 ? (
-                <p className="dk-np-empty">{S.mTranscriptEmpty}</p>
+                <div className="dk-np-pre">
+                  <p className="dk-np-pre-h">{S.mWho}</p>
+                  <ul className="dk-np-people">
+                    {CLIP.speakers.map((sp) => (
+                      <li key={sp.id}>
+                        <i style={{ background: color.get(sp.id) }} aria-hidden="true" />
+                        {sp.label[lang]}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="dk-np-empty">{S.mTranscriptEmpty}</p>
+                </div>
               ) : (
                 <ol ref={listRef} className="dk-np-lines">
                   {clip.voice.slice(0, seg + 1).map((line, i) => {
@@ -393,6 +460,24 @@ export function Meeting({ nav }: { nav: NpNav }) {
           <section className="dk-np-card dk-np-lanescard">
             <Lanes reached={seg} nav={nav} />
           </section>
+        </div>
+      )}
+      {sm && run === 'playing' && ctlAway && !recorder && (
+        <div className="dk-np-mini" role="group" aria-label={S.mMini}>
+          {/* icon-only: the speaker's name keeps its room */}
+          <IconButton variant="primary" icon={state.playing ? 'pause' : 'play'} label={state.playing ? S.mPause : S.mResume} onClick={onPlay} aria-pressed={state.playing} />
+          <span className="dk-np-mini-who" aria-live="off">
+            {state.seg >= 0 && <i style={{ background: color.get(segs[state.seg]?.speaker ?? '') }} aria-hidden="true" />}
+            {state.seg >= 0 ? speaker.get(segs[state.seg]?.speaker ?? '') : S.mTranscript}
+          </span>
+          {/* the OPD board sits below the fold on a phone: its count rides along in the mini player */}
+          <span className="dk-np-mini-acts dk-num" key={actsShown} aria-live="polite">
+            <Icon name="kanban" size={12} />
+            {S.mMiniActs(actsShown, SCRIPT.actions.length)}
+          </span>
+          <Button variant="secondary" size="sm" icon="forward" onClick={skip}>
+            {S.mSkipShort}
+          </Button>
         </div>
       )}
       {official && (

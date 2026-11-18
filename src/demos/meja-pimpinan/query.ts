@@ -6,7 +6,7 @@
  */
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, rows, type Bi, type ComplaintCategory, type Minutes, type WorldState } from '../../demo-kit/world'
-import { devOf, kecName, opdShort, riskRank, weekChange } from './data'
+import { devOf, kecName, mpLeaderboard, opdShort, riskRank, weekChange } from './data'
 import { topicLabel } from './strings'
 
 export type Metric = 'complaints' | 'sla_on_time' | 'ticket_backlog' | 'alerts' | 'mentions_negative' | 'procurement_risk' | 'sales' | 'prices' | 'econ_index' | 'action_items_overdue'
@@ -174,6 +174,11 @@ export function runQuery(s: WorldState, now: Minutes, spec: QuerySpec, lang: Lan
         const values = all.map((a, i) => (a ? (last = Math.round((ok[i]! / a) * 100)) : last))
         return { ...res({ title, unit: '%', rows: [] }), chart: 'line', x: values.map((_, i) => dayLabel(s, today - n + 1 + i, lang)), values, total: values[values.length - 1] ?? 0, format: 'pct' }
       }
+      if (spec.groupBy === 'opd') {
+        // the leaderboard's own rows and rule (open tickets past SLA count, agencies below the minimum sample left out)
+        const r = mpLeaderboard(s, now).filter((x) => x.slaPct !== null && (!opdF || x.opdId === opdF)).map((x) => ({ id: x.opdId, label: x.short, value: x.slaPct! })).sort((a, b) => a.value - b.value)
+        return { ...res({ title, unit: lang === 'id' ? '% tepat waktu, 30 hari (tiket terbuka lewat SLA ikut dihitung; terendah dulu)' : '% on time, 30 days (open tickets past SLA count; lowest first)', rows: r }), format: 'pct' }
+      }
       const by = new Map<string, { ok: number; all: number }>()
       for (const t of list) {
         const c = s.complaints.byId[t.complaintId]
@@ -227,8 +232,9 @@ export function runQuery(s: WorldState, now: Minutes, spec: QuerySpec, lang: Lan
     case 'procurement_risk': {
       const list = rows(s.procurements).filter((p) => p.status !== 'selesai' && (!opdF || p.opdId === opdF))
       // the riskiest first in the same order as the briefing (flagged by score, then emergency, then mark-up)
-      const r = [...list].sort((a, b) => riskRank(b) - riskRank(a)).map((p) => ({ id: p.id, label: `${p.code} · ${p.name[lang]}`, value: Math.round(p.riskScore ?? Math.max(0, devOf(p))) })).slice(0, 8)
-      return res({ title: lang === 'id' ? 'Risiko paket pengadaan' : 'Procurement package risk', unit: lang === 'id' ? 'skor risiko, atau % HPS di atas pasar bila belum dianalisis' : 'risk score, or % above market when not analysed yet', rows: r })
+      // ONE metric per chart: % the cost estimate sits above the market (the risk score, when there is one, is in the label)
+      const r = [...list].sort((a, b) => riskRank(b) - riskRank(a)).map((p) => ({ id: p.id, label: `${p.code} · ${p.name[lang]}${p.riskScore != null ? ` · ${lang === 'id' ? 'skor' : 'score'} ${p.riskScore}` : ''}`, value: Math.round(devOf(p) * 10) / 10 })).slice(0, 8)
+      return { ...res({ title: lang === 'id' ? 'Paket pengadaan: HPS di atas harga pasar' : "Procurement packages: owner's estimate (HPS) above market", unit: lang === 'id' ? '% HPS di atas harga pasar, paket paling berisiko dulu (simulasi)' : '% above market price, riskiest package first (simulated)', rows: r }), format: 'pct' as const }
     }
     case 'prices': {
       const com = spec.filter?.commodity ? s.region.commodities.find((c) => norm(c.id).includes(norm(spec.filter!.commodity!)) || norm(c.name.id).includes(norm(spec.filter!.commodity!)) || norm(c.name.en).includes(norm(spec.filter!.commodity!)))?.id : undefined
@@ -240,7 +246,7 @@ export function runQuery(s: WorldState, now: Minutes, spec: QuerySpec, lang: Lan
           const xs = pts.map((p) => (back === 0 ? p.price : (p.history[p.history.length - back] ?? p.price)))
           return Math.round(xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length))
         })
-        return { ...res({ title: lang === 'id' ? `Harga rata-rata ${s.region.commodities.find((c) => c.id === com)?.name.id ?? com}` : `Average price of ${s.region.commodities.find((c) => c.id === com)?.name.en ?? com}`, unit: lang === 'id' ? 'Rp per satuan (simulasi)' : 'Rp per unit (simulated)', rows: [] }), chart: 'line', x: values.map((_, i) => dayLabel(s, today - n + 1 + i, lang)), values, total: values[values.length - 1] ?? 0, format: 'rp' }
+        return { ...res({ title: lang === 'id' ? `Harga rata-rata ${s.region.commodities.find((c) => c.id === com)?.name.id ?? com}` : `Average price of ${s.region.commodities.find((c) => c.id === com)?.name.en ?? com}`, unit: lang === 'id' ? `Rp per ${s.region.commodities.find((c) => c.id === com)?.unit ?? 'satuan'} (simulasi)` : `Rp per ${s.region.commodities.find((c) => c.id === com)?.unit ?? 'unit'} (simulated)`, rows: [] }), chart: 'line', x: values.map((_, i) => dayLabel(s, today - n + 1 + i, lang)), values, total: values[values.length - 1] ?? 0, format: 'rp' }
       }
       const g = spec.groupBy === 'market' ? 'market' : 'commodity'
       const by = new Map<string, number[]>()

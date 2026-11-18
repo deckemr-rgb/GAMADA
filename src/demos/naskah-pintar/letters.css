@@ -48,7 +48,7 @@
   display: -webkit-box;
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 .dk-np-lrole {
   display: grid;
@@ -284,4 +284,98 @@
   .dk-np-bar span {
     transition: none;
   }
+}
+
+/* "already handled in the meeting": the draft links to that follow-up instead of a duplicate task */
+.dk-np-linknote {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--dk-line-act);
+  border-radius: 8px;
+  background: var(--dk-accent-12);
+  color: var(--dk-text);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-np-linknote p {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+.dk-np-linknote svg {
+  flex: none;
+  margin-top: 2px;
+}
+.dk-np-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.dk-np-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--dk-accent);
+}
+.dk-np-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* history of the letter (simulated audit trail) */
+.dk-np-trailbox {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dk-line);
+}
+.dk-np-trailbox h5 {
+  margin: 0;
+  color: var(--dk-faint);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-np-trail {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--dk-line-2);
+  list-style: none;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) / 1.45 var(--dk-font);
+}
+.dk-np-trail li {
+  position: relative;
+}
+.dk-np-trail li::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -19px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dk-accent);
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dk-np-check {
+    min-height: var(--dk-target);
+  }
+}
+/* phones, Kepala Daerah: the AI summary and the draft above the scan (the decision is the point) */
+.dk-np-lpane.is-side-first > .dk-np-lside {
+  order: -1;
+}
+/* "Baca & setujui" scrolls the letter / the approve button under the shell's top bar, not behind it */
+.dk-np-lpane,
+.dk-np-lpane [data-np='approve'] {
+  scroll-margin-top: 120px;
+}
+.dk-np-waitcard {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
 }

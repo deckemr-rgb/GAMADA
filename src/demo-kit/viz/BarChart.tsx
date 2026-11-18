@@ -139,6 +139,7 @@ export function BarChart(props: BarProps) {
               <rect className={`dk-viz-barhit${hi === i ? ' is-on' : ''}`} x={0} y={i * ROW} width={w} height={ROW} rx={6} />
               <text x={labelW - 10} y={y + bh / 2 + 4} className={`t-end${hi === i ? ' t-strong' : ' t-muted'}`}>
                 {d.label.length > fitChars ? `${d.label.slice(0, fitChars - 1).trimEnd()}…` : d.label}
+                {d.label.length > fitChars && <title>{d.label}</title>}
               </text>
             </g>
           )
@@ -153,6 +154,8 @@ export function BarChart(props: BarProps) {
               <g key={d.id ?? d.label}>
                 {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" data-tw="x y width height" x={Math.min(zx, px)} y={y - 2} width={Math.abs(px - zx)} height={bh + 4} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
                 <rect className="dk-viz-bar" data-tw="x y width height" x={Math.min(zx, x1)} y={y} width={Math.max(0, Math.abs(x1 - zx))} height={bh} rx={3} style={{ fill: colorOf(d, d.value) }} />
+                {/* the previous value as a high-contrast tick ON TOP of the bar: the ghost alone vanishes when prev < value */}
+                {d.prev !== undefined && <line className="dk-viz-prevtick" data-tw="x1 x2 y1 y2" x1={px} x2={px} y1={y - 3} y2={y + bh + 3} />}
               </g>
             )
           })}
@@ -234,6 +237,7 @@ export function BarChart(props: BarProps) {
               <g key={d.id ?? d.label}>
                 {d.prev !== undefined && <rect className="dk-viz-bar is-ghost" data-tw="x y width height" x={x - 2} y={Math.min(zy, py)} width={bw + 4} height={Math.abs(py - zy)} rx={3} style={{ fill: 'var(--dk-viz-muted)' }} />}
                 <rect className="dk-viz-bar" data-tw="x y width height" x={x} y={Math.min(zy, y1)} width={bw} height={Math.max(0, Math.abs(y1 - zy))} rx={Math.min(3, bw / 3)} style={{ fill: colorOf(d, d.value) }} />
+                {d.prev !== undefined && <line className="dk-viz-prevtick" data-tw="x1 x2 y1 y2" x1={x - 3} x2={x + bw + 3} y1={py} y2={py} />}
               </g>
             )
           })}

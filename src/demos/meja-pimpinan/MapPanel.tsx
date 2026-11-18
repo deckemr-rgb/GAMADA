@@ -67,8 +67,10 @@ function topDistrict(s: WorldState, now: Minutes, cats: Set<string> | null) {
     } else if (c.at > now - 14 * DAY_MIN) prev.set(c.kecamatanId, (prev.get(c.kecamatanId) ?? 0) + 1)
   }
   // the whole region: the kit's ranking (the chat and the briefing use it too, so ties resolve the same way)
-  const k0 = cats ? null : complaintsByKecamatan(s, now, 7)[0]
-  const top: [string, number] | undefined = cats ? [...cur.entries()].sort((a, b) => b[1] - a[1])[0] : k0 && k0.count ? [k0.kecamatanId, k0.count] : undefined
+  // a tie is broken by name, so the headline does not flip between two districts with the same numbers
+  const all = cats ? [] : complaintsByKecamatan(s, now, 7)
+  const k0 = cats ? null : all.filter((k) => k.count === all[0]?.count).sort((x, y) => x.name.localeCompare(y.name))[0] ?? null
+  const top: [string, number] | undefined = cats ? [...cur.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] : k0 && k0.count ? [k0.kecamatanId, k0.count] : undefined
   if (!top) return null
   const cat = [...(byCat.get(top[0]) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] as keyof typeof CATEGORY_LABEL | undefined
   return { kecamatanId: top[0], name: s.region.kecamatan.find((k) => k.id === top[0])?.name ?? top[0], count: top[1], prev: prev.get(top[0]) ?? 0, cat: cat ?? null }
@@ -174,6 +176,24 @@ export function MapPanel({ selected, onSelect, onReady, onFly, note, onNoteDone,
   useEffect(() => {
     if (note) setTipHidden(false)
   }, [note])
+  // the wall's hoax banner already lies over the top of the map: the insight folds into its chip meanwhile
+  const banner = !!overlay
+  useEffect(() => {
+    if (banner) setTipHidden(true)
+  }, [banner])
+  // on the wall the insight is read once, then folds into its chip so it does not keep covering the west districts
+  // (a cross-product note stays until dismissed)
+  useEffect(() => {
+    if (phone || tipHidden || note || !top) return
+    const id = window.setTimeout(() => setTipHidden(true), 9000)
+    return () => window.clearTimeout(id)
+  }, [phone, tipHidden, note, top])
+
+  const insightText = note ?? (top
+    ? opdId
+      ? trf('insightOpd', lang, { o: opdName, kec: top.name, n: top.count, p: top.prev, cat: topCat ? lc(CATEGORY_LABEL[topCat][lang]) : '-' })
+      : trf('insightTop', lang, { kec: top.name, n: top.count, p: top.prev, cat: topCat ? lc(CATEGORY_LABEL[topCat][lang]) : '-' })
+    : null)
 
   if (!pack) return null
   return (
@@ -185,31 +205,42 @@ export function MapPanel({ selected, onSelect, onReady, onFly, note, onNoteDone,
           </Chip>
         ))}
       </div>
+      {/* phones: the insight is a strip above the map, never a card over it */}
+      {phone && insightText && (
+        <div className="dk-mp-insight-strip" aria-live="polite">
+          <Icon name="spark" size={14} />
+          <p>
+            <strong>{tr('insight', lang)}:</strong> {insightText}
+          </p>
+          {note ? (
+            <IconButton icon="close" size="sm" label={tr('dismiss', lang)} onClick={onNoteDone} />
+          ) : top ? (
+            <Button size="sm" variant="ghost" onClick={() => onFly(top.kecamatanId)}>
+              {trf('insightAct', lang, { kec: top.name })}
+            </Button>
+          ) : null}
+        </div>
+      )}
       <div className="dk-mp-mapbox">
         <div className={`dk-mp-mapover${overlay ? ' has-banner' : ''}`}>
         {overlay}
-        {(note || top) && tipHidden && (
+        {!phone && (note || top) && tipHidden && (
           <button type="button" className="dk-mp-tipchip" onClick={() => setTipHidden(false)}>
             <Icon name="spark" size={14} />
             {tr('insight', lang)}
           </button>
         )}
-        {(note || top) && !tipHidden && (
+        {!phone && (note || top) && !tipHidden && (
           <div className="dk-mp-insight" aria-live="polite">
             {note ? (
-              <InsightCallout title={tr('insight', lang)} action={<IconButton icon="close" size="sm" label={tr('dismiss', lang)} onClick={onNoteDone} />}>
-                {note}
-              </InsightCallout>
+              <InsightCallout title={tr('insight', lang)}>{note}</InsightCallout>
             ) : top ? (
               <InsightCallout
                 title={tr('insight', lang)}
                 action={
-                  <span className="dk-mp-ph-act">
-                    <Button size="sm" variant="ghost" iconEnd="arrowRight" onClick={() => onFly(top.kecamatanId)}>
-                      {trf('insightAct', lang, { kec: top.name })}
-                    </Button>
-                    <IconButton icon="close" size="sm" label={tr('dismiss', lang)} onClick={() => setTipHidden(true)} />
-                  </span>
+                  <Button size="sm" variant="ghost" iconEnd="arrowRight" onClick={() => onFly(top.kecamatanId)}>
+                    {trf('insightAct', lang, { kec: top.name })}
+                  </Button>
                 }
               >
                 {opdId
@@ -217,6 +248,7 @@ export function MapPanel({ selected, onSelect, onReady, onFly, note, onNoteDone,
                   : trf('insightTop', lang, { kec: top.name, n: top.count, p: top.prev, cat: topCat ? lc(CATEGORY_LABEL[topCat][lang]) : '-' })}
               </InsightCallout>
             ) : null}
+            <IconButton className="dk-mp-insight-x" icon="close" size="sm" label={tr('dismiss', lang)} onClick={note ? onNoteDone : () => setTipHidden(true)} />
           </div>
         )}
         </div>

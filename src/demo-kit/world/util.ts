@@ -7,7 +7,7 @@ import type { LngLat, Minutes, Table, TableKey } from './types'
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
   /** bump when the generated shape changes → persisted worlds are regenerated */
-  version: 3,
+  version: 4,
   /** max entities per table (oldest dropped) */
   maxPerTable: 5000,
   /** max reaction chain depth (0 = emitted directly) */
@@ -16,6 +16,9 @@ export const WORLD = {
   day: '2026-11-17',
   /** clock start (07:00 — the seeded morning has activity up to then) */
   clockStart: 7 * 60,
+  /** today's flood coordination meeting (the Naskah Pintar sample recording): 06.30–07.00, before the clock starts */
+  floodMeetingAt: 6 * 60 + 30,
+  floodMeetingMin: 30,
   /** complaint cluster rule (spec P1 step 6) */
   clusterMin: 5,
   clusterRadiusKm: 1,
@@ -160,6 +163,12 @@ export function centroid(points: LngLat[]): LngLat {
 export const dayOf = (at: Minutes): number => Math.floor(at / DAY_MIN)
 export const isToday = (at: Minutes): boolean => at >= 0 && at < DAY_MIN
 export const pad = (n: number, w = 2): string => String(n).padStart(w, '0')
+/** the person in charge (PIC) of an agency by title: BPBD is led by a Kalaksa, a kecamatan by a Camat */
+export function picOf(opd: { id: string; short?: string } | undefined, opdId = opd?.id ?? ''): string {
+  if (opdId === 'bpbd') return 'Kalaksa BPBD'
+  if (opdId === 'kecamatan') return 'Camat'
+  return `Kepala ${opd?.short ?? opdId}`
+}
 
 /** "HH:MM" for minutes within a day (wraps for negative / multi-day values) */
 export function hhmm(min: Minutes): string {

@@ -101,7 +101,10 @@ export default function Environment() {
   )
 }
 
-function Compare({ site, L }: { site: ChangeSite; L: (k: keyof typeof T, v?: Record<string, string | number>) => string }) {
+/** painted before/after pairs per region + site (two 2D canvases each; a handful of sites per session) */
+const painted = new Map<string, [HTMLCanvasElement, HTMLCanvasElement]>()
+
+function Compare({ site, L }:{ site: ChangeSite; L: (k: keyof typeof T, v?: Record<string, string | number>) => string }) {
   const { lang } = useI18n()
   const { pack, markMission } = useShell()
   const beforeRef = useRef<HTMLCanvasElement>(null)
@@ -115,6 +118,15 @@ function Compare({ site, L }: { site: ChangeSite; L: (k: keyof typeof T, v?: Rec
   useEffect(() => {
     if (!pack) return
     const signal = { cancelled: false }
+    // painted once per site: reopening the tab draws the cached pair at once (no "rendering…" again)
+    const key = `${pack.id}:${site.id}:${sites.length}`
+    const hit = painted.get(key)
+    if (hit) {
+      beforeRef.current?.getContext('2d')?.drawImage(hit[0], 0, 0)
+      afterRef.current?.getContext('2d')?.drawImage(hit[1], 0, 0)
+      setReady(true)
+      return
+    }
     setReady(false)
     void (async () => {
       const [{ painterContext, paint, cropView }, geo] = await Promise.all([import('./imagery'), loadRegionGeo(pack.id, { desa: false })])
@@ -124,6 +136,7 @@ function Compare({ site, L }: { site: ChangeSite; L: (k: keyof typeof T, v?: Rec
       const view = cropView(ctx, site.center, CMP.kmW, CMP.w, CMP.h)
       const [b, a] = await Promise.all([paint(ctx, view, 'before', signal), paint(ctx, view, 'after', signal)])
       if (signal.cancelled || !b || !a) return
+      painted.set(key, [b, a])
       beforeRef.current?.getContext('2d')?.drawImage(b, 0, 0)
       afterRef.current?.getContext('2d')?.drawImage(a, 0, 0)
       setReady(true)
@@ -137,7 +150,8 @@ function Compare({ site, L }: { site: ChangeSite; L: (k: keyof typeof T, v?: Rec
   const onInput = (v: number) => {
     clipRef.current?.style.setProperty('clip-path', `inset(0 0 0 ${v}%)`)
     knobRef.current?.style.setProperty('transform', `translateX(${v}cqw)`)
-    if (!moved.current) {
+    // the mission ticks only once both images are on screen (never on an empty slider)
+    if (!moved.current && ready) {
       moved.current = true
       markMission('compare')
     }

@@ -8,7 +8,8 @@ import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { SLUGS, notNoise, openDemo, type Slug } from './helpers'
 
-test.describe.configure({ timeout: 180_000 })
+// up to 45 controls, most of which reopen the demo afterwards (about 3.5 s each): 2.5-3 min per demo when run alone
+test.describe.configure({ timeout: 420_000 })
 
 // tabs are checked on their own (each one must select its panel): clicking them mid-crawl would change the screen
 const CONTROLS = '.dk-shell-canvas :is(button:not([role="tab"]), [role="radio"], [role="switch"], a[href], summary, input[type="checkbox"], input[type="radio"])'

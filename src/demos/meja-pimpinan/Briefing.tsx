@@ -4,18 +4,21 @@
  * and links to the entity it is about (`/demo/<source>?focus=<id>`). "Dengarkan briefing" (lazy) reads it aloud and
  * highlights the item being read. New world facts after composition show as "N pembaruan".
  */
-import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { demoHref } from '../../demo-kit/shell'
 import { Button, Icon, animatePose, motionMode, type IconName } from '../../demo-kit/ui'
 import { useSession, useWorld, type Briefing as BriefingT } from '../../demo-kit/world'
-import { MP, mpBriefingItems, refId, sameItems, useNow, withControls } from './data'
+import { hasVoiceFor, loadVoices } from '../../demo-kit/media/tts'
+import { MP, dayPart, mpBriefingItems, refId, sameItems, useNow, withControls } from './data'
 import type { InstructionPreset } from './index'
 import { nf, tr, trf, type Bi } from './strings'
 
-const BriefingPlayer = lazy(() => import('./BriefingPlayer'))
+const loadPlayer = () => import('./BriefingPlayer')
+const BriefingPlayer = lazy(loadPlayer)
+const TITLE = { pagi: 'briefing', siang: 'briefingSiang', sore: 'briefingSore', malam: 'briefingMalam' } as const
 
 export interface ShownItem {
   title: Bi
@@ -34,7 +37,7 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
   onInstruct?: (p: InstructionPreset) => void
   onListened: () => void
   leader: Bi
-  /** desktop: the start hint points at this panel's compose button (room for the hint under it) */
+  /** desktop: the start hint points at this panel's compose button while no briefing exists */
   hotspot?: boolean
 }) {
   const { lang } = useI18n()
@@ -53,8 +56,30 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
       return { title: it.title, detail: match?.detail ?? null, source: it.source, refs: it.refs, focus: refId(it.refs[0]) }
     })
   }, [briefing, cur])
+  // empty state: what the briefing would gather right now, per source product (live: it follows the world)
+  const ready = useMemo(() => {
+    const m = new Map<ProductSlug, number>()
+    for (const c of cur) m.set(c.source, (m.get(c.source) ?? 0) + 1)
+    return [...m.entries()]
+  }, [cur])
   const updates = useMemo(() => (briefing ? cur.filter((c) => !briefing.items.some((b) => b.title.id === c.title.id)).length : 0), [briefing, cur])
   const sources = useMemo(() => new Set(shown.map((i) => i.source)).size, [shown])
+  // the title follows the world time ("Briefing Pagi" in the morning, "Briefing Sore" at 16.00)
+  const title = tr(TITLE[dayPart(briefing ? briefing.at : now5)], lang)
+
+  // once a briefing exists: fetch the player and ask the browser for its voices, so "Listen" starts at once and
+  // says up front when this device has no voice for the language (read-along mode)
+  const has = !!briefing
+  const [voiceOk, setVoiceOk] = useState<boolean | undefined>(undefined)
+  useEffect(() => {
+    if (!has) return
+    let live = true
+    void loadPlayer().catch(() => {})
+    void loadVoices().then(() => live && setVoiceOk(hasVoiceFor(lang === 'id' ? 'id-ID' : 'en-GB') ?? false))
+    return () => {
+      live = false
+    }
+  }, [has, lang])
 
   // staggered entrance of a freshly composed briefing (transform / opacity only)
   useLayoutEffect(() => {
@@ -80,11 +105,11 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
       <header className="dk-mp-ph">
         <h3 id="dk-mp-brief-h">
           <Icon name="doc" size={16} />
-          {tr('briefing', lang)}
+          {title}
         </h3>
         {briefing && !assembling && (
           <Button size="sm" variant={voice ? 'secondary' : 'ghost'} icon={voice ? 'close' : 'play'} onClick={() => setVoice((v) => !v)} aria-pressed={voice} data-mp="listen">
-            {voice ? tr('stopListen', lang) : `${tr('listen', lang)} · ${trf('listenLen', lang, { m: minutes })}`}
+            {voice ? tr('stopListen', lang) : `${voiceOk === false ? tr('listenSilent', lang) : tr('listen', lang)} · ${trf('listenLen', lang, { m: minutes })}`}
           </Button>
         )}
       </header>
@@ -111,26 +136,24 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
           <div className="dk-mp-empty">
             <p className="dk-mp-empty-t">{tr('briefingEmpty', lang)}</p>
             <p className="dk-mp-empty-b">{tr('briefingEmptyBody', lang)}</p>
-            <ul className="dk-mp-srcs" aria-hidden="true">
-              {(['sapa-warga', 'siaga-wilayah', 'radar-isu', 'awas-belanja', 'sinyal-pasar', 'naskah-pintar'] as const).map((p) => (
+            <p className="dk-mp-ready">
+              <span className="dk-mp-ready-dot" aria-hidden="true" />
+              {trf('readyNow', lang, { n: cur.length, p: ready.length })}
+            </p>
+            <ul className="dk-mp-srcs is-ready">
+              {ready.map(([p, n]) => (
                 <li key={p}>
                   <Icon name={PRODUCT_BY_SLUG[p].icon as IconName} size={14} />
-                  {PRODUCT_BY_SLUG[p].name}
+                  <span className="dk-mp-srcs-n">{PRODUCT_BY_SLUG[p].name}</span>
+                  <span className="dk-mp-srcs-c dk-num">{n === 1 ? tr('finding1', lang) : trf('findings', lang, { n })}</span>
                 </li>
               ))}
             </ul>
-            {onInstruct &&
-              (hotspot ? (
-                <div className="dk-mp-cta--panel" data-hotspot="briefing">
-                  <Button variant="primary" icon="spark" onClick={onCompose}>
-                    {tr('compose', lang)}
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="primary" icon="spark" onClick={onCompose}>
-                  {tr('compose', lang)}
-                </Button>
-              ))}
+            {onInstruct && (
+              <Button variant="primary" icon="spark" onClick={onCompose} data-hotspot={hotspot ? 'briefing' : undefined} className="dk-mp-empty-cta">
+                {tr('compose', lang)}
+              </Button>
+            )}
           </div>
         ) : (
           <ol ref={listRef} className="dk-mp-items" aria-live="polite">

@@ -9,6 +9,7 @@ import type { Intent, Lang, Scenario, SimContext, SimResponse } from '../../demo
 import type { Bi } from '../../demo-kit/world'
 import type { CtxItem, NaskahCtx } from './ai'
 import { byText } from './strings'
+import { dueLabel, isoDateText, parseDue } from './due'
 
 type Ctx = SimContext<unknown>
 
@@ -16,7 +17,7 @@ function W(ctx: Ctx): NaskahCtx {
   const w = (ctx.world ?? {}) as Partial<NaskahCtx>
   return {
     task: w.task ?? 'ask',
-    now: w.now ?? '09:00',
+    now: w.now ?? '07:00',
     day: w.day ?? '',
     region: w.region ?? '',
     lang: w.lang ?? ctx.lang,
@@ -32,7 +33,7 @@ const isJawa = (t: string) => (t.match(JAWA) ?? []).length >= 2
 
 /* ------------------------------------------------------------------ minutes from free text (recorder) */
 
-const ACTION_RE = /(siapkan|kirim|laporkan|verifikasi|koordinasi|tangani|perbaiki|siarkan|ajukan|susun|cek|periksa|gelar|salurkan|pastikan|tindak lanjut|segera|harus|agar|mohon|tolong|paling lambat|tenggat|prepare|send|report|verify|coordinate|fix|broadcast|request|draft|check|hold|deliver|make sure|must|please|by tomorrow|gawekna|kirimna|lapuran)/i
+const ACTION_RE = /(siapkan|kirim|pasang|bangun|turunkan|terjunkan|buka|tutup|laporkan|verifikasi|koordinasi|tangani|perbaiki|siarkan|ajukan|susun|cek|periksa|gelar|salurkan|pastikan|lengkapi|selesaikan|tuntaskan|distribusikan|kerahkan|siagakan|evakuasi|antar|dampingi|tinjau|pantau|perbarui|data ulang|tindak lanjut|segera|harus|agar|mohon|tolong|paling lambat|tenggat|prepare|send|report|verify|coordinate|fix|broadcast|request|draft|check|hold|deliver|make sure|complete|finish|distribute|deploy|monitor|review|update|must|please|by tomorrow|gawekna|kirimna|lapuran)/i
 const DECISION_RE = /(keputusan|diputuskan|disepakati|sepakat|kesimpulan|decision|decided|agreed|resolved|diputus)/i
 const OWNER_RE: [RegExp, Bi][] = [
   [/pupr|pekerjaan umum|public works|tanggul|embankment|jalan rusak/i, { id: 'Dinas PUPR', en: 'Public Works' }],
@@ -43,31 +44,26 @@ const OWNER_RE: [RegExp, Bi][] = [
   [/distan|pertanian|agricultur|gabah|petani|farmer/i, { id: 'Distan', en: 'Agriculture Office' }],
   [/diskominfo|kominfo|komunikasi|communications|siarkan|broadcast/i, { id: 'Diskominfo', en: 'Communications Office' }],
   [/camat|kecamatan|district/i, { id: 'Camat', en: 'District Head' }],
+  [/dishub|perhubungan|transport|rambu|lalu lintas|traffic/i, { id: 'Dishub', en: 'Transport Office' }],
+  [/dlh|lingkungan hidup|environment|sampah|waste/i, { id: 'DLH', en: 'Environment Office' }],
+  [/dpmptsp|perizinan|permit/i, { id: 'DPMPTSP', en: 'One-Stop Permit Office' }],
+  [/disdukcapil|kependudukan|civil registry/i, { id: 'Disdukcapil', en: 'Civil Registry' }],
   [/disdik|pendidikan|education|sekolah|school/i, { id: 'Disdik', en: 'Education Office' }],
   [/bappeda|planning/i, { id: 'Bappeda', en: 'Planning Agency' }],
   [/satpol/i, { id: 'Satpol PP', en: 'Civil Service Police' }],
 ]
-const NUM_WORDS: Record<string, number> = { satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10, sebelas: 11, 'dua belas': 12, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 }
 
-function dueOf(sentence: string, lang: Lang): string {
-  const s = sentence.toLowerCase()
-  const hm = /(?:pukul|jam|at)\s+(\d{1,2}|[a-z]+(?: belas)?)(?:[.:](\d{2}))?/.exec(s)
-  let h: number | null = null
-  if (hm) {
-    const raw = hm[1] ?? ''
-    h = /^\d+$/.test(raw) ? Number(raw) : (NUM_WORDS[raw] ?? null)
-  }
-  const time = h !== null ? `${String(h).padStart(2, '0')}.${hm?.[2] ?? '00'}` : null
-  if (/besok|tomorrow|sesuk/.test(s)) return `${T(lang, 'Besok', 'Tomorrow')}${time ? ` ${time}` : ' 12.00'}`
-  if (/lusa|two days|dua hari/.test(s)) return T(lang, 'Lusa', 'In two days')
-  if (/hari ini|today|dina iki|siang ini|sore ini|this afternoon/.test(s)) return `${T(lang, 'Hari ini', 'Today')}${time ? ` ${time}` : ' 16.00'}`
-  const days = /(\d+)\s*(hari|days)/.exec(s)
-  if (days) return T(lang, `${days[1]} hari lagi`, `In ${days[1]} days`)
-  if (time) return `${T(lang, 'Hari ini', 'Today')} ${time}`
-  return T(lang, '3 hari lagi', 'In 3 days')
+/** the deadline a sentence names, as a label the recorder reads back (due.ts): "Besok 10.00", "Kam, 19 Nov 16.00" */
+function dueOf(sentence: string, lang: Lang, now: number, day: string): string {
+  return dueLabel(parseDue(sentence, now, day), lang, day)
 }
 
-export function extractFromText(text: string, lang: Lang): { decisions: string[]; actionItems: { task: string; owner: string; due: string }[] } {
+/** spoken connectives that are not part of the task ("Kalau begitu Dinas PUPR koordinasikan …") */
+const FILLER_RE = /^(?:(?:kalau|kalo) begitu|baik(?:lah)?|jadi|oke|ok|nah|selanjutnya|lalu|kemudian|terus|untuk itu|dengan demikian|so|okay|right|then|in that case|alright)\b[\s,]*/i
+/** a label before a colon that says "this is a decision" rather than naming a speaker */
+const DECISION_LABEL = /^(keputusan( rapat)?|kesimpulan|diputuskan|disepakati|hasil rapat|decision|decisions|resolution|agreed)$/i
+
+export function extractFromText(text: string, lang: Lang, now = 7 * 60, day = '2026-11-17'): { decisions: string[]; actionItems: { task: string; owner: string; due: string }[] } {
   const sentences = text
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+|\n+/)
@@ -75,9 +71,20 @@ export function extractFromText(text: string, lang: Lang): { decisions: string[]
     .filter((x) => x.length > 8)
   const decisions: string[] = []
   const actionItems: { task: string; owner: string; due: string }[] = []
-  for (const s of sentences) {
-    const clean = s.replace(/^(keputusan( rapat)?|decision)\s*[:,-]?\s*/i, '').replace(/[.!?]+$/, '')
-    if (DECISION_RE.test(s)) decisions.push(clean.charAt(0).toUpperCase() + clean.slice(1))
+  for (const raw of sentences) {
+    /* "Sekda: …" — a speaker label is not part of the instruction; what the chair orders is also a decision */
+    const sp0 = /^([A-Z][\w .'/-]{1,28}):\s+(.+)$/.exec(raw)
+    /* "Keputusan rapat: …" / "Decision: …" is a decision, not a speaker called "Keputusan rapat" */
+    const labelled = !!sp0 && DECISION_LABEL.test((sp0[1] ?? '').trim())
+    const sp = labelled ? null : sp0
+    const s = sp ? (sp[2] ?? raw) : raw
+    const chair = !!sp && /^(sekda|bupati|wali ?kota|ketua|pimpinan|wakil bupati|asisten|chair|regent)/i.test(sp[1] ?? '')
+    const clean = s
+      .replace(/^(keputusan( rapat)?|kesimpulan|hasil rapat|decisions?|resolution)\s*[:,-]?\s*/i, '')
+      .replace(FILLER_RE, '')
+      .replace(/[.!?]+$/, '')
+    const decided = labelled || DECISION_RE.test(s)
+    if (decided || (chair && ACTION_RE.test(s))) decisions.push(clean.charAt(0).toUpperCase() + clean.slice(1))
     let owner: [RegExp, Bi] | undefined
     let at = Infinity
     for (const o of OWNER_RE) {
@@ -87,8 +94,9 @@ export function extractFromText(text: string, lang: Lang): { decisions: string[]
         owner = o
       }
     }
-    const dated = /(besok|lusa|hari ini|pukul|jam|tomorrow|today|sesuk|paling lambat|tenggat|by\s)/i.test(s)
-    if (owner && ACTION_RE.test(s) && (!DECISION_RE.test(s) || dated)) actionItems.push({ task: clean.charAt(0).toUpperCase() + clean.slice(1), owner: owner[1][lang], due: dueOf(s, lang) })
+    const dated = /(besok|lusa|hari ini|pukul|jam|tomorrow|today|sesuk|paling lambat|tenggat|minggu ini|pekan ini|this week|senin|selasa|rabu|kamis|jumat|sabtu|monday|tuesday|wednesday|thursday|friday|saturday|by\s)/i.test(s)
+    /* a decision becomes a task only when it also names a dated job for an agency (not "operasi pasar digelar") */
+    if (owner && ACTION_RE.test(s) && (!decided || (dated && !labelled))) actionItems.push({ task: clean.charAt(0).toUpperCase() + clean.slice(1), owner: owner[1][lang], due: dueOf(s, lang, now, day) })
   }
   return { decisions: decisions.slice(0, 12), actionItems: actionItems.slice(0, 15) }
 }
@@ -116,10 +124,14 @@ function minutes(ctx: Ctx): SimResponse {
     }
   }
   const text = w.meeting?.transcript ?? ''
-  const out = extractFromText(text, lang)
+  const nowMin = (() => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(w.now)
+    return m ? Number(m[1]) * 60 + Number(m[2]) : 7 * 60
+  })()
+  const out = extractFromText(text, lang, nowMin, w.day || '2026-11-17')
   return {
     text: out.actionItems.length
-      ? T(lang, `Dari transkrip saya menemukan ${out.decisions.length} keputusan dan ${out.actionItems.length} tindak lanjut. Periksa PIC dan tenggatnya sebelum disimpan.`, `From the transcript I found ${out.decisions.length} decisions and ${out.actionItems.length} follow-ups. Check the owners and deadlines before saving.`)
+      ? T(lang, `Dari transkrip saya menemukan ${out.decisions.length} keputusan dan ${out.actionItems.length} tindak lanjut. Periksa PIC dan tenggatnya sebelum disimpan.`, `From the transcript I found ${out.decisions.length} ${out.decisions.length === 1 ? 'decision' : 'decisions'} and ${out.actionItems.length} ${out.actionItems.length === 1 ? 'follow-up' : 'follow-ups'}. Check the owners and deadlines before saving.`)
       : T(lang, 'Saya belum menemukan tugas yang jelas di transkrip. Sebutkan unit, tugas, dan tenggatnya, misalnya “Dinas PUPR perbaiki tanggul besok pukul 10”.', 'I found no clear task in the transcript yet. Name the agency, the task and the deadline, e.g. “Public Works repairs the embankment tomorrow at 10”.'),
     structured: { kind: 'minutes', data: out },
     toolCalls: [{ name: 'extract_minutes', input: { kalimat: text.split(/[.!?]/).filter(Boolean).length }, ms: 380 }],
@@ -193,8 +205,8 @@ function reminder(ctx: Ctx): SimResponse {
   const src = it.source === 'meeting' ? T(lang, 'hasil rapat', 'from the meeting') : it.source === 'instruction' ? T(lang, 'instruksi Kepala Daerah', 'the Regional Head’s instruction') : it.source === 'letter' ? T(lang, 'disposisi surat', 'a letter disposition') : ''
   const message =
     lang === 'id'
-      ? `Yth. ${it.pic}, mengingatkan tindak lanjut ${src} “${title}” dengan tenggat ${it.due} (${lateTxt}). Mohon kabari progresnya lewat Naskah Pintar. Terima kasih. ${it.from ?? 'Sekretariat Daerah'}`
-      : `Dear ${it.pic}, a reminder about the follow-up ${src} “${title}”, due ${it.due} (${lateTxt}). Please update its progress in Naskah Pintar. Thank you. ${it.from ?? 'Regional Secretariat'}`
+      ? `Yth. ${it.pic}, pengingat tindak lanjut ${src}: “${title}”, tenggat ${it.due} (${lateTxt}). Mohon kabari progresnya. ${it.from ?? 'Sekretariat Daerah'}`
+      : `Dear ${it.pic}, a reminder: “${title}” ${src}, due ${it.due} (${lateTxt}). Please share an update. ${it.from ?? 'Regional Secretariat'}`
   return {
     text: message,
     structured: { kind: 'reminder', data: { to: it.pic, message, dueText: it.due } },
@@ -223,12 +235,12 @@ function lateList(ctx: Ctx): SimResponse {
       text: `Wonten ${b.late} tindak lanjut sing kasep tenggate:\n${b.lateItems
         .slice(0, 5)
         .map((x) => itemLine('id', x))
-        .join('\n')}${more > 0 ? `\n…lan ${more} liyane` : ''}\nSaged dikirimi pangeling-eling saking tab Tindak Lanjut.`,
-      translation: `Terjemahan: Ada ${b.late} tindak lanjut yang lewat tenggat. Pengingat bisa dikirim dari tab Tindak Lanjut.`,
+        .join('\n')}${more > 0 ? `\n…lan ${more} liyane` : ''}\nSaged dikirimi pangeling-eling saking papan tindak lanjut.`,
+      translation: `Terjemahan: Ada ${b.late} tindak lanjut yang lewat tenggat. Pengingat bisa dikirim dari papan tindak lanjut (tab Tindak Lanjut, di HP: Tugas).`,
       followUps: ['Kirim pengingat ke yang paling telat', 'OPD mana paling banyak tugas?'],
     }
   return {
-    text: T(lang, `Ada ${b.late} tindak lanjut lewat tenggat:\n${lines}\nKirim pengingat dari tab Tindak Lanjut.`, `${b.late} ${b.late === 1 ? 'follow-up is' : 'follow-ups are'} overdue:\n${lines}\nSend reminders from the Follow-ups tab.`),
+    text: T(lang, `Ada ${b.late} tindak lanjut lewat tenggat:\n${lines}\nKirim pengingat dari papan tindak lanjut (tab Tindak Lanjut, di HP: Tugas).`, `${b.late} ${b.late === 1 ? 'follow-up is' : 'follow-ups are'} overdue:\n${lines}\nSend reminders from the follow-up board (Follow-ups tab, Tasks on a phone).`),
     toolCalls: [{ name: 'query_action_items', input: { status: 'lewat_tenggat' }, output: { jumlah: b.late }, ms: 140 }],
     followUps: lang === 'id' ? ['OPD mana paling banyak tugas?', 'Apa yang jatuh tempo hari ini?'] : ['Which agency has the most tasks?', 'What is due today?'],
   }
@@ -270,6 +282,41 @@ function byOpd(ctx: Ctx): SimResponse {
   }
 }
 
+function lateByOpd(ctx: Ctx): SimResponse {
+  const w = W(ctx)
+  const lang = ctx.lang
+  const b = w.board
+  if (!b) return fallback(ctx)
+  const rows = b.byOpd.filter((r) => r.late > 0).sort((a, c) => c.late - a.late || c.open - a.open)
+  if (!rows.length) return { text: T(lang, 'Tidak ada OPD dengan tindak lanjut lewat tenggat saat ini.', 'No agency has an overdue follow-up right now.') }
+  const list = rows.map((r) => `- ${r.opd}: ${num(lang, r.late)} ${T(lang, 'lewat tenggat', 'overdue')} ${T(lang, `dari ${num(lang, r.open)} terbuka`, `of ${num(lang, r.open)} open`)}`).join('\n')
+  return {
+    text: T(lang, `${rows.length} OPD punya tindak lanjut lewat tenggat (total ${b.late}):\n${list}\nKirim pengingat dari papan tindak lanjut (tab Tindak Lanjut, di HP: Tugas).`, `${rows.length} ${rows.length === 1 ? 'agency has' : 'agencies have'} overdue follow-ups (${b.late} in all):\n${list}\nSend reminders from the follow-up board (Follow-ups tab, Tasks on a phone).`),
+    toolCalls: [{ name: 'group_by_opd', input: { status: 'lewat_tenggat' }, output: { opd: rows.length }, ms: 160 }],
+    followUps: lang === 'id' ? ['Tindak lanjut apa yang lewat tenggat?'] : ['Which follow-ups are overdue?'],
+  }
+}
+
+function urgentLetters(ctx: Ctx): SimResponse {
+  const w = W(ctx)
+  const lang = ctx.lang
+  const l = w.letters
+  if (!l) return fallback(ctx)
+  const urgent = l.pendingList.filter((x) => x.sifat === 'segera').sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))
+  const list = (urgent.length ? urgent : l.pendingList).slice(0, 4)
+  if (!list.length) return { text: T(lang, 'Semua surat masuk sudah didisposisi; tidak ada yang menunggu.', 'Every incoming letter has a disposition; nothing is waiting.') }
+  const lines = list
+    .map((x) => `- ${L(lang, x.subject)} (${byText(x.from, lang === 'en' ? 'en' : 'id')})${x.due ? T(lang, `, tenggat ${isoDateText(x.due, 'id')}`, `, due ${isoDateText(x.due, 'en')}`) : ''}${x.to?.length ? T(lang, `; disarankan ke ${x.to.join(', ')}`, `; suggested for ${x.to.join(', ')}`) : ''}`)
+    .join('\n')
+  return {
+    text: urgent.length
+      ? T(lang, `${urgent.length} surat bersifat segera dan belum didisposisi:\n${lines}\nBuka di tab Surat Masuk lalu “Baca & susun disposisi” untuk memeriksa draf AI sebelum disetujui.`, `${urgent.length} urgent ${urgent.length === 1 ? 'letter still needs' : 'letters still need'} a disposition:\n${lines}\nOpen it in Incoming, then “Read & draft disposition” to check the AI draft before approving.`)
+      : T(lang, `Tidak ada surat segera. Yang masih menunggu disposisi:\n${lines}`, `No urgent letter. Still waiting for a disposition:\n${lines}`),
+    toolCalls: [{ name: 'query_letters', input: { sifat: 'segera', status: 'masuk' }, output: { jumlah: urgent.length }, ms: 150 }],
+    followUps: lang === 'id' ? ['Bagaimana cara mendisposisikan surat?'] : ['How do I disposition a letter?'],
+  }
+}
+
 function pendingLetters(ctx: Ctx): SimResponse {
   const w = W(ctx)
   const lang = ctx.lang
@@ -297,13 +344,42 @@ function meetingDecisions(ctx: Ctx): SimResponse {
   const w = W(ctx)
   const lang = ctx.lang
   const m = w.minutes
-  const meet = w.meetings?.find((x) => x.transcribed)
+  const meet = w.meetings?.find((x) => x.transcribed && /banjir|flood/i.test(x.title.id)) ?? w.meetings?.find((x) => x.transcribed)
   if (!m || !m.decisions.length)
     return {
       text: T(lang, 'Notulen rapat banjir belum ada. Putar rekaman contoh di tab Rapat, keputusan akan tercatat otomatis.', 'There are no flood-meeting minutes yet. Play the sample recording in the Meeting tab and the decisions are recorded automatically.'),
     }
+  /* "Keputusan Rapat Koordinasi …" (the title already says "Rapat"): no "rapat Rapat" */
+  const title = meet ? L(lang, meet.title) : ''
+  const head = title ? T(lang, `Keputusan ${/^rapat\b/i.test(title) ? title : `rapat ${title}`}:\n`, `Decisions of the ${title}:\n`) : T(lang, 'Keputusan rapat:\n', 'Decisions of the meeting:\n')
+  const askPic = /\b(pic|pic-nya|siapa|sinten|who|penanggung jawab|in charge)\b/i.test(ctx.text)
+  const pics = askPic && m.actions.length ? `\n${T(lang, 'Tindak lanjut dan PIC-nya:', 'Follow-ups and who owns them:')}\n${m.actions.map((a) => `- ${L(lang, a.task)}: ${a.pic}, ${T(lang, 'tenggat', 'due')} ${a.due}`).join('\n')}` : ''
   return {
-    text: T(lang, `Keputusan rapat${meet ? ` ${L(lang, meet.title)}` : ''}:\n`, `Decisions of${meet ? ` ${L(lang, meet.title)}` : ' the meeting'}:\n`) + m.decisions.map((d, i) => `${i + 1}. ${L(lang, d)}`).join('\n'),
+    text: head + m.decisions.map((d, i) => `${i + 1}. ${L(lang, d)}`).join('\n') + pics,
+    followUps: lang === 'id' ? ['Berapa tindak lanjut rapat banjir yang sudah selesai?'] : ['How many flood-meeting follow-ups are done?'],
+  }
+}
+
+/** how far the flood meeting's follow-ups have got (statuses from the board) */
+function meetingProgress(ctx: Ctx): SimResponse {
+  const w = W(ctx)
+  const lang = ctx.lang
+  const acts = w.minutes?.actions ?? []
+  if (!acts.length)
+    return { text: T(lang, 'Tindak lanjut rapat banjir belum dibuat. Putar rekaman contoh di tab Rapat; keenam tindak lanjut langsung masuk papan OPD.', 'The flood meeting has no follow-ups yet. Play the sample recording in the Meeting tab; all six land on the agency board at once.') }
+  const done = acts.filter((a) => a.status === 'selesai')
+  const run = acts.filter((a) => a.status === 'proses')
+  const rest = acts.length - done.length - run.length
+  const ST: Record<string, Bi> = { selesai: { id: 'selesai', en: 'done' }, proses: { id: 'sedang dikerjakan', en: 'in progress' }, baru: { id: 'belum dimulai', en: 'not started' } }
+  const list = acts.map((a) => `- ${L(lang, a.task)} (${a.pic}): ${L(lang, ST[a.status ?? 'baru'] ?? ST.baru)}`).join('\n')
+  return {
+    text: T(
+      lang,
+      `${done.length} dari ${acts.length} tindak lanjut rapat banjir sudah selesai, ${run.length} sedang dikerjakan, ${rest} belum dimulai (per pukul ${w.now.replace(':', '.')}):\n${list}`,
+      `${done.length} of ${acts.length} flood-meeting follow-ups are done, ${run.length} in progress, ${rest} not started (as of ${w.now}):\n${list}`,
+    ),
+    toolCalls: [{ name: 'query_action_items', input: { sumber: 'rapat_banjir' }, output: { selesai: done.length, berjalan: run.length }, ms: 140 }],
+    followUps: lang === 'id' ? ['Tindak lanjut apa yang lewat tenggat?'] : ['Which follow-ups are overdue?'],
   }
 }
 
@@ -427,14 +503,36 @@ const intents: Intent<unknown>[] = [
     respond: (ctx) => byOpd(ctx),
   },
   {
+    id: 'followups.lateByOpd',
+    examples: ['Siapa yang paling sering telat?', 'OPD mana yang paling banyak lewat tenggat', 'dinas mana yang terlambat', 'Which agency is most often late?', 'which agencies have overdue tasks', 'Dinas endi sing paling kasep'],
+    respond: (ctx) => lateByOpd(ctx),
+  },
+  {
+    id: 'letters.urgent',
+    examples: ['Surat mana yang paling mendesak dan siapa yang harus menangani?', 'surat segera mana yang harus didahulukan', 'surat paling mendesak', 'Which letter is most urgent and who should handle it?', 'most urgent letters', 'Surat endi sing paling mendesak'],
+    respond: (ctx) => urgentLetters(ctx),
+  },
+  {
     id: 'letters.pending',
     examples: ['Berapa surat yang belum didisposisi?', 'surat masuk yang menunggu disposisi', 'How many letters still need a disposition?', 'pending letters', 'Surat sing durung didisposisi pira'],
     respond: (ctx) => pendingLetters(ctx),
   },
   {
     id: 'meeting.decisions',
-    examples: ['Apa keputusan rapat banjir hari ini?', 'hasil rapat koordinasi banjir', 'What did the flood meeting decide today?', 'meeting decisions', 'Rapate mutusake apa'],
+    examples: ['Apa keputusan rapat banjir hari ini?', 'Apa keputusan rapat banjir tadi pagi dan siapa PIC-nya?', 'hasil rapat koordinasi banjir', 'What did the flood meeting decide and who owns each item?', 'What did the flood meeting decide today?', 'meeting decisions', 'Rapate mutusake apa'],
     respond: (ctx) => meetingDecisions(ctx),
+  },
+  {
+    id: 'meeting.progress',
+    examples: [
+      'Berapa tindak lanjut rapat banjir yang sudah selesai?',
+      'progres tindak lanjut rapat banjir',
+      'sudah sampai mana pengerjaan tindak lanjut rapat',
+      'How many flood-meeting follow-ups are done?',
+      'flood meeting follow-up progress',
+      'Tindak lanjut rapat banjir wis rampung pira',
+    ],
+    respond: (ctx) => meetingProgress(ctx),
   },
   {
     id: 'meeting.list',

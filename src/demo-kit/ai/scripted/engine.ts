@@ -9,14 +9,14 @@
 import type { AiChunk, IntentMatch, Lang, Msg, Scenario, SimContext, SimResponse } from '../types'
 import type { ProductSlug, RoleId } from '../../../content/products'
 import { createMatcher, type Matcher, type SynonymMap } from '../intents'
-import { hashString, prng, sleep as realSleep, streamText, thinkingDelayMs, type Sleep } from '../stream'
+import { eitherSignal, hashString, prng, sleep as realSleep, streamText, thinkingDelayMs, type Sleep } from '../stream'
 
 /* ------------------------------------------------------------------ constants (module-local, see report) */
 export const ENGINE = {
   /** shown pause per agent step = clamp(step.ms × stepScale, stepMinMs, stepMaxMs) */
   stepScale: 0.5,
   stepMinMs: 90,
-  stepMaxMs: 420,
+  stepMaxMs: 260,
   /** default ms reported for a step without `ms` (deterministic in this range) */
   stepDefaultMin: 120,
   stepDefaultMax: 480,
@@ -111,12 +111,17 @@ export interface SimChunkOptions {
   sleep?: Sleep
   /** seed for timings (default: hash of the answer text) */
   seed?: number
+  /** when this aborts, the rest arrives without delays */
+  skip?: AbortSignal
 }
 
 /** Stream a SimResult as AiChunks. Ends early (without done) when the signal aborts. */
 export async function* simChunks(result: SimResult, opts: SimChunkOptions = {}): AsyncIterable<AiChunk> {
   const { response, match } = result
-  const wait: Sleep = opts.instant ? async () => {} : (opts.sleep ?? realSleep)
+  const base: Sleep = opts.instant ? async () => {} : (opts.sleep ?? realSleep)
+  const skip = opts.skip
+  const wake = eitherSignal(opts.signal, skip)
+  const wait: Sleep = (ms, s) => (skip?.aborted ? Promise.resolve() : base(ms, s && s === opts.signal ? wake : s))
   const seed = opts.seed ?? hashString(response.text)
   const signal = opts.signal
 
@@ -124,7 +129,7 @@ export async function* simChunks(result: SimResult, opts: SimChunkOptions = {}):
   if (signal?.aborted) return
 
   // only forward an injected sleep: the default path lets streamText compensate timer drift
-  for await (const piece of streamText(response.text, { seed, instant: !!opts.instant, ...(opts.sleep ? { sleep: opts.sleep } : {}), ...(signal ? { signal } : {}) })) {
+  for await (const piece of streamText(response.text, { seed, instant: !!opts.instant, ...(opts.sleep ? { sleep: opts.sleep } : {}), ...(signal ? { signal } : {}), ...(skip ? { skip } : {}) })) {
     yield { type: 'text', text: piece }
   }
   if (signal?.aborted) return

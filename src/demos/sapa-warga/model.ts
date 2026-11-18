@@ -8,7 +8,7 @@
 import type { Lang } from '../../lib/i18n'
 import type { RegionPack } from '../../demo-kit/region/types'
 import {
-  CATEGORY_LABEL, DAY_MIN, WORLD, distanceKm, emit, formatId, hhmm, rows,
+  CATEGORY_LABEL, DAY_MIN, WORLD, clock, distanceKm, emit, formatId, hhmm, rows,
   type Bi, type Citizen, type ComplaintCategory, type ComplaintChannel, type EventMap, type LngLat, type Urgency, type WorldState,
 } from '../../demo-kit/world'
 
@@ -30,6 +30,38 @@ export const SW = {
   /** ticket flight phone → console (s), spec ≤ 900 ms */
   flightS: 0.85,
 } as const
+
+/* ------------------------------------------------------------------ simulated work time per officer step */
+
+/**
+ * How long each step takes in the simulated day (world minutes). An officer action moves the world clock on by
+ * this much, so a ticket's history reads like a working morning ("dilaporkan 07.02, selesai 08.58") instead of
+ * five steps in the same minute. The drawer says so next to the action ("jam simulasi maju +18 mnt").
+ */
+const STEP_MIN = { diverifikasi: 4, diteruskan: 7, diproses: 18 } as const
+const FIX_MIN: Partial<Record<ComplaintCategory, number>> = { banjir: 95, 'pohon-tumbang': 80, pju: 150, 'jalan-rusak': 180, sampah: 110, 'air-bersih': 140 }
+export function stepMinutes(status: string, category: ComplaintCategory): number {
+  if (status === 'selesai') return FIX_MIN[category] ?? 120
+  return STEP_MIN[status as keyof typeof STEP_MIN] ?? 0
+}
+/** move the shared world clock on by `min` (never past the end of the demo day); returns the minutes really added */
+export function advanceClock(min: number): number {
+  if (min <= 0) return 0
+  const now = clock.get().minutes
+  const to = Math.min(DAY_MIN - 2, now + min)
+  if (to <= now) return 0
+  clock.setTime(to)
+  return to - now
+}
+/** "1 j 35 m" / "1 h 35 m" / "18 mnt" / "18 min" */
+export function durText(min: number, lang: Lang): string {
+  const m = Math.max(0, Math.round(min))
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  if (!h) return lang === 'id' ? `${r} mnt` : `${r} min`
+  if (!r) return lang === 'id' ? `${h} jam` : `${h} h`
+  return lang === 'id' ? `${h} j ${r} m` : `${h} h ${r} m`
+}
 
 /* ------------------------------------------------------------------ personas */
 
@@ -93,12 +125,13 @@ export function voiceSampleFor(key: PersonaKey, pack: RegionPack | null): VoiceS
 
 /* ------------------------------------------------------------------ sample photos (inline SVG scenes in photos.tsx) */
 
-export type PhotoId = 'genangan' | 'air-rumah' | 'lampu' | 'lubang' | 'sesudah'
+export type PhotoId = 'genangan' | 'air-rumah' | 'lampu' | 'lubang' | 'sesudah' | 'surut'
 export const PHOTO_META: Record<PhotoId, { category: ComplaintCategory | null; caption: Bi; title: Bi }> = {
   genangan: { category: 'banjir', title: { id: 'Genangan jalan desa', en: 'Flooded village road' }, caption: { id: 'Jalan depan SD sudah tergenang setinggi lutut, motor tidak bisa lewat.', en: 'The road in front of the primary school is knee-deep in water, motorbikes cannot pass.' } },
   'air-rumah': { category: 'banjir', title: { id: 'Air masuk halaman', en: 'Water in the yard' }, caption: { id: 'Air sudah masuk halaman rumah dan terus naik.', en: 'Water has entered the yard and keeps rising.' } },
   lampu: { category: 'pju', title: { id: 'Lampu jalan padam', en: 'Street light out' }, caption: { id: 'Lampu jalan di pertigaan ini mati, malam gelap sekali.', en: 'The street light at this junction is out, it is pitch dark at night.' } },
   lubang: { category: 'jalan-rusak', title: { id: 'Jalan berlubang', en: 'Pothole' }, caption: { id: 'Lubang besar di tengah jalan, sudah ada pengendara jatuh.', en: 'A big pothole in the middle of the road, a rider has already fallen.' } },
+  surut: { category: null, title: { id: 'Sesudah ditangani: air surut', en: 'After the fix: water receded' }, caption: { id: 'Jalan depan SD yang sama, air sudah surut.', en: 'The same road in front of the school, the water has receded.' } },
   sesudah: { category: null, title: { id: 'Sesudah ditangani', en: 'After the fix' }, caption: { id: 'Kondisi sesudah ditangani petugas.', en: 'Condition after the crew fixed it.' } },
 }
 export const PERSONA_PHOTOS: Record<PersonaKey, PhotoId[]> = {
@@ -146,6 +179,32 @@ export function classifyReport(text: string): ComplaintCategory | null {
   for (const [cat, re] of REPORT_RULES) if (re.test(text)) return cat
   return null
 }
+/* ------------------------------------------------------------------ life safety (triase darurat) */
+
+/**
+ * Life-safety words (ID · Basa Jawa · EN): someone needs evacuating or rescuing. Such a complaint is not a public-works
+ * job with a 24-hour SLA: the AI triage labels it Darurat and routes it straight to BPBD (Pusdalops), with the category's
+ * own agency copied in (see triage.ts).
+ */
+const EMERGENCY = /evakuasi|dievakuasi|perahu karet|kirim perahu|terjebak|terperangkap|sepinggang|sedada|terseret arus|tulung .{0,20}(ngungsi|dievakuasi)|evacuat|trapped|rescue|rubber boat|waist-deep|chest-deep/i
+/** response target for a life-safety complaint (world minutes) */
+export const EMERGENCY_RESPONSE_MIN = 60
+export function isEmergency(c: { text: string; summary?: Bi; category: ComplaintCategory }): boolean {
+  if (c.category !== 'banjir' && c.category !== 'pohon-tumbang' && c.category !== 'kesehatan' && c.category !== 'lainnya') return false
+  return EMERGENCY.test(c.text) || EMERGENCY.test(c.summary?.id ?? '') || EMERGENCY.test(c.summary?.en ?? '')
+}
+/**
+ * What the reporter actually needs, for "Gabungkan duplikat": only the same need may be merged (an evacuation request
+ * never disappears into a drainage ticket, a contaminated well is a clean-water need, not a flood duplicate).
+ */
+export function needKey(c: { text: string; summary?: Bi; category: ComplaintCategory }): string {
+  if (isEmergency(c)) return 'darurat'
+  const t = `${c.text} ${c.summary?.id ?? ''}`
+  if (/sumur|air bersih|clean water|\bwells?\b/i.test(t)) return 'air-bersih'
+  if (c.category === 'banjir' && /posko|ngungsi|mengungsi|shelter/i.test(t)) return 'posko'
+  return c.category
+}
+
 const URGENT = /sepinggang|evakuasi|terus naik|masuk rumah|mlebu omah|kabel .{0,10}(putus|pedhot)|bengi iki|malam ini|darurat|keselamatan|rising|emergency|waist|tumbang|ambruk|jatuh|tiba/i
 export function urgencyOf(cat: ComplaintCategory, text: string): Urgency {
   if (URGENT.test(text) || cat === 'banjir' || cat === 'pohon-tumbang') return 'tinggi'
@@ -296,8 +355,16 @@ export function neighbourReport(s: WorldState, center: LngLat, kecamatanId: stri
     { id: `Air mulai masuk rumah di ${desa}, sudah sebetis dan terus naik.`, en: `Water is entering homes in ${desa}, calf-deep and still rising.` },
     { id: `Jalan utama ${desa} tergenang, anak sekolah tidak bisa lewat.`, en: `The main road of ${desa} is flooded, school children cannot get through.` },
     { id: `Sawah dan pekarangan di ${desa} tergenang sejak subuh.`, en: `Rice fields and yards in ${desa} have been flooded since dawn.` },
+    { id: `Gang di belakang pasar ${desa} sudah tidak bisa dilewati motor, air setinggi lutut.`, en: `The alley behind the ${desa} market is knee-deep, motorbikes cannot pass.` },
+    { id: `Saluran depan balai desa ${desa} meluap, air cokelat masuk ke teras warga.`, en: `The drain in front of the ${desa} village hall has overflowed; brown water is reaching porches.` },
+    { id: `Kandang ternak di ujung ${desa} kemasukan air, kami pindahkan kambing ke tanggul.`, en: `Water got into the livestock pens at the edge of ${desa}; we are moving the goats up to the embankment.` },
+    { id: `Musala di RT 02 ${desa} tergenang sekitar 30 cm, karpet sudah kami angkat.`, en: `The prayer house in RT 02, ${desa} has about 30 cm of water; we have lifted the carpets.` },
+    { id: `Air dari sungai merembes lewat tanggul kecil di ${desa}, mohon dicek sebelum makin besar.`, en: `River water is seeping through the small embankment in ${desa}; please check it before it gets worse.` },
   ]
-  const t = texts[n % texts.length]!
+  const day = Math.floor(clock.get().minutes / DAY_MIN) * DAY_MIN
+  const used = new Set(rows(s.complaints).filter((x) => x.category === 'banjir' && x.desaId === desaId && x.at >= day).map((x) => x.text))
+  const k = texts.findIndex((_, i) => !used.has(texts[(n + i) % texts.length]!.id))
+  const t = texts[(n + Math.max(0, k)) % texts.length]!
   const coord = offsetKm(center, ((n % 5) - 2) * 0.07, ((n % 3) - 1) * 0.08)
   return createComplaint(s, { citizen: c, category: 'banjir', channel: n % 2 ? 'web' : 'wa', text: t.id, lang: 'id', summary: t, coord, kecamatanId, desaId, urgency: 'tinggi', photo: n % 2 === 0 })
 }
@@ -335,8 +402,21 @@ export interface SwContext {
   nextCode: string
   /** set when the phone already created the ticket (voice note / photo report) before asking the AI to answer */
   justCreated: { code: string; category: ComplaintCategory; opd: string; slaHours: number; channel: ComplaintChannel; place: string; translation: Bi | null } | null
-  alertHere: { level: number; kecamatan: string } | null
+  /** posko: the shelter named in the warning this citizen received (the bot repeats the same place) */
+  alertHere: { level: number; kecamatan: string; posko: string | null } | null
   clusterHere: { complaints: number; desa: string } | null
+}
+
+/** the shelter named in the newest early warning on this citizen's phone ("Posko pengungsian Balai Desa Temu") */
+function poskoFor(s: WorldState, citizenId: string): string | null {
+  let best: { at: number; text: string } | null = null
+  for (const id of s.messages.ids) {
+    const m = s.messages.byId[id]
+    if (!m || m.kind !== 'peringatan' || !m.to.includes(citizenId)) continue
+    if (!best || m.at >= best.at) best = { at: m.at, text: m.text.id }
+  }
+  const hit = best ? /posko(?: pengungsian)? (?:di )?([A-Z][^.,;:\n]*)/i.exec(best.text) : null
+  return hit?.[1]?.trim() ?? null
 }
 
 export function buildContext(s: WorldState, pack: RegionPack | null, key: PersonaKey, now: number, justCreated: SwContext['justCreated']): SwContext {
@@ -369,7 +449,7 @@ export function buildContext(s: WorldState, pack: RegionPack | null, key: Person
     myTickets,
     nextCode: nextComplaintCode(s),
     justCreated,
-    alertHere: alert ? { level: alert.level, kecamatan: alert.kecamatanIds.map((k) => kecName(s, k)).join(', ') } : null,
+    alertHere: alert ? { level: alert.level, kecamatan: alert.kecamatanIds.map((k) => kecName(s, k)).join(', '), posko: poskoFor(s, c?.id ?? '') } : null,
     clusterHere: cl ? { complaints: cl.complaintIds.length, desa: desaName(s, cl.kecamatanId, cl.desaId) } : null,
   }
 }
@@ -431,6 +511,9 @@ export function resolvePlace(s: WorldState, loc: unknown, fallback: { kecamatanI
 }
 
 /* ------------------------------------------------------------------ small formatting */
+
+/** a category label that may break after its slash ("Flood/Waterlogging") instead of mid-word */
+export const slashBreak = (v: string): string => v.replace(/\//g, '/​')
 
 export const L = <T,>(lang: Lang, v: { id: T; en: T }): T => v[lang]
 /**

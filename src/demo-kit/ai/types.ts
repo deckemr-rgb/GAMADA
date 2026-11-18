@@ -32,6 +32,9 @@ export interface ChatRequest {
   tools?: ToolSpec[]
   /** abort when the user resets / navigates */
   signal?: AbortSignal
+  /** simulated answers only: when this aborts, the rest of the answer (text, tool steps, structured parts) arrives
+   *  at once ("Tampilkan sekarang" / a tap on the bubble / a short draft that should not make anyone wait) */
+  skip?: AbortSignal
 }
 
 export type ExtractKind = 'document' | 'invoice' | 'cv' | 'ktp-specimen'
@@ -51,6 +54,8 @@ export interface ExtractedField {
   confidence: number
   /** bounding box in % of the page */
   box?: { x: number; y: number; w: number; h: number }
+  /** how the value reads: 'amount' = Rupiah, 'presence' = ada / tidak ada (localised), 'text' = verbatim. Inferred when absent. */
+  kind?: 'amount' | 'presence' | 'text'
 }
 export interface Extracted {
   kind: ExtractKind

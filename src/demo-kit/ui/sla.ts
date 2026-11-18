@@ -24,13 +24,22 @@ function span(lang: Lang, min: number): string {
     return lang === 'id' ? `${hr} j` : `${hr} h`
   }
   const d = Math.round(h / 24)
-  return lang === 'id' ? `${d} hr` : `${d} d`
+  return lang === 'id' ? `${d} hari` : `${d} ${d === 1 ? 'day' : 'days'}`
 }
 
-/** `minutesLeft` may be negative (overdue). `done` short-circuits to "Tuntas" / "Resolved". */
-export function formatSla(minutesLeft: number, lang: Lang, done = false): SlaResult {
+/**
+ * `minutesLeft` may be negative (overdue). `done` short-circuits to "Tuntas" / "Resolved". With `now` (the current
+ * minute, e.g. world minutes) a deadline 2+ days away counts CALENDAR days: the day after tomorrow reads
+ * "Lusa" / "in 2 days" whatever the hour, not "3 hari lagi" for a late-afternoon deadline seen early in the morning.
+ */
+export function formatSla(minutesLeft: number, lang: Lang, done = false, now?: number): SlaResult {
   if (done) return { text: lang === 'id' ? 'Tuntas' : 'Resolved', tone: 'done' }
   if (minutesLeft < 0) return { text: lang === 'id' ? `Lewat ${span(lang, -minutesLeft)}` : `${span(lang, -minutesLeft)} late`, tone: 'late' }
+  if (now !== undefined && minutesLeft >= 24 * 60) {
+    const days = Math.floor((now + minutesLeft) / 1440) - Math.floor(now / 1440)
+    if (days === 2) return { text: lang === 'id' ? 'Lusa' : 'in 2 days', tone: 'ok' }
+    if (days > 2) return { text: lang === 'id' ? `${days} hari lagi` : `${days} days left`, tone: 'ok' }
+  }
   return { text: lang === 'id' ? `${span(lang, minutesLeft)} lagi` : `${span(lang, minutesLeft)} left`, tone: minutesLeft < SLA_WARN_MIN ? 'warn' : 'ok' }
 }
 

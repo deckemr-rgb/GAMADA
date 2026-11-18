@@ -9,14 +9,14 @@
  * Lazy: chat (+ scenario + query engine + charts), scorecard, instruction dialog, meeting mode, phone view,
  * briefing voice and the Kepala OPD task list load on the user action that needs them.
  */
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import type { DemoCanvasProps } from '../registry'
 import type { ProductSlug } from '../../content/products'
-import { useShell, type Mission } from '../../demo-kit/shell'
-import { clock, emit, isEvent, rows, useSession, useWorld, world, type EntityRef, type WorldState } from '../../demo-kit/world'
+import { dismissHotspot, useShell, type Mission } from '../../demo-kit/shell'
+import { clock, emit, isEvent, rows, setSession, useClock, useSession, useWorld, world, type EntityRef, type WorldState } from '../../demo-kit/world'
 import { WallScreenFrame } from '../../demo-kit/frames'
-import { Button, LiveBadge, LoadingText, Select, Tabs, motionMode, useElementWidth } from '../../demo-kit/ui'
+import { Button, IconButton, LiveBadge, LoadingText, Select, Tabs, motionMode, useElementWidth } from '../../demo-kit/ui'
 import type { MapViewHandle } from '../../demo-kit/map'
 import { Kpis as KpisP } from './Kpis'
 import { MapPanel as MapPanelP } from './MapPanel'
@@ -26,7 +26,7 @@ import { Events as EventsP } from './Events'
 import { AskBox as AskBoxP } from './AskBox'
 import { HoaxBanner } from './HoaxBanner'
 import { MP, desaName, mpBriefingItems, useNow } from './data'
-import { leaderTitle, nf, tr, trf, type Bi } from './strings'
+import { leaderTitle, nf, regionLabel, tr, trf, type Bi } from './strings'
 import './mp.css'
 
 /* the panels re-render from their own world / clock subscriptions; opening or closing a dialog, the assembling
@@ -37,6 +37,22 @@ const Briefing = memo(BriefingP)
 const Leaderboard = memo(LeaderboardP)
 const Events = memo(EventsP)
 const AskBox = memo(AskBoxP)
+
+/* the map is the centre of the first screen: start the MapLibre engine chunk, its stylesheet and the basemap host
+   connection while the world is still being generated, instead of when the MapView first mounts (it then waited for
+   the world, the region pack and the panels to render first: the "map still loading 3 s after open" gap). The same
+   chunk the MapView imports (MapLibre stays out of the demo budget); errors surface there, not here. */
+if (typeof window !== 'undefined') {
+  void Promise.all([import('../../demo-kit/map/engine'), import('maplibre-gl/dist/maplibre-gl.css')]).catch(() => {})
+  if (!document.querySelector('link[data-mp-preconnect]')) {
+    const l = document.createElement('link')
+    l.rel = 'preconnect'
+    l.href = 'https://tiles.openfreemap.org'
+    l.crossOrigin = 'anonymous'
+    l.dataset.mpPreconnect = ''
+    document.head.appendChild(l)
+  }
+}
 
 const InstructionDialog = lazy(() => import('./InstructionDialog'))
 const Scorecard = lazy(() => import('./Scorecard'))
@@ -52,6 +68,8 @@ export interface InstructionPreset {
   origin?: EntityRef
   /** a briefing item: the dialog derives the suggestion itself (keeps the suggestion code out of the first screen) */
   item?: { title: Bi; source: ProductSlug; refs: EntityRef[] }
+  /** deadline preset (urgent items such as a hoax clarification: today) */
+  due?: 'today' | 'tomorrow' | 'd3'
 }
 
 type Dialog = { kind: 'instruct'; preset?: InstructionPreset } | { kind: 'scorecard'; opdId: string } | { kind: 'phone' } | { kind: 'meeting' } | null
@@ -69,17 +87,17 @@ export const missions: readonly Mission[] = [
   {
     id: 'listen',
     label: { id: 'Dengarkan 1 butir briefing', en: 'Listen to 1 briefing item' },
-    hint: { id: 'Di panel Briefing Pagi tekan "Dengarkan briefing": butir yang sedang dibacakan disorot.', en: 'In the Morning Briefing panel press "Listen to briefing": the item being read is highlighted.' },
+    hint: { id: 'Di panel briefing tekan "Dengarkan briefing" (di perangkat tanpa suara: "Baca bersama"): butir yang sedang dibacakan disorot.', en: 'In the briefing panel press "Listen to briefing" (on a device without a voice: "Read along"): the item being read is highlighted.' },
   },
   {
     id: 'ask',
     label: { id: 'Ajukan 1 pertanyaan data', en: 'Ask 1 data question' },
-    hint: { id: 'Di "Tanya data", misalnya: "Kenapa aduan jalan naik minggu ini?" Jawaban datang dengan grafik dan peta.', en: 'In "Ask the data", e.g. "Why are road complaints up this week?" The answer comes with a chart and the map.' },
+    hint: { id: 'Di "Tanya data" tekan contoh pertanyaan pertama (kategori aduan yang memang naik pekan ini), atau ketik misalnya "Berapa aduan jalan rusak di Dander bulan ini?" Jawaban datang dengan grafik dan peta.', en: 'In "Ask the data" press the first example (the complaint category that really rose this week), or type e.g. "How many road complaints in Dander this month?" The answer comes with a chart and the map.' },
   },
   {
     id: 'instruct',
     label: { id: 'Beri 1 instruksi', en: 'Issue 1 instruction' },
-    hint: { id: 'Tekan "Beri instruksi", pilih saran AI atau tulis sendiri. Instruksi menjadi disposisi di Naskah Pintar.', en: 'Press "Issue instruction", pick an AI suggestion or write your own. It becomes a disposition in Naskah Pintar.' },
+    hint: { id: 'Tekan "Beri instruksi", pilih saran AI atau tulis sendiri. Instruksi menjadi disposisi di Naskah Pintar. (Peran Kepala Daerah atau Sekretariat; Kepala OPD menerima tugasnya.)', en: 'Press "Issue instruction", pick an AI suggestion or write your own. It becomes a disposition in Naskah Pintar. (Regional head or Secretariat role; an agency head receives the task.)' },
     done: (e) => isEvent(e, 'instruction.issued') && e.source === 'meja-pimpinan',
   },
   {
@@ -92,6 +110,8 @@ export const missions: readonly Mission[] = [
   },
 ]
 
+/** DemoShell's default hotspot id (`${slug}:${target}`), for retiring the ring once a briefing exists */
+const HOTSPOT_ID = 'meja-pimpinan:[data-hotspot="briefing"]'
 export const hotspot = { target: '[data-hotspot="briefing"]', label: { id: 'Mulai di sini: briefing pagi tersusun sendiri dari 6 produk', en: 'Start here: the morning briefing assembles itself from 6 products' } }
 
 /* ------------------------------------------------------------------ selectors */
@@ -109,6 +129,78 @@ const activeHoax = (s: WorldState) => rows(s.hoaxAlerts).find((h) => h.status ==
 function NowText() {
   const now = useNow(1)
   return <span className="dk-num">{`${String(Math.floor(now / 60)).padStart(2, '0')}.${String(now % 60).padStart(2, '0')}`}</span>
+}
+
+/** "LANGSUNG" only while the world clock runs; paused, the chip says so and one tap starts the day again */
+function ClockChip({ button = true }: { button?: boolean }) {
+  const { lang } = useI18n()
+  const c = useClock()
+  const on = c.running && c.speed > 0
+  return (
+    <span className={`dk-mp-clock${on ? ' is-on' : ''}`}>
+      {on ? <LiveBadge label={`${tr('live', lang)} ×${c.speed}`} /> : <span className="dk-mp-paused">{tr('paused', lang)}</span>}
+      {button && <IconButton icon={on ? 'pause' : 'play'} size="sm" variant="quiet" label={on ? tr('clockPause', lang) : tr('clockPlay', lang)} onClick={() => clock.toggle()} data-mp="clock" />}
+    </span>
+  )
+}
+
+/** the world clock starts on its own at the demo's 07.00 start, unless motion is reduced / off, the page was opened
+ *  at another time (a shared ?t= link) or the visitor already paused it this session. A fast start (×60 up to 07.30,
+ *  about 30 s) puts several arrivals on screen in the first minute, then the clock settles at ×10 (unless the visitor
+ *  picked a speed meanwhile). */
+const FAST_UNTIL = 7 * 60 + 30
+const AUTOPLAY_KEY = 'gamada:mp:autoplay'
+function useAutoplay(present: boolean) {
+  useEffect(() => {
+    if (present || motionMode() !== 'full') return
+    let done = false
+    try {
+      done = window.sessionStorage.getItem(AUTOPLAY_KEY) === '1'
+    } catch {
+      /* storage blocked: autoplay once per page load */
+    }
+    if (done) return
+    let stop: (() => void) | null = null
+    // after the shell has applied the link's time and the world is ready (its own effects run after the canvas')
+    const id = window.setTimeout(() => {
+      const c = clock.get()
+      if (c.running || c.minutes !== 7 * 60 || world.status() !== 'ready') return
+      clock.setSpeed(60)
+      clock.play()
+      const un = clock.subscribe(() => {
+        const k = clock.get()
+        if (k.speed !== 60) return un()
+        if (k.minutes >= FAST_UNTIL) {
+          un()
+          clock.setSpeed(10)
+        }
+      })
+      stop = un
+      try {
+        window.sessionStorage.setItem(AUTOPLAY_KEY, '1')
+      } catch {
+        /* ignore */
+      }
+    }, 1500)
+    return () => {
+      window.clearTimeout(id)
+      stop?.()
+    }
+  }, [present])
+}
+
+/** before the morning's viral hoax: one tap to the moment it lands (the jump replays every event in between) */
+const SKIP_TO = 10 * 60 + 30
+function SkipChip() {
+  const { lang } = useI18n()
+  const now = useNow(5)
+  const hoaxSeen = useWorld((s) => rows(s.hoaxAlerts).some((h) => h.at >= 0 && h.at <= now))
+  if (now >= 10 * 60 || hoaxSeen) return null
+  return (
+    <button type="button" className="dk-mp-skip" onClick={() => clock.setTime(SKIP_TO)} data-mp="skip">
+      {tr('skipHoax', lang)}
+    </button>
+  )
 }
 
 /* ------------------------------------------------------------------ canvas */
@@ -129,6 +221,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const [assembling, setAssembling] = useState<string[] | null>(null)
   const [fresh, setFresh] = useState(false)
   const [tab, setTab] = useState<MobileTab>('briefing')
+  // phones: the tab strip answers the tap at once; the panel below follows in an interruptible render (INP)
+  const shownTab = useDeferredValue(tab)
   const [note, setNote] = useState<string | null>(null)
   const isOpd = role === 'kepala-opd'
   const isSekda = role === 'sekretariat'
@@ -145,6 +239,23 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const hoax = useWorld(activeHoax)
   const regionName = useWorld((s) => s.region.name)
   const day = useWorld((s) => s.day)
+  useAutoplay(shell.present)
+  useEffect(() => {
+    const go = () => {
+      off()
+      void import('./InstructionDialog').catch(() => {})
+    }
+    const opts = { passive: true, capture: true } as const
+    const off = () => {
+      window.removeEventListener('pointerdown', go, opts)
+      window.removeEventListener('keydown', go, opts)
+      window.removeEventListener('scroll', go, opts)
+    }
+    window.addEventListener('pointerdown', go, opts)
+    window.addEventListener('keydown', go, opts)
+    window.addEventListener('scroll', go, opts)
+    return off
+  }, [])
 
   /* map control (the handle may not exist yet when a focus arrives) */
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -180,6 +291,8 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
       timer.current = null
       const fresh = mpBriefingItems(world.get(), clock.get().minutes)
       emit('briefing.generated', { items: fresh.map(({ title, source, refs }) => ({ title, source, refs })) }, 'meja-pimpinan')
+      // the start ring has done its job (whichever button composed it: the panel, the header, "as the leader")
+      dismissHotspot(HOTSPOT_ID)
       setAssembling(null)
       setFresh(true)
     }
@@ -191,6 +304,21 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
     setAssembling(sources)
     timer.current = window.setTimeout(finish, Math.round(sources.length * MP.assembleTick * 1000) + 240)
   }, [assembling, reveal])
+
+  /* Kepala OPD: the leader's actions (briefing, instruction, meeting mode) are one click away in the leader's role */
+  /* the role switch re-renders the whole canvas and the shell: paint the pressed state first, then switch (INP) */
+  const [switching, setSwitching] = useState(false)
+  const composeAsLeader = useCallback(() => {
+    if (switching) return
+    setSwitching(true)
+    window.requestAnimationFrame(() =>
+      window.setTimeout(() => {
+        setSession({ role: 'kepala-daerah' })
+        setSwitching(false)
+        compose()
+      }, 0),
+    )
+  }, [compose, switching])
 
   const openInstruct = useCallback((preset?: InstructionPreset) => setDlg({ kind: 'instruct', ...(preset ? { preset } : {}) }), [])
   const openScorecard = useCallback((opdId: string) => setDlg({ kind: 'scorecard', opdId }), [])
@@ -228,7 +356,11 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   const sub = isOpd ? `${tr('opdView', lang)} · ${opdList.find((o) => o.id === opdScope)?.short ?? ''}` : isSekda ? `${tr('sekdaFor', lang)} ${leader[lang]}` : `${tr('forLeader', lang)} ${leader[lang]}`
   const composeLabel = briefing ? tr('recompose', lang) : isSekda ? tr('composeSekda', lang) : tr('compose', lang)
 
-  const preload = (f: () => Promise<unknown>) => () => void f().catch(() => {})
+  // fetch a dialog's code at the first sign of intent (hover, touch, keyboard focus), so the tap opens it at once
+  const warm = (f: () => Promise<unknown>) => {
+    const go = () => void f().catch(() => {})
+    return { onPointerEnter: go, onPointerDown: go, onFocus: go }
+  }
 
   const header = (
     <header className="dk-mp-head">
@@ -236,8 +368,9 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
         <p className="dk-mp-eyebrow">
           <span>Meja Pimpinan</span>
           <span aria-hidden="true">·</span>
-          <span>{regionName}</span>
-          <LiveBadge />
+          <span>{regionLabel(regionName, lang)}</span>
+          <ClockChip button={!phone} />
+          {!isOpd && <SkipChip />}
         </p>
         <h2 className="dk-mp-title">{tr('title', lang)}</h2>
         <p className="dk-mp-sub">
@@ -252,31 +385,36 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
             <Select value={opdScope} onChange={(e) => setOpdScope(e.target.value)} options={opdList.map((o) => ({ value: o.id, label: o.short }))} aria-label={tr('opdPick', lang)} />
           </label>
         )}
-        <Button variant="ghost" size="sm" icon="phone" onClick={() => setDlg({ kind: 'phone' })} onPointerEnter={preload(() => import('./PhoneBriefing'))}>
-          {tr('phone', lang)}
-        </Button>
+        {phone ? (
+          <Button variant="ghost" size="sm" icon="info" onClick={() => shell.setGuideOpen(true)} data-mp="guide">
+            {tr('tryThis', lang)}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" icon="phone" onClick={() => setDlg({ kind: 'phone' })} {...warm(() => import('./PhoneBriefing'))}>
+            {tr('phone', lang)}
+          </Button>
+        )}
         {!phone && (
-          <Button variant="ghost" size="sm" icon="fullscreen" onClick={() => setDlg({ kind: 'meeting' })} onPointerEnter={preload(() => import('./MeetingMode'))} data-mp="meeting">
+          <Button variant="ghost" size="sm" icon="fullscreen" onClick={() => setDlg({ kind: 'meeting' })} {...warm(() => import('./MeetingMode'))} data-mp="meeting">
             {tr('meeting', lang)}
           </Button>
         )}
         {canInstruct && (
-          <Button variant="secondary" size="sm" icon="send" onClick={() => openInstruct()} onPointerEnter={preload(() => import('./InstructionDialog'))} data-mp="instruct">
+          <Button variant="secondary" size="sm" icon="send" onClick={() => openInstruct()} {...warm(() => import('./InstructionDialog'))} data-mp="instruct">
             {isSekda ? tr('instructSekda', lang) : tr('instruct', lang)}
           </Button>
         )}
-        {canInstruct &&
-          (phone ? (
-            <div className="dk-mp-cta" data-hotspot="briefing">
-              <Button variant="primary" size="sm" icon="spark" onClick={compose} busy={!!assembling}>
-                {composeLabel}
-              </Button>
-            </div>
-          ) : (
-            <Button variant="primary" size="sm" icon="spark" onClick={compose} busy={!!assembling} data-hotspot={briefing ? 'briefing' : undefined}>
-              {composeLabel}
-            </Button>
-          ))}
+        {/* desktop: the start ring sits on the empty briefing panel's button (a hint here would cover the KPI labels) */}
+        {isOpd && (
+          <Button variant="primary" size={phone ? 'md' : 'sm'} icon="spark" onClick={composeAsLeader} busy={switching} data-hotspot={phone ? 'briefing' : undefined}>
+            {trf('composeAs', lang, { l: leader[lang] })}
+          </Button>
+        )}
+        {canInstruct && (
+          <Button variant="primary" size={phone ? 'md' : 'sm'} icon="spark" onClick={compose} busy={!!assembling} data-hotspot={phone ? 'briefing' : undefined}>
+            {composeLabel}
+          </Button>
+        )}
       </div>
     </header>
   )
@@ -328,7 +466,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
           { id: 'events', label: tr('tabEvents', lang) },
         ]}
       >
-        <div className="dk-mp-tabbody">{tab === 'briefing' ? briefingPanel : tab === 'opd' ? leaderboard : tab === 'ask' ? ask : events}</div>
+        <div className="dk-mp-tabbody">{shownTab === 'briefing' ? briefingPanel : shownTab === 'opd' ? leaderboard : shownTab === 'ask' ? ask : events}</div>
       </Tabs>
       </div>
     </div>
@@ -351,7 +489,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   return (
     <div ref={rootRef} className={`dk-mp${phone ? ' is-phone' : ''}`} data-product={product} data-role={role}>
       {body}
-      <Suspense fallback={null}>
+      <Suspense fallback={dlg ? <div className="dk-mp-dlgwait" role="status"><LoadingText>{tr('loading', lang)}</LoadingText></div> : null}>
         {dlg?.kind === 'instruct' && <InstructionDialog open onClose={close} preset={dlg.preset} />}
         {dlg?.kind === 'scorecard' && <Scorecard open onClose={close} opdId={dlg.opdId} onInstruct={canInstruct ? (opdIds) => openInstruct({ opdIds }) : undefined} />}
         {dlg?.kind === 'phone' && <PhoneBriefing open onClose={close} onCompose={canInstruct ? compose : undefined} onInstruct={canInstruct ? () => openInstruct() : undefined} leader={leader} />}
@@ -359,7 +497,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
           <MeetingMode
             onClose={close}
             onOpened={() => shell.markMission('meeting')}
-            title={`${tr('title', lang)} · ${regionName}`}
+            title={`${tr('title', lang)} · ${regionLabel(regionName, lang)}`}
             leader={leader}
           />
         )}

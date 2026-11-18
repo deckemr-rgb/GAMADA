@@ -11,12 +11,13 @@ import type { ProductSlug } from '../../content/products'
 import { useI18n } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
 import { goTo } from '../../components/AppLink'
-import { Toast, ToastRegion, type ToastData } from '../ui'
+import { Toast, ToastRegion, type ToastData, type ToastPlacement } from '../ui'
 import { LIVE_FALLBACK_NOTICE, onLiveFallback } from '../ai/live-base' // not the barrel: see controls.tsx
 import { getSession, onEvent, setSession, world } from '../world'
 import { useDemoStrings } from '../i18n'
 import { createEffectTracker } from './effects'
 import { demoHref } from './url'
+import { preloadDemo } from '../../demos/registry'
 
 export interface EventToastStackProps {
   product: ProductSlug
@@ -25,9 +26,11 @@ export interface EventToastStackProps {
   dismiss: (id: string) => void
   /** bumps on world reset so chains from the old world are forgotten */
   epoch?: number
+  /** stack position (DemoShell toastPlacement / useShell().setToastPlacement); default bottom-left */
+  placement?: ToastPlacement
 }
 
-export function EventToastStack({ product, toasts, push, dismiss, epoch = 0 }: EventToastStackProps) {
+export function EventToastStack({ product, toasts, push, dismiss, epoch = 0, placement = 'bottom-left' }: EventToastStackProps) {
   const t = useDemoStrings()
   const { lang } = useI18n()
   const navigate = useNavigate()
@@ -42,17 +45,22 @@ export function EventToastStack({ product, toasts, push, dismiss, epoch = 0 }: E
       const fx = tracker.feed(e, world.get())
       if (!fx) return
       const { lang: l } = ctx.current
+      const target = fx.target
       sfx.notify()
+      // start fetching the target's chunk now, so a click on the toast opens it without a blank wait
+      if (target) preloadDemo(target)
       push({
         id: `fx:${fx.key}`,
         tone: 'accent',
         icon: 'share',
         title: fx.title[l],
         body: fx.body[l],
-        onActivate: () => {
-          dismiss(`fx:${fx.key}`)
-          void goTo(demoHref(fx.target, getSession(), fx.focus), ctx.current.navigate, ctx.current.pathname)
-        },
+        onActivate: target
+          ? () => {
+              dismiss(`fx:${fx.key}`)
+              void goTo(demoHref(target, getSession(), fx.focus), ctx.current.navigate, ctx.current.pathname)
+            }
+          : undefined,
       })
     })
   }, [product, push, dismiss, epoch])
@@ -74,7 +82,7 @@ export function EventToastStack({ product, toasts, push, dismiss, epoch = 0 }: E
   )
 
   return (
-    <ToastRegion label={t.toasts} placement="bottom-left">
+    <ToastRegion label={t.toasts} placement={placement}>
       {toasts.map((d) => (
         <Toast key={d.id} data={d} onDismiss={dismiss} />
       ))}

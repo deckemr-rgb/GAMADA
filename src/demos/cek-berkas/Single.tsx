@@ -4,14 +4,14 @@
  * opacity toggle. Every finished read emits `document.verified` (source cek-berkas) and lands in the session log.
  * Live mode adds "Unggah dokumen sendiri" (lazy UploadOwn, consent first, not stored). "Tanya AI" is lazy (AskAi).
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from 'react'
 import { DocArt, DocViewer, ExtractPanel, TamperToggle, VERDICT_LABEL, getSample, readPrompt, simulateExtract, verdictOf, type SampleDoc, type VerdictResult } from '../../demo-kit/docs'
 import type { Extracted } from '../../demo-kit/ai/types'
-import { useShell } from '../../demo-kit/shell'
+import { dismissHotspot, useShell } from '../../demo-kit/shell'
 import { Button, Icon, LoadingText, motionMode } from '../../demo-kit/ui'
 import { clock, emit, hhmm, useSession, world } from '../../demo-kit/world'
 import { useI18n, type Lang } from '../../lib/i18n'
-import { CEK, GALLERY, sessionLog, worldDocFor, type CekContext, type CekRole, type LogRow } from './model'
+import { CEK, GALLERY, HOTSPOT_ID, saveWorldSoon, sessionLog, worldDocFor, type CekContext, type CekRole, type LogRow } from './model'
 import { STR } from './strings'
 
 const AskAi = lazy(() => import('./AskAi'))
@@ -26,12 +26,42 @@ export interface OwnDoc {
 
 const isEdited = (d: SampleDoc) => d.id.endsWith('-edit')
 
-/** amounts are the only bare numbers the kit panel may show as Rupiah: postcodes, KBLI codes, years stay verbatim */
-const MONEY_KEY = /modal|nilai|jumlah|total|harga|biaya|omzet|nominal|amount|price|capital/i
-function displayValue(key: string, v: string, lang: Lang): string {
-  if (/^[1-9]\d{3,8}$/.test(v) && !MONEY_KEY.test(key)) return `\u2060${v}` // word joiner: invisible, keeps the digits verbatim
-  return STR[lang].presence[v] ?? v
+/** family-card relation words in English notes (the kit keeps the Indonesian word) */
+const REL_EN: Record<string, string> = { istri: 'wife', suami: 'husband', anak: 'child', 'kepala keluarga': 'head of household', 'orang tua': 'parent', menantu: 'child-in-law', cucu: 'grandchild', famili: 'relative', 'famili lain': 'other relative' }
+/** check wording as an officer reads it: ID says "isian", never "field"; EN names the family relation in English */
+function localise(x: Extracted, lang: Lang): Extracted {
+  if (!x.checks?.length) return x
+  const checks = x.checks.map((c) => {
+    const label = { id: c.label.id.replace(/\bfield\b/g, 'isian'), en: c.label.en }
+    let note = c.note
+    if (note && lang === 'id') note = note.replace(/\bfield\b/g, 'isian')
+    if (note && lang === 'en') note = note.replace(/family-card member \(([^)]+)\)/, (m, r: string) => (REL_EN[r.toLowerCase()] ? `family-card member (${REL_EN[r.toLowerCase()]})` : m))
+    return { ...c, label, ...(note !== undefined ? { note } : {}) }
+  })
+  return { ...x, checks }
 }
+const NO_CELLS: NonNullable<Extracted['tamper']> = []
+
+/** the extraction list masks 16-digit numbers (NIK, KK) like every other surface: area code + birth-date code stay
+ *  readable (the NIK-vs-birth-date check), the serial is hidden */
+function maskIds(x: Extracted): Extracted {
+  if (!x.fields.some((f) => /^\d{16}$/.test(f.value.replace(/\s/g, '')))) return x
+  return {
+    ...x,
+    fields: x.fields.map((f) => {
+      const v = f.value.replace(/\s/g, '')
+      return /^\d{16}$/.test(v) ? { ...f, value: `${v.slice(0, 6)} ${v.slice(6, 12)} ••••` } : f
+    }),
+  }
+}
+
+// memoised kit views: a gallery press, a heatmap drag or a history update re-renders only what changed (INP)
+const Viewer = memo(DocViewer)
+const Panel = memo(ExtractPanel)
+
+/** after the next paint: the pressed thumb paints first, the (heavy) document swap one frame later (INP) */
+const afterPaint = (fn: () => void) => requestAnimationFrame(() => setTimeout(fn, 0))
+
 const narrowLayout = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 980px)').matches
 const smooth = (): ScrollBehavior => (motionMode() === 'full' ? 'smooth' : 'auto')
 
@@ -42,9 +72,10 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
   const session = useSession()
   const docs = useMemo(() => GALLERY[role].map((id) => getSample(id)).filter((d): d is SampleDoc => !!d), [role])
   const doc = getSample(pick) ?? docs[0]!
-  const extracted = useMemo(() => simulateExtract(doc, { lang }), [doc, lang])
-  const shownExtract = useMemo<Extracted>(() => ({ ...extracted, fields: extracted.fields.map((f) => ({ ...f, value: displayValue(f.key, f.value, lang) })) }), [extracted, lang])
+  // the kit localises presence values ('ada' → 'present') and formats Rupiah for amount fields only
+  const extracted = useMemo(() => localise(simulateExtract(doc, { lang }), lang), [doc, lang])
   const total = extracted.fields.length
+  const listed = useMemo(() => maskIds(extracted), [extracted])
 
   /* ---------------------------------------------------------------- read run */
   const [run, setRun] = useState<{ doc: string; n: number } | null>(null)
@@ -68,10 +99,21 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     setRun((r) => ({ doc: id, n: (r?.n ?? 0) + 1 }))
   }, [])
 
+  // a gallery / history pick or the Verify button: the thumb / button answers in this frame (pressed, busy), the
+  // document swap + read start one paint later (INP: the first read mounts the boxes and the field list)
+  const [pressed, setPressed] = useState<string | null>(null)
+  const pickSeq = useRef(0)
   const select = useCallback(
     (id: string) => {
-      onPick(id)
-      start(id)
+      dismissHotspot(HOTSPOT_ID) // the visitor started: the "start here" ring has done its job
+      setPressed(id)
+      const n = ++pickSeq.current
+      afterPaint(() => {
+        if (pickSeq.current !== n) return
+        setPressed(null)
+        onPick(id)
+        start(id)
+      })
     },
     [onPick, start],
   )
@@ -97,8 +139,8 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     if (emitted.current === key) return
     emitted.current = key
     const v = verdictOf(extracted)
-    const idv = verdictOf(simulateExtract(doc, { lang: 'id' }))
-    const env = verdictOf(simulateExtract(doc, { lang: 'en' }))
+    const idv = verdictOf(localise(simulateExtract(doc, { lang: 'id' }), 'id'))
+    const env = verdictOf(localise(simulateExtract(doc, { lang: 'en' }), 'en'))
     // the desk record this specimen stands for (the world only knows its own documents)
     const documentId = worldDocFor(world.get(), doc.id)
     if (documentId) {
@@ -111,6 +153,7 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     if (doc.kind === 'ktp') shell.markMission('verify-ktp')
     const row: LogRow = { docId: doc.id, verdict: v.verdict, ms: Math.max(300, Math.round(performance.now() - t0.current)), at: clock.get().minutes, tampered: isEdited(doc) }
     sessionLog.add(row)
+    saveWorldSoon()
     setLastMs({ doc: doc.id, ms: row.ms })
     if (doc.tamper?.length) setHeat(CEK.heatOn)
     if (isEdited(doc) && v.verdict === 'cek-manual') shell.markMission('find-edited')
@@ -124,9 +167,23 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     if (narrowLayout()) requestAnimationFrame(() => sideRef.current?.querySelector('.dk-cb-verdict')?.scrollIntoView({ block: 'nearest', behavior: smooth() }))
   }, [done, run, doc, extracted, shell])
 
-  const cells = extracted.tamper ?? []
-  const maxScore = cells.reduce((m, c) => Math.max(m, c.score), 0)
-  const verdict = done ? verdictOf(extracted) : null
+  const cells = extracted.tamper ?? NO_CELLS
+  const maxScore = useMemo(() => cells.reduce((m, c) => Math.max(m, c.score), 0), [cells])
+  const verdict = useMemo(() => (done ? verdictOf(extracted) : null), [done, extracted])
+  const tamper = useMemo(() => (done && cells.length ? { cells, opacity: heat } : null), [done, cells, heat])
+  const reread = useCallback(() => select(doc.id), [select, doc.id])
+  const pending = pressed !== null && pressed === doc.id
+  const toolbar = useMemo(
+    () => (
+      <>
+        <Button size="sm" variant="primary" icon={done ? 'refresh' : 'shield'} onClick={reread} busy={reading || pending} data-hotspot="cek-go">
+          {done ? t.reverify : t.verify}
+        </Button>
+        {done && cells.length > 0 && <TamperToggle opacity={heat} onChange={setHeat} maxScore={maxScore} />}
+      </>
+    ),
+    [done, reading, pending, reread, t, cells.length, heat, maxScore],
+  )
 
   /* ---------------------------------------------------------------- own document (Live only) */
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -190,7 +247,7 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
 
   return (
     <div className="dk-cb-single">
-      <Gallery docs={docs} value={doc.id} onSelect={select} lang={lang} live={session.aiMode === 'live'} onUpload={() => setUploadOpen(true)} ownActive={!!own} />
+      <Gallery docs={docs} value={pressed ?? doc.id} onSelect={select} lang={lang} live={session.aiMode === 'live'} onUpload={() => setUploadOpen(true)} ownActive={!!own} />
 
       <div className="dk-cb-work">
         <div className="dk-cb-viewer">
@@ -199,7 +256,7 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
               <OwnView doc={own} onClose={closeOwn} />
             </Suspense>
           ) : (
-            <DocViewer
+            <Viewer
               doc={doc}
               boxes={extracted.fields}
               revealBoxes={reveal}
@@ -208,16 +265,9 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
               deskew={reveal}
               activeKey={active}
               onBoxFocus={setActive}
-              tamper={done && cells.length ? { cells, opacity: heat } : null}
+              tamper={tamper}
               height="clamp(300px, 58vh, 600px)"
-              toolbar={
-                <>
-                  <Button size="sm" variant="primary" icon={done ? 'refresh' : 'shield'} onClick={() => start(doc.id)} busy={reading} data-hotspot="cek-go">
-                    {done ? t.reverify : t.verify}
-                  </Button>
-                  {done && cells.length > 0 && <TamperToggle opacity={heat} onChange={setHeat} maxScore={maxScore} />}
-                </>
-              }
+              toolbar={toolbar}
             />
           )}
         </div>
@@ -238,10 +288,11 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
             </p>
           )}
           {own ? (
-            <ExtractPanel extracted={own.extracted} showVerdict={false} className="dk-cb-xp" />
+            <Panel extracted={own.extracted} showVerdict={false} className="dk-cb-xp" />
           ) : (
-            <ExtractPanel extracted={reveal ? shownExtract : null} revealed={shown} activeKey={active} onFieldFocus={setActive} emptyText={readPrompt(t.verify, lang)} showVerdict={false} className="dk-cb-xp" />
+            <Panel extracted={reveal ? listed : null} revealed={shown} activeKey={active} onFieldFocus={setActive} emptyText={readPrompt(t.verify, lang)} showVerdict={false} className="dk-cb-xp" />
           )}
+          {!own && !reveal && <CheckPreview checks={extracted.checks ?? []} fields={total} lang={lang} />}
           {!own && done && (
             <p className="dk-cb-sent">
               <Icon name="checkCircle" size={14} />
@@ -342,6 +393,7 @@ function Gallery({ docs, value, onSelect, lang, live, onUpload, ownActive }: { d
                 <span className="dk-cb-kind">
                   <Icon name={KIND_ICON[d.kind] ?? 'doc'} size={12} />
                   {t.kindLabel[d.kind] ?? d.kind}
+                  {isEdited(d) && <em className="dk-cb-edited">{t.galleryEdited}</em>}
                 </span>
                 <b>{d.title[lang]}</b>
                 <small>{d.caption[lang]}</small>
@@ -374,6 +426,33 @@ function Gallery({ docs, value, onSelect, lang, live, onUpload, ownActive }: { d
   )
 }
 
+/* ------------------------------------------------------------------ before the first read: what will be checked */
+
+function CheckPreview({ checks, fields, lang }: { checks: NonNullable<Extracted['checks']>; fields: number; lang: Lang }) {
+  const t = STR[lang]
+  return (
+    <section className="dk-cb-preview" aria-label={t.previewTitle}>
+      <h4>{t.previewTitle}</h4>
+      <ol>
+        <li>
+          <Icon name="eye" size={14} />
+          {t.previewFields(fields)}
+        </li>
+        {checks.map((c, i) => (
+          <li key={c.id} style={{ '--n': i + 1 } as CSSProperties}>
+            <Icon name="shield" size={14} />
+            {c.label[lang]}
+          </li>
+        ))}
+        <li className="is-verdict" style={{ '--n': checks.length + 1 } as CSSProperties}>
+          <Icon name="checkCircle" size={14} />
+          {t.previewVerdict}
+        </li>
+      </ol>
+    </section>
+  )
+}
+
 /* ------------------------------------------------------------------ verdict card (top of the result column) */
 
 const VERDICT_ICON = { lengkap: 'checkCircle', kurang: 'info', 'cek-manual': 'alert' } as const
@@ -383,7 +462,7 @@ function VerdictCard({ verdict, checks, fields, ms, lang }: { verdict: VerdictRe
   const loc = lang === 'id' ? 'id-ID' : 'en-US'
   const meta =
     lang === 'id'
-      ? `${ok} dari ${checks.length} cek lolos · ${fields} field terbaca${ms !== null ? ` · ${(ms / 1000).toLocaleString(loc, { maximumFractionDigits: 1, minimumFractionDigits: 1 })} dtk` : ''}`
+      ? `${ok} dari ${checks.length} cek lolos · ${fields} isian terbaca${ms !== null ? ` · ${(ms / 1000).toLocaleString(loc, { maximumFractionDigits: 1, minimumFractionDigits: 1 })} dtk` : ''}`
       : `${ok} of ${checks.length} checks passed · ${fields} fields read${ms !== null ? ` · ${(ms / 1000).toLocaleString(loc, { maximumFractionDigits: 1, minimumFractionDigits: 1 })} s` : ''}`
   return (
     <div className={`dk-cb-verdict is-${verdict.verdict}`} role="status">

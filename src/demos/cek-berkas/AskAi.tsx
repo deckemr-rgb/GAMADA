@@ -9,9 +9,9 @@ import { registerScenario, useAiChat, type ChatMessage, type Structured } from '
 import { useShell } from '../../demo-kit/shell'
 import { Icon, IconButton } from '../../demo-kit/ui'
 import { hhmm, rows, useSession, world } from '../../demo-kit/world'
-import { bansosBatch } from '../../demo-kit/world/satu-daerah'
 import { useI18n, type Lang } from '../../lib/i18n'
-import { bulkLog, bulkProcessed, sessionLog, summarize, type CekContext, type CekRole } from './model'
+import { bulkLog, sessionLog, summarize, type CekContext, type CekRole } from './model'
+import { cekBatch, zoneOf } from './batch'
 import { cekScenario } from './scenario'
 import { STR } from './strings'
 
@@ -24,15 +24,14 @@ function buildContext(role: CekRole, doc: CekContext['doc']): CekContext {
   const log = sessionLog.get()
   // the batch this session last emitted (what the grid shows and the world holds); else the live batch
   const ran = bulkLog.get()
-  const live = ran ? null : bansosBatch(s)
-  const sum = ran ? ran.summary : summarize(live!)
-  const zone = ran ? ran.zone : live!.zone
-  const b = { total: sum.total, lolos: sum.lolos, kurang: sum.kurang, ganda: sum.ganda, gandaPairs: sum.gandaPairs, luarZona: sum.luarZona, outside: sum.outside }
+  const sum = ran ? ran.summary : summarize(cekBatch(s))
+  const z = ran ? { zone: ran.zone, warnZone: ran.warnZone } : zoneOf(s)
+  const b = { total: sum.total, lolos: sum.lolos, kurang: sum.kurang, ganda: sum.ganda, gandaPairs: sum.gandaPairs, luarZona: sum.luarZona, manual: sum.manual }
   return {
     role,
     mode: 'single',
     doc,
-    batch: { ...b, processed: !!ran || bulkProcessed(s), zone: zone.map(name) },
+    batch: { ...b, processed: !!ran, zone: z.zone.map(name), warnZone: z.warnZone?.map(name) ?? null },
     program: prog ? { quota: prog.quota, kecamatan: prog.kecamatanIds.map(name), openedAt: hhmm(prog.openedAt) } : null,
     session: { verified: log.length, manual: log.filter((r) => r.verdict === 'cek-manual').length },
     region: s.region.name,
@@ -62,9 +61,18 @@ export default function AskAi({ role, doc, onClose }: { role: CekRole; doc: CekC
     inputRef.current?.focus({ preventScroll: true })
   }, [])
 
+  // the tap hides the chips in this frame; the send (context build, thread render) and the guide tick run after
+  // the paint, so the tap answers at once (INP)
+  const [asking, setAsking] = useState(false)
   const ask = (text: string) => {
-    void chat.send(text)
-    shell.markMission('ask-ai')
+    setAsking(true)
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        setAsking(false)
+        void chat.send(text)
+        shell.markMission('ask-ai')
+      }, 0),
+    )
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -115,7 +123,7 @@ export default function AskAi({ role, doc, onClose }: { role: CekRole; doc: CekC
         {chat.messages.length === 0 && <p className="dk-cb-chat-empty">{t.aiEmpty}</p>}
         {chat.messages.map((m) => (m.role === 'user' ? <p key={m.id} className="dk-cb-msg is-user">{m.content}</p> : <AiMsg key={m.id} m={m} lang={lang} />))}
       </div>
-      {suggestions.length > 0 && !chat.busy && (
+      {suggestions.length > 0 && !chat.busy && !asking && (
         <div className="dk-cb-chat-chips" role="group" aria-label={t.aiSuggest}>
           {suggestions.map((s) => (
             <button key={s} type="button" onClick={() => ask(s)}>
@@ -164,7 +172,7 @@ function AiMsg({ m, lang }: { m: ChatMessage; lang: Lang }) {
           {m.toolCalls.map((c) => (
             <span key={c.id}>
               <Icon name="zap" size={11} />
-              {c.name}
+              {TOOL_LABEL[c.name]?.[lang] ?? c.name}
               <i className="dk-num">{c.ms ?? 0} ms</i>
             </span>
           ))}
@@ -181,6 +189,15 @@ function AiMsg({ m, lang }: { m: ChatMessage; lang: Lang }) {
   )
 }
 
+/** tool steps in plain words (the raw tool name stays in the data, never on screen) */
+const TOOL_LABEL: Record<string, { id: string; en: string }> = {
+  check_documents: { id: 'Pemeriksaan dokumen', en: 'Document check' },
+  tamper_scan: { id: 'Pindai tanda edit', en: 'Edit-trace scan' },
+  match_family_card: { id: 'Cocokkan dengan KK', en: 'Family card match' },
+  dedupe_nik: { id: 'Cek NIK ganda', en: 'Duplicate NIK check' },
+  geo_check: { id: 'Cek alamat vs zona', en: 'Address vs zone check' },
+}
+
 const STATUS_NAME: Record<string, { id: string; en: string }> = {
   lengkap: { id: 'Lengkap', en: 'Complete' },
   kurang: { id: 'Kurang', en: 'Incomplete' },
@@ -194,7 +211,9 @@ function DocCheck({ s, lang }: { s: Structured; lang: Lang }) {
   const d = s.data as { status?: string; missing?: string[]; notes?: string[] }
   return (
     <div className="dk-cb-struct">
-      <span className="dk-cb-struct-h">{t.aiResult} · check_documents</span>
+      <span className="dk-cb-struct-h">
+        {t.aiResult} · {TOOL_LABEL.check_documents![lang]}
+      </span>
       <span className={`dk-cb-struct-chip is-${d.status ?? ''}`}>
         <small>{t.aiStatus}</small>
         {STATUS_NAME[d.status ?? '']?.[lang] ?? d.status}

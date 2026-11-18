@@ -32,12 +32,17 @@ export function Panel() {
   const tab = useUi((s) => s.tab)
   const open = useUi((s) => s.panelOpen) || size === 'sm'
   const sm = size === 'sm'
-  // phones: the tab strip may scroll sideways — keep the selected tab in view
+  // phones: the tab strip may scroll sideways — keep the selected tab in view. Only the strip scrolls (never the page:
+  // scrollIntoView would also scroll the canvas down to the strip on first paint and hide the map's top controls)
   const tabsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!sm) return
     const el = tabsRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const strip = el?.closest<HTMLElement>('[role="tablist"]')
+    if (!el || !strip) return
+    const a = el.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft
+    if (a < strip.scrollLeft) strip.scrollLeft = a - 8
+    else if (a + el.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = a + el.offsetWidth - strip.clientWidth + 24
   }, [tab, sm])
 
   if (!open)
@@ -68,11 +73,12 @@ export function Panel() {
           {size !== 'sm' && <IconButton icon="chevronLeft" label={t('collapse')} size="sm" onClick={() => ui.set({ panelOpen: false })} />}
         </div>
       </header>
+      <p className="dk-sg-tagline">{t('tagline')}</p>
       <Flow role={role} />
       <div ref={tabsRef} className="dk-sg-tabwrap">
         <Tabs items={TABS.map((x) => ({ id: x.id, label: t(sm && x.id === 'env' ? 'tabEnvShort' : x.label) }))} value={tab} onChange={(v) => ui.set({ tab: v })} label={t('tabs')} fill className="dk-sg-tabs">
           <Suspense fallback={<TabSkeleton />}>
-            {tab === 'alerts' ? <Alerts /> : tab === 'forecast' ? <Forecast /> : tab === 'agri' ? <Agriculture /> : <Environment />}
+            {tab === 'alerts' ? <Alerts sm={sm} /> :tab === 'forecast' ? <Forecast /> : tab === 'agri' ? <Agriculture /> : <Environment />}
           </Suspense>
         </Tabs>
       </div>
@@ -140,7 +146,7 @@ function Flow({ role }: { role: ReturnType<typeof swRole> }) {
         const s = world.get()
         const cl = rows(s.clusters).filter((c) => c.category === 'banjir').sort((a, b) => b.complaintIds.length - a.complaintIds.length)[0]
         const at = cl?.center ?? floodReports(s)[0]?.coord
-        if (at) mapRef.current?.flyTo(at, 12)
+        if (at) mapRef.current?.flyTo(at, 11)
       },
     },
     { k: 'step4', done: pasca, act: () => openTab('agri', sm) },

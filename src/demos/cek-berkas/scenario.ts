@@ -20,7 +20,7 @@ function w(ctx: Ctx): CekContext {
     role: o.role === 'dinsos' ? 'dinsos' : 'perizinan',
     mode: o.mode === 'bulk' ? 'bulk' : 'single',
     doc: o.doc ?? null,
-    batch: o.batch ?? { total: 0, lolos: 0, kurang: 0, ganda: 0, gandaPairs: 0, luarZona: 0, outside: 0, processed: false, zone: [] },
+    batch: o.batch ?? { total: 0, lolos: 0, kurang: 0, ganda: 0, gandaPairs: 0, luarZona: 0, manual: 0, processed: false, zone: [], warnZone: null },
     program: o.program ?? null,
     session: o.session ?? { verified: 0, manual: 0 },
     region: o.region ?? '',
@@ -34,6 +34,11 @@ const VERDICT: Record<string, { id: string; en: string }> = {
 }
 
 const MISSING_IDS = new Set(['signature', 'stamp', 'validity', 'required', 'kk-attached', 'recent'])
+
+/** a check label as the officer sees it (no lower-casing: "NIK" stays "NIK"); ID never says "field" */
+const lbl = (label: string, lang: Lang) => (lang === 'id' ? label.replace(/\bfield\b/g, 'isian') : label)
+/** NIK in an answer: area code and birth-date code readable, the serial masked */
+const nikParts = (nik: string) => `${nik.slice(0, 6)} · ${nik.slice(6, 12)} · ••••`
 
 function chips(lang: Lang, ...keys: ('why' | 'missing' | 'edited' | 'nik' | 'dup' | 'zone' | 'quota' | 'msg' | 'next')[]): string[] {
   const c = {
@@ -87,21 +92,24 @@ export const cekScenario: Scenario<CekContext> = {
         const lang = ctx.lang
         const v = VERDICT[d.verdict]![lang]
         const fails = d.checks.filter((x) => x.status !== 'ok')
+        const passed = d.checks.filter((x) => x.status === 'ok')
+        const all = d.checks.map((x) => lbl(x.label, 'id')).join('; ')
+        const allEn = d.checks.map((x) => x.label).join('; ')
         const id =
           d.verdict === 'lengkap'
-            ? `${d.title}: hasilnya **${v}**. Semua ${d.checks.length} cek lolos (${d.checks.map((x) => x.label.toLowerCase()).slice(0, 4).join(', ')}).`
-            : `${d.title}: hasilnya **${v}** karena ${fails.length} cek tidak lolos: ${fails.map((x) => `${x.label.toLowerCase()}${x.note ? ` (${x.note})` : ''}`).join('; ')}.`
+            ? `${d.title}: hasilnya **${v}**. Semua ${d.checks.length} cek lolos: ${all}.`
+            : `${d.title}: hasilnya **${v}** karena ${fails.length} dari ${d.checks.length} cek tidak lolos: ${fails.map((x) => `${lbl(x.label, 'id')}${x.note ? ` (${lbl(x.note, 'id')})` : ''}`).join('; ')}.${passed.length ? ` Yang lolos: ${passed.map((x) => lbl(x.label, 'id')).join('; ')}.` : ''}`
         const en =
           d.verdict === 'lengkap'
-            ? `${d.title}: the result is **${v}**. All ${d.checks.length} checks passed (${d.checks.map((x) => x.label.toLowerCase()).slice(0, 4).join(', ')}).`
-            : `${d.title}: the result is **${v}** because ${fails.length} check${fails.length === 1 ? '' : 's'} failed: ${fails.map((x) => `${x.label.toLowerCase()}${x.note ? ` (${x.note})` : ''}`).join('; ')}.`
+            ? `${d.title}: the result is **${v}**. All ${d.checks.length} checks passed: ${allEn}.`
+            : `${d.title}: the result is **${v}** because ${fails.length} of ${d.checks.length} check${d.checks.length === 1 ? '' : 's'} failed: ${fails.map((x) => `${x.label}${x.note ? ` (${x.note})` : ''}`).join('; ')}.${passed.length ? ` Passed: ${passed.map((x) => x.label).join('; ')}.` : ''}`
         const base = L(lang, id, en) + L(lang, ' Temuan ini indikasi untuk petugas, bukan keputusan akhir.', ' This is an indication for the officer, not a final decision.')
         const jv = looksJawa(ctx.text)
         const out: SimResponse = {
           text: jv
             ? d.verdict === 'lengkap'
               ? `Berkas ${d.title} sampun lengkap, sedaya pamriksan lolos.`
-              : `Berkas ${d.title} kedah dipun-cek malih: ${fails.map((x) => x.label.toLowerCase()).join(', ')}.`
+              : `Berkas ${d.title} kedah dipun-cek malih: ${fails.map((x) => lbl(x.label, 'id')).join(', ')}.`
             : base,
           toolCalls: [step('check_documents', { documentId: d.id }, 340)],
           followUps: d.verdict === 'cek-manual' ? chips(lang, 'edited', 'msg', 'next') : d.verdict === 'kurang' ? chips(lang, 'missing', 'msg') : chips(lang, 'msg', 'dup'),
@@ -170,7 +178,7 @@ export const cekScenario: Scenario<CekContext> = {
           'A 16-digit NIK is read in parts: 6 digits of Kemendagri area code (province, regency, district), 6 digits of birth date DDMMYY (women: day + 40), then a 4-digit serial.',
         )
         const tail = nik
-          ? L(lang, ` Pada berkas ini: ${nik.slice(0, 6)} · ${nik.slice(6, 12)} · ${nik.slice(12)}.${chk ? ` Hasil cek tanggal lahir: ${chk.note ?? chk.label}.` : ''}`, ` On this file: ${nik.slice(0, 6)} · ${nik.slice(6, 12)} · ${nik.slice(12)}.${chk ? ` Birth-date check: ${chk.note ?? chk.label}.` : ''}`)
+          ? L(lang, ` Pada berkas ini: ${nikParts(nik)} (nomor urut disamarkan).${chk ? ` Hasil cek tanggal lahir: ${lbl(chk.note ?? chk.label, 'id')}.` : ''}`, ` On this file: ${nikParts(nik)} (serial masked).${chk ? ` Birth-date check: ${chk.note ?? chk.label}.` : ''}`)
           : ''
         return { text: head + tail + L(lang, ' Semua NIK di demo ini spesimen fiktif (nomor urut 9001–9999).', ' Every NIK in this demo is a fictional specimen (serial 9001–9999).'), followUps: chips(lang, 'dup', 'why') }
       },
@@ -225,8 +233,9 @@ export const cekScenario: Scenario<CekContext> = {
         const lang = ctx.lang
         const b = c.batch
         const zone = b.zone.join(', ')
+        const warn = b.warnZone?.join(', ')
         return {
-          text: L(lang, `${b.outside} dari ${b.total} pendaftar beralamat di luar zona terdampak (${zone}). Zona diambil dari Siaga Wilayah${c.program ? ' sesuai peringatan banjir yang membuka kuota' : ', skenario rawan banjir karena belum ada peringatan aktif'}. Mereka perlu verifikasi lapangan sebelum ditetapkan.`, `${b.outside} of ${b.total} applicants live outside the affected zone (${zone}). The zone comes from Siaga Wilayah${c.program ? ', from the flood warning that opened the quota' : ', the scenario flood-risk area since no warning is active'}. They need a field check before approval.`),
+          text: L(lang, `${b.luarZona} dari ${b.total} pendaftar beralamat di luar zona acuan (${zone}). ${warn ? `Zona acuan = kecamatan peringatan Siaga Wilayah (${warn}) ditambah peta rawan banjir skenario.` : 'Belum ada peringatan aktif, jadi acuannya peta rawan banjir skenario.'} Mereka perlu verifikasi lapangan sebelum ditetapkan; kekurangan lampiran mereka tetap tercatat terpisah.`, `${b.luarZona} of ${b.total} applicants live outside the reference zone (${zone}). ${warn ? `Reference zone = the Siaga Wilayah warning districts (${warn}) plus the scenario flood-risk map.` : 'No warning is active, so the reference is the scenario flood-risk map.'} They need a field check before approval; any missing attachment is still recorded separately.`),
           toolCalls: [step('geo_check', { zone: b.zone, files: b.total }, 300)],
           followUps: chips(lang, 'dup', 'quota'),
         }
@@ -315,7 +324,7 @@ export const cekScenario: Scenario<CekContext> = {
         const lang = ctx.lang
         const b = c.batch
         return {
-          text: L(lang, `Sesi ini: ${c.session.verified} berkas tunggal diperiksa, ${c.session.manual} perlu cek manual.${b.processed ? ` Massal: ${b.total} berkas, ${b.lolos} lolos, ${b.kurang} kurang, ${b.ganda} NIK ganda, ${b.luarZona} luar zona.` : ' Pemeriksaan massal belum dijalankan.'}`, `This session: ${c.session.verified} single files checked, ${c.session.manual} need a manual check.${b.processed ? ` Bulk: ${b.total} files, ${b.lolos} passed, ${b.kurang} incomplete, ${b.ganda} duplicate NIK, ${b.luarZona} outside the zone.` : ' The bulk check has not run yet.'}`),
+          text: L(lang, `Sesi ini: ${c.session.verified} berkas tunggal diperiksa, ${c.session.manual} perlu cek manual.${b.processed ? ` Massal: ${b.total} berkas, ${b.lolos} lolos tanpa temuan, ${b.kurang} kurang lampiran, ${b.ganda} NIK ganda, ${b.luarZona} luar zona; ${b.manual} berkas perlu cek manual (NIK ganda atau luar zona). Satu berkas bisa punya lebih dari satu temuan.` : ' Pemeriksaan massal belum dijalankan.'}`, `This session: ${c.session.verified} single files checked, ${c.session.manual} need a manual check.${b.processed ? ` Bulk: ${b.total} files, ${b.lolos} passed with no finding, ${b.kurang} missing an attachment, ${b.ganda} duplicate NIK, ${b.luarZona} outside the zone; ${b.manual} files need a manual check (duplicate NIK or outside the zone). One file can carry more than one finding.` : ' The bulk check has not run yet.'}`),
           followUps: chips(lang, 'dup', 'zone'),
         }
       },
@@ -335,8 +344,8 @@ export const cekScenario: Scenario<CekContext> = {
         const low = d.fields.filter((f) => f.confidence < 0.85)
         return {
           text: low.length
-            ? L(lang, `${low.length} field di bawah 85%: ${low.map((f) => `${f.label} ${Math.round(f.confidence * 100)}%`).join(', ')}. Penyebabnya pindaian miring, tulisan tangan/cap, atau area yang diedit; cocokkan field itu dengan dokumen asli.`, `${low.length} field${low.length === 1 ? '' : 's'} under 85%: ${low.map((f) => `${f.label} ${Math.round(f.confidence * 100)}%`).join(', ')}. Causes: a tilted scan, handwriting/stamps, or an edited area; match those fields against the original.`)
-            : L(lang, `Semua ${d.fields.length} field terbaca di atas 85%. Persentase adalah keyakinan OCR per field; di bawah 85% diberi tanda “periksa”.`, `All ${d.fields.length} fields read above 85%. The percentage is the OCR confidence per field; under 85% gets a “check” tag.`),
+            ? L(lang, `${low.length} isian di bawah 85%: ${low.map((f) => `${f.label} ${Math.round(f.confidence * 100)}%`).join(', ')}. Penyebabnya pindaian miring, tulisan tangan/cap, atau area yang diedit; cocokkan isian itu dengan dokumen asli.`, `${low.length} field${low.length === 1 ? '' : 's'} under 85%: ${low.map((f) => `${f.label} ${Math.round(f.confidence * 100)}%`).join(', ')}. Causes: a tilted scan, handwriting/stamps, or an edited area; match those fields against the original.`)
+            : L(lang, `Semua ${d.fields.length} isian terbaca di atas 85%. Persentase adalah keyakinan OCR per isian; di bawah 85% diberi tanda “periksa”.`, `All ${d.fields.length} fields read above 85%. The percentage is the OCR confidence per field; under 85% gets a “check” tag.`),
           followUps: chips(lang, 'why', 'edited'),
         }
       },
@@ -365,11 +374,74 @@ export const cekScenario: Scenario<CekContext> = {
         return { text, followUps: chips(lang, 'msg', 'why') }
       },
     },
+    {
+      id: 'dukcapil-scope',
+      examples: [
+        'apakah NIK terdaftar di Dukcapil', 'apakah NIK ini terdaftar di Dukcapil pusat siapa ibunya', 'cek NIK ke Dukcapil pusat', 'NIK terdaftar di Dukcapil atau tidak', 'cek ke database Dukcapil', 'terhubung ke SIAK Dukcapil', 'siapa ibunya', 'siapa nama ibu kandungnya', 'siapa orang tuanya', 'alamat lengkap pemohon', 'nomor HP pemohon', 'data keluarga lengkap pemohon',
+        'is the NIK registered with Dukcapil', 'is this NIK registered in the Dukcapil database who is the mother', 'check the NIK against Dukcapil', 'check against the civil registry', 'who is the mother', 'mother maiden name', 'full address of the applicant', 'family data of the applicant', 'connected to SIAK Dukcapil',
+        'NIK niki kadhaftar ing Dukcapil', 'sinten ibunipun',
+      ],
+      respond(ctx) {
+        const lang = ctx.lang
+        return {
+          text: L(
+            lang,
+            'Demo ini **tidak terhubung ke Dukcapil/SIAK** dan semua NIK di sini spesimen fiktif, jadi saya tidak bisa memastikan NIK terdaftar. Saya juga tidak membuka data keluarga (nama ibu, orang tua) atau alamat lengkap: asisten hanya membaca hasil pemeriksaan di layar. Di penerapan nyata, cek NIK dilakukan lewat layanan Dukcapil sesuai perjanjian kerja sama, dengan hak akses per petugas dan setiap akses tercatat di log audit.',
+            'This demo is **not connected to Dukcapil/SIAK** and every NIK here is a fictional specimen, so I cannot confirm a NIK is registered. I also do not open family data (mother’s name, parents) or full addresses: the assistant only reads the check result on screen. In a real deployment the NIK check runs through the Dukcapil service under a cooperation agreement, with per-officer access rights and every access written to the audit log.',
+          ),
+          followUps: chips(lang, 'nik', 'why'),
+        }
+      },
+    },
+    {
+      // data residency + retention: answered before (and instead of) the service-time intent ("berapa lama disimpan")
+      id: 'data-handling',
+      examples: [
+        'data KTP ini disimpan di server mana dan berapa lama', 'disimpan di server mana', 'data disimpan di mana', 'berapa lama data disimpan', 'retensi data berapa lama', 'kapan data dihapus',
+        'server dan pusat data di mana', 'apakah data disimpan di cloud', 'dokumen diproses di server mana', 'penyimpanan data warga', 'apakah log akses bisa diekspor', 'data diproses di PDN atau server daerah',
+        'where is this ID card data stored and for how long', 'where is the data stored', 'how long is the data kept', 'data retention period', 'which server processes the documents', 'is the data stored in the cloud', 'when is the data deleted', 'can the access log be exported',
+        'data dipunsimpen wonten pundi', 'suwene data disimpen',
+      ],
+      respond(ctx) {
+        const lang = ctx.lang
+        return {
+          text: L(
+            lang,
+            '**Di demo ini** dokumen galeri adalah spesimen yang dibaca di peramban Anda; tidak ada yang diunggah atau disimpan di server. Log audit demo hanya ada di peramban ini (simulasi). **Di penerapan nyata** (rancangan, ditetapkan bersama Pemda): dokumen diproses di server Pemda atau Pusat Data Nasional sesuai kebijakan daerah, tidak di layanan AI publik; masa simpan mengikuti jadwal retensi arsip daerah; setiap akses petugas tercatat di log audit yang hanya bisa ditambah dan bisa diekspor untuk inspektorat. Saya tidak menyebut angka retensi karena itu keputusan Pemda, bukan bawaan produk.',
+            '**In this demo** the gallery documents are specimens read in your browser; nothing is uploaded or stored on a server. The demo audit log exists only in this browser (simulated). **In a real deployment** (a design to be agreed with the local government): documents are processed on the local government’s servers or the National Data Centre (PDN) under its policy, not on a public AI service; retention follows the regional records-retention schedule; every officer access is written to an append-only audit log that can be exported for the inspectorate. I do not quote a retention period because that is the local government’s decision, not a product default.',
+          ),
+          followUps: chips(lang, 'nik', 'why'),
+        }
+      },
+    },
+    {
+      id: 'wait-time',
+      examples: [
+        'berapa lama warga harus menunggu', 'berapa lama proses izinnya', 'kapan izin selesai', 'lama menunggu di loket berapa hari', 'kapan izinnya terbit', 'berapa lama antre layanan',
+        'how long does the citizen have to wait', 'how long does the permit take', 'when will the permit be done', 'how many days until the permit',
+        'pinten dinten nengga', 'suwene piro',
+      ],
+      respond(ctx) {
+        const c = w(ctx)
+        const lang = ctx.lang
+        const d = c.doc
+        const now = L(lang, 'Pemeriksaan otomatisnya sendiri hanya beberapa detik per berkas (di layar ini ±2 dtk).', 'The automatic check itself takes a few seconds per file (about 2 s on this screen).')
+        const next = !d?.verdict
+          ? ''
+          : d.verdict === 'lengkap'
+            ? L(lang, ' Berkas ini lengkap, jadi langsung bisa diteruskan ke proses penerbitan.', ' This file is complete, so it can go straight on to issuing.')
+            : d.verdict === 'kurang'
+              ? L(lang, ' Berkas ini kurang lampiran: begitu warga melengkapinya, pemeriksaan ulang juga hanya beberapa detik.', ' This file is missing an attachment: once the citizen adds it, the re-check also takes seconds.')
+              : L(lang, ' Berkas ini perlu dicocokkan dengan dokumen asli oleh petugas; lamanya tergantung kapan warga membawa aslinya.', ' This file has to be matched with the original by an officer; how long depends on when the citizen brings it.')
+        const tail = L(lang, ' Lama layanan setelah itu mengikuti SOP dan standar pelayanan loket; demo ini tidak menetapkan angkanya.', ' Service time after that follows the desk’s SOP and service standard; this demo does not set those figures.')
+        return { text: now + next + tail, followUps: chips(lang, 'msg', 'next') }
+      },
+    },
   ],
   fallback(ctx) {
     const lang = ctx.lang
     return {
-      text: L(lang, 'Maaf, saya hanya membantu menjelaskan hasil pemeriksaan berkas (kelengkapan, NIK, KK, peta panas, NIK ganda, zona bansos). Coba salah satu pertanyaan ini:', 'Sorry, I only help explain document checks (completeness, NIK, family card, heatmap, duplicate NIKs, aid zone). Try one of these:'),
+      text: L(lang, 'Pertanyaan itu di luar hasil pemeriksaan yang saya baca, jadi saya tidak mau menebak. Saya bisa menjelaskan kelengkapan, NIK, KK, peta panas, NIK ganda, dan zona bansos. Coba salah satu pertanyaan ini:', 'That question is outside the check result I can read, so I will not guess. I can explain completeness, NIK, family card, heatmap, duplicate NIKs and the aid zone. Try one of these:'),
       followUps: chips(lang, 'why', 'dup', 'quota'),
     }
   },

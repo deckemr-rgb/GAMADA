@@ -8,6 +8,7 @@
 import type { ExtractRequest, Extracted, ExtractedField } from '../ai/types'
 import { hashString } from '../world/prng'
 import { pct } from './measure'
+import { fieldKind, presenceText } from './values'
 import { dmy, longDate, nikMatchesBirth, nikRegionName, parseNik, SPECIMEN_KEC } from './nik'
 import { getSample, idr } from './samples'
 import type { Bi, Box, SampleDoc } from './types'
@@ -138,6 +139,13 @@ function addMonths(iso: string, m: number): string {
   return t.toISOString().slice(0, 10)
 }
 
+/** a family-card relation in English (the card itself is Indonesian) */
+const RELATION_EN: Record<string, string> = {
+  'kepala keluarga': 'head of household', istri: 'wife', suami: 'husband', anak: 'child', menantu: 'son- or daughter-in-law', cucu: 'grandchild',
+  'orang tua': 'parent', mertua: 'parent-in-law', 'famili lain': 'other relative', lainnya: 'other',
+}
+const relationEn = (r: string): string => RELATION_EN[r.toLowerCase()] ?? r.toLowerCase()
+
 function checksFor(doc: SampleDoc, lang: Lang): Check[] {
   const meta = doc.meta
   const out: Check[] = []
@@ -147,9 +155,9 @@ function checksFor(doc: SampleDoc, lang: Lang): Check[] {
       const match = nikMatchesBirth(meta.nik, meta.birthDate, meta.gender)
       const p = parseNik(meta.nik)
       out.push(
-        check('nik-dob', { id: 'Tanggal lahir di NIK vs field', en: 'Birth date in NIK vs field' }, match ? 'ok' : 'fail', match
+        check('nik-dob', { id: 'Tanggal lahir di NIK vs isian', en: 'Birth date in NIK vs the form' }, match ? 'ok' : 'fail', match
           ? { id: `Sama: ${dmy(meta.birthDate)}${meta.gender === 'P' ? ' (perempuan, tanggal +40)' : ''}`, en: `Match: ${dmy(meta.birthDate)}${meta.gender === 'P' ? ' (female, day +40)' : ''}` }
-          : { id: `NIK menunjuk ${String(p.day).padStart(2, '0')}-${String(p.month).padStart(2, '0')}-xx${String(p.yy).padStart(2, '0')}, field tertulis ${dmy(meta.birthDate)}`, en: `NIK says ${String(p.day).padStart(2, '0')}-${String(p.month).padStart(2, '0')}-xx${String(p.yy).padStart(2, '0')}, field shows ${dmy(meta.birthDate)}` }, lang),
+          : { id: `NIK menunjuk ${String(p.day).padStart(2, '0')}-${String(p.month).padStart(2, '0')}-xx${String(p.yy).padStart(2, '0')}, isian tertulis ${dmy(meta.birthDate)}`, en: `NIK says ${String(p.day).padStart(2, '0')}-${String(p.month).padStart(2, '0')}-xx${String(p.yy).padStart(2, '0')}, the form shows ${dmy(meta.birthDate)}` }, lang),
       )
       if (meta.kkRef) {
         const kk = getSample(meta.kkRef)
@@ -157,7 +165,7 @@ function checksFor(doc: SampleDoc, lang: Lang): Check[] {
         const hit = members.find((m) => m.name === meta.name)
         out.push(
           check('name-kk', { id: 'Nama di KK vs KTP', en: 'Name on family card vs ID card' }, hit ? 'ok' : 'fail', hit
-            ? { id: `Cocok · anggota KK (${hit.relation.toLowerCase()})`, en: `Match · family-card member (${hit.relation.toLowerCase()})` }
+            ? { id: `Cocok · anggota KK (${hit.relation.toLowerCase()})`, en: `Match · family-card member (${relationEn(hit.relation)})` }
             : { id: 'Nama tidak ditemukan di KK', en: 'Name not found on the family card' }, lang),
         )
       } else {
@@ -267,13 +275,18 @@ export function simulateExtract(docOrId: SampleDoc | string, opts: SimulateOptio
   const doc = typeof docOrId === 'string' ? getSample(docOrId) : docOrId
   if (!doc) throw new Error(`unknown sample document "${String(docOrId)}"`)
   const lang = opts.lang ?? currentLang()
-  const fields: ExtractedField[] = doc.fields.map((f) => ({
-    key: f.key,
-    label: f.label,
-    value: f.value,
-    confidence: confidenceOf(doc, f.key, !!f.hard),
-    box: pct(f.box, doc.w, doc.h),
-  }))
+  const fields: ExtractedField[] = doc.fields.map((f) => {
+    const kind = fieldKind(f.key, f.value)
+    return {
+      key: f.key,
+      label: f.label,
+      // presence words in the session language (the AI context and the panel read the same value)
+      value: kind === 'presence' ? presenceText(f.value, lang) : f.value,
+      confidence: confidenceOf(doc, f.key, !!f.hard),
+      box: pct(f.box, doc.w, doc.h),
+      kind,
+    }
+  })
   const tamper = doc.specimen || doc.tamper || doc.kind === 'nota' || doc.kind === 'house' ? tamperCells(doc) : undefined
   return { kind: doc.extractKind, fields, checks: checksFor(doc, lang), ...(tamper ? { tamper } : {}), mode: 'sim' }
 }

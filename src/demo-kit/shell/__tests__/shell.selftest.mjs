@@ -197,7 +197,8 @@ async function focus(b) {
   await b.ev(`document.querySelector('.dk-guide .dk-guide-head button').focus()`)
   await b.key('Escape', 27)
   await sleep(300)
-  ok((await b.ev(`document.activeElement === ${more}`)) === true, `mobile Esc → focus on "⋯" (now: ${await b.ev(name)})`)
+  // phones: the "Coba ini" mission bar under the top bar is the guide's toggle (aria-controls); without it, "⋯"
+  ok((await b.ev(`document.activeElement === (document.querySelector('.dk-mpill') ?? ${more})`)) === true, `mobile Esc → focus on the mission bar / "⋯" (now: ${await b.ev(name)})`)
 }
 
 async function lang(b) {
@@ -225,11 +226,12 @@ async function live(b) {
 
 async function interim(b) {
   console.log('interim: placeholder canvases show only controls that act on them')
-  await b.open('/demo/sapa-warga', 1440, 900, false, 2500)
+  // a product that is still a placeholder (the Satu Daerah products are live since tahap 2)
+  await b.open('/demo/indeks-ekonomi', 1440, 900, false, 2500)
   const r = await b.ev(`({ role: !!document.querySelector('.dk-topbar .dk-pick, .dk-topbar .dk-shell-chip .dk-avatar'), clock: !!document.querySelector('.dk-topbar .dk-clock'), ai: !!document.querySelector('.dk-topbar .dk-ai'), reset: [...document.querySelectorAll('.dk-topbar button')].some((x) => /Reset|Ulang/i.test(x.getAttribute('aria-label') || '')) })`)
   ok(!r.role && !r.clock && !r.ai && !r.reset, `top bar on a placeholder: ${JSON.stringify(r)}`)
   // the preview panel says what the link asked for (?role, ?t), with no fake controls
-  await b.open('/demo/siaga-wilayah?role=kepala-daerah&t=09:15', 1440, 900, false, 2500, '.dk-ph-try')
+  await b.open('/demo/indeks-ekonomi?role=kepala-daerah&t=09:15', 1440, 900, false, 2500, '.dk-ph-try')
   const pv = await b.ev(`(() => { const p = document.querySelector('.dk-ph-try'); return p && { text: p.textContent, cur: p.querySelector('[aria-current="true"]')?.textContent || '', digits: p.querySelector('.dk-ph-digits')?.textContent || '', ctl: p.querySelectorAll('button, input, select, [role=button], [role=switch], [role=radio]').length } })()`)
   ok(!!pv && pv.digits === '09:15' && /pukul 09\.15/.test(pv.text) && /Kepala Daerah/.test(pv.cur) && pv.ctl === 0, `preview: clock ${pv?.digits}, link time in text ${/pukul 09\.15/.test(pv?.text || '')}, current role "${pv?.cur}", controls inside ${pv?.ctl}`)
   await b.open('/lab/_kit?only=shell', 1440, 900, false, 3000)
@@ -239,7 +241,7 @@ async function interim(b) {
 
 async function gutter(b) {
   console.log('gutter: one 16 px gutter on mobile placeholders')
-  await b.open('/demo/sapa-warga', 390, 844, true, 800, '.dk-ph-title')
+  await b.open('/demo/indeks-ekonomi', 390, 844, true, 800, '.dk-ph-title')
   const r = await b.ev(`(() => { const t = document.querySelector('.dk-ph-title'); const c = document.querySelector('.dk-ph-tagline'); return t && { title: Math.round(t.getBoundingClientRect().left), tagline: Math.round(c.getBoundingClientRect().left), sw: document.documentElement.scrollWidth } })()`)
   ok(!!r && Math.abs(r.title - 16) <= 2 && Math.abs(r.tagline - 16) <= 2 && r.sw <= 390, `title x ${r?.title}, tagline x ${r?.tagline}, scrollWidth ${r?.sw}`)
   const q = await b.ev(`(() => { const L = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().left) : null }; const R = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().right) : null }; return { title: L('.dk-ph-try-title'), chips: L('.dk-ph-chips'), digits: L('.dk-ph-digits'), stages: R('.dk-ph-stages') } })()`)

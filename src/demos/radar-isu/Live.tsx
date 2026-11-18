@@ -4,18 +4,42 @@
  * source radar-isu: the world raises ONE hoax.detected on the 6th post → toast to Meja Pimpinan) and, for the
  * Regional Head, an instruction to the Comms Office. Clarify and the AI analyst are lazy drawers.
  */
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import { Button, Drawer, Kpi, KpiStrip, InsightCallout, Icon, LiveBadge, Segmented, motionMode } from '../../demo-kit/ui'
 import { BubbleChart, LineChart, type BubbleDatum } from '../../demo-kit/viz'
 import { clockWib, compact } from '../../demo-kit/viz/format'
 import { useLocation, useNavigate } from 'react-router'
 import { goTo } from '../../components/AppLink'
 import { demoHref, useShell } from '../../demo-kit/shell'
-import { clock, emit, getSession, isEvent, onEvent, rows, useSession, useWorld, world, type Mention, type WorldState } from '../../demo-kit/world'
+import { WORLD, clock, emit, getSession, isEvent, onEvent, rows, useSession, useWorld, world, type Mention, type WorldState } from '../../demo-kit/world'
 import { HoaxCard } from './HoaxCard'
 import { Stream } from './Stream'
-import { RADAR, afterPaint, burstPosts, hoaxPhase, negIssues, prefetchBurst, radarKpis, recoveryOf, sentimentIndex, signedIdx, streamOf, topicsOf, useNow, type SentRes } from './model'
+import {
+  RADAR,
+  afterPaint,
+  burstPosts,
+  hoaxPhase,
+  manualTriggerAt,
+  setAssessTarget,
+  markManualTrigger,
+  mentionsToday,
+  negIssues,
+  prefetchBurst,
+  radarKpis,
+  recoveryOf,
+  riverAlert,
+  sapaFlood,
+  scannedToday,
+  sentSummary,
+  sentimentIndex,
+  signedIdx,
+  streamOf,
+  topicsOf,
+  useNow,
+  type SentRes,
+} from './model'
 import { STR, fill, topicName, useStr } from './strings'
+import { isEnabled } from '../../lib/motion'
 
 const loadClarify = () => import('./Clarify')
 const loadAssistant = () => import('./Assistant')
@@ -29,6 +53,8 @@ const selGauges = (s: WorldState) => s.gauges
 const selMeta = (s: WorldState) => s.meta
 const selRegion = (s: WorldState) => s.region
 const selSeed = (s: WorldState) => s.seed
+const selComplaints = (s: WorldState) => s.complaints
+const COARSE = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
 /** the three-column layout (container ≥ 1080 px): the idle hoax card has room for its full text there */
 function useWide(ref: RefObject<HTMLElement | null>): boolean {
   const [wide, setWide] = useState(true)
@@ -41,6 +67,8 @@ function useWide(ref: RefObject<HTMLElement | null>): boolean {
   }, [ref])
   return wide
 }
+/** the monitor starts by itself once per page load (first visit of the live tab) */
+let autoRan = false
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 /** keep the previous value while its signature is unchanged (the bubbles must not re-layout on every clock tick) */
 function useStable<T>(v: T, sig: (v: T) => string): T {
@@ -89,6 +117,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const meta = useWorld(selMeta)
   const region = useWorld(selRegion)
   const seed = useWorld(selSeed)
+  const complaints = useWorld(selComplaints)
   const gauge = gauges.byId[meta.facts.hoax.gaugeId]
   const damName = meta.facts.hoax.damName || gauge?.name || 'Bendungan'
 
@@ -99,7 +128,8 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   // stable while nothing in the scenario changed (the hoax card is memoised: no re-render on every world minute)
   const phase = useStable(
     useMemo(() => hoaxPhase({ mentions, hoaxAlerts, meta }, now), [mentions, hoaxAlerts, meta, now]),
-    (ph) => (ph.kind === 'idle' ? 'idle' : `${ph.kind}|${ph.posts.length}|${ph.kind === 'burst' ? '' : `${ph.alert.id}|${ph.alert.status}|${ph.alert.clarification?.at ?? ''}|${ph.alert.spreadPerHour}`}`),
+    (ph) =>
+      ph.kind === 'idle' ? 'idle' : `${ph.kind}|${ph.posts.length}|${ph.kind === 'burst' ? '' : `${ph.alert.id}|${ph.alert.status}|${ph.alert.clarification?.at ?? ''}|${ph.alert.spreadPerHour}`}`,
   )
   const stream = useMemo(() => streamOf(mentions, now, RADAR.streamLimit), [mentions, now])
   // bubbles move in 10-minute steps (a smooth glide, not a re-layout on every world minute at ×60)
@@ -125,6 +155,19 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
     (r) => (r ? `${r.before}|${r.after}` : ''),
   )
   const negTop = negIssues(mentions, now)[0]
+  // Sapa Warga flood reports where the rumour points (second evidence row; hour granularity is enough)
+  const sapa = useStable(
+    useMemo(() => sapaFlood({ complaints, region }, now), [complaints, region, now]),
+    (f) => (f ? `${f.count}|${f.desa}|${f.since}|${f.regionCount}|${f.evac}|${f.dike}|${f.inHomes}` : ''),
+  )
+  // the river gauge at SIAGA / AWAS: shown next to the dam evidence (a calm dam is not a calm river)
+  const river = useStable(
+    useMemo(() => riverAlert({ gauges }, now), [gauges, now]),
+    (r) => (r ? `${r.status}|${r.level}|${r.updatedAt}` : ''),
+  )
+  const replayAt = manualTriggerAt(meta.facts)
+  // "Isu negatif" = topics with any negative mention (ecosystem definition); how many are mostly negative
+  const negDominant = clusters.filter((c) => c.sentiment === 'negatif').length
   // the moment a hoax is detected, zoom the sentiment chart to 3 h so the dip (and later the recovery) is visible
   const wasActive = useRef(phase.kind === 'active' || phase.kind === 'clarified')
   useEffect(() => {
@@ -149,10 +192,12 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
     rest: Awaited<ReturnType<typeof burstPosts>>
     facts: object
   } | null>(null)
-  const trigger = useCallback(async () => {
+  const trigger = useCallback(async (at?: number) => {
     if (burst.current) return
     const s = world.get()
-    const start = Math.max(0, clock.get().minutes - 25)
+    const start = at ?? Math.max(0, clock.get().minutes - 25)
+    // pressed by hand: the posts are dated up to 25 minutes back and replayed at speed; the card says so
+    if (at === undefined) markManualTrigger(clock.get().minutes, s.meta.facts)
     burst.current = { rest: [], facts: s.meta.facts }
     // answer the click at once (busy state), even while the burst texts are still loading
     setBursting(true)
@@ -184,6 +229,51 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
     const id = window.setTimeout(prefetchBurst, 2500)
     return () => window.clearTimeout(id)
   }, [])
+  /* the live feed (lazy): curated mentions while the clock runs, backfill after a jump, the 10.00 scenario after a
+     jump over it. On a first visit with full motion the monitor starts by itself at ×60 (the world moves within
+     seconds; reduced motion, ?off=, ?static, a presenter / test run or a clock already moved keep it as it is). */
+  const triggerRef = useRef(trigger)
+  triggerRef.current = trigger
+  useEffect(() => {
+    let un: (() => void) | null = null
+    let alive = true
+    void import('./live-feed').then(
+      (m) => {
+        if (alive) un = m.startFeed({ startHoax: (at) => void triggerRef.current(at) })
+      },
+      () => undefined,
+    )
+    let auto = 0
+    const q = new URLSearchParams(window.location.search)
+    // reduced motion / ?off=demoAnimations / ?static=1 keep the world still (a perf degrade alone does not)
+    const calm = motionMode() === 'static' || !isEnabled('demoAnimations') || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!autoRan && !calm && !q.has('e2e') && !q.has('present') && !q.has('tour')) {
+      const c0 = clock.get()
+      // only from the untouched start of the demo day (an explicit ?t= or a world already in progress stays as it is)
+      if (!c0.running && c0.minutes === WORLD.clockStart)
+        auto = window.setTimeout(() => {
+          // marked when it fires (not when scheduled): a dev StrictMode remount clears the first timer
+          autoRan = true
+          const c = clock.get()
+          // the visitor already set the clock (or the tab is hidden): leave it alone
+          if (c.running || c.minutes !== c0.minutes || document.visibilityState === 'hidden') return
+          clock.setSpeed(60)
+          clock.play()
+        }, RADAR.autoRunMs)
+    }
+    return () => {
+      alive = false
+      un?.()
+      window.clearTimeout(auto)
+    }
+  }, [])
+  // toasts away from the hoax card: bottom-right beside the charts on wide screens; on phones at the bottom (the
+  // guide is a pill at the top now, and the hoax card with its next step sits in the first screen above them)
+  const setToastAt = shell.setToastPlacement
+  useEffect(() => {
+    setToastAt({ wide: 'bottom-right', sm: 'bottom-left' })
+    return () => setToastAt(null)
+  }, [setToastAt])
   // leaving mid-burst: post the rest at once (into the SAME world), so the hoax is still detected
   useEffect(
     () => () => {
@@ -236,19 +326,27 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   useEffect(() => onEvent('clarification.published', (e) => isEvent(e, 'clarification.published') && setClarify(null)), [])
 
   const assess = useCallback(
-    (m: Mention) =>
+    (m: Mention) => {
+      // the analyst reads this card's own label, score and topic (its verdict never contradicts the card)
+      setAssessTarget(m)
       setAsk((a) => ({
         open: true,
         prompt: `${lang === 'id' ? 'Nilai unggahan ini' : 'Assess this post'}: «${m.text[lang]}»`,
         n: a.n + 1,
-      })),
+      }))
+    },
     [lang],
   )
 
   const tc = topic ? clusters.find((c) => c.topic === topic) : undefined
   // the drawer lists exactly the mentions its count is made of (same 24 h window, newest first)
   const topicItems = useMemo(
-    () => (topic ? rows(mentions).filter((m) => m.topic === topic && m.at <= nowQ && m.at >= nowQ - 1440).sort((a, b) => b.at - a.at) : []),
+    () =>
+      topic
+        ? rows(mentions)
+            .filter((m) => m.topic === topic && m.at <= nowQ && m.at >= nowQ - 1440)
+            .sort((a, b) => b.at - a.at)
+        : [],
     [mentions, nowQ, topic],
   )
 
@@ -265,6 +363,8 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         }
   }, [phase, series, t])
   const sentWord = kpis.sentiment <= -20 ? t.wBuruk : kpis.sentiment >= 20 ? t.wBaik : t.wNetral
+  // the hero KPI says in words what the number means ("Netral · skala −100…+100")
+  const sentCap = sentWord.charAt(0).toUpperCase() + sentWord.slice(1)
   const sm = shell.size === 'sm'
   const narrow = useNarrow()
   const wide = useWide(gridRef)
@@ -301,15 +401,19 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const go = useCallback(
-    (slug: 'siaga-wilayah' | 'meja-pimpinan') => {
-      const h = demoHref(slug, getSession())
+    (slug: 'siaga-wilayah' | 'meja-pimpinan' | 'sapa-warga', focus?: string) => {
+      const h = demoHref(slug, getSession(), focus)
       void goTo(new URLSearchParams(window.location.search).get('controls') === 'all' ? `${h}&controls=all` : h, navigate, pathname)
     },
     [navigate, pathname],
   )
-  // Siaga Wilayah has no arrival for a gauge id (kitHandoff): open its flood map without a dead ?focus=
-  const onOpenSiaga = useCallback(() => go('siaga-wilayah'), [go])
+  // Siaga Wilayah arrives on a gauge id (?focus=<gaugeId>): the map flies to the dam and its card shows the gauge
+  const damGaugeId = meta.facts.hoax.gaugeId
+  const onOpenSiaga = useCallback(() => go('siaga-wilayah', damGaugeId), [go, damGaugeId])
   const onOpenMp = useCallback(() => go('meja-pimpinan'), [go])
+  // Sapa Warga opens the most urgent of the reports the card cites (?focus=<complaint id>: its ticket opens)
+  const sapaFocus = sapa?.focusId
+  const onOpenSapa = useCallback(() => go('sapa-warga', sapaFocus), [go, sapaFocus])
   const onSkip = useCallback(() => {
     if (clarAtR === null) return
     wantFocus.current = true
@@ -328,19 +432,23 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
 
   /* charts: memoised elements, so a stream filter / drawer / badge update does not re-render them */
   const onBubble = useCallback((d: BubbleDatum) => openTopic(d.id), [openTopic])
+  const pickBubble = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const svg = e.currentTarget.querySelector('svg')
+      if (!svg || !svg.contains(e.target as Node)) return
+      // the kit draws one g.dk-viz-bubble per datum, in data order
+      let hit = -1
+      svg.querySelectorAll(':scope > g.dk-viz-bubble').forEach((g, i) => {
+        const r = g.querySelectorAll('circle')[1]?.getBoundingClientRect()
+        if (r && Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2)) <= r.width / 2) hit = i
+      })
+      const d = bubbles[hit]
+      if (d) onBubble(d)
+    },
+    [bubbles, onBubble],
+  )
   const bubbleEl = useMemo(
-    () => (
-      <BubbleChart
-        title={t.bubblesTitle}
-        unit={t.bubblesUnit}
-        seed={seed}
-        data={bubbles}
-        selectedId={topic}
-        onSelect={onBubble}
-        height={sm ? 260 : 300}
-        className="dk-ri-bubbles"
-      />
-    ),
+    () => <BubbleChart title={t.bubblesTitle} unit={t.bubblesUnit} seed={seed} data={bubbles} selectedId={topic} onSelect={onBubble} height={sm ? 260 : 300} className="dk-ri-bubbles" />,
     [t, seed, bubbles, topic, onBubble, sm],
   )
   const sentX = useMemo(() => series.map((p) => p.at), [series])
@@ -369,25 +477,27 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         yDomain={[-100, 100]}
         {...(markIdx ? { marker: markIdx } : {})}
         format={signedIdx}
+        summary={sentSummary(series, lang, t.sentSeries)}
         height={sm ? 180 : 200}
         className="dk-ri-sentchart"
       />
     ),
-    [res, t, seed, sentX, sentSeries, markIdx, lang, sm],
+    [res, t, seed, sentX, sentSeries, markIdx, lang, sm, series],
   )
 
   // re-rendered only when a figure changes (not on every world minute)
   const { count: kCount, prev: kPrev, sentiment: kSent, negTopics: kNeg, reach: kReach } = kpis
   const kpiStrip = useMemo(
     () => (
-      <KpiStrip label={t.kpiLabel} className="dk-ri-kpis">
-        <Kpi label={t.kpiMentions} value={kCount} delta={kCount - kPrev} goodWhen="up" deltaLabel={narrow ? t.vsPrevShort : t.vsPrev} />
-        <Kpi hero label={t.kpiSentiment} value={kSent} format={fmtSent} caption={t.kpiSentimentCap} />
-        <Kpi label={t.kpiNegative} value={kNeg} caption={t.kpiNegativeCap} />
+      // keyed by language: the kit count-up keeps its first formatter until the value changes ("219 rb" in EN)
+      <KpiStrip key={lang} label={t.kpiLabel} className="dk-ri-kpis">
+        <Kpi label={t.kpiMentions} value={kCount} delta={kCount - kPrev} goodWhen="up" deltaLabel={narrow ? t.vsPrevShort : t.vsPrev} {...(narrow ? {} : { caption: t.kpiMentionsCap })} />
+        <Kpi hero label={t.kpiSentiment} value={kSent} format={fmtSent} caption={fill(narrow ? t.kpiSentimentCap : t.kpiSentimentCapN, { w: sentCap, n: kCount })} />
+        <Kpi label={t.kpiNegative} value={kNeg} caption={fill(narrow ? t.kpiNegativeCapShort : t.kpiNegativeCap, { d: negDominant })} />
         <Kpi label={t.kpiReach} value={kReach} format={fmtReach} caption={t.kpiReachCap} />
       </KpiStrip>
     ),
-    [t, kCount, kPrev, kSent, kNeg, kReach, narrow, fmtSent, fmtReach],
+    [t, lang, kCount, kPrev, kSent, kNeg, kReach, narrow, fmtSent, fmtReach, sentCap, negDominant],
   )
 
   const hoaxCard = (
@@ -398,6 +508,9 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         role={role}
         damName={damName}
         gauge={gauge}
+        sapa={sapa}
+        river={river}
+        replayAt={replayAt}
         recovery={recovery}
         bursting={bursting}
         instructed={instructed}
@@ -407,6 +520,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         onSkip={onSkip}
         onOpenSiaga={onOpenSiaga}
         onOpenMp={onOpenMp}
+        onOpenSapa={onOpenSapa}
         onPrefetch={prefetchBurst}
         compactIdle={!sm && !wide && !hoaxActive}
         rowIdle={sm && !hoaxActive}
@@ -423,20 +537,25 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         </div>
         <div className="dk-ri-live-act">
           {speed ? (
-            <LiveBadge label={fill(t.clockRunning, { x: speed })} />
+            <button type="button" className="dk-ri-clockpill" onClick={() => clock.pause()} aria-label={fill(t.clockPauseAria, { t: clockWib(now, lang), x: speed })}>
+              <LiveBadge label={fill(t.clockRunning, { t: clockWib(now, lang), x: speed })} />
+              <Icon name="pause" size={14} />
+            </button>
           ) : (
-            <Button size="sm" variant="secondary" icon="play" onClick={() => clock.play()}>
-              {t.clockPlay}
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="play"
+              onClick={() => {
+                // ×60: a world hour per real minute, so the stream visibly moves within seconds
+                clock.setSpeed(60)
+                clock.play()
+              }}
+            >
+              {fill(t.clockPlay, { t: clockWib(now, lang) })}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="secondary"
-            icon="spark"
-            onPointerEnter={warmAssistant}
-            onFocus={warmAssistant}
-            onClick={() => setAsk((a) => ({ open: true, prompt: null, n: a.n + 1 }))}
-          >
+          <Button size="sm" variant="secondary" icon="spark" onPointerEnter={warmAssistant} onFocus={warmAssistant} onClick={() => setAsk((a) => ({ open: true, prompt: null, n: a.n + 1 }))}>
             {t.askAi}
           </Button>
         </div>
@@ -477,24 +596,23 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
       <div ref={gridRef} className="dk-ri-grid">
         {!sm && hoaxCard}
         <div className="dk-ri-col-stream">
-          <Stream key={role} items={stream} initialFilter={head ? 'neg' : 'all'} onAssess={assess} />
+          <p className="dk-ri-scan dk-num">
+            <Icon name="search" size={13} /> {fill(t.streamScan, { n: scannedToday(now).toLocaleString(lang === 'id' ? 'id-ID' : 'en-GB'), m: mentionsToday(mentions, now) })}{' '}
+            <span>({t.streamScanNote})</span>
+          </p>
+          <Stream key={role} items={stream} initialFilter={head ? 'neg' : 'all'} onAssess={assess} compact={sm} />
         </div>
         <div className="dk-ri-col-mid">
-          {bubbleEl}
+          {/* a tap (or a click with no hover before it) sends no pointermove, and the kit chart only selects the bubble
+              it last hovered: hit-test the click itself, so the bubble under the finger opens */}
+          <div onClick={pickBubble}>{bubbleEl}</div>
           <div className="dk-ri-topicrow">
             <span className="dk-ri-hint">
-              <Icon name="info" size={14} /> {t.bubblesHint}
+              <Icon name="info" size={14} /> {COARSE ? t.bubblesHintTouch : t.bubblesHint}
             </span>
             <div className="dk-ri-chips" role="group" aria-label={t.bubblesTitle}>
               {clusters.slice(0, 6).map((c, i) => (
-                <Button
-                  key={c.topic}
-                  size="sm"
-                  variant={i === 0 ? 'secondary' : 'ghost'}
-                  onClick={() => openTopic(c.topic)}
-                  data-topic={c.topic}
-                  aria-pressed={topic === c.topic}
-                >
+                <Button key={c.topic} size="sm" variant={i === 0 ? 'secondary' : 'ghost'} onClick={() => openTopic(c.topic)} data-topic={c.topic} aria-pressed={topic === c.topic}>
                   {topicName(c.topic, lang)} <span className="dk-num dk-ri-cnt">{c.count}</span>
                 </Button>
               ))}
@@ -508,13 +626,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
         <Icon name="info" size={14} /> {t.simNote}
       </p>
 
-      <Drawer
-        open={!!topic}
-        onClose={() => setTopic(null)}
-        title={topic ? topicName(topic, lang) : ''}
-        eyebrow={topic && clusters[0]?.topic === topic ? t.topicBiggest : t.topicEyebrow}
-        width={460}
-      >
+      <Drawer open={!!topic} onClose={() => setTopic(null)} title={topic ? topicName(topic, lang) : ''} eyebrow={topic && clusters[0]?.topic === topic ? t.topicBiggest : t.topicEyebrow} width={460}>
         {tc && (
           <div className="dk-ri-topic">
             <p className="dk-ri-topic-stats">

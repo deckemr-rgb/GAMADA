@@ -16,7 +16,7 @@ import type {
 } from './types'
 import {
   ACTION_TPL_BY_OPD, ACTION_TPL_GENERAL, AGENT_TEAMS, BIZ_KINDS, BIZ_WORDS, BRAND_TEXT, CALL_CUSTOMERS, CANDIDATE_ROLES, CATEGORY_LABEL, CATEGORY_OPD_HINTS,
-  CATEGORY_SLA_DAYS, COMPANY_WORDS, COMPETITOR_BRANDS, COMPLAINT_TEXT, COMPLAINT_WEIGHTS, LENDERS, LETTER_TPL, MEDIA_OUTLETS,
+  CATEGORY_SLA_DAYS, COMPANY_WORDS, COMPETITOR_BRANDS, COMPLAINT_TEXT, COMPLAINT_WEIGHTS, complaintRouting, fillComplaint, mentionText, NAMES, LENDERS, LETTER_TPL, MEDIA_OUTLETS,
   MEETING_PARTICIPANTS, MEETING_TPL, MENTION_TEXT, PROCUREMENT_TPL, SHOP_NAMES, SKILLS, SKUS, SOCIAL_HANDLES, TENDER_TPL,
   PUMP_HISTORY, SPLIT_PACKAGES, PERSONAS,
   type SkuRow,
@@ -25,7 +25,7 @@ import { makeNamer, makeRng, mulberry32, hashString, streamRng, groupWeights, pe
 import { formatId, nextId, type Seq } from './ids'
 import { makeNik as makeSpecimenNik } from '../docs/nik'
 import { scoreOf, computeScore } from './score'
-import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, emptyTable, isoDay, monthOf, offsetKm, pad, round, roundCoord, tableFrom } from './util'
+import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, picOf, emptyTable, isoDay, monthOf, offsetKm, pad, round, roundCoord, tableFrom } from './util'
 
 export { mulberry32, hashString, makeRng, streamRng, groupWeights, personName, makeNamer }
 export type { Rng }
@@ -131,8 +131,18 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const namer = makeNamer(rc, pack.languages.regional)
   const regionalGroups = new Set(pack.languages.regional)
   const citizens: Citizen[] = []
+  // citizens carry a full (two-part) name: a single first name reads like generator output on a form
+  const rfn = S('citizen-names')
+  const fullName = (p: { name: string; gender: 'L' | 'P'; group: Citizen['group'] }): string => {
+    if (p.name.includes(' ')) return p.name
+    const set = NAMES[p.group] ?? NAMES.jawa!
+    const pool = (p.gender === 'P' && set.lastF?.length ? set.lastF : set.last) ?? (p.gender === 'P' ? set.f : set.m)
+    const second = pool.filter((x) => x !== p.name && !x.includes(' '))
+    return second.length ? `${p.name} ${rfn.pick(second)}` : p.name
+  }
   for (let i = 0; i < GEN.citizens; i++) {
-    const p = namer()
+    const p0 = namer()
+    const p = { ...p0, name: fullName(p0) }
     const pl = place(rc)
     const nativeLang = (Object.entries({ jawa: 'jv', sunda: 'su', minang: 'min', bugis: 'bug', madura: 'mad', bali: 'bal', batak: 'bat', banjar: 'bjn' }) as [string, string][])
       .find(([g]) => g === p.group)?.[1]
@@ -158,11 +168,19 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   type Draft = Omit<Complaint, 'id' | 'code' | 'ticketId'>
   const drafts: Draft[] = []
   const floodKec = region.floodKecamatanIds.length ? region.floodKecamatanIds : [region.kecamatan[0]!.id]
+  // an illegal-levy report is never low urgency
+  const atLeastMedium = (category: ComplaintCategory, u: Complaint['urgency']): Complaint['urgency'] => (category === 'pungli' && u === 'rendah' ? 'sedang' : u)
+  // the region's place names a regional-language sample mentions ("… nang Ledok Kulon", "… ing Kanor"): such a sample
+  // is only used for a report from that very desa / kecamatan, never placed somewhere else
+  const placeNames = region.kecamatan.flatMap((k) => [k.name, ...k.desa.map((d) => d.name)]).filter((n) => n.length > 3)
+  const esc = (x: string) => x.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&')
+  const namedIn = new Map(templates.map((t) => [t.id, placeNames.filter((n) => new RegExp('\\b' + esc(n) + '\\b').test(t.text))]))
   const makeDraft = (at: Minutes, category: ComplaintCategory, pl: Place, urgency?: Complaint['urgency']): Draft => {
     const c = rq.pick(citizens.filter((x) => x.kecamatanId === pl.kecamatanId).slice(0, 40).concat(citizens.slice(0, 1)))
-    const tpls = templates.filter((t) => t.category === category)
-    const useTpl = tpls.length > 0 && c.lang !== 'id' && rq.chance(0.75)
     const desaName = kecById.get(pl.kecamatanId)?.desa.find((d) => d.id === pl.desaId)?.name ?? ''
+    const kecName = kecById.get(pl.kecamatanId)?.name ?? ''
+    const tpls = templates.filter((t) => t.category === category && (namedIn.get(t.id) ?? []).every((n) => n === desaName || n === kecName))
+    const useTpl = tpls.length > 0 && c.lang !== 'id' && rq.chance(0.75)
     let text: string
     let summary: Bi
     let lang: Complaint['lang'] = 'id'
@@ -174,14 +192,15 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
       lang = t.lang
       templateId = t.id
     } else {
-      const t = rq.pick(COMPLAINT_TEXT[category])
-      text = t.id.replace('{d}', desaName)
-      summary = { id: text, en: t.en.replace('{d}', desaName) }
+      // the draw keeps the stream unchanged; the variant itself is chosen after sorting (no repeat within 7 days)
+      rq.pick(COMPLAINT_TEXT[category])
+      text = ''
+      summary = { id: desaName, en: desaName }
     }
     return {
       citizenId: c.id, category, channel: rq.weighted([['wa', 55], ['web', 20], ['telepon', 10], ['voice', 15]] as const),
       text, lang, summary, kecamatanId: pl.kecamatanId, desaId: pl.desaId, coord: pl.coord,
-      urgency: urgency ?? (category === 'banjir' || category === 'pohon-tumbang' ? 'tinggi' : rq.weighted([['rendah', 35], ['sedang', 50], ['tinggi', 15]] as const)),
+      urgency: urgency ?? (category === 'banjir' || category === 'pohon-tumbang' ? 'tinggi' : atLeastMedium(category, rq.weighted([['rendah', 35], ['sedang', 50], ['tinggi', 15]] as const))),
       at, clusterId: null, templateId, photo: rq.chance(0.45),
     }
   }
@@ -208,13 +227,65 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     drafts.push(makeDraft(minuteOn(rq, d), cat, pl))
   }
   drafts.sort((a, b) => a.at - b.at)
+  // fallback texts: per category a shuffled deck of variants; a variant is not reused within 7 days in its category
+  const rqt = S('complaint-text')
+  const decks = new Map<ComplaintCategory, { order: number[]; next: number; last: number[] }>()
+  const tplLast = new Map<string, number>()
+  for (const d of drafts) {
+    if (d.templateId) {
+      // a regional-language sample already used in the last 7 days → this report is written in Indonesian instead
+      const last = tplLast.get(d.templateId)
+      if (last === undefined || d.at - last >= 7 * DAY_MIN) {
+        tplLast.set(d.templateId, d.at)
+        continue
+      }
+      const desaName = kecById.get(d.kecamatanId)?.desa.find((x) => x.id === d.desaId)?.name ?? ''
+      d.templateId = undefined
+      d.lang = 'id'
+      d.text = ''
+      d.summary = { id: desaName, en: desaName }
+    }
+    if (d.text) continue
+    const pool = COMPLAINT_TEXT[d.category]
+    let deck = decks.get(d.category)
+    if (!deck) {
+      deck = { order: rqt.shuffle(pool.map((_, i) => i)), next: 0, last: pool.map(() => -Infinity) }
+      decks.set(d.category, deck)
+    }
+    let pick = deck.order[deck.next % deck.order.length]!
+    for (let k = 0; k < deck.order.length; k++) {
+      const cand = deck.order[(deck.next + k) % deck.order.length]!
+      if (d.at - deck.last[cand]! >= 7 * DAY_MIN) {
+        pick = cand
+        deck.next += k
+        break
+      }
+    }
+    deck.next++
+    deck.last[pick] = d.at
+    const filled = fillComplaint(pool[pick]!, d.summary.id, rqt)
+    d.text = filled.id
+    d.summary = filled
+  }
   const complaints: Complaint[] = []
   const tickets: Ticket[] = []
+  // past flood reports: embankment ones and every other high-urgency one went to the disaster agency (BPBD), so its
+  // 30-day performance has data on a flood day
+  const floodBpbd = region.opd.find((o) => o.id === 'bpbd')?.id ?? null
+  let pastFlood = 0
+  const opdFor = (d: Draft): string => {
+    if (!floodBpbd || d.category !== 'banjir' || d.at >= 0) return region.categoryOpd[d.category]
+    const toBpbd = /tanggul|evakuasi|posko|embankment/i.test(d.text) || (d.urgency === 'tinggi' && pastFlood++ % 4 !== 3)
+    return toBpbd ? floodBpbd : region.categoryOpd[d.category]
+  }
   for (const d of drafts) {
     const id = nid('complaints')
     const tid = nid('tickets')
     complaints.push({ ...d, id, code: id, ticketId: tid })
-    const sla = CATEGORY_SLA_DAYS[d.category] * DAY_MIN
+    // a life-safety report (evacuation, trapped residents) went to BPBD with a 60-minute SLA (= the reducer's rule)
+    const route = complaintRouting(region, d.category, d.text)
+    const life = route.opdId !== region.categoryOpd[d.category]
+    const sla = life ? route.slaMin : CATEGORY_SLA_DAYS[d.category] * DAY_MIN
     const ageDays = (now - d.at) / DAY_MIN
     const flow: TicketStatus[] = ['baru', 'diverifikasi', 'diteruskan', 'diproses', 'selesai']
     let reach: number
@@ -222,6 +293,8 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     else if (ageDays < 0.4) reach = rq.weighted([[0, 40], [1, 45], [2, 15]] as const)
     else if (ageDays * DAY_MIN < sla) reach = rq.weighted([[1, 10], [2, 30], [3, 40], [4, 20]] as const)
     else reach = rq.weighted([[2, 6], [3, 14], [4, 80]] as const)
+    // a life-safety report is never left untouched: it was forwarded to BPBD at once
+    if (life && reach < 2 && ageDays * DAY_MIN >= 10) reach = 2
     const history: Ticket['history'] = [{ at: d.at, status: 'baru' }]
     let t = d.at
     const span = Math.max(30, Math.min(now - d.at, sla * rq.float(0.4, 1.3)))
@@ -231,7 +304,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     }
     const status = flow[reach]!
     tickets.push({
-      id: tid, code: id, complaintId: id, status, opdId: region.categoryOpd[d.category], createdAt: d.at, updatedAt: t,
+      id: tid, code: id, complaintId: id, status, opdId: life ? route.opdId : opdFor(d), createdAt: d.at, updatedAt: t,
       slaDueAt: d.at + sla, closedAt: status === 'selesai' ? t : null,
       rating: status === 'selesai' && rq.chance(0.7) ? rq.weighted([[5, 40], [4, 35], [3, 15], [2, 7], [1, 3]] as const) : null,
       history,
@@ -248,6 +321,25 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   }
 
   /* ---------------------------------------------------------------- letters, meetings, action items */
+  // subject keywords → agencies (ids or name hints in the region pack)
+  const LETTER_ROUTES: [RegExp, string[]][] = [
+    [/bantuan sosial|bansos/i, ['dinsos', 'sosial']],
+    [/tanggul|drainase|saluran air|jalan kabupaten/i, ['pupr', 'pekerjaan umum']],
+    [/genangan|kesiapsiagaan/i, ['bpbd', 'bencana']],
+    [/pompa irigasi|kelompok tani/i, ['distan', 'pertanian']],
+    [/umkm/i, ['diskopumkm', 'umkm', 'koperasi']],
+    [/anggaran/i, ['bappeda', 'perencanaan']],
+  ]
+  const letterRoute = (subject: string): string[] => {
+    for (const [re, hints] of LETTER_ROUTES) {
+      if (!re.test(subject)) continue
+      for (const h of hints) {
+        const o = region.opd.find((x) => x.id === h || `${x.short} ${x.name}`.toLowerCase().includes(h))
+        if (o) return [o.id]
+      }
+    }
+    return []
+  }
   const rl = S('letters')
   const letters: Letter[] = []
   const letterDrafts = Array.from({ length: 24 }, (_, i) => {
@@ -258,7 +350,10 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   }).sort((a, b) => a.at - b.at)
   for (const { t, at, recent } of letterDrafts) {
     const id = nid('letters')
-    const opds = rl.sample(region.opd, rl.int(1, 2)).map((o) => o.id)
+    // same draws as before; a letter whose subject names an agency's field goes to that agency
+    const drawnOpds = rl.sample(region.opd, rl.int(1, 2)).map((o) => o.id)
+    const routed = letterRoute(t.s.id)
+    const opds = routed.length ? routed : drawnOpds
     letters.push({
       id, number: `${rl.int(1, 999).toString().padStart(3, '0')}/${rl.int(100, 999)}/${rl.int(400, 499)}.${rl.int(100, 300)}/${year}`,
       from: t.from, subject: t.s, kind: t.kind, sifat: rl.weighted([['segera', 25], ['biasa', 70], ['rahasia', 5]] as const),
@@ -271,7 +366,9 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const actionItems: ActionItem[] = []
   const meetingDrafts: { title: Bi; at: Minutes; done: boolean }[] = []
   for (let i = 0; i < 6; i++) meetingDrafts.push({ title: MEETING_TPL[(i + 1) % MEETING_TPL.length]!, at: -rm.int(1, 14) * DAY_MIN + rm.int(8, 14) * 60, done: true })
-  meetingDrafts.push({ title: MEETING_TPL[0]!, at: 9 * 60, done: false }, { title: MEETING_TPL[3]!, at: 13 * 60 + 30, done: false })
+  // today's flood meeting (the sample recording Naskah Pintar plays) was held 06.30–07.00, before the clock starts
+  // (owner decision 2026-11-18): its recording exists when the demo opens; the minutes are drafted in the demo
+  meetingDrafts.push({ title: MEETING_TPL[0]!, at: WORLD.floodMeetingAt, done: false }, { title: MEETING_TPL[3]!, at: 13 * 60 + 30, done: false })
   meetingDrafts.sort((a, b) => a.at - b.at)
   // today's flood meeting is the sample recording Naskah Pintar plays: its participants are the clip's speakers
   // (the random draw still runs, so the rest of the seed is unchanged)
@@ -279,6 +376,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const floodKecName = (region.kecamatan.find((k) => k.id === 'kalitidu') ?? region.kecamatan.find((k) => k.id === region.floodKecamatanIds[0]))?.name
   const meetingPeople = (m: { title: Bi; done: boolean }, drawn: string[]): string[] =>
     m.title === MEETING_TPL[0] && !m.done ? ['Sekda', 'Kepala Dinas PUPR', 'Kalaksa BPBD', 'Kepala Dinas Sosial', floodKecName ? `Camat ${floodKecName}` : 'Camat'] : drawn
+  const usedTitles = new Map<string, Set<string>>()
   for (const m of meetingDrafts) {
     const id = nid('meetings')
     const items: string[] = []
@@ -288,15 +386,41 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
         const due = m.at + rm.int(2, 10) * DAY_MIN
         const opd = rm.pick(region.opd)
         const status: ActionItem['status'] = due < now ? rm.weighted([['selesai', 62], ['proses', 28], ['baru', 10]] as const) : rm.weighted([['baru', 50], ['proses', 45], ['selesai', 5]] as const)
-        actionItems.push({ id: aid, title: rm.pick(ACTION_TPL_BY_OPD[opd.id] ?? ACTION_TPL_GENERAL), opdId: opd.id, pic: `Kepala ${opd.short}`, dueAt: due, status, source: { kind: 'meeting', id }, createdAt: m.at + 90 })
+        // same draw as before; a title the agency already has is swapped for the next unused one of its pool
+        const pool = ACTION_TPL_BY_OPD[opd.id] ?? ACTION_TPL_GENERAL
+        const drawnTitle = rm.pick(pool)
+        const used = usedTitles.get(opd.id) ?? new Set<string>()
+        usedTitles.set(opd.id, used)
+        const title = [drawnTitle, ...pool, ...ACTION_TPL_GENERAL].find((x) => !used.has(x.id)) ?? drawnTitle
+        used.add(title.id)
+        actionItems.push({ id: aid, title, opdId: opd.id, pic: picOf(opd), dueAt: due, status, source: { kind: 'meeting', id }, createdAt: m.at + 90 })
         items.push(aid)
       }
     }
+    // the draws run for every meeting, so the rest of the seed does not depend on the flood meeting's time
+    const drawnMin = rm.pick([60, 90, 120])
+    const participants = meetingPeople(m, rm.sample(MEETING_PARTICIPANTS, rm.int(4, 6)))
+    // held before the clock starts but not minuted yet (the flood meeting): status selesai, transcribed false
+    const held = !m.done && m.title === MEETING_TPL[0] && m.at + WORLD.floodMeetingMin <= WORLD.clockStart
     meetings.push({
-      id, title: m.title, at: m.at, durationMin: rm.pick([60, 90, 120]), participants: meetingPeople(m, rm.sample(MEETING_PARTICIPANTS, rm.int(4, 6))),
-      status: m.done ? 'selesai' : 'terjadwal', transcribed: m.done, summary: m.done ? { id: `Notulen ${m.title.id} disahkan.`, en: `Minutes of ${m.title.en} approved.` } : null,
+      id, title: m.title, at: m.at, durationMin: held ? WORLD.floodMeetingMin : drawnMin, participants,
+      status: m.done || held ? 'selesai' : 'terjadwal', transcribed: m.done, summary: m.done ? { id: `Notulen ${m.title.id} disahkan.`, en: `Minutes of ${m.title.en} approved.` } : null,
       actionItemIds: items,
     })
+  }
+
+  // every disposition of an older letter gave each recipient one follow-up task (created after the meeting tasks so
+  // their ids are unchanged); done when already due, otherwise in progress
+  for (const l of letters) {
+    if (!l.disposition) continue
+    for (const opdId of l.disposition.to) {
+      const opd = region.opd.find((o) => o.id === opdId)
+      const due = l.dueAt ?? l.disposition.at + 5 * DAY_MIN
+      actionItems.push({
+        id: nid('actionItems'), title: { id: `Tindak lanjut surat ${l.number.split('/')[0]}: ${l.subject.id}`, en: `Follow up letter ${l.number.split('/')[0]}: ${l.subject.en}` }, opdId, pic: picOf(opd, opdId), dueAt: due,
+        status: due < now ? 'selesai' : 'proses', source: { kind: 'letter', id: l.id }, createdAt: l.disposition.at,
+      })
+    }
   }
 
   /* ---------------------------------------------------------------- mentions (Radar Isu) */
@@ -314,7 +438,7 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     const fill = (s: string) => s.replace('{k}', k.name).replace('{r}', region.shortName)
     mentions.push({
       id: nid('mentions'), at, outlet: kind === 'berita' ? rn.pick(MEDIA_OUTLETS) : kind === 'sosmed' ? rn.pick(SOCIAL_HANDLES) : 'Forum Warga',
-      kind, author: kind === 'berita' ? 'Redaksi' : rn.pick(SOCIAL_HANDLES), text: { id: fill(tpl.t.id), en: fill(tpl.t.en) },
+      kind, author: kind === 'berita' ? 'Redaksi' : rn.pick(SOCIAL_HANDLES), text: { id: fill(mentionText(tpl, hashString(`${at}|${mentions.length}`)).id), en: fill(mentionText(tpl, hashString(`${at}|${mentions.length}`)).en) },
       sentiment: score < -0.2 ? 'negatif' : score > 0.2 ? 'positif' : 'netral', score, topic: tpl.topic,
       reach: Math.round(Math.exp(rn.normal(kind === 'berita' ? 8 : 6.5, 1))),
     })
@@ -332,22 +456,37 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const bidders: Bidder[] = []
   const company = (r: Rng) => `${r.pick(COMPANY_WORDS)} ${r.pick(COMPANY_WORDS)}${r.chance(0.4) ? ' ' + r.pick(COMPANY_WORDS) : ''}`
   const bnamer = makeNamer(rp, pack.languages.regional)
+  // documentation address ranges (RFC 5737), never a real or private network; same three draws as before, and no
+  // two independent bidders ever share an address by accident
+  const usedIp = new Set<string>()
+  const docIp = (a: number, b: number, c: number): string => {
+    const nets = ['203.0.113', '198.51.100', '192.0.2']
+    for (let k = 0; k < 760; k++) {
+      const n = (a + b + k) % 3
+      const ip = `${nets[n]}.${((c + k * 7) % 250) + 2}`
+      if (!usedIp.has(ip)) {
+        usedIp.add(ip)
+        return ip
+      }
+    }
+    return `${nets[0]}.${c}`
+  }
   const ringDefs: { ring: string; n: number }[] = [{ ring: 'pompa', n: 4 }, { ring: 'jalan', n: 3 }]
   for (const { ring, n } of ringDefs) {
     const director = bnamer('L').name
     const addr = place(rp)
-    const ip = `10.${rp.int(10, 250)}.${rp.int(0, 255)}.${rp.int(2, 250)}`
+    const ip = docIp(rp.int(10, 250), rp.int(0, 255), rp.int(2, 250))
     for (let i = 0; i < n; i++) {
       bidders.push({
         id: nid('bidders'), name: company(rp), legal: rp.chance(0.6) ? 'CV' : 'PT', director: i < 2 ? director : bnamer().name,
-        address: i !== 1 ? addr.label : place(rp).label, kecamatanId: addr.kecamatanId, ip: i < 3 ? ip : `10.${rp.int(10, 250)}.${rp.int(0, 255)}.${rp.int(2, 250)}`,
+        address: i !== 1 ? addr.label : place(rp).label, kecamatanId: addr.kecamatanId, ip: i < 3 ? ip : docIp(rp.int(10, 250), rp.int(0, 255), rp.int(2, 250)),
         wins: rp.int(1, 6), ring,
       })
     }
   }
   for (let i = bidders.length; i < 36; i++) {
     const pl = place(rp)
-    bidders.push({ id: nid('bidders'), name: company(rp), legal: rp.chance(0.55) ? 'CV' : 'PT', director: bnamer().name, address: pl.label, kecamatanId: pl.kecamatanId, ip: `10.${rp.int(10, 250)}.${rp.int(0, 255)}.${rp.int(2, 250)}`, wins: rp.int(0, 4), ring: null })
+    bidders.push({ id: nid('bidders'), name: company(rp), legal: rp.chance(0.55) ? 'CV' : 'PT', director: bnamer().name, address: pl.label, kecamatanId: pl.kecamatanId, ip: docIp(rp.int(10, 250), rp.int(0, 255), rp.int(2, 250)), wins: rp.int(0, 4), ring: null })
   }
   const opdByHint = (hints: string[]) => {
     for (const h of hints) {
@@ -749,7 +888,16 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   const regPool = citizens.filter((c) => floodSet.has(c.kecamatanId))
   const others = citizens.filter((c) => !floodSet.has(c.kecamatanId))
   const registrants: Citizen[] = []
-  for (let i = 0; i < 50; i++) registrants.push(i % 5 === 4 && others.length ? rv.pick(others) : rv.pick(regPool.length ? regPool : citizens))
+  // 50 distinct people (nobody registers twice under different NIKs): 46 from the flood zone + 4 from outside it
+  // (positions 11, 23, 35, 47), topped up from anyone not yet drawn when a pool is small
+  const inZone = rv.sample(regPool.length ? regPool : citizens, 46)
+  const outZone = rv.sample(others, 4)
+  const drawn = new Set([...inZone, ...outZone].map((c) => c.id))
+  const spare = citizens.filter((c) => !drawn.has(c.id))
+  for (let i = 0, a = 0, b = 0; i < 50; i++) {
+    const c = i % 12 === 11 && b < outZone.length ? outZone[b++] : inZone[a++] ?? outZone[b++] ?? spare.shift()
+    if (c) registrants.push(c)
+  }
   const regDocs: Omit<DocumentRec, 'id'>[] = registrants.map((c) => ({ kind: 'ktp' as const, ownerName: c.name, citizenId: c.id, nik: makeNik(c), program: 'bansos-banjir' as const, kecamatanId: c.kecamatanId, desaId: c.desaId, status: 'baru' as const, at: rv.int(0, now) }))
   // exactly 3 duplicate NIK pairs (Cek Berkas P7 "3 NIK ganda")
   for (const [a, b] of [[3, 17], [22, 41], [8, 33]] as const) regDocs[b]!.nik = regDocs[a]!.nik

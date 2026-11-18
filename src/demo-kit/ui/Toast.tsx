@@ -7,12 +7,12 @@
  * toast that holds focus goes away (timer, ✕, or pushed out), focus moves to the next toast, else the
  * previous one, else back to the element that had focus before the region was entered.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Children, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { DEMO } from '../../lib/motion'
 import { Icon, type IconName } from './icons'
 import { enterPanel } from './motion'
-import { Portal } from './Overlay'
+import { Portal, overlayOpen, subscribeOverlays } from './Overlay'
 import { useUiStrings } from './strings'
 import './tokens.css'
 import './ui.css'
@@ -114,8 +114,29 @@ export function Toast({ data, onDismiss }: { data: ToastData; onDismiss?: (id: s
 }
 
 /** Fixed stack (body-level portal). Newest at the bottom, nearest the corner. */
-export function ToastRegion({ children, placement = 'bottom-left', label }: { children: ReactNode; placement?: 'bottom-left' | 'bottom-right' | 'top-right'; label?: string }) {
+export type ToastPlacement = 'bottom-left' | 'bottom-right' | 'top-right'
+
+/**
+ * Fixed stack (body-level portal). Below 768 px the stack sits at the bottom above the safe area, shows only the
+ * newest toast with a "+n" marker for the others (a stack covered ~40 % of a 390 × 844 screen), and is held (hidden, timers paused) while a Modal or Drawer is open (class is-held).
+ */
+const PHONE_MQ = '(max-width: 767px)'
+const isPhone = () => typeof window !== 'undefined' && !!window.matchMedia?.(PHONE_MQ).matches
+/** phones: shorter life (a toast covers a large share of the screen) */
+const PHONE_TTL_MS = 4000
+
+export function ToastRegion({ children, placement = 'bottom-left', label }: { children: ReactNode; placement?: ToastPlacement; label?: string }) {
+  const ov = useSyncExternalStore(subscribeOverlays, overlayOpen, () => false)
+  // phones: while a Modal / Drawer is open the stack is held (hidden, timers paused) instead of covering the
+  // sheet's header or footer; it shows again, with its time left, when the sheet closes
+  const hold = ov && isPhone()
+  useEffect(() => {
+    if (!hold) return
+    setRegionHold(true)
+    return () => setRegionHold(false)
+  }, [hold])
   const t = useUiStrings()
+  const count = Children.count(children)
   const hover = useRef(false)
   const focus = useRef(false)
   const held = useRef(false)
@@ -159,7 +180,8 @@ export function ToastRegion({ children, placement = 'bottom-left', label }: { ch
     <Portal className="dk-toast-host">
       <section
         ref={secRef}
-        className={`dk-toasts dk-toasts--${placement}`}
+        className={`dk-toasts dk-toasts--${placement}${ov ? ' is-ov' : ''}${hold ? ' is-held' : ''}`}
+        aria-hidden={hold || undefined}
         aria-label={label ?? t.notifications}
         aria-live="polite"
         aria-relevant="additions"
@@ -184,6 +206,11 @@ export function ToastRegion({ children, placement = 'bottom-left', label }: { ch
           sync()
         }}
       >
+        {count > 1 && (
+          <span className="dk-toasts-more dk-num" aria-hidden="true">
+            +{count - 1}
+          </span>
+        )}
         {children}
       </section>
     </Portal>
@@ -214,7 +241,7 @@ export function useToastQueue(max: number = DEMO.toastMax, ttlMs: number = DEMO.
         return next.slice(-max)
       })
       timers.current.get(id)?.kill()
-      const tw = gsap.delayedCall(ttlMs / 1000, () => dismiss(id))
+      const tw = gsap.delayedCall((isPhone() ? Math.min(ttlMs, PHONE_TTL_MS) : ttlMs) / 1000, () => dismiss(id))
       if (pausedBy > 0) tw.pause() // pushed while the reader is in the region: wait for them
       timers.current.set(id, tw)
       return id

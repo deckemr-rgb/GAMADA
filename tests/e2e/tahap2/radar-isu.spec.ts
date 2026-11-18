@@ -65,6 +65,19 @@ test('Radar Isu · ?tab=analisis opens Analisis Mendalam (the /tools/scrappulse 
   expect(errors.filter(notNoise)).toEqual([])
 })
 
+test('Radar Isu · the counter-evidence link lands on the dam gauge in Siaga Wilayah (?focus=<gaugeId>)', async ({ page, errors }) => {
+  await openDemo(page, 'radar-isu')
+  await page.locator('.dk-ri-hoax-cta').click()
+  await expect(page.locator('.dk-ri-hoax.is-active')).toBeVisible({ timeout: 15_000 })
+  const gaugeId = await W<string>(page, 's.meta.facts.hoax.gaugeId')
+  const nav = page.waitForURL(new RegExp(`/demo/siaga-wilayah\\?.*focus=${gaugeId}`), { timeout: 15_000 })
+  await page.locator('.dk-ri-evid-link').click()
+  await nav
+  await expect(page).toHaveURL(/\/demo\/siaga-wilayah/)
+  await expect(page.getByText('Radar Isu memakai data ini', { exact: false })).toBeVisible({ timeout: 20_000 })
+  expect(errors.filter(notNoise)).toEqual([])
+})
+
 test.describe('phone 390', () => {
   test.use(PHONE)
   test('Radar Isu · stream first, the hoax card works on a phone (EN)', async ({ page, errors }) => {
@@ -74,6 +87,27 @@ test.describe('phone 390', () => {
     await expect(page.locator('.dk-ri-hoax.is-active')).toBeVisible({ timeout: 15_000 })
     await expect(page.locator('.dk-toast').filter({ hasText: 'Meja Pimpinan' })).toHaveCount(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    expect(errors.filter(notNoise)).toEqual([])
+  })
+
+  test('Radar Isu · mission 2 by touch: a tap on the biggest bubble opens its cluster', async ({ page, errors }) => {
+    await openDemo(page, 'radar-isu')
+    await closeGuide(page)
+    const svg = page.locator('.dk-ri-bubbles svg').first()
+    await svg.scrollIntoViewIfNeeded()
+    // the biggest bubble's centre (no hover before the tap: a finger sends no pointermove)
+    const c = await page.evaluate(() => {
+      let best: { w: number; x: number; y: number } | null = null
+      for (const g of document.querySelectorAll('.dk-ri-bubbles svg .dk-viz-bubble')) {
+        const r = g.getBoundingClientRect()
+        if (!best || r.width > best.w) best = { w: r.width, x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      }
+      return best
+    })
+    expect(c).not.toBeNull()
+    await page.touchscreen.tap(c!.x, c!.y)
+    await expect(page.locator('.dk-drawer')).toBeVisible()
+    await expect.poll(() => missionsDone(page, 'radar-isu')).toContain('topik')
     expect(errors.filter(notNoise)).toEqual([])
   })
 })

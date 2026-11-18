@@ -117,6 +117,13 @@
 .dk-ab-kpis .dk-kpi {
   min-width: 0;
 }
+/* the money KPI leads the strip: the overpricing a review would catch */
+.dk-ab-kpi-gap .dk-kpi-val {
+  color: var(--dk-warn-ink);
+}
+.dk-ab-kpi-gap {
+  background: linear-gradient(180deg, var(--dk-warn-12), transparent 80%);
+}
 
 /* ------------------------------------------------------------------ flood banner */
 .dk-ab-flood {
@@ -267,6 +274,7 @@
 }
 .dk-ab-main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   min-width: 0;
 }
@@ -446,9 +454,12 @@
 }
 
 /* 3 key findings */
-.dk-ab-top {
+.dk-ab-top,
+.dk-ab-top-wait {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+  min-width: 0;
 }
 .dk-ab-top-h {
   color: var(--dk-faint);
@@ -823,6 +834,7 @@
 
 /* ------------------------------------------------------------------ memo tab */
 .dk-ab-memo {
+  container-type: inline-size;
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -1140,6 +1152,84 @@
   font: 500 var(--dk-t12) var(--dk-font);
 }
 
+/* ------------------------------------------------------------------ cross-product flow (emergency package) */
+.dk-ab-chain {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-ab-chain-i {
+  position: relative;
+  min-width: 0;
+}
+.dk-ab-chain-a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+  color: var(--dk-text);
+  text-decoration: none;
+}
+a.dk-ab-chain-a:hover {
+  border-color: var(--dk-line-2);
+  background: var(--dk-s2);
+}
+a.dk-ab-chain-a:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+.dk-ab-chain-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: 50%;
+  color: var(--dk-faint);
+  font: 700 11px/1 var(--dk-font);
+}
+.dk-ab-chain-i.is-done .dk-ab-chain-dot {
+  border-color: transparent;
+  background: var(--dk-accent);
+  color: var(--dk-bg, #0e0b1f);
+}
+.dk-ab-chain-i.is-now .dk-ab-chain-a {
+  border-color: var(--dk-line-act);
+}
+.dk-ab-chain-i.is-now .dk-ab-chain-dot {
+  border-color: var(--dk-accent);
+  color: var(--dk-accent);
+}
+.dk-ab-chain-tx {
+  display: grid;
+  min-width: 0;
+}
+.dk-ab-chain-tx > b {
+  overflow: hidden;
+  font: 600 var(--dk-t12) var(--dk-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-ab-chain-tx > span {
+  color: var(--dk-muted);
+  font: 500 11.5px/16px var(--dk-font);
+}
+.dk-ab-chain-i.is-wait .dk-ab-chain-tx {
+  opacity: 0.72;
+}
+.dk-ab-chain-go {
+  color: var(--dk-faint);
+}
+
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 1100px) {
   .dk-ab-hps-grid,
@@ -1161,6 +1251,19 @@
   .dk-ab {
     padding: 12px 12px 16px;
     gap: 12px;
+  }
+  /* KPIs 2 × 2: the flood banner and its action stay in the first screen */
+  .dk-ab-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dk-ab-kpis .dk-kpi {
+    padding: 10px 12px;
+  }
+  .dk-ab-kpis .dk-kpi-val {
+    font-size: 20px;
+  }
+  .dk-ab-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .dk-ab-top-list {
     margin: 0 -12px;
@@ -1311,22 +1414,6 @@
 }
 
 /* ------------------------------------------------------------------ review fixes */
-/* kit workaround: the painted edge line sits over the 14 px hit line; let clicks reach the hit line (kitHandoff) */
-.dk-ab .dk-viz-edge {
-  pointer-events: none;
-}
-@media (pointer: coarse) {
-  .dk-ab .dk-viz-edgehit {
-    stroke-width: 26;
-  }
-}
-@media (max-width: 767px), (pointer: coarse) {
-  /* the kit draws a 1 px border around the field: the input itself must still be 44 px tall */
-  .dk-ab .dk-input,
-  .dk-ab .dk-select {
-    height: calc(var(--dk-target) + 2px);
-  }
-}
 /* the package title takes focus when a package opens: ring only for keyboard users */
 .dk-ab-dtitle:focus {
   outline: none;
@@ -1334,24 +1421,6 @@
 .dk-ab-dtitle:focus-visible {
   border-radius: 6px;
   box-shadow: var(--dk-focus);
-}
-/* hotspot wrapper: the ring sits on the button's top-right corner; the kit Hotspot now places its label under the
-   target (placement 'auto'), so the wrapper needs no extra room */
-.dk-ab-hs {
-  display: inline-flex;
-}
-@media (max-width: 767px) {
-  .dk-ab-flood-act > .dk-ab-linkbtn {
-    margin-right: 18px;
-  }
-  .dk-ab-hs {
-    flex: 1 1 100%;
-    padding-right: 18px;
-  }
-  .dk-ab-hs > .dk-btn {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
 }
 .dk-ab-chartbox {
   min-width: 0;
@@ -1405,4 +1474,289 @@
   border-color: var(--dk-accent);
   color: var(--dk-accent);
   font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ wow-audit round 1 */
+/* header: the grid track may shrink (long HPS figures never push the ring + label off the card) */
+.dk-ab-dhead {
+  grid-template-columns: minmax(0, 1fr);
+}
+.dk-ab-dhead-fig,
+.dk-ab-hpsfig {
+  min-width: 0;
+}
+.dk-ab-hpsfig-was {
+  max-width: 100%;
+}
+/* list: a proposed HPS correction under the HPS */
+.dk-ab-hpscell {
+  display: grid;
+  justify-items: end;
+  line-height: 1.2;
+}
+.dk-ab-hpscell-p {
+  color: var(--dk-pos);
+  font: 600 11px/14px var(--dk-font);
+}
+.dk-ab-gloss {
+  margin-top: 6px;
+  max-width: 72ch;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+/* the world clock at work: the latest screening */
+.dk-ab-screen {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s1);
+}
+.dk-ab-screen-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dk-faint);
+}
+.dk-ab-screen.is-run .dk-ab-screen-dot {
+  background: var(--dk-pos);
+  animation: dk-ab-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dk-ab-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.dk-ab-screen-tx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-ab-screen-tx > b {
+  color: var(--dk-text);
+  font-weight: 600;
+}
+/* detector weights + how the score is built */
+.dk-ab-det-s {
+  gap: 6px;
+}
+.dk-ab-det-w {
+  color: var(--dk-faint);
+  font: 600 11px/14px var(--dk-font);
+  white-space: nowrap;
+}
+.dk-ab-scorehow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-ab-scorehow > .dk-icon {
+  flex: none;
+  margin-top: 2px;
+}
+.dk-ab-bidover {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 6px;
+}
+.dk-ab-chain-soon {
+  display: block;
+  color: var(--dk-warn-ink);
+  font: 600 11px/14px var(--dk-font);
+}
+/* phones: the next step stays under the thumb once the header's actions scroll away */
+.dk-ab-sticky {
+  position: fixed;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: 12px;
+  z-index: calc(var(--dk-z-pop) - 1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s2);
+  box-shadow: var(--dk-e3);
+}
+.dk-ab-sticky > .dk-btn {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.dk-ab-sticky-s {
+  display: grid;
+  justify-items: center;
+  line-height: 1.1;
+}
+.dk-ab-sticky-s > b {
+  font: 700 var(--dk-t16) var(--dk-font);
+}
+.dk-ab-sticky-s > small {
+  font: 600 11px/13px var(--dk-font);
+}
+.dk-ab-sticky-s.is-high {
+  color: var(--dk-danger-ink);
+}
+.dk-ab-sticky-s.is-mid {
+  color: var(--dk-warn-ink);
+}
+@media (max-width: 767px) {
+  .dk-ab-dhead-fig {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+  }
+  .dk-ab-hpsfig-v {
+    font-size: 19px;
+    line-height: 24px;
+  }
+  .dk-ab-dhead-fig .dk-score {
+    min-width: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-ab-screen.is-run .dk-ab-screen-dot {
+    animation: none;
+  }
+}
+/* memo table: item names keep a readable width on wide screens */
+.dk-ab-memo-table:not(.is-cards) tbody th {
+  min-width: 11em;
+}
+.dk-ab-clockchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--dk-target);
+  padding: 0 12px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: 999px;
+  background: var(--dk-s2);
+  color: var(--dk-text);
+  font: 700 var(--dk-t13) var(--dk-font);
+  cursor: pointer;
+}
+.dk-ab-clockchip[aria-pressed='true'] {
+  border-color: var(--dk-pos);
+}
+.dk-ab-clockchip:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+
+/* round 2: screening rows (history line in red), score transitions, data source, memo fit, phone sticky bar room */
+.dk-ab-screen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.dk-ab-screen-row.is-hist {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--dk-line);
+}
+.dk-ab-screen-row.is-hist .dk-ab-screen-tx {
+  color: var(--dk-danger-ink);
+  font-weight: 600;
+}
+.dk-ab-screen-ic {
+  flex: none;
+  color: var(--dk-danger-ink);
+}
+.dk-ab-screen-from {
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-ab-risk.is-pass b {
+  color: var(--dk-pos);
+  font-size: var(--dk-t13);
+}
+.dk-ab-risk-was {
+  color: var(--dk-faint);
+  font: 500 11px/14px var(--dk-font);
+}
+.dk-ab-src {
+  margin-top: 8px;
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+.dk-ab-memo {
+  container-type: inline-size;
+  grid-template-columns: minmax(0, 1fr);
+}
+.dk-ab-memo > * {
+  min-width: 0;
+}
+.dk-ab-paper {
+  min-width: 0;
+  max-width: min(860px, 100%);
+}
+.dk-ab-memo-bar > .dk-btn {
+  flex: none;
+}
+.dk-ab-memo-ok {
+  min-width: 0;
+}
+@container (max-width: 780px) {
+  .dk-ab-memo-doc {
+    padding: 32px 28px 36px;
+  }
+  .dk-ab-memo-table:not(.is-cards) tbody th {
+    min-width: 10em;
+  }
+}
+.dk-ab-top-wait .dk-ab-top-card,
+.dk-ab-top-wait .dk-ab-top-h {
+  opacity: 0;
+}
+.dk-ab-top-wait .dk-ab-top-card.is-in,
+.dk-ab-top-wait .dk-ab-top-h.is-in {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.dk-ab-detail.has-sticky .dk-ab-panel {
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+.dk-ab-memo-now {
+  flex: none;
+}
+.dk-ab-itemcell {
+  display: grid;
+  min-width: 0;
+}
+.dk-ab-itemcell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-ab-itemcell > small {
+  color: var(--dk-faint);
+  font: 500 var(--dk-t12) var(--dk-font);
+  white-space: normal;
+}
+.dk-ab-bidtable {
+  min-width: 0;
+}
+.dk-ab-itemcell.is-num {
+  justify-items: end;
+}
+@media (max-width: 767px) {
+  /* the ring row has the same height before and after the analysis (no shift when the score lands) */
+  .dk-ab-ring {
+    display: flex;
+    flex: 1 0 100%;
+    align-items: center;
+    min-height: 82px;
+  }
 }

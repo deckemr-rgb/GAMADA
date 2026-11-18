@@ -4,7 +4,7 @@
  * the label), an optional sparkline slot (viz/Sparkline) and an optional value-vs-target bar.
  * One `hero` KPI per screen may use the Fraunces display numeral.
  */
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { gsap } from 'gsap'
 import { DEMO, EASE } from '../../lib/motion'
 import { useI18n } from '../../lib/i18n'
@@ -55,7 +55,7 @@ export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaForm
   const t = useUiStrings()
   const root = useRef<HTMLDivElement>(null)
   const inView = useInView(root, { threshold: 0.4 })
-  const fmt = format ?? ((n: number) => fmtNum(lang, n, decimals))
+  const fmt = useMemo(() => format ?? ((n: number) => fmtNum(lang, n, decimals)), [format, lang, decimals])
   const numRef = useCountUp<HTMLSpanElement>(value, { format: fmt, start: inView })
   const tagRef = useRef<HTMLSpanElement>(null)
   const flashRef = useRef<HTMLSpanElement>(null)
@@ -66,15 +66,30 @@ export function Kpi({ label, value, decimals = 0, format, unit, delta, deltaForm
   const meaning = delta === undefined ? 'flat' : deltaMeaning(delta, goodWhen)
 
   /* change tag "+n" beside the number + soft accent flash of the cell */
+  // changes that arrive while the tag is still showing add up (7 → 9 → 12 reads "+5", not "+3")
+  const base = useRef(value)
+  const burstEnd = useRef(0)
   useEffect(() => {
     const before = prev.current
     prev.current = value
-    if (before === value || !inView) return
+    if (before === value || !inView) {
+      base.current = value
+      return
+    }
     const tag = tagRef.current
     const fl = flashRef.current
     if (!tag || !fl) return
-    const diff = value - before
+    const nowMs = performance.now()
+    if (nowMs > burstEnd.current) base.current = before
+    burstEnd.current = nowMs + DEMO.rowHighlightFade * 1000 + 400
+    const diff = value - base.current
+    if (!diff) {
+      tag.textContent = ''
+      return
+    }
     tag.textContent = `${diff > 0 ? '+' : '−'}${fmt(Math.abs(diff))}`
+    // coloured by what the change means (goodWhen): an overdue count going up is bad news
+    tag.dataset.tone = deltaMeaning(diff, goodWhen)
     const mode = motionMode()
     if (mode === 'static') return
     // write-only pose tweens (a gsap fromTo reads computed style at start = a forced style recalc after commit)

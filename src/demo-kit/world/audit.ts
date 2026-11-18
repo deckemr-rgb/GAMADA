@@ -12,10 +12,36 @@ const commodity = (s: WorldState, id: string): Bi => s.region.commodities.find((
 const marketName = (s: WorldState, id: string) => s.markets.byId[id]?.name ?? id
 const bizName = (s: WorldState, id: string) => s.businesses.byId[id]?.name ?? id
 const pct = (n: number) => `${n > 0 ? '+' : ''}${Math.round(n)}%`
+/** a rupiah figure that could look official, per locale and labelled simulated */
+const rpSim = (n: number): Bi => ({ id: `${fmtRp(n)} (simulasi)`, en: `Rp ${Math.round(n).toLocaleString('en-GB')} (simulated)` })
+/** an index with one decimal and its signed % change, per locale: "82,3 (−9 %)" / "82.3 (−9%)" */
+const indexBi = (v: number, d: number): Bi => {
+  const sign = d > 0 ? '+' : d < 0 ? '−' : ''
+  const r = Math.abs(Math.round(d))
+  return {
+    id: `${v.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} (${sign}${r} %)`,
+    en: `${v.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} (${sign}${r}%)`,
+  }
+}
 
 const TICKET_STATUS: Record<string, Bi> = {
   baru: { id: 'Baru', en: 'New' }, diverifikasi: { id: 'Diverifikasi', en: 'Verified' }, diteruskan: { id: 'Diteruskan ke OPD', en: 'Forwarded to agency' },
   diproses: { id: 'Diproses', en: 'In progress' }, selesai: { id: 'Selesai', en: 'Resolved' },
+}
+
+const DOC_STATUS: Record<string, Bi> = {
+  lengkap: { id: 'Lengkap', en: 'Complete' }, kurang: { id: 'Kurang', en: 'Incomplete' }, 'cek-manual': { id: 'Perlu cek manual', en: 'Needs manual check' },
+  baru: { id: 'Baru', en: 'New' },
+}
+const docStatus = (st: string): Bi => DOC_STATUS[st] ?? { id: st, en: st }
+
+/** "Briefing pagi / siang / sore / malam" from the minute of day it was assembled */
+function briefingName(at: number): Bi {
+  const h = Math.floor((((at % 1440) + 1440) % 1440) / 60)
+  if (h >= 4 && h < 11) return { id: 'Briefing pagi', en: 'Morning briefing' }
+  if (h >= 11 && h < 15) return { id: 'Briefing siang', en: 'Midday briefing' }
+  if (h >= 15 && h < 18) return { id: 'Briefing sore', en: 'Afternoon briefing' }
+  return { id: 'Briefing malam', en: 'Evening briefing' }
 }
 
 export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: EntityRef[] } {
@@ -55,16 +81,21 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const sv = s.region.services.find((x) => x.id === e.payload.serviceId)?.name ?? { id: e.payload.serviceId, en: e.payload.serviceId }
       return { summary: { id: `Antrean ${sv.id} pukul ${hhmm(e.payload.slotAt)}`, en: `Queue booked: ${sv.en} at ${hhmm(e.payload.slotAt)}` }, refs: [ref('bookings', e.payload.id ?? '')] }
     }
-    case 'briefing.generated':
-      return { summary: { id: `Briefing pagi tersusun (${e.payload.items.length} butir)`, en: `Morning briefing assembled (${e.payload.items.length} items)` }, refs: [ref('briefings', e.payload.id ?? ''), ...e.payload.items.flatMap((i) => i.refs)] }
+    case 'briefing.generated': {
+      // named after the time of day it was assembled (a 14.00 briefing is not a "morning" one)
+      const tod = briefingName(e.at)
+      return { summary: { id: `${tod.id} tersusun (${e.payload.items.length} butir)`, en: `${tod.en} assembled (${e.payload.items.length} items)` }, refs: [ref('briefings', e.payload.id ?? ''), ...e.payload.items.flatMap((i) => i.refs)] }
+    }
     case 'instruction.issued':
       return {
         summary: { id: `Instruksi pimpinan: ${e.payload.text.id} → ${e.payload.opdIds.map((o) => opdShort(s, o)).join(', ')}`, en: `Leader's instruction: ${e.payload.text.en} → ${e.payload.opdIds.map((o) => opdShort(s, o)).join(', ')}` },
         refs: [ref('instructions', e.payload.id ?? ''), ...(e.payload.refs ?? []), ...(e.payload.origin ? [e.payload.origin] : [])],
       }
     case 'meeting.transcribed': {
+      // the row is stamped when the minutes were drafted; it also names when the meeting itself took place
       const m = s.meetings.byId[e.payload.meetingId]
-      return { summary: { id: `Notulen tersusun: ${m?.title.id ?? e.payload.meetingId}`, en: `Minutes drafted: ${m?.title.en ?? e.payload.meetingId}` }, refs: [ref('meetings', e.payload.meetingId)] }
+      if (!m) return { summary: { id: `Notulen tersusun: ${e.payload.meetingId}`, en: `Minutes drafted: ${e.payload.meetingId}` }, refs: [] }
+      return { summary: { id: `Notulen tersusun: ${m.title.id} (rapat pukul ${hhmm(m.at).replace(':', '.')})`, en: `Minutes drafted: ${m.title.en} (meeting at ${hhmm(m.at)})` }, refs: [ref('meetings', m.id)] }
     }
     case 'actionItem.created':
       return {
@@ -79,6 +110,8 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
       const a = s.actionItems.byId[e.payload.actionItemId]
       return { summary: { id: `Pengingat WA terkirim ke ${a?.pic ?? 'PIC'}`, en: `WhatsApp reminder sent to ${a?.pic ?? 'the person in charge'}` }, refs: [ref('actionItems', e.payload.actionItemId)] }
     }
+    case 'letter.received':
+      return { summary: { id: `Surat masuk ${e.payload.number} dari ${e.payload.from}: ${e.payload.subject.id}`, en: `Letter received ${e.payload.number} from ${e.payload.from}: ${e.payload.subject.en}` }, refs: [ref('letters', e.payload.id ?? '')] }
     case 'letter.dispositioned': {
       const l = s.letters.byId[e.payload.letterId ?? '']
       const to = e.payload.to.map((o) => opdShort(s, o)).join(', ')
@@ -124,7 +157,12 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'eligibility.opened':
       return { summary: { id: `Kuota pendaftar bansos banjir dibuka (${e.payload.quota})`, en: `Flood-relief aid registration opened (${e.payload.quota})` }, refs: [ref('programs', e.payload.id ?? ''), ...(e.payload.alertId ? [ref('alerts', e.payload.alertId)] : [])] }
     case 'procurement.created':
-      return { summary: { id: `Paket pengadaan dibuat: ${e.payload.name.id} (${fmtRp(e.payload.hps)})`, en: `Procurement package created: ${e.payload.name.en} (${fmtRp(e.payload.hps)})` }, refs: [ref('procurements', e.payload.id ?? '')] }
+      return {
+        summary: e.payload.emergency
+          ? { id: `Draf paket pengadaan darurat: ${e.payload.name.id} (menunggu persetujuan PPK) · ${rpSim(e.payload.hps).id}`, en: `Draft emergency procurement package: ${e.payload.name.en} (awaiting the commitment officer's approval) · ${rpSim(e.payload.hps).en}` }
+          : { id: `Paket pengadaan dibuat: ${e.payload.name.id} · ${rpSim(e.payload.hps).id}`, en: `Procurement package created: ${e.payload.name.en} · ${rpSim(e.payload.hps).en}` },
+        refs: [ref('procurements', e.payload.id ?? '')],
+      }
     case 'procurement.flagged': {
       const p = s.procurements.byId[e.payload.procurementId]
       return { summary: { id: `Paket ${p?.name.id ?? ''} ditandai berisiko (${e.payload.riskScore})`, en: `Package ${p?.name.en ?? ''} flagged as risky (${e.payload.riskScore})` }, refs: [ref('procurements', e.payload.procurementId)] }
@@ -132,12 +170,18 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'procurement.recommended': {
       const p = s.procurements.byId[e.payload.procurementId]
       return {
-        summary: { id: `Rekomendasi audit ${p?.name.id ?? ''}: HPS dikoreksi ke ${fmtRp(e.payload.hpsCorrected)}`, en: `Audit recommendation ${p?.name.en ?? ''}: HPS corrected to ${fmtRp(e.payload.hpsCorrected)}` },
+        // an office memo proposing a correction, not an audit finding
+        summary: p
+          ? { id: `Usulan koreksi HPS ${p.name.id}: ${fmtRp(p.hps)} → ${rpSim(e.payload.hpsCorrected).id}`, en: `Proposed HPS correction for ${p.name.en}: Rp ${Math.round(p.hps).toLocaleString('en-GB')} → ${rpSim(e.payload.hpsCorrected).en}` }
+          : { id: `Usulan koreksi HPS: ${rpSim(e.payload.hpsCorrected).id}`, en: `Proposed HPS correction: ${rpSim(e.payload.hpsCorrected).en}` },
         refs: [ref('procurements', e.payload.procurementId)],
       }
     }
     case 'document.verified':
-      return { summary: { id: `Berkas ${e.payload.documentId} diverifikasi: ${e.payload.status}`, en: `Document ${e.payload.documentId} verified: ${e.payload.status}` }, refs: [ref('documents', e.payload.documentId), ref('verifications', `VF-${e.id}`)] }
+      // the reducer ignores a document the world does not know: the row says so and carries no dangling refs
+      if (!s.documents.byId[e.payload.documentId])
+        return { summary: { id: `Berkas ${e.payload.documentId} diverifikasi: ${docStatus(e.payload.status).id} (tidak ada di data dunia, tidak dicatat)`, en: `Document ${e.payload.documentId} verified: ${docStatus(e.payload.status).en} (not in the world data, not recorded)` }, refs: [] }
+      return { summary: { id: `Berkas ${e.payload.documentId} diverifikasi: ${docStatus(e.payload.status).id}`, en: `Document ${e.payload.documentId} verified: ${docStatus(e.payload.status).en}` }, refs: [ref('documents', e.payload.documentId), ref('verifications', `VF-${e.id}`)] }
     case 'sale.created': {
       const sale = s.sales.byId[e.payload.id ?? '']
       return { summary: { id: `Transaksi ${e.payload.code} · ${fmtRp(sale?.total ?? 0)} (${e.payload.payment.toUpperCase()})`, en: `Sale ${e.payload.code} · ${fmtRp(sale?.total ?? 0)} (${e.payload.payment.toUpperCase()})` }, refs: [ref('sales', e.payload.id ?? '')] }
@@ -193,7 +237,7 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'loan.approved':
       return { summary: { id: `Pengajuan modal ${e.payload.loanId} disetujui`, en: `Loan ${e.payload.loanId} approved` }, refs: [ref('loanApps', e.payload.loanId)] }
     case 'econ.updated':
-      return { summary: { id: `Indeks ekonomi Kec. ${kecName(s, e.payload.kecamatanId)}: ${e.payload.index} (${pct(e.payload.delta)})`, en: `Economic index ${kecName(s, e.payload.kecamatanId)}: ${e.payload.index} (${pct(e.payload.delta)})` }, refs: [ref('econIndex', `${e.payload.kecamatanId}:${e.payload.month}`)] }
+      return { summary: { id: `Indeks ekonomi Kec. ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).id}`, en: `Economic index ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).en}` }, refs: [ref('econIndex', `${e.payload.kecamatanId}:${e.payload.month}`)] }
     case 'price.updated': {
       const c = commodity(s, e.payload.commodityId)
       return { summary: { id: `Harga ${c.id} di ${marketName(s, e.payload.marketId)}: ${fmtRp(e.payload.price)}`, en: `${c.en} price at ${marketName(s, e.payload.marketId)}: ${fmtRp(e.payload.price)}` }, refs: [ref('prices', `${e.payload.marketId}:${e.payload.commodityId}`)] }

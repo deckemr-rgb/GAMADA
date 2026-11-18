@@ -5,8 +5,8 @@
 import type { ProductSlug } from '../../content/products'
 import type { Lang } from '../../lib/i18n'
 import { CATEGORY_LABEL, DAY_MIN, overdueActions, rows, ref, type Bi, type EntityRef, type Minutes, type WorldState } from '../../demo-kit/world'
-import { complaintsByKecamatan, instructionIdeas, kpiStrip, opdLeaderboard } from '../../demo-kit/world/satu-daerah'
-import { MP, desaName, findOpd, kecName, mpBriefingItems, opdShort, refId, riskiestProcurement, topRiser } from './data'
+import { complaintsByKecamatan, instructionIdeas, kpiStrip } from '../../demo-kit/world/satu-daerah'
+import { MP, desaName, findOpd, kecName, mpBriefingItems, mpLeaderboard, mpServiceIndex, opdShort, refId, riskiestProcurement, riverNow, topRiser } from './data'
 
 /* ------------------------------------------------------------------ "Beri instruksi" ideas */
 
@@ -19,6 +19,8 @@ export interface Idea {
   origin?: EntityRef
   /** product the idea comes from */
   source: ProductSlug
+  /** deadline preset for urgent ideas */
+  due?: 'today'
 }
 
 /** AI suggestions for "Beri instruksi" (spec P2 step 5): the kit's instructionIdeas + what today's briefing shows. */
@@ -49,9 +51,13 @@ export function leaderIdeas(s: WorldState, now: Minutes): Idea[] {
     })
   }
   // river gauge close to the alert level
+  // the same clock-driven reading the briefing and Siaga Wilayah show; past SIAGA with no warning out: send one
   const river = rows(s.gauges).find((g) => g.kind === 'sungai')
-  if (river && bpbd && river.level >= river.normal + (river.siaga - river.normal) * 0.6)
-    add({ text: { id: `Siagakan posko banjir dan pantau muka air ${river.name} tiap jam`, en: `Put flood posts on standby and monitor the ${river.name} water level hourly` }, opdIds: [bpbd], refs: [ref('gauges', river.id)], source: 'siaga-wilayah' })
+  const rv = riverNow(s, now)
+  if (river && rv && bpbd && rv.state !== 'normal' && !rv.alerts)
+    add({ text: { id: `Kirim peringatan dini banjir dari Siaga Wilayah: ${rv.name.id} status ${rv.state === 'awas' ? 'AWAS' : 'SIAGA'}, siagakan posko di kecamatan bantaran sungai`, en: `Send the flood early warning from Siaga Wilayah: ${rv.name.en} at ${rv.state === 'awas' ? 'danger level (AWAS)' : 'alert level (SIAGA)'}; put the riverside districts' flood posts on standby` }, opdIds: [bpbd], refs: [ref('gauges', river.id)], source: 'siaga-wilayah', due: 'today' })
+  else if (river && rv && bpbd && rv.level >= river.normal + (river.siaga - river.normal) * 0.6)
+    add({ text: { id: `Siagakan posko banjir dan pantau muka air ${rv.name.id} tiap jam`, en: `Put flood posts on standby and monitor the ${rv.name.en} water level hourly` }, opdIds: [bpbd], refs: [ref('gauges', river.id)], source: 'siaga-wilayah' })
   // risky procurement not analysed yet
   const insp = findOpd(s, 'inspektorat')
   const proc = riskiestProcurement(s)
@@ -69,7 +75,10 @@ export function leaderIdeas(s: WorldState, now: Minutes): Idea[] {
   const late = overdueActions(s, now)
   if (late.length >= 2) {
     const sek = findOpd(s, 'bappeda')
-    const opds = [...new Set(late.map((a) => a.opdId))].slice(0, 4)
+    // most overdue first (the leaderboard's "Tugas telat" column), so the briefing, this idea and the board agree
+    const n = new Map<string, number>()
+    for (const a of late) n.set(a.opdId, (n.get(a.opdId) ?? 0) + 1)
+    const opds = [...n.entries()].sort((a, b) => b[1] - a[1]).map(([o]) => o).slice(0, 4)
     if (sek || opds.length) add({ text: { id: `Tuntaskan ${late.length} tindak lanjut rapat yang lewat tenggat paling lambat besok`, en: `Close the ${late.length} overdue meeting follow-ups by tomorrow` }, opdIds: opds, refs: late.slice(0, 5).map((a) => ref('actionItems', a.id)), source: 'naskah-pintar' })
   }
   // most urgent first: field situation, then risk and money, then paperwork
@@ -82,9 +91,9 @@ export function leaderIdeas(s: WorldState, now: Minutes): Idea[] {
 const SOURCE_OPD: Partial<Record<ProductSlug, string>> = { 'siaga-wilayah': 'bpbd', 'radar-isu': 'kominfo', 'awas-belanja': 'inspektorat', 'sinyal-pasar': 'disperindag', 'cek-berkas': 'dinsos' }
 
 /** "Instruksikan" on a briefing item: the matching AI suggestion, else a follow-up for the agency that owns it */
-export function presetFor(s: WorldState, now: Minutes, it: { title: Bi; source: ProductSlug; refs: EntityRef[] }): { text: Bi; opdIds: string[]; refs: EntityRef[]; origin?: EntityRef } {
+export function presetFor(s: WorldState, now: Minutes, it: { title: Bi; source: ProductSlug; refs: EntityRef[] }): { text: Bi; opdIds: string[]; refs: EntityRef[]; origin?: EntityRef; due?: 'today' } {
   const idea = leaderIdeas(s, now).find((i) => i.refs.some((r) => it.refs.includes(r)))
-  if (idea) return { text: idea.text, opdIds: idea.opdIds, refs: idea.refs, ...(idea.origin ? { origin: idea.origin } : {}) }
+  if (idea) return { text: idea.text, opdIds: idea.opdIds, refs: idea.refs, ...(idea.origin ? { origin: idea.origin } : {}), ...(idea.due ? { due: idea.due } : {}) }
   let opd: string | undefined
   const r0 = it.refs[0] ?? ''
   if (r0.startsWith('complaints:')) {
@@ -110,9 +119,11 @@ export interface AskContext {
   briefing: { source: string; title: string }[]
   complaintsByKecamatan7d: { kecamatan: string; count: number; prev: number }[]
   topCategories7d: { category: string; count: number; prev: number }[]
-  opd: { opd: string; score: number; slaPct: number | null; open: number; late: number }[]
+  opd: { opd: string; score: number | null; slaPct: number | null; open: number; pastSla: number; late: number }[]
   overdue: { title: string; opd: string; dueDaysAgo: number }[]
   alerts: { level: number; kecamatan: string[] }[]
+  /** the main river gauge: the same clock-driven reading the briefing and Siaga Wilayah show (simulated) */
+  river: { gauge: string; levelM: number; rise24hM: number; status: 'normal' | 'siaga' | 'awas'; siagaM: number; awasM: number } | null
   instructionsToday: string[]
   state?: WorldState
   now?: Minutes
@@ -131,13 +142,14 @@ export function askContext(s: WorldState, now: Minutes, lang: Lang, leader: stri
     leader,
     time: `${String(Math.floor(now / 60)).padStart(2, '0')}:${String(now % 60).padStart(2, '0')}`,
     lang,
-    kpi: kpiStrip(s, now),
+    kpi: (() => { const k = kpiStrip(s, now); const x = mpServiceIndex(s, now); return { ...k, slaPct: x.sla, serviceIndex: x.index } })(),
     briefing: mpBriefingItems(s, now).map((b) => ({ source: b.source, title: b.title[lang] })),
     complaintsByKecamatan7d: complaintsByKecamatan(s, now, 7).slice(0, 10).map((k) => ({ kecamatan: k.name, count: k.count, prev: k.prev })),
     topCategories7d: [...cats.entries()].map(([k, v]) => ({ category: CATEGORY_LABEL[k as keyof typeof CATEGORY_LABEL]?.[lang] ?? k, ...v })).sort((a, b) => b.count - a.count).slice(0, 6),
-    opd: opdLeaderboard(s, now).map((o) => ({ opd: o.short, score: o.score, slaPct: o.slaPct, open: o.openTickets, late: o.actionsLate })),
+    opd: mpLeaderboard(s, now).map((o) => ({ opd: o.short, score: o.score, slaPct: o.slaPct, open: o.openTickets, pastSla: o.lateTickets, late: o.actionsLate })),
     overdue: overdueActions(s, now).slice(0, 6).map((a) => ({ title: a.title[lang], opd: opdShort(s, a.opdId), dueDaysAgo: Math.round((now - a.dueAt) / DAY_MIN) })),
     alerts: rows(s.alerts).filter((a) => a.status === 'aktif').map((a) => ({ level: a.level, kecamatan: a.kecamatanIds.map((k) => kecName(s, k)) })),
+    river: (() => { const r = riverNow(s, now); return r ? { gauge: r.name[lang], levelM: Math.round(r.level * 10) / 10, rise24hM: Math.round(r.rise24 * 10) / 10, status: r.state, siagaM: r.siaga, awasM: r.awas } : null })(),
     instructionsToday: rows(s.instructions).filter((i) => i.at >= 0).map((i) => i.text[lang]).slice(0, 5),
   }
   Object.defineProperty(ctx, 'state', { value: s, enumerable: false })

@@ -1,11 +1,13 @@
 /**
  * Waveform — SVG bars. Two sources:
  *   - live: `level()` (mic AnalyserNode) sampled once per frame into a scrolling history;
- *   - peaks: precomputed bars with a played overlay driven by `progress()`.
+ *   - peaks: precomputed bars with a played overlay driven by `progress()`: a clip box slid by CSS transform (outer
+ *     translateX(p − 1), inner translateX(1 − p), both own layers), so playback is compositor-only — no SVG
+ *     attribute writes and no repaint per frame.
  * Bars move by `transform` on gsap.ticker; the ticker only runs while active, on screen and the tab is visible.
  * With `onSeek` it becomes a slider (click / ←→ / Home / End); `markers` render as jump buttons.
  */
-import { useEffect, useId, useMemo, useRef, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import { gsap } from 'gsap'
 import { useInView, usePageVisible, motionMode } from '../ui/motion'
 import './media.css'
@@ -53,8 +55,8 @@ export interface WaveformProps {
 export function Waveform({ peaks, level, progress, active = false, bars = 40, height = 48, markers, onSeek, onMarker, label, valueText, className }: WaveformProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const baseG = useRef<SVGGElement>(null)
-  const clipRect = useRef<SVGRectElement>(null)
-  const uid = useId().replace(/:/g, '')
+  const clipOut = useRef<HTMLDivElement>(null)
+  const clipIn = useRef<HTMLDivElement>(null)
   const inView = useInView(wrap, { once: false, threshold: 0 })
   const visible = usePageVisible()
   const live = !!level && !peaks
@@ -66,6 +68,13 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
   const barT = (v: number) => {
     const s = Math.max(WAVE.floor, Math.min(1, v))
     return `translate(0 ${((H * (1 - s)) / 2).toFixed(2)}) scale(1 ${s.toFixed(3)})`
+  }
+
+  /** played share 0..1 → the clip box slides (transform only: compositor work, no repaint) */
+  const setPlayed = (p: number) => {
+    const q = Math.max(0, Math.min(1, p))
+    if (clipOut.current) clipOut.current.style.transform = `translate3d(${((q - 1) * 100).toFixed(3)}%,0,0)`
+    if (clipIn.current) clipIn.current.style.transform = `translate3d(${((1 - q) * 100).toFixed(3)}%,0,0)`
   }
 
   // per-frame updates
@@ -84,10 +93,7 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
         hist.push(smooth)
         for (let i = 0; i < rects.length; i++) rects[i]?.setAttribute('transform', barT(hist[i] ?? 0))
       }
-      if (progress && clipRect.current) {
-        const p = Math.max(0, Math.min(1, progress()))
-        clipRect.current.setAttribute('transform', `scale(${p.toFixed(4)} 1)`)
-      }
+      if (progress) setPlayed(progress())
     }
     gsap.ticker.add(tick)
     return () => {
@@ -98,7 +104,7 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
 
   // reflect progress when paused / after a seek
   useEffect(() => {
-    if (progress && clipRect.current) clipRect.current.setAttribute('transform', `scale(${Math.max(0, Math.min(1, progress())).toFixed(4)} 1)`)
+    if (progress) setPlayed(progress())
   })
 
   const fracOf = (clientX: number) => {
@@ -143,20 +149,19 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
         : { role: 'img', 'aria-label': label })}
     >
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <clipPath id={`${uid}-c`}>
-            <rect ref={clipRect} x={0} y={0} width={W} height={H} transform="scale(0 1)" />
-          </clipPath>
-        </defs>
         <g ref={baseG} className="dk-wave-base">
           {values.map(bar)}
         </g>
-        {progress && (
-          <g className="dk-wave-played" clipPath={`url(#${uid}-c)`}>
-            {values.map(bar)}
-          </g>
-        )}
       </svg>
+      {progress && (
+        <div ref={clipOut} className="dk-wave-clip" aria-hidden="true" style={{ transform: 'translate3d(-100%,0,0)' }}>
+          <div ref={clipIn} className="dk-wave-clip-in" style={{ transform: 'translate3d(100%,0,0)' }}>
+            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+              <g className="dk-wave-played">{values.map(bar)}</g>
+            </svg>
+          </div>
+        </div>
+      )}
       {markers?.map((m) => (
         <button
           key={m.id}

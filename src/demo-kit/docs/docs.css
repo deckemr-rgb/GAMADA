@@ -36,7 +36,11 @@
   font: 600 var(--dk-t12) var(--dk-font);
   color: var(--dk-muted);
 }
-.dk-doc-zoomval:hover {
+.dk-doc-zoomval:disabled {
+  color: var(--dk-muted);
+  cursor: default;
+}
+.dk-doc-zoomval:not(:disabled):hover {
   background: var(--dk-s2);
   color: var(--dk-text);
 }
@@ -143,6 +147,15 @@
   transform: none;
   pointer-events: auto;
 }
+/* a thin line of text is still a 24 px target (WCAG 2.5.8): invisible hit area, centred on the box */
+.dk-doc-box::after {
+  content: '';
+  position: absolute;
+  top: min(0px, calc(50% - 12px));
+  bottom: min(0px, calc(50% - 12px));
+  left: min(0px, calc(50% - 12px));
+  right: min(0px, calc(50% - 12px));
+}
 .dk-doc-box.is-low {
   border-color: var(--dk-ocr-low);
   border-style: dashed;
@@ -160,19 +173,18 @@
   outline-offset: 2px;
 }
 .dk-doc-mark {
-  /* outside the box, in the page margin to its left: never covers the text being read */
+  /* in the gutter beside the page on the box's side, level with its box (left / top inline from DocViewer):
+     never over document text; 15 px tall = DOCS.markPx */
   position: absolute;
-  top: -1px;
-  right: calc(100% + 3px);
   display: grid;
   place-items: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 3px;
-  border-radius: 9px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 2px;
+  border-radius: 8px;
   background: var(--dk-ocr);
   color: #fff;
-  font: 700 10px/1 var(--dk-font);
+  font: 700 9.5px/1 var(--dk-font);
 }
 .dk-doc-box:not(.is-roomy):not(.is-active):not(:focus-visible):not(:hover) .dk-doc-mark {
   opacity: 0;
@@ -185,6 +197,8 @@
   background: var(--dk-ocr-low);
 }
 .dk-doc-conf {
+  /* a label, never a target: it must not take clicks meant for the neighbouring box */
+  pointer-events: none;
   position: absolute;
   right: -2px;
   bottom: calc(100% + 3px);
@@ -206,8 +220,6 @@
 }
 @media (max-width: 640px) {
   .dk-doc-mark {
-    top: -7px;
-    left: -7px;
     min-width: 14px;
     height: 14px;
     font-size: 9px;
@@ -274,6 +286,13 @@
 .dk-heat-range input {
   width: 96px;
   accent-color: var(--dk-accent);
+}
+@media (max-width: 767px), (pointer: coarse) {
+  /* 44 px hit area; the native track stays centred */
+  .dk-heat-range input {
+    height: var(--dk-target, 44px);
+    margin: 0;
+  }
 }
 .dk-heat-score {
   font: var(--dk-t12) var(--dk-font);
@@ -356,7 +375,8 @@
 }
 .dk-xp-rowbtn {
   display: grid;
-  grid-template-columns: 22px minmax(92px, 0.8fr) minmax(0, 1.4fr) 112px;
+  /* the value column gets the room (a whole NIK / KK number on one line); confidence is stacked in 44 px */
+  grid-template-columns: 22px minmax(76px, 0.7fr) minmax(0, 1.7fr) 44px;
   align-items: center;
   gap: var(--dk-2);
   width: 100%;
@@ -392,19 +412,22 @@
 }
 .dk-xp-value {
   font: 600 var(--dk-t13) var(--dk-font);
-  overflow-wrap: anywhere;
+  /* breaks between words only: numbers (NIK, KK, account) never split mid-number */
+  overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
 }
 .dk-xp-conf {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   justify-content: flex-end;
   font: 600 var(--dk-t12) var(--dk-font);
   color: var(--dk-muted);
 }
 .dk-xp-bar {
   position: relative;
-  width: 44px;
+  width: 36px;
   height: 4px;
   border-radius: 2px;
   background: var(--dk-s3);
@@ -422,7 +445,9 @@
 }
 .dk-xp-lowtag {
   color: var(--dk-warn-ink);
+  font-size: 10px;
   font-weight: 700;
+  line-height: 12px;
 }
 .dk-xp-row.is-low .dk-xp-conf {
   flex-wrap: wrap;

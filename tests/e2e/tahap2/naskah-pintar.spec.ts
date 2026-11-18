@@ -17,6 +17,12 @@ test('Naskah Pintar · all 4 missions + meeting action items + instruction as di
   })
   await openDemo(page, 'naskah-pintar')
 
+  // the flood meeting was held 06.30–07.00 (before the clock start): recording ready, no "play early" wording
+  const head = page.locator('.dk-np-mhead')
+  await expect(head).toContainText('06.30–07.00')
+  await expect(head).toContainText('Rekaman siap')
+  await expect(head).not.toContainText(/dijadwalkan|lebih awal/)
+
   // 1 · play the sample meeting (skip to the end) → meeting.transcribed + ≥ 5 action items with PIC + due date
   const items0 = await W<number>(page, 's.actionItems.ids.length')
   await page.locator('[data-np="play"]').click()
@@ -32,6 +38,7 @@ test('Naskah Pintar · all 4 missions + meeting action items + instruction as di
 
   // 2 · official minutes → print (window.print stubbed)
   await page.locator('[data-np="official"]').click()
+  await expect(page.locator('.dk-np-off')).toContainText('06.30')
   await page.locator('[data-np="print"]').click()
   await expect.poll(() => page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1)
   await expect.poll(() => missionsDone(page, 'naskah-pintar')).toContain('ekspor-notulen')
@@ -41,6 +48,8 @@ test('Naskah Pintar · all 4 missions + meeting action items + instruction as di
   await page.getByRole('tab', { name: /Surat Masuk/ }).click()
   await page.locator('[data-np="read-side"]').click()
   await page.locator('[data-np="approve"]').click({ timeout: 20_000 })
+  // maker ≠ checker: the Sekretariat submits, the Regional Secretary approves (simulated)
+  await page.locator('[data-np="sekda-approve"]').click({ timeout: 10_000 })
   await expect.poll(() => missionsDone(page, 'naskah-pintar'), { timeout: 10_000 }).toContain('disposisi-surat')
 
   // 4 · reminder for an overdue follow-up

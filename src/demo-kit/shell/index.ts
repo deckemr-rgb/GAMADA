@@ -11,7 +11,7 @@
  * `../../demo-kit/shell/CoachMark`, so demos without one do not carry it.
  */
 export { DemoShell, type DemoShellProps } from './DemoShell'
-export { useShell, useShellOptional, ShellContext, type ShellApi } from './context'
+export { useShell, useShellOptional, ShellContext, type ShellApi, type ToastPlacementSpec } from './context'
 export { TopBar, MoreSheet, Breadcrumb, ecoShortName, type TopBarProps, type MoreSheetProps } from './TopBar'
 export {
   RegionSwitcher,
@@ -31,6 +31,7 @@ export { Picker, type PickerOption, type PickerProps } from './Picker'
 export type { GuidePanelProps } from './GuidePanel'
 export { markMission, resetMissions, missionProgress, useMissionProgress, useMissionTracker, type Mission } from './missions'
 export type { HotspotProps } from './Hotspot'
+export { dismissHotspot } from './hotspot-store'
 export type { CoachMarkProps } from './CoachMark'
 export { EventToastStack, type EventToastStackProps } from './EventToasts'
 export { createEffectTracker, EFFECT_TARGET, type CrossEffect } from './effects'

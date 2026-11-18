@@ -62,6 +62,7 @@ export const en: DemoDict = {
   toasts: 'Cross-product events',
   forwardedTo: (what: string, product: string) => `${what} forwarded to ${product}`,
   openIn: (product: string) => `Open in ${product}`,
+  recordedFor: (what: string, product: string, stage: number) => `${what} recorded for ${product} (stage ${stage} demo)`,
   eventFrom: (product: string) => `Event from ${product}`,
   rootLabel: {
     complaint: (code: string) => `Complaint #${code}`,

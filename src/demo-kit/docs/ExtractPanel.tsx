@@ -4,13 +4,14 @@
  * DocViewer.onReveal); checks + verdict appear once every field is in.
  */
 import { useEffect, useRef } from 'react'
-import type { Extracted } from '../ai/types'
+import type { Extracted, ExtractedField } from '../ai/types'
 import { useI18n } from '../../lib/i18n'
 import { Icon } from '../ui/icons'
 import { dropChips, flashNewRow } from '../ui/motion'
 import { DOCS } from './DocViewer'
 import { verdictOf, type Verdict, type VerdictResult } from './extract'
 import { longDate } from './nik'
+import { fieldKind, presenceText } from './values'
 import './docs.css'
 
 export interface ExtractPanelProps {
@@ -46,13 +47,20 @@ export const VERDICT_LABEL: Record<Verdict, { id: string; en: string }> = {
 }
 
 const S = {
-  id: { title: 'Hasil ekstraksi', fields: 'Field terbaca', checks: 'Cek konsistensi', reading: 'Membaca dokumen…', of: 'dari', sim: 'Simulasi', live: 'Live', low: 'periksa', conf: 'keyakinan', result: 'Hasil verifikasi', empty: 'Pilih dokumen untuk mulai membaca.' },
+  id: { title: 'Hasil ekstraksi', fields: 'Isian terbaca', checks: 'Cek konsistensi', reading: 'Membaca dokumen…', of: 'dari', sim: 'Simulasi', live: 'Live', low: 'periksa', conf: 'keyakinan', result: 'Hasil verifikasi', empty: 'Pilih dokumen untuk mulai membaca.' },
   en: { title: 'Extraction result', fields: 'Fields read', checks: 'Consistency checks', reading: 'Reading the document…', of: 'of', sim: 'Simulation', live: 'Live', low: 'check', conf: 'confidence', result: 'Verification result', empty: 'Pick a document to start reading.' },
 }
 
-/** ISO dates read as dates, plain amounts as Rupiah (≤ 9 digits, so NIK / NIB / account numbers stay verbatim) */
-function showValue(v: string, lang: 'id' | 'en'): string {
-  if (/^[1-9]\d{3,8}$/.test(v)) return `Rp ${Number(v).toLocaleString('id-ID')}`
+/**
+ * ISO dates read as dates; Rupiah ONLY for amount fields (field.kind 'amount', or an amount key such as total /
+ * bayar / saldo / modal), so postcodes, KBLI codes, RT/RW, years, NIK and account numbers stay verbatim;
+ * presence values (ada / tidak ada) in the UI language.
+ */
+function showValue(f: ExtractedField, lang: 'id' | 'en'): string {
+  const v = f.value
+  const kind = fieldKind(f.key, v, f.kind)
+  if (kind === 'presence') return presenceText(v, lang)
+  if (kind === 'amount' && /^\d+$/.test(v)) return `Rp ${Number(v).toLocaleString('id-ID')}`
   const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?$/.exec(v)
   if (!m || !m[1]) return v
   return m[2] ? `${longDate(m[1], lang)} ${m[2]}` : longDate(m[1], lang)
@@ -97,8 +105,10 @@ export function ExtractPanel({ extracted, revealed, loading, activeKey, onFieldF
       <header className="dk-xp-head">
         <h3 className="dk-xp-title">{title ?? s.title}</h3>
         {extracted && <span className="dk-xp-mode">{extracted.mode === 'live' ? s.live : s.sim}</span>}
-        <span className="dk-xp-count dk-num" aria-live="polite">
-          {loading ? s.reading : extracted ? `${n} ${s.of} ${fields.length}` : ''}
+        <span className="dk-xp-count dk-num">{loading ? s.reading : extracted ? `${n} ${s.of} ${fields.length}` : ''}</span>
+        {/* announced twice only: when reading starts and with the final count (not every revealed field) */}
+        <span className="dk-sr" aria-live="polite">
+          {loading || (extracted && !done) ? s.reading : done ? `${s.fields}: ${fields.length}` : ''}
         </span>
       </header>
 
@@ -125,13 +135,13 @@ export function ExtractPanel({ extracted, revealed, loading, activeKey, onFieldF
                   onPointerLeave={() => onFieldFocus?.(null)}
                   onFocus={() => onFieldFocus?.(f.key)}
                   onBlur={() => onFieldFocus?.(null)}
-                  aria-label={`${i + 1}. ${f.label[lang]}: ${showValue(f.value, lang)}, ${s.conf} ${pctv}%${low ? ` (${s.low})` : ''}`}
+                  aria-label={`${i + 1}. ${f.label[lang]}: ${showValue(f, lang)}, ${s.conf} ${pctv}%${low ? ` (${s.low})` : ''}`}
                 >
                   <span className="dk-xp-mark dk-num" aria-hidden="true">
                     {i + 1}
                   </span>
                   <span className="dk-xp-label">{f.label[lang]}</span>
-                  <span className="dk-xp-value">{showValue(f.value, lang)}</span>
+                  <span className="dk-xp-value">{showValue(f, lang)}</span>
                   <span className="dk-xp-conf" aria-hidden="true">
                     <span className="dk-xp-bar">
                       <i style={{ transform: `scaleX(${f.confidence})` }} />

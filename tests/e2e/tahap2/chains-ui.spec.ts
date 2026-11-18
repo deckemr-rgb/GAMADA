@@ -47,8 +47,15 @@ test('chain 1 · Sapa Warga flood reports ⇒ cluster: one toast; Meja Pimpinan,
   await expect(toast).toHaveCount(1)
   await expect(toast).toContainText('Meja Pimpinan')
   expect(await W<number>(page, `Object.values(s.mentions.byId).filter((m) => m.topic === 'banjir' && m.at >= 0 && m.kind === 'sosmed').length`)).toBeGreaterThan(0)
+  // the target demo is preloaded when the toast appears, so it may read ?focus= and drop it from the URL (replaceState)
+  // before a URL poll sees it: record every URL the page passes through instead
+  const urls: string[] = []
+  page.on('framenavigated', (f) => {
+    if (f === page.mainFrame()) urls.push(f.url())
+  })
   await toast.locator('.dk-toast-main').click()
-  await expect(page).toHaveURL(/\/demo\/meja-pimpinan\?.*focus=/)
+  await expect(page).toHaveURL(/\/demo\/meja-pimpinan\?/)
+  await expect.poll(() => urls.some((u) => /\/demo\/meja-pimpinan\?.*focus=/.test(u))).toBe(true)
   await expect(page.locator('.dk-mp').first()).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.dk-mp').getByText(/Klaster banjir/).first()).toBeVisible({ timeout: 15_000 })
   expect(errors.filter(notNoise)).toEqual([])

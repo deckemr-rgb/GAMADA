@@ -23,7 +23,7 @@ const id = {
 
   /* role notes */
   roleNote: {
-    sekretariat: 'Sekretariat menyiapkan notulen dan draf disposisi; persetujuan atas nama Sekda.',
+    sekretariat: 'Sekretariat menyiapkan notulen dan draf disposisi, lalu mengajukannya ke Sekda untuk disetujui.',
     'kepala-daerah': 'Anda menyetujui disposisi sebagai Bupati dan memantau tindak lanjut semua OPD.',
     'kepala-opd': 'Anda melihat disposisi dan tindak lanjut untuk unit Anda saja.',
   },
@@ -31,6 +31,8 @@ const id = {
   /* instruction banner */
   instrTitle: 'Instruksi Kepala Daerah diterima',
   instrBody: (opds: string, n: number) => `Nota dinas didisposisikan ke ${opds}; ${n} tindak lanjut dibuat otomatis.`,
+  instrTitleMine: (t: string) => `Instruksi Anda pukul ${t} sudah diteruskan`,
+  instrBodyMine: (opds: string, n: number) => `Menjadi nota dinas untuk ${opds}; ${n} tindak lanjut dipantau di papan. Banner ini hilang sendiri setelah tugasnya selesai.`,
   instrOpen: 'Lihat nota dinas',
   instrTasks: 'Lihat tindak lanjut',
   dismiss: 'Tutup pemberitahuan',
@@ -39,18 +41,20 @@ const id = {
   mTitleHint: 'Hari ini',
   mPlace: 'Ruang Rapat Sekretariat Daerah',
   mParticipants: (n: number) => `${n} peserta`,
-  mStatus: { terjadwal: 'Terjadwal', berlangsung: 'Berlangsung', selesai: 'Notulen jadi' },
+  mStatus: { terjadwal: 'Terjadwal', siap: 'Rekaman siap', berlangsung: 'Berlangsung', selesai: 'Notulen jadi' },
   mLead: {
     terjadwal: 'Putar rekaman: notulen dan tindak lanjut akan menulis dirinya sendiri.',
+    siap: (t: string) => `Rapat usai pukul ${t}, notulennya belum ada. Putar rekamannya: transkrip, notulen, dan tindak lanjut OPD menulis dirinya sendiri.`,
     berlangsung: 'Rapat berjalan, notulen dan tindak lanjut menulis dirinya sendiri.',
     selesai: (n: number) => `Notulen selesai · ${n} tindak lanjut terbagi ke OPD.`,
   },
-  mEarly: (t: string) => `Rapat dijadwalkan ${t}; rekaman simulasinya bisa diputar sekarang.`,
   mPlay: 'Putar rekaman contoh',
   mPause: 'Jeda',
   mResume: 'Lanjutkan',
   mReplay: 'Putar ulang',
   mSkip: 'Lewati ke akhir',
+  mSkipShort: 'Lewati',
+  mMini: 'Pemutar rekaman ringkas',
   mRecord: 'Rekam / ketik rapat',
   mSpeed: 'Kecepatan rekaman',
   mFast: 'Cepat ×3',
@@ -65,10 +69,14 @@ const id = {
   mCollapse: 'Sembunyikan',
   mExpand: 'Tampilkan',
   mDone: (n: number) => `Rapat selesai · ${n} tindak lanjut sudah ada di papan OPD`,
+  mWillMake: (d: number, a: number) => `Setelah diputar: notulen, ${d} keputusan, ${a} tindak lanjut ber-PIC`,
+  mWriting: (n: number, t: number) => `AI menulis notulen · ${n}/${t} tindak lanjut sudah dikirim ke OPD`,
+  mToMp: 'Pantau di Meja Pimpinan',
+  mWho: 'Peserta dalam rekaman',
   mFormat: 'Format tata naskah dinas',
   mToastTitle: 'Notulen rapat tersimpan',
-  mToastBody: (n: number) => `${n} tindak lanjut masuk papan OPD dan terpantau di Meja Pimpinan.`,
-  mToastAct: 'Buka Tindak Lanjut',
+  mToastBody: (n: number) => `${n} tindak lanjut sudah di papan OPD.`,
+  mToastAct: 'Lihat papan tugas',
 
   /* minutes */
   nTitle: 'Notulen',
@@ -80,7 +88,14 @@ const id = {
   nActions: 'Tindak lanjut',
   nSummary: 'Ringkasan AI',
   nSummaryWait: 'Ringkasan disusun setelah rapat selesai.',
-  nEmpty: 'Belum ada isi. Notulen terisi sendiri saat rapat diputar.',
+  nPreTitle: 'Saat rekaman diputar, AI menulis notulen ini sendiri:',
+  nPre: {
+    who: 'Peserta, agenda dan pokok bahasan',
+    decisions: (n: number) => `${n} keputusan rapat`,
+    actions: (n: number, o: number) => `${n} tindak lanjut lengkap dengan PIC dan tenggat, langsung masuk papan ${o} unit kerja`,
+    paper: 'Ringkasan AI dan notulen format tata naskah dinas, siap cetak',
+    cross: 'Tindak lanjutnya ikut terpantau di Meja Pimpinan; instruksi dari sana masuk ke Surat Masuk sebagai nota dinas.',
+  },
   nTask: 'Uraian',
   nPic: 'PIC',
   nDue: 'Tenggat',
@@ -89,11 +104,12 @@ const id = {
   nLiveCheck: (d: number, a: number) => `Dicek AI Live: ${d} keputusan, ${a} tindak lanjut`,
   lanesTitle: 'Papan tindak lanjut per OPD',
   lanesHint: 'Kartu terbang ke kolom OPD penanggung jawab.',
-  laneOpen: (opd: string, n: number) => `${opd}: ${n} tindak lanjut. Buka di tab Tindak Lanjut`,
+  laneWait: 'Belum ada',
+  laneOpen: (opd: string, n: number) => `${opd}: ${n} tindak lanjut. Buka di papan tindak lanjut`,
 
   /* recorder */
   rTitle: 'Rekam atau ketik rapat Anda',
-  rLead: 'Bicara di dekat mikrofon (Web Speech) atau tempel transkrip. AI menyusun keputusan dan tindak lanjutnya.',
+  rLead: 'Bicara di dekat mikrofon (pengenalan suara peramban) atau tempel transkrip. AI menyusun keputusan dan tindak lanjutnya.',
   rFor: 'Rapat yang dicatat',
   rStart: 'Mulai rekam',
   rStop: 'Berhenti',
@@ -192,7 +208,7 @@ const id = {
   lNotaHal: 'Hal',
   lNotaBody: 'Sehubungan dengan perkembangan situasi terkini, dengan ini diinstruksikan:',
   lNotaClose: 'Demikian untuk dilaksanakan dan dilaporkan hasilnya.',
-  lOpdView: 'Disposisi untuk unit Anda. Tugasnya ada di tab Tindak Lanjut.',
+  lOpdView: 'Disposisi untuk unit Anda. Tugasnya ada di papan tindak lanjut (tab Tindak Lanjut, di HP: Tugas).',
   lOpdWho: 'Disposisi disusun Sekretariat dan disetujui atas nama Sekda atau Bupati.',
   lTryAsSetda: 'Coba sebagai Sekretariat',
   lToastTitle: 'Disposisi terkirim',
@@ -238,6 +254,9 @@ const id = {
   fCount: (n: number) => `${n} tugas`,
   fDoneN: (n: number) => `${n} selesai`,
   fNew: 'baru',
+  fAgain: (d: string) => `Ditugaskan ulang (tugas yang sama sebelumnya: ${d})`,
+  fThread: (n: number) => `Satu urusan pompa dengan ${n} tugas lain; selesai bersama saat pompa tiba`,
+  fXlink: { 'cek-berkas': 'Lanjut di Cek Berkas', 'siaga-wilayah': 'Lihat di Siaga Wilayah' } as Record<'cek-berkas' | 'siaga-wilayah', string>,
 
   /* reminder */
   wTitle: 'Kirim pengingat WhatsApp',
@@ -274,6 +293,101 @@ const id = {
   tomorrow: 'Besok',
   yesterday: 'Kemarin',
   dayFmt: (d: number) => (d > 0 ? `${d} hari lagi` : `${-d} hari lalu`),
+
+  /* demo clock (phones: the shell's clock sits in a menu) */
+  clockLabel: (t: string) => `Jam dunia demo ${t}`,
+
+  /* Kepala Daerah desk */
+  ldLabel: 'Ringkasan untuk Kepala Daerah',
+  ldWaiting: (n: number) => `Menunggu keputusan Anda (${n})`,
+  ldNone: 'Tidak ada surat yang menunggu keputusan Anda.',
+  ldOpen: 'Baca & setujui',
+  ldMeeting: 'Rapat banjir 06.30',
+  ldProgress: (run: number, done: number, n: number) => `${done} selesai · ${run} berjalan · dari ${n} tindak lanjut`,
+  ldNoMinutes: 'Notulen belum ada. Putar rekamannya di tab Rapat.',
+  ldNoMinutesShort: 'notulen belum ada',
+  ldAllDone: (n: number) => `${n} dari ${n} tindak lanjut selesai`,
+  ldWaitingShort: (n: number) => `${n} surat menunggu keputusan Anda`,
+  ldMeetingShort: 'Rapat banjir',
+  ldExpand: 'Ringkasan',
+  ldCollapse: 'Ciutkan',
+  ldAll: (n: number) => `Lihat semua ${n} surat`,
+  ldLateOld: (n: number, top: string, topN: number) => (n ? `Di luar rapat ini: ${n} tindak lanjut lama lewat tenggat${top ? ` (terbanyak ${top}, ${topN})` : ''}` : 'Di luar rapat ini: tidak ada tindak lanjut yang lewat tenggat'),
+  ldLateSee: 'Lihat yang lewat tenggat',
+  ldToMeeting: 'Ke tab Rapat',
+  ldBoard: 'Lihat papan',
+  ldLate: (n: number) => (n ? `${n} tindak lanjut OPD lewat tenggat` : 'Tidak ada tindak lanjut yang lewat tenggat'),
+
+  /* the working day (scenario events while the clock runs) */
+  dayToast: (t: string) => `Pembaruan OPD hingga pukul ${t}`,
+  dayMore: (n: number) => `…dan ${n} pembaruan lain`,
+  daySee: 'Lihat papan',
+  dayNotes: {
+    a4p: 'BPBD menyiapkan naskah peringatan dini untuk desa bantaran.',
+    a5p: 'Camat Kalitidu mulai menyiapkan Balai Desa Ngujo untuk evakuasi.',
+    a2i: 'Pinjam pakai 4 pompa disetujui; pompa tiba di lokasi genangan. Instruksi Bupati 09.15 soal pompa selesai.',
+    a1p: 'Dinas PUPR mulai menangani tanggul Ngujo; tim dan 1.500 karung pasir berangkat.',
+    a4: 'BPBD menyiarkan peringatan dini ke desa bantaran.',
+    a3p: 'Dinsos mulai memverifikasi 50 berkas bansos banjir.',
+    a2: 'Pinjam pakai 4 pompa disetujui; pompa tiba di lokasi genangan.',
+    a5: 'Balai Desa Ngujo siap sebagai titik evakuasi.',
+    a6: 'Camat Kalitidu melaporkan titik evakuasi siap.',
+    a1: 'Rembesan tanggul Ngujo tertangani.',
+    a3: 'Dinsos menuntaskan verifikasi 50 berkas bansos.',
+    instr: 'Bupati mengirim instruksi soal pompa (nota dinas di Surat Masuk); nota dinas PUPR tentang pompa ikut ditindaklanjuti.',
+  } as Record<string, string>,
+  daySeed: (title: string, opd: string) => `${opd} menuntaskan “${title}”.`,
+  daySeedStart: (title: string, opd: string) => `${opd} mulai mengerjakan “${title}”.`,
+
+  /* meeting: what it produced (simulated estimate) */
+  mBenefit: (n: number) => ['Rapat 30 menit → notulen siap begitu rekaman selesai', `${n}/${n} tindak lanjut punya PIC dan tenggat`, '±2 jam kerja notulis dihemat (perkiraan simulasi)'],
+  mBenefitLabel: 'Hasil rapat ini',
+  mBenefitPreLabel: 'Yang akan dihasilkan rapat ini',
+  mBenefitPre: (n: number) => ['Rapat 30 menit → notulen siap dalam ±70 detik (simulasi)', `${n} tindak lanjut otomatis punya PIC dan tenggat`, '±2 jam kerja notulis dihemat (perkiraan simulasi)'],
+  mMiniActs: (n: number, t: number) => `${n}/${t} tugas`,
+
+  /* official minutes */
+  oConclusion: 'Kesimpulan',
+
+  /* recorder */
+  rLater: 'terjadwal nanti',
+  rNoMeeting: 'Rapat lain (tanpa jadwal)',
+
+  /* letters: maker-checker, history, links to the meeting */
+  lSubmit: 'Ajukan ke Sekda',
+  lWaitSekda: 'Diajukan ke Sekda · menunggu persetujuan (TTE simulasi)',
+  lWaitHow: 'Sekda menyetujui saat jam dunia berjalan beberapa menit, atau setujui sekarang sebagai Sekda (simulasi pemisahan tugas).',
+  lAsSekda: 'Setujui sebagai Sekda (simulasi)',
+  lTrailInstr: (t: string) => `Ditindaklanjuti lewat instruksi Kepala Daerah ${t}`,
+  lLinkInstr: (opd: string, no: number) => `${opd}: lanjutkan tindak lanjut rapat no. ${no} (tanpa tugas baru).`,
+  lTrail: 'Riwayat surat (simulasi)',
+  lTrailReceived: (t: string) => `Diterima ${t}`,
+  lTrailRead: (t: string, lo: number, hi: number) => `Dibaca AI ${t} · keyakinan OCR ${lo}–${hi}%`,
+  lTrailDraft: (t: string, edited: boolean) => `Draf ${edited ? 'diubah Sekretariat' : 'AI tanpa perubahan'} · diajukan ${t}`,
+  lTrailApproved: (by: string, t: string) => `Disetujui ${by} ${t} · TTE simulasi`,
+  lTrailDone: (by: string, t: string) => `Didisposisikan ${by} ${t}`,
+  lTrailTasks: (n: number) => `${n} tindak lanjut dibuat`,
+  lTrailLinked: (no: number) => `Ditautkan ke tindak lanjut rapat no. ${no}`,
+  lLinked: (no: number, pic: string, due: string) => `Sudah ditangani di rapat 06.30: tindak lanjut no. ${no} · ${pic} · ${due}`,
+  lLinkOpt: 'Tautkan ke tindak lanjut yang ada (tanpa tugas ganda)',
+  lLinkedDone: (no: number) => `Ditautkan ke tindak lanjut rapat no. ${no}; tidak ada tugas ganda.`,
+  lAwait: 'Menunggu disposisi Sekretariat',
+  lForUnit: 'Akan didisposisikan ke unit Anda',
+  lLetterDate: 'Tanggal surat',
+
+  /* assistant: where an answer came from (no internal tool names on screen) */
+  aTools: {
+    group_by_opd: 'Sumber: papan tindak lanjut per OPD',
+    query_action_items: 'Sumber: daftar tindak lanjut',
+    query_letters: 'Sumber: kotak surat masuk',
+    extract_minutes: 'Sumber: transkrip rapat',
+    baca_transkrip: 'Membaca transkrip',
+    ocr_surat: 'Membaca pindaian surat',
+    classify_letter: 'Klasifikasi surat',
+    draft_disposition: 'Draf disposisi',
+    draft_reminder: 'Draf pengingat',
+  } as Record<string, string>,
+  aToolOther: 'Sumber: data Naskah Pintar',
 }
 
 type Dict = typeof id
@@ -291,13 +405,15 @@ const en: Dict = {
   simulated: 'Simulated recording & data',
 
   roleNote: {
-    sekretariat: 'The secretariat prepares minutes and disposition drafts; approval on behalf of the Regional Secretary.',
+    sekretariat: 'The secretariat prepares minutes and disposition drafts, then submits them to the Regional Secretary for approval.',
     'kepala-daerah': 'You approve dispositions as the Regent and watch every agency’s follow-ups.',
     'kepala-opd': 'You see dispositions and follow-ups for your own agency only.',
   },
 
   instrTitle: 'Instruction from the Regional Head received',
   instrBody: (opds: string, n: number) => `Memo dispositioned to ${opds}; ${n} ${pl(n, 'follow-up', 'follow-ups')} created automatically.`,
+  instrTitleMine: (t: string) => `Your ${t} instruction has been passed on`,
+  instrBodyMine: (opds: string, n: number) => `It is now a memo to ${opds}; ${n} ${pl(n, 'follow-up is', 'follow-ups are')} tracked on the board. This banner goes away once the work is done.`,
   instrOpen: 'View the memo',
   instrTasks: 'View follow-ups',
   dismiss: 'Dismiss notice',
@@ -305,18 +421,20 @@ const en: Dict = {
   mTitleHint: 'Today',
   mPlace: 'Regional Secretariat meeting room',
   mParticipants: (n: number) => `${n} participants`,
-  mStatus: { terjadwal: 'Scheduled', berlangsung: 'In progress', selesai: 'Minutes ready' },
+  mStatus: { terjadwal: 'Scheduled', siap: 'Recording ready', berlangsung: 'In progress', selesai: 'Minutes ready' },
   mLead: {
     terjadwal: 'Play the recording: the minutes and follow-ups will write themselves.',
+    siap: (t: string) => `The meeting ended at ${t} and has no minutes yet. Play its recording: the transcript, minutes and agency follow-ups write themselves.`,
     berlangsung: 'The meeting runs; minutes and follow-ups write themselves.',
     selesai: (n: number) => `Minutes done · ${n} ${pl(n, 'follow-up', 'follow-ups')} shared out to the agencies.`,
   },
-  mEarly: (t: string) => `The meeting is scheduled for ${t}; its simulated recording can be played now.`,
   mPlay: 'Play the sample recording',
   mPause: 'Pause',
   mResume: 'Resume',
   mReplay: 'Replay',
   mSkip: 'Skip to the end',
+  mSkipShort: 'Skip',
+  mMini: 'Compact recording player',
   mRecord: 'Record / type a meeting',
   mSpeed: 'Recording speed',
   mFast: 'Fast ×3',
@@ -331,10 +449,14 @@ const en: Dict = {
   mCollapse: 'Hide',
   mExpand: 'Show',
   mDone: (n: number) => `Meeting over · ${n} ${pl(n, 'follow-up is', 'follow-ups are')} on the agency board`,
+  mWillMake: (d: number, a: number) => `Once played: minutes, ${d} decisions, ${a} follow-ups with an owner`,
+  mWriting: (n: number, t: number) => `The AI is writing the minutes · ${n}/${t} follow-ups sent to the agencies`,
+  mToMp: 'Track it in Meja Pimpinan',
+  mWho: 'Speakers in the recording',
   mFormat: 'Official memo format',
   mToastTitle: 'Meeting minutes saved',
-  mToastBody: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} reached the agency board and the Regional Head’s desk.`,
-  mToastAct: 'Open Follow-ups',
+  mToastBody: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} on the agency board.`,
+  mToastAct: 'See the task board',
 
   nTitle: 'Minutes',
   nWriting: 'AI is writing',
@@ -345,7 +467,14 @@ const en: Dict = {
   nActions: 'Follow-ups',
   nSummary: 'AI summary',
   nSummaryWait: 'The summary is written when the meeting ends.',
-  nEmpty: 'Nothing yet. The minutes fill themselves while the meeting plays.',
+  nPreTitle: 'While the recording plays, the AI writes these minutes itself:',
+  nPre: {
+    who: 'Participants, agenda and discussion points',
+    decisions: (n: number) => `${n} meeting ${pl(n, 'decision', 'decisions')}`,
+    actions: (n: number, o: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} with a person in charge and a due date, straight onto the boards of ${o} work units`,
+    paper: 'An AI summary and the minutes in the official memo format, ready to print',
+    cross: 'The follow-ups are tracked in Meja Pimpinan too; its instructions arrive in Incoming as a memo.',
+  },
   nTask: 'Task',
   nPic: 'Owner',
   nDue: 'Due',
@@ -354,10 +483,11 @@ const en: Dict = {
   nLiveCheck: (d: number, a: number) => `Checked by Live AI: ${d} ${pl(d, 'decision', 'decisions')}, ${a} ${pl(a, 'follow-up', 'follow-ups')}`,
   lanesTitle: 'Follow-up board by agency',
   lanesHint: 'Cards fly to the column of the agency in charge.',
-  laneOpen: (opd: string, n: number) => `${opd}: ${n} ${pl(n, 'follow-up', 'follow-ups')}. Open in Follow-ups`,
+  laneWait: 'None yet',
+  laneOpen: (opd: string, n: number) => `${opd}: ${n} ${pl(n, 'follow-up', 'follow-ups')}. Open on the follow-up board`,
 
   rTitle: 'Record or type your meeting',
-  rLead: 'Speak near the microphone (Web Speech) or paste a transcript. The AI drafts the decisions and follow-ups.',
+  rLead: 'Speak near the microphone (the browser’s speech recognition) or paste a transcript. The AI drafts the decisions and follow-ups.',
   rFor: 'Meeting being minuted',
   rStart: 'Start recording',
   rStop: 'Stop',
@@ -457,7 +587,7 @@ const en: Dict = {
   lNotaHal: 'Subject',
   lNotaBody: 'In view of the latest situation, the following is hereby instructed:',
   lNotaClose: 'To be carried out and reported back.',
-  lOpdView: 'A disposition for your agency. Its tasks are in the Follow-ups tab.',
+  lOpdView: 'A disposition for your agency. Its tasks are on the follow-up board (Follow-ups tab, Tasks on a phone).',
   lOpdWho: 'The Secretariat drafts dispositions; they are approved for the Regional Secretary or the Regent.',
   lTryAsSetda: 'Try as the Secretariat',
   lToastTitle: 'Disposition sent',
@@ -502,6 +632,9 @@ const en: Dict = {
   fCount: (n: number) => `${n} ${pl(n, 'task', 'tasks')}`,
   fDoneN: (n: number) => `${n} done`,
   fNew: 'new',
+  fAgain: (d: string) => `Assigned again (same task earlier: ${d})`,
+  fThread: (n: number) => `One pump matter with ${n} other ${pl(n, 'task', 'tasks')}; all close when the pumps arrive`,
+  fXlink: { 'cek-berkas': 'Continue in Cek Berkas', 'siaga-wilayah': 'See in Siaga Wilayah' } as Record<'cek-berkas' | 'siaga-wilayah', string>,
 
   wTitle: 'Send a WhatsApp reminder',
   wTo: 'To',
@@ -535,6 +668,93 @@ const en: Dict = {
   tomorrow: 'Tomorrow',
   yesterday: 'Yesterday',
   dayFmt: (d: number) => (d > 0 ? `in ${d} days` : `${-d} days ago`),
+
+  clockLabel: (t: string) => `Demo world clock ${t}`,
+
+  ldLabel: 'Summary for the Regional Head',
+  ldWaiting: (n: number) => `Waiting for your decision (${n})`,
+  ldNone: 'No letter is waiting for your decision.',
+  ldOpen: 'Read & approve',
+  ldMeeting: 'Flood meeting 06:30',
+  ldProgress: (run: number, done: number, n: number) => `${done} done · ${run} under way · of ${n} follow-ups`,
+  ldNoMinutes: 'No minutes yet. Play its recording in the Meeting tab.',
+  ldNoMinutesShort: 'no minutes yet',
+  ldAllDone: (n: number) => `${n} of ${n} follow-ups done`,
+  ldWaitingShort: (n: number) => `${n} ${pl(n, 'letter waits', 'letters wait')} for your decision`,
+  ldMeetingShort: 'Flood meeting',
+  ldExpand: 'Summary',
+  ldCollapse: 'Fold',
+  ldAll: (n: number) => `See all ${n} letters`,
+  ldLateOld: (n: number, top: string, topN: number) => (n ? `Outside this meeting: ${n} older ${pl(n, 'follow-up is', 'follow-ups are')} overdue${top ? ` (most: ${top}, ${topN})` : ''}` : 'Outside this meeting: no follow-up is overdue'),
+  ldLateSee: 'See the overdue ones',
+  ldToMeeting: 'Go to Meeting',
+  ldBoard: 'View the board',
+  ldLate: (n: number) => (n ? `${n} agency ${pl(n, 'follow-up is', 'follow-ups are')} overdue` : 'No follow-up is overdue'),
+
+  dayToast: (t: string) => `Agency updates up to ${t}`,
+  dayMore: (n: number) => `…and ${n} more ${pl(n, 'update', 'updates')}`,
+  daySee: 'View the board',
+  dayNotes: {
+    a4p: 'BPBD drafts the early warning for the riverside villages.',
+    a5p: 'The Head of Kalitidu starts preparing Ngujo village hall for evacuation.',
+    a2i: 'The loan of 4 pumps is approved; the pumps reach the flooded area. The Regent’s 09:15 pump instruction is done.',
+    a1p: 'Public Works starts on the Ngujo embankment; the team and 1,500 sandbags are on their way.',
+    a4: 'BPBD broadcasts early warnings to the riverside villages.',
+    a3p: 'Social Affairs starts verifying the 50 flood-aid files.',
+    a2: 'The loan of 4 pumps is approved; the pumps reach the flooded area.',
+    a5: 'Ngujo village hall is ready as an evacuation point.',
+    a6: 'The Head of Kalitidu reports the evacuation point ready.',
+    a1: 'The Ngujo embankment seepage is under control.',
+    a3: 'Social Affairs finishes verifying the 50 aid files.',
+    instr: 'The Regent sends an instruction about the pumps (memo in Incoming); PUPR’s pump memo is handled with it.',
+  },
+  daySeed: (title: string, opd: string) => `${opd} completes “${title}”.`,
+  daySeedStart: (title: string, opd: string) => `${opd} starts work on “${title}”.`,
+
+  mBenefit: (n: number) => ['30-minute meeting → minutes ready as the recording ends', `${n}/${n} follow-ups have an owner and a deadline`, '~2 hours of minute-taking saved (simulated estimate)'],
+  mBenefitLabel: 'What this meeting produced',
+  mBenefitPreLabel: 'What this meeting will produce',
+  mBenefitPre: (n: number) => ['30-minute meeting → minutes in about 70 seconds (simulated)', `${n} follow-ups get an owner and a deadline automatically`, '~2 hours of minute-taking saved (simulated estimate)'],
+  mMiniActs: (n: number, t: number) => `${n}/${t} tasks`,
+
+  oConclusion: 'Conclusions',
+
+  rLater: 'later today',
+  rNoMeeting: 'Another meeting (not scheduled)',
+
+  lSubmit: 'Submit to the Regional Secretary',
+  lWaitSekda: 'Submitted to the Regional Secretary · awaiting approval (simulated e-signature)',
+  lWaitHow: 'The Regional Secretary approves once the world clock has run a few minutes, or approve now as the Regional Secretary (simulated separation of duties).',
+  lAsSekda: 'Approve as Regional Secretary (simulated)',
+  lTrailInstr: (t: string) => `Handled through the Regional Head’s ${t} instruction`,
+  lLinkInstr: (opd: string, no: number) => `${opd}: continue meeting follow-up no. ${no} (no new task).`,
+  lTrail: 'Letter history (simulated)',
+  lTrailReceived: (t: string) => `Received ${t}`,
+  lTrailRead: (t: string, lo: number, hi: number) => `Read by the AI ${t} · OCR confidence ${lo}–${hi}%`,
+  lTrailDraft: (t: string, edited: boolean) => `${edited ? 'Draft edited by the Secretariat' : 'AI draft unchanged'} · submitted ${t}`,
+  lTrailApproved: (by: string, t: string) => `Approved by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} ${t} · simulated e-signature`,
+  lTrailDone: (by: string, t: string) => `Dispositioned by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} ${t}`,
+  lTrailTasks: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} created`,
+  lTrailLinked: (no: number) => `Linked to meeting follow-up no. ${no}`,
+  lLinked: (no: number, pic: string, due: string) => `Already handled in the 06:30 meeting: follow-up no. ${no} · ${pic} · ${due}`,
+  lLinkOpt: 'Link to the existing follow-up (no duplicate task)',
+  lLinkedDone: (no: number) => `Linked to meeting follow-up no. ${no}; no duplicate task.`,
+  lAwait: 'Awaiting the Secretariat’s disposition',
+  lForUnit: 'Will be dispositioned to your agency',
+  lLetterDate: 'Letter date',
+
+  aTools: {
+    group_by_opd: 'Source: follow-up board by agency',
+    query_action_items: 'Source: follow-up list',
+    query_letters: 'Source: incoming letters',
+    extract_minutes: 'Source: meeting transcript',
+    baca_transkrip: 'Reading the transcript',
+    ocr_surat: 'Reading the scanned letter',
+    classify_letter: 'Classifying the letter',
+    draft_disposition: 'Disposition draft',
+    draft_reminder: 'Reminder draft',
+  },
+  aToolOther: 'Source: Naskah Pintar data',
 }
 
 export const STR: Record<Lang, Dict> = { id, en }
@@ -585,6 +805,9 @@ const PIC_EN: Record<string, string> = {
   'Kepala Dinas PUPR': 'Head of Public Works',
   Kadinsos: 'Head of Social Affairs',
   'Kalaksa BPBD': 'Head of the Disaster Agency',
+  'Kepala BPBD': 'Head of the Disaster Agency',
+  'Kepala Dinsos': 'Head of Social Affairs',
+  Camat: 'District Head',
   Sekda: 'Regional Secretary',
   Bupati: 'Regent',
   'Kepala Daerah': 'Regional Head',
@@ -605,8 +828,10 @@ function headOf(opdId: string): string | null {
 }
 /** person in charge (titles only) in the UI language; "Kepala <agency>" reads through the agency's English name
  *  ("Head of Public Works (PUPR)") instead of a half-translated "Head of Dinas PUPR" */
+/** spoken short titles in the meeting notes → the formal title the rest of the product uses (one name per PIC) */
+const PIC_ID: Record<string, string> = { 'Kadis PUPR': 'Kepala Dinas PUPR', Kadinsos: 'Kepala Dinsos' }
 export function picLabel(pic: string, lang: Lang, opdId?: string): string {
-  if (lang === 'id') return pic
+  if (lang === 'id') return PIC_ID[pic] ?? pic
   const hit = PIC_EN[pic]
   if (hit) return hit
   const camat = /^Camat (.+)$/.exec(pic)
@@ -629,7 +854,19 @@ const TITLES: readonly (readonly [string, string])[] = [
   [id.by['kepala-daerah'], en.by['kepala-daerah']],
   [id.by['kepala-opd'], en.by['kepala-opd']],
 ]
+/** letter senders that are titles (company names pass through as written) */
+const SENDER_EN: Record<string, string> = {
+  'Kepala Pelaksana BPBD': 'Head of the Disaster Agency',
+  'Kepala Pelaksana BPBD Provinsi': 'Head of the Provincial Disaster Agency',
+}
 export function byText(by: string, lang: Lang): string {
   for (const [i, e] of TITLES) if (by === i || by === e) return lang === 'id' ? i : e
+  if (lang === 'en') {
+    const hit = SENDER_EN[by]
+    if (hit) return hit
+    const desa = /^Kepala Desa (.+)$/.exec(by)
+    if (desa) return `${desa[1]} Village Head`
+    if (/^(Kepala|Camat|Kadis|Kadinsos|Kalaksa) /.test(by) || PIC_EN[by]) return picLabel(by, 'en')
+  }
   return by
 }

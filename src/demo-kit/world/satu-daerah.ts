@@ -13,7 +13,7 @@
  */
 import type {
   ActionItem, Alert, Bi, Bidder, Briefing, Citizen, CitizenMessage, Complaint, ComplaintCluster, DocumentRec, EntityRef, EventMap, Facility,
-  Harvest, Letter, Mention, Minutes, Procurement, ProcurementFinding, Ticket, WorldState,
+  Harvest, Letter, Mention, Minutes, Procurement, ProcurementFinding, Ticket, WaterGauge, WorldState,
 } from './types'
 import type { ProductSlug } from '../../content/products'
 import type { RegionPack } from '../region/types'
@@ -110,7 +110,7 @@ export const kpiStrip: (s: WorldState, now: Minutes) => KpiStrip = /*#__PURE__*/
     const s = { complaints, tickets, alerts, mentions, actionItems } as WorldState
     return {
       complaints: complaintKpi(s, now),
-      slaPct: slaOnTimePct(s),
+      slaPct: slaOnTimePct(s, now),
       alerts: activeAlerts(s).length,
       negativeIssues: negativeIssues(s, now).length,
       overdue: overdueActions(s, now).length,
@@ -119,39 +119,52 @@ export const kpiStrip: (s: WorldState, now: Minutes) => KpiStrip = /*#__PURE__*/
   },
 )
 
+/** an agency needs this many tickets in the 30-day window (closed + open past SLA) before it gets an SLA %, a score
+ *  and a rank */
+export const OPD_MIN_SAMPLE = 3
 export interface OpdRow {
   opdId: string
   name: string
   short: string
   openTickets: number
+  /** open tickets already past their SLA deadline (they count against the SLA) */
+  lateTickets: number
   closed30: number
-  /** % of tickets closed in the last 30 days that met their SLA (null when none closed) */
+  onTime30: number
+  /** on time ÷ (closed in 30 days + open past SLA), as slaOnTimePct; null below OPD_MIN_SAMPLE */
   slaPct: number | null
   /** average rating 1–5 (null when no rating) */
   rating: number | null
   actionsOpen: number
+  /** follow-ups past their deadline and not done */
   actionsLate: number
-  /** composite 0–100: SLA 50 %, follow-up discipline 30 %, satisfaction 20 % */
-  score: number
+  /** composite 0–100: SLA 50 %, follow-up discipline (items already due) 30 %, satisfaction 20 %; null below OPD_MIN_SAMPLE */
+  score: number | null
+  /** 1-based rank among agencies with enough data; null otherwise */
+  rank: number | null
 }
-/** OPD leaderboard (Meja Pimpinan "papan peringkat"), best first; OPDs without tickets or actions are left out */
+/** OPD leaderboard (Meja Pimpinan "papan peringkat"): ranked agencies best first, then those without enough data */
 export const opdLeaderboard = /*#__PURE__*/ createParamSelector((s) => [s.tickets, s.actionItems, s.region], (now: Minutes, tickets, actions, region): OpdRow[] => {
-  const by = new Map<string, OpdRow & { onTime: number; rSum: number; rN: number }>()
-  const row = (opdId: string) => {
+  type Acc = OpdRow & { rSum: number; rN: number; due: number }
+  const by = new Map<string, Acc>()
+  const row = (opdId: string): Acc => {
     let r = by.get(opdId)
     if (!r) {
       const o = region.opd.find((x) => x.id === opdId)
-      r = { opdId, name: o?.name ?? opdId, short: o?.short ?? opdId, openTickets: 0, closed30: 0, slaPct: null, rating: null, actionsOpen: 0, actionsLate: 0, score: 0, onTime: 0, rSum: 0, rN: 0 }
+      r = { opdId, name: o?.name ?? opdId, short: o?.short ?? opdId, openTickets: 0, lateTickets: 0, closed30: 0, onTime30: 0, slaPct: null, rating: null, actionsOpen: 0, actionsLate: 0, score: null, rank: null, rSum: 0, rN: 0, due: 0 }
       by.set(opdId, r)
     }
     return r
   }
   for (const t of rows(tickets)) {
+    if (t.createdAt > now) continue
     const r = row(t.opdId)
-    if (t.status !== 'selesai') r.openTickets++
-    else if (t.closedAt !== null && t.closedAt >= now - 30 * DAY_MIN) {
+    if (t.status !== 'selesai' || t.closedAt === null || t.closedAt > now) {
+      r.openTickets++
+      if (t.slaDueAt < now) r.lateTickets++
+    } else if (t.closedAt > now - 30 * DAY_MIN) {
       r.closed30++
-      if (t.closedAt <= t.slaDueAt) r.onTime++
+      if (t.closedAt <= t.slaDueAt) r.onTime30++
     }
     if (t.rating !== null) {
       r.rSum += t.rating
@@ -159,20 +172,27 @@ export const opdLeaderboard = /*#__PURE__*/ createParamSelector((s) => [s.ticket
     }
   }
   for (const a of rows(actions)) {
-    if (a.status === 'selesai') continue
     const r = row(a.opdId)
-    r.actionsOpen++
-    if (a.dueAt < now) r.actionsLate++
+    if (a.status !== 'selesai') r.actionsOpen++
+    if (a.dueAt < now) {
+      r.due++
+      if (a.status !== 'selesai') r.actionsLate++
+    }
   }
   const out: OpdRow[] = []
   for (const r of by.values()) {
-    const sla = r.closed30 ? Math.round((r.onTime / r.closed30) * 100) : null
+    const n = r.closed30 + r.lateTickets
+    const sla = n >= OPD_MIN_SAMPLE ? Math.round((r.onTime30 / n) * 100) : null
     const rating = r.rN ? Math.round((r.rSum / r.rN) * 10) / 10 : null
-    const discipline = r.actionsOpen ? 1 - r.actionsLate / r.actionsOpen : 1
-    const score = Math.round(0.5 * (sla ?? 80) + 30 * discipline + 20 * ((rating ?? 3.5) / 5))
-    out.push({ opdId: r.opdId, name: r.name, short: r.short, openTickets: r.openTickets, closed30: r.closed30, slaPct: sla, rating, actionsOpen: r.actionsOpen, actionsLate: r.actionsLate, score })
+    const discipline = r.due ? 1 - r.actionsLate / r.due : 1
+    const score = sla === null ? null : Math.round(0.5 * sla + 30 * discipline + 20 * ((rating ?? 3.5) / 5))
+    const { rSum: _a, rN: _b, due: _c, ...rest } = r
+    out.push({ ...rest, slaPct: sla, rating, score })
   }
-  return out.sort((a, b) => b.score - a.score || a.short.localeCompare(b.short))
+  out.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.short.localeCompare(b.short))
+  let k = 0
+  for (const r of out) if (r.score !== null) r.rank = ++k
+  return out
 })
 
 export interface OpdScorecard {
@@ -217,7 +237,8 @@ export function complaintsByKecamatan(s: WorldState, now: Minutes, days = 7, cat
     else if (c.at > from - days * DAY_MIN && c.at <= from) r.prev++
     by.set(c.kecamatanId, r)
   }
-  return [...by.entries()].map(([kecamatanId, r]) => ({ kecamatanId, name: kecName(s, kecamatanId), ...r })).sort((a, b) => b.count - a.count)
+  // stable on ties, so the chat, the briefing and the map insight name the same district
+  return [...by.entries()].map(([kecamatanId, r]) => ({ kecamatanId, name: kecName(s, kecamatanId), ...r })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
 export type BriefingItem = Briefing['items'][number] & {
@@ -246,6 +267,108 @@ export const topicLabel = (topic: string, lang: 'id' | 'en'): string => TOPIC_LA
 export function weekChangeOf(price: number, history: readonly number[]): number {
   const base = history[history.length - 7] ?? history[0] ?? price
   return base > 0 ? (price - base) / base : 0
+}
+
+const UNIT_EN: Record<string, string> = { kg: 'kg', liter: 'litre', l: 'litre', butir: 'egg', ikat: 'bunch', ekor: 'head', papan: 'tray', bungkus: 'pack', karung: 'sack' }
+
+/** a gauge's display name: "Bengawan Solo · pos Bojonegoro" → EN "Bengawan Solo · Bojonegoro gauge" */
+export function gaugeName(g: WaterGauge): Bi {
+  return { id: g.name, en: g.name.replace(/\bpos ([^·]+)$/i, '$1 gauge') }
+}
+
+/**
+ * A water gauge's level at a world minute — ONE curve for every product (Siaga Wilayah, Meja Pimpinan, Radar Isu).
+ * Up to the seeded reading (06.00) it replays the seeded 24 h history; after that the morning rain pushes the river
+ * up: past SIAGA before 07.00, past AWAS ±10.15, a crest at 13.00, then it recedes (SIAGA again by ±16.00). The dam
+ * (and any other gauge) keeps its seeded reading. SIMULATED readings at a real gauge site.
+ */
+export const RIVER_CREST_AT = 13 * 60
+export function gaugeLevelAt(g: WaterGauge, minute: Minutes): number {
+  if (g.kind !== 'sungai') return g.level
+  const h = g.history
+  const t0 = g.updatedAt
+  if (minute <= t0) {
+    const i = h.length - 1 - (t0 - minute) / 60
+    if (i <= 0) return h[0] ?? g.level
+    const a = Math.floor(i)
+    const b = Math.min(h.length - 1, a + 1)
+    return (h[a] ?? g.level) + ((h[b] ?? g.level) - (h[a] ?? g.level)) * (i - a)
+  }
+  const crest = g.awas + 0.45
+  if (minute <= RIVER_CREST_AT) {
+    const f = (minute - t0) / Math.max(1, RIVER_CREST_AT - t0)
+    return g.level + (crest - g.level) * Math.sin((f * Math.PI) / 2)
+  }
+  return g.normal + (crest - g.normal) * Math.exp(-(minute - RIVER_CREST_AT) / 600)
+}
+export interface GaugeOutlook {
+  level: number
+  state: 'normal' | 'siaga' | 'awas'
+  /** m per hour over the last hour (positive = rising) */
+  trend: number
+  /** highest level within the next 6 h and its world minute */
+  peak: { level: number; at: Minutes }
+  /** world minute the level first reaches AWAS within the next 6 h (null = not reached / already above) */
+  awasAt: Minutes | null
+}
+/** the reading at a world minute plus its 6-hour outlook (same curve everywhere) */
+export function gaugeOutlook(g: WaterGauge, minute: Minutes): GaugeOutlook {
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  const level = r2(gaugeLevelAt(g, minute))
+  const trend = r2(gaugeLevelAt(g, minute) - gaugeLevelAt(g, minute - 60))
+  let peak = { level: gaugeLevelAt(g, minute), at: minute }
+  let awasAt: Minutes | null = null
+  for (let m = minute + 15; m <= minute + 360; m += 15) {
+    const v = gaugeLevelAt(g, m)
+    if (v >= peak.level) peak = { level: v, at: m }
+    if (awasAt === null && level < g.awas && v >= g.awas) awasAt = m
+  }
+  const state = level >= g.awas ? 'awas' : level >= g.siaga ? 'siaga' : 'normal'
+  return { level, state, trend, peak: { level: r2(peak.level), at: peak.at }, awasAt }
+}
+
+/** true when the alert was raised by the clock (the automatic scenario warning), not by a person in Siaga Wilayah */
+function isClockAlert(s: WorldState, alertId: string): boolean {
+  const key = ref('alerts', alertId)
+  for (const id of s.auditLog.ids) {
+    const a = s.auditLog.byId[id]
+    if (a?.type === 'flood.alert' && a.entityRefs.includes(key)) return a.source === 'clock'
+  }
+  return false
+}
+
+const n1 = (v: number, l: 'id' | 'en') => (l === 'id' ? idNum(v, 1) : enNum(v, 1))
+/** "07.20" in Indonesian, "07:20" in English */
+const hm = (m: Minutes, l: 'id' | 'en') => (l === 'id' ? hhmm(m).replace(':', '.') : hhmm(m))
+/**
+ * Briefing item 3 without an alert: the river's ONE clock-driven reading (gaugeOutlook) with its status, in the same
+ * words Meja Pimpinan, Siaga Wilayah and "Tanya data" use. SIMULATED readings.
+ */
+function riverTitle(g: WaterGauge, now: Minutes): Bi {
+  const o = gaugeOutlook(g, now)
+  const name = gaugeName(g)
+  const level = gaugeLevelAt(g, now)
+  const rise = level - gaugeLevelAt(g, now - DAY_MIN)
+  if (o.state === 'normal') return { id: `Muka air ${name.id} ${n1(level, 'id')} m, ${rise >= 0 ? 'naik' : 'turun'} ${n1(Math.abs(rise), 'id')} m dalam 24 jam`, en: `${name.en} at ${n1(level, 'en')} m, ${rise >= 0 ? 'up' : 'down'} ${n1(Math.abs(rise), 'en')} m in 24 h` }
+  return o.state === 'awas'
+    ? { id: `${name.id} status AWAS: ${n1(level, 'id')} m (batas awas ${n1(g.awas, 'id')} m)`, en: `${name.en} at danger level AWAS: ${n1(level, 'en')} m (threshold ${n1(g.awas, 'en')} m)` }
+    : { id: `${name.id} status SIAGA: ${n1(level, 'id')} m (batas siaga ${n1(g.siaga, 'id')} m)`, en: `${name.en} at alert level SIAGA: ${n1(level, 'en')} m (threshold ${n1(g.siaga, 'en')} m)` }
+}
+function riverDetail(s: WorldState, g: WaterGauge, now: Minutes): Bi {
+  const o = gaugeOutlook(g, now)
+  const level = gaugeLevelAt(g, now)
+  const rise = level - gaugeLevelAt(g, now - DAY_MIN)
+  const up: Bi = { id: `${rise >= 0 ? 'Naik' : 'Turun'} ${n1(Math.abs(rise), 'id')} m dalam 24 jam`, en: `${rise >= 0 ? 'Up' : 'Down'} ${n1(Math.abs(rise), 'en')} m in 24 h` }
+  const next: Bi = o.peak.level > level + 0.05
+    ? { id: `puncak ±${n1(o.peak.level, 'id')} m sekitar pukul ${hm(o.peak.at, 'id')}`, en: `crest ≈ ${n1(o.peak.level, 'en')} m around ${hm(o.peak.at, 'en')}` }
+    : o.trend < -0.02 ? { id: 'mulai surut', en: 'starting to recede' } : { id: 'bertahan', en: 'holding' }
+  // the heavy-rain outlook belongs to the morning only
+  const rain: Bi = now % DAY_MIN < 11 * 60 ? { id: ' Hujan lebat diprakirakan siang ini.', en: ' Heavy rain expected this afternoon.' } : { id: '', en: '' }
+  if (o.state === 'normal') return { id: `Batas siaga ${n1(g.siaga, 'id')} m; ${next.id} (data simulasi).${rain.id}`, en: `Alert level ${n1(g.siaga, 'en')} m; ${next.en} (simulated data).${rain.en}` }
+  const alerts = rows(s.alerts).filter((a) => a.status === 'aktif' && a.kind === 'banjir').length
+  return alerts
+    ? { id: `${up.id}; ${next.id}. ${alerts} peringatan banjir aktif (data simulasi).`, en: `${up.en}; ${next.en}. ${alerts} flood warning(s) active (simulated data).` }
+    : { id: `${up.id}; ${next.id}. Belum ada peringatan banjir resmi (data simulasi).${rain.id}`, en: `${up.en}; ${next.en}. No official flood warning yet (simulated data).${rain.en}` }
 }
 
 export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
@@ -283,18 +406,32 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   const alert = activeAlerts(s).filter((a) => a.kind === 'banjir').sort((a, b) => b.level - a.level)[0]
   const river = rows(s.gauges).find((g) => g.kind === 'sungai')
   if (alert) {
+    // an automatic warning (the clock's scenario alert, in Siaga Wilayah's domain) is worded as such: it is active,
+    // only the broadcast to residents is still to be sent
+    const auto = !alert.broadcast && isClockAlert(s, alert.id)
     push('siaga-wilayah', { id: `Peringatan banjir level ${alert.level}: Kec. ${alert.kecamatanIds.map((x) => kecName(s, x)).join(', ')}`, en: `Flood warning level ${alert.level}: ${alert.kecamatanIds.map((x) => kecName(s, x)).join(', ')}` },
-      alert.broadcast ? { id: `Peringatan dini terkirim ke ${idNum(alert.broadcast.recipients)} penerima`, en: `Early warning sent to ${enNum(alert.broadcast.recipients)} recipients` } : { id: 'Peringatan dini belum dikirim ke warga', en: 'Early warning not yet sent to residents' }, [ref('alerts', alert.id)])
+      alert.broadcast
+        ? { id: `Peringatan dini terkirim ke ${idNum(alert.broadcast.recipients)} penerima`, en: `Early warning sent to ${enNum(alert.broadcast.recipients)} recipients` }
+        : auto
+          ? { id: `Peringatan banjir level ${alert.level} aktif sejak ${hm(alert.at, 'id')}; siaran ke warga belum dikirim`, en: `Level-${alert.level} flood warning active since ${hm(alert.at, 'en')}; broadcast to residents not yet sent` }
+          : { id: 'Peringatan dini belum dikirim ke warga', en: 'Early warning not yet sent to residents' },
+      [ref('alerts', alert.id)])
   } else if (river) {
-    const rising = river.level - (river.history[0] ?? river.level)
-    push('siaga-wilayah', { id: `Muka air ${river.name} ${idNum(river.level, 1)} m, naik ${idNum(rising, 1)} m dalam 24 jam`, en: `${river.name} at ${enNum(river.level, 1)} m, up ${enNum(rising, 1)} m in 24 h` },
-      { id: `Batas siaga ${idNum(river.siaga, 1)} m (data simulasi). Hujan lebat diprakirakan siang ini.`, en: `Alert level ${enNum(river.siaga, 1)} m (simulated data). Heavy rain expected this afternoon.` }, [ref('gauges', river.id)])
+    push('siaga-wilayah', riverTitle(river, now), riverDetail(s, river, now), [ref('gauges', river.id)])
   }
   // 4 · viral issue (Radar Isu)
   const hoax = rows(s.hoaxAlerts).find((h) => h.status === 'aktif')
   const neg = negativeIssues(s, now)[0]
   if (hoax) {
-    push('radar-isu', { id: `Hoaks viral: ${hoax.claim.id}`, en: `Viral hoax: ${hoax.claim.en}` }, { id: `Skor hoaks ${Math.round(hoax.score * 100)}%, belum diklarifikasi`, en: `Hoax score ${Math.round(hoax.score * 100)}%, not clarified yet` }, [ref('hoaxAlerts', hoax.id)])
+    // a clarification the leader already ordered (an instruction that refs the hoax): say so, not "not clarified yet"
+    const key = ref('hoaxAlerts', hoax.id)
+    const ins = rows(s.instructions).filter((i) => i.refs.includes(key)).sort((a, b) => b.at - a.at)[0]
+    const opds = ins ? ins.opdIds.map((o) => opdShort(s, o)).join(', ') : ''
+    push('radar-isu', { id: `Hoaks viral: ${hoax.claim.id}`, en: `Viral hoax: ${hoax.claim.en}` },
+      ins
+        ? { id: `Klarifikasi diinstruksikan pukul ${hm(ins.at, 'id')} (${opds}), menunggu rilis`, en: `Clarification ordered at ${hm(ins.at, 'en')} (${opds}), awaiting release` }
+        : { id: `Skor hoaks ${Math.round(hoax.score * 100)}%, belum diklarifikasi`, en: `Hoax score ${Math.round(hoax.score * 100)}%, not clarified yet` },
+      [key])
   } else if (neg) {
     push('radar-isu', { id: `Isu negatif terbesar: ${topicLabel(neg.topic, 'id')} (${neg.count} mention)`, en: `Top negative issue: ${topicLabel(neg.topic, 'en')} (${neg.count} mentions)` }, { id: `Jangkauan ±${idNum(neg.reach)} akun dalam 24 jam`, en: `Reach ≈ ${enNum(neg.reach)} accounts in 24 h` }, [ref('mentions', neg.latest.id)])
   }
@@ -304,7 +441,7 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
   if (risky) {
     const d = Math.round(devPct(risky))
     push('awas-belanja', { id: `Paket berisiko: ${risky.name.id} (${rpShort(risky.hps).id})`, en: `Risky package: ${risky.name.en} (${rpShort(risky.hps).en})` },
-      risky.flagged ? { id: `Skor risiko ${risky.riskScore}, ${risky.findings.filter((f) => f.level !== 'lolos').length} temuan`, en: `Risk score ${risky.riskScore}, ${risky.findings.filter((f) => f.level !== 'lolos').length} findings` } : { id: `HPS ${d}% di atas harga pasar, belum dianalisis`, en: `HPS ${d}% above market price, not analysed yet` }, [ref('procurements', risky.id)])
+      risky.flagged ? { id: `Skor risiko ${risky.riskScore}, ${risky.findings.filter((f) => f.level !== 'lolos').length} temuan`, en: `Risk score ${risky.riskScore}, ${risky.findings.filter((f) => f.level !== 'lolos').length} findings` } : { id: `HPS ${d}% di atas harga pasar, belum dianalisis`, en: `Owner's estimate (HPS) ${d}% above market price, not analysed yet` }, [ref('procurements', risky.id)])
   }
   // 6 · prices (Sinyal Pasar)
   const op = rows(s.marketOps).find((m) => m.stage === 'recommended')
@@ -320,22 +457,44 @@ export function briefingItems(s: WorldState, now: Minutes): BriefingItem[] {
     const p = anomaly ?? rise!.p
     const c = s.region.commodities.find((x) => x.id === p.commodityId)?.name ?? { id: p.commodityId, en: p.commodityId }
     const m = s.markets.byId[p.marketId]?.name ?? p.marketId
+    const u = s.region.commodities.find((x) => x.id === p.commodityId)?.unit || ''
+    const unitOf: Bi = u ? { id: u, en: UNIT_EN[u] ?? u } : { id: 'satuan', en: 'unit' }
     const pct = Math.round(weekChangeOf(p.price, p.history) * 1000) / 10
     const fmtPct = (l: 'id' | 'en') => Math.abs(pct).toLocaleString(l === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: 1 })
     push('sinyal-pasar', { id: `Harga ${c.id.toLowerCase()} di ${m} ${pct >= 0 ? 'naik' : 'turun'} ${fmtPct('id')}% sepekan`, en: `${c.en} at ${m} ${pct >= 0 ? 'up' : 'down'} ${fmtPct('en')}% in a week` },
-      { id: `Rp ${idNum(p.price)} per satuan${p.anomaly ? ', ditandai anomali' : ''} (data simulasi)`, en: `Rp ${enNum(p.price)} per unit${p.anomaly ? ', flagged as an anomaly' : ''} (simulated data)` }, [ref('prices', p.id)])
+      { id: `Rp ${idNum(p.price)} per ${unitOf.id}${p.anomaly ? ', ditandai anomali' : ''} (data simulasi)`, en: `Rp ${enNum(p.price)} per ${unitOf.en}${p.anomaly ? ', flagged as an anomaly' : ''} (simulated data)` }, [ref('prices', p.id)])
   }
   // 7 · overdue follow-ups (Naskah Pintar)
   const late = overdueActions(s, now)
   if (late.length) {
-    const opds = [...new Set(late.map((a) => opdShort(s, a.opdId)))].slice(0, 3).join(', ')
+    // agencies by number of overdue items, most first, with the counts
+    const per = new Map<string, number>()
+    for (const a of late) per.set(a.opdId, (per.get(a.opdId) ?? 0) + 1)
+    const opds = [...per.entries()].sort((a, b) => b[1] - a[1] || opdShort(s, a[0]).localeCompare(opdShort(s, b[0]))).slice(0, 3).map(([id, n]) => `${opdShort(s, id)} (${n})`).join(', ')
     push('naskah-pintar', { id: `${late.length} tindak lanjut rapat lewat tenggat`, en: `${late.length} meeting follow-ups overdue` }, { id: `Terbanyak di ${opds}`, en: `Mostly at ${opds}` }, late.slice(0, 5).map((a) => ref('actionItems', a.id)))
   }
   // 8 · bansos registration (Cek Berkas) when open
   const prog = rows(s.programs).find((p) => p.open)
   if (prog) {
     const docs = rows(s.documents).filter((d) => d.program === prog.kind)
-    push('cek-berkas', { id: `Pendaftaran bansos banjir dibuka: ${docs.length} berkas masuk`, en: `Flood-aid registration open: ${docs.length} applications in` }, { id: `Kuota ${idNum(prog.quota)} KK`, en: `Quota ${enNum(prog.quota)} households` }, [ref('programs', prog.id)])
+    const checked = docs.filter((d) => d.status !== 'baru')
+    const quota = { id: `Kuota ${idNum(prog.quota)} KK`, en: `Quota ${enNum(prog.quota)} households` }
+    if (!checked.length) push('cek-berkas', { id: `Pendaftaran bansos banjir dibuka: ${docs.length} berkas masuk`, en: `Flood-aid registration open: ${docs.length} applications in` }, quota, [ref('programs', prog.id)])
+    else {
+      // the verification result (Cek Berkas), counted from the document statuses; NIK pairs and out-of-zone files are
+      // named once the whole batch has been checked
+      const n = (st: string) => checked.filter((d) => d.status === st).length
+      const b = checked.length === docs.length ? bansosBatch(s) : null
+      const parts: Bi[] = [
+        b ? { id: `${checked.length} berkas diperiksa`, en: `${checked.length} files checked` } : { id: `${checked.length} dari ${docs.length} berkas diperiksa`, en: `${checked.length} of ${docs.length} files checked` },
+        { id: `${n('lengkap')} lolos`, en: `${n('lengkap')} complete` },
+      ]
+      if (b?.summary.gandaPairs) parts.push({ id: `${b.summary.gandaPairs} pasang NIK ganda ditahan`, en: `${b.summary.gandaPairs} duplicate-ID pair${b.summary.gandaPairs === 1 ? '' : 's'} held` })
+      if (b?.summary.luarZona) parts.push({ id: `${b.summary.luarZona} luar zona`, en: `${b.summary.luarZona} outside the zone` })
+      if (!b && n('kurang')) parts.push({ id: `${n('kurang')} kurang`, en: `${n('kurang')} incomplete` })
+      if (!b && n('cek-manual')) parts.push({ id: `${n('cek-manual')} perlu cek manual`, en: `${n('cek-manual')} need a manual check` })
+      push('cek-berkas', { id: `Pendaftaran bansos banjir: ${parts.map((x) => x.id).join(' · ')}`, en: `Flood-aid registration: ${parts.map((x) => x.en).join(' · ')}` }, quota, [ref('programs', prog.id)])
+    }
   }
   // 9 · economic index (Indeks Ekonomi) when an update arrived today (post-flood harvest, chain C10): lowest district
   const dayStart = Math.floor(now / DAY_MIN) * DAY_MIN
@@ -769,12 +928,33 @@ export function analyzeProcurement(s: WorldState, procurementId: string): { risk
   // 7 · affiliated bidders
   const edges = affiliationEdges(s, p.id)
   const ring = new Set(edges.flatMap((e) => [e.a, e.b]))
+  // the note lists only the kinds of link the network really shows
+  const kinds = [...new Set(edges.flatMap((e) => e.kinds))]
   f.push(edges.length
-    ? { detector: 'afiliasi', level: ring.size >= 3 ? 'tinggi' : 'waspada', note: { id: `${ring.size} peserta terhubung lewat ${edges.length} kesamaan (alamat, direktur, IP, giliran menang)`, en: `${ring.size} bidders linked by ${edges.length} shared traits (address, director, IP, rotating wins)` } }
+    ? { detector: 'afiliasi', level: ring.size >= 3 ? 'tinggi' : 'waspada', note: { id: `${ring.size} peserta terhubung lewat ${edges.length} kesamaan (${kinds.map((k) => AFFILIATION_KIND[k].id).join(', ')})`, en: `${ring.size} bidders linked by ${edges.length} shared traits (${kinds.map((k) => AFFILIATION_KIND[k].en).join(', ')})` } }
     : { detector: 'afiliasi', level: 'lolos', note: { id: 'Tidak ada keterkaitan antarpeserta', en: 'No links between bidders' } })
-  const w = { lolos: 0, waspada: 8, tinggi: 18 }
-  const riskScore = Math.min(100, 8 + f.reduce((a, x) => a + w[x.level], 0))
-  return { riskScore, findings: f }
+  return { riskScore: riskScoreOf(f), findings: f }
+}
+
+const AFFILIATION_KIND: Record<AffiliationEdge['kinds'][number], Bi> = {
+  alamat: { id: 'alamat', en: 'address' },
+  direktur: { id: 'direktur', en: 'director' },
+  ip: { id: 'IP pendaftaran', en: 'registration IP' },
+  giliran: { id: 'giliran menang', en: 'rotating wins' },
+}
+/** how much each detector's finding weighs (independent signals combined: 100 × (1 − Π(1 − w))) */
+export const DETECTOR_WEIGHT: Record<ProcurementFinding['detector'], { tinggi: number; waspada: number }> = {
+  'hps-kemahalan': { tinggi: 0.3, waspada: 0.12 },
+  'harga-seragam': { tinggi: 0.3, waspada: 0.12 },
+  afiliasi: { tinggi: 0.45, waspada: 0.2 },
+  'pemenang-berulang': { tinggi: 0.25, waspada: 0.1 },
+  'spesifikasi-merek': { tinggi: 0.2, waspada: 0.08 },
+  'jadwal-singkat': { tinggi: 0.15, waspada: 0.06 },
+  'pemecahan-paket': { tinggi: 0.15, waspada: 0.08 },
+}
+/** risk score 0–100 of a set of findings (a clean package scores 0; never a flat 100 from adding up) */
+export function riskScoreOf(findings: ProcurementFinding[]): number {
+  return Math.round(100 * (1 - findings.reduce((a, x) => a * (1 - (x.level === 'lolos' ? 0 : (DETECTOR_WEIGHT[x.detector]?.[x.level] ?? 0))), 1)))
 }
 
 /** local UMKM offers matched through Katalog Lokal for a package's need (price benchmark, spec P6 consume match.made) */

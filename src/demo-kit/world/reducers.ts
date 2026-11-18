@@ -4,7 +4,7 @@
  * Payload ids are already assigned by engine.prepare() when a reducer runs.
  */
 import type { Alert, EventType, Instruction, LngLat, MarketOperation, Program, Sale, SalesDay, Ticket, WorldEvent, WorldState } from './types'
-import { CATEGORY_SLA_DAYS, CATEGORY_LABEL } from './texts'
+import { CATEGORY_LABEL, complaintRouting } from './texts'
 import { DAY_MIN, WORLD, centroid, get, monthOf, patch, patchMany, upsert } from './util'
 
 export type Reducer<K extends EventType> = (s: WorldState, e: WorldEvent<K>) => WorldState
@@ -21,10 +21,11 @@ export const REDUCERS: ReducerMap = {
     const p = e.payload
     const id = must(p.id, 'complaint id')
     const ticketId = must(p.ticketId, 'ticket id')
-    const sla = CATEGORY_SLA_DAYS[p.category] * DAY_MIN
+    // life-safety flood reports (evacuation, trapped residents) → BPBD with a 60-minute SLA
+    const route = complaintRouting(s.region, p.category, p.text)
     const ticket: Ticket = {
-      id: ticketId, code: p.code ?? id, complaintId: id, status: 'baru', opdId: s.region.categoryOpd[p.category], createdAt: e.at, updatedAt: e.at,
-      slaDueAt: e.at + sla, closedAt: null, rating: null, history: [{ at: e.at, status: 'baru' }],
+      id: ticketId, code: p.code ?? id, complaintId: id, status: 'baru', opdId: route.opdId, createdAt: e.at, updatedAt: e.at,
+      slaDueAt: e.at + route.slaMin, closedAt: null, rating: null, history: [{ at: e.at, status: 'baru' }],
     }
     return {
       ...s,
@@ -112,6 +113,17 @@ export const REDUCERS: ReducerMap = {
     actionItems: patch(s.actionItems, e.payload.actionItemId, (a) => (a.status === e.payload.status ? a : { ...a, status: e.payload.status })),
   }),
   'actionItem.reminded': (s, e) => ({ ...s, actionItems: patch(s.actionItems, e.payload.actionItemId, (a) => ({ ...a, remindedAt: e.at })) }),
+  'letter.received': (s, e) => {
+    const p = e.payload
+    const id = must(p.id, 'letter id')
+    return {
+      ...s,
+      letters: upsert(s.letters, {
+        id, number: p.number, from: p.from, subject: p.subject, kind: p.kind, sifat: p.sifat ?? 'biasa', receivedAt: p.receivedAt ?? e.at, dueAt: p.dueAt ?? null,
+        status: 'masuk', scanned: p.scanned ?? false, disposition: null,
+      }),
+    }
+  },
   'letter.dispositioned': (s, e) => {
     const p = e.payload
     const id = must(p.letterId, 'letter id')
@@ -195,15 +207,18 @@ export const REDUCERS: ReducerMap = {
   'harvest.updated': (s, e) => {
     const p = e.payload
     const kec = new Set(p.kecamatanIds)
-    const drop = p.scenario === 'pasca-banjir' ? (p.dropPct ?? WORLD.harvestFloodDropPct) / 100 : 0
+    const dropOf = (k: string) => (p.scenario === 'pasca-banjir' ? (p.dropPctByKecamatan?.[k] ?? p.dropPct ?? WORLD.harvestFloodDropPct) / 100 : 0)
     const ids = s.harvests.ids.filter((id) => kec.has(s.harvests.byId[id]?.kecamatanId ?? ''))
     return {
       ...s,
-      harvests: patchMany(s.harvests, ids, (h) => ({
-        ...h, scenario: p.scenario, updatedAt: e.at,
-        estimateTon: Math.round(h.baselineTon * (1 - drop * (h.crop === 'cabai' || h.crop === 'bawang-merah' ? 1.2 : 1))),
-        ndvi: p.scenario === 'pasca-banjir' ? Math.round(Math.max(0.12, h.ndviBase * (1 - drop * 1.3)) * 100) / 100 : h.ndviBase,
-      })),
+      harvests: patchMany(s.harvests, ids, (h) => {
+        const drop = dropOf(h.kecamatanId)
+        return {
+          ...h, scenario: p.scenario, updatedAt: e.at,
+          estimateTon: Math.round(h.baselineTon * (1 - drop * (h.crop === 'cabai' || h.crop === 'bawang-merah' ? 1.2 : 1))),
+          ndvi: p.scenario === 'pasca-banjir' ? Math.round(Math.max(0.12, h.ndviBase * (1 - drop * 1.3)) * 100) / 100 : h.ndviBase,
+        }
+      }),
     }
   },
   'eligibility.opened': (s, e) => {

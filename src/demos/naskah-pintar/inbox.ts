@@ -43,9 +43,16 @@ export function rowsOf(letters: Letter[], map: Map<string, SampleDoc>): Row[] {
 }
 
 /** the AI's view of the inbox, with the same identities the screen shows */
-export function lettersCtx(s: WorldState): { pending: number; total: number; pendingList: { subject: Bi; from: string; sifat: string }[] } {
+export function lettersCtx(s: WorldState, opdName: (id: string) => string = (id) => id): { pending: number; total: number; pendingList: { subject: Bi; from: string; sifat: string; due?: string | null; to?: string[] }[] } {
   const letters = letterInbox(s)
   const rows = rowsOf(letters, sampleMap(letters))
   const pending = rows.filter((r) => r.letter.status === 'masuk')
-  return { pending: pending.length, total: rows.length, pendingList: pending.slice(0, 6).map((r) => ({ subject: r.subject, from: r.from, sifat: r.sifat })) }
+  return {
+    pending: pending.length,
+    total: rows.length,
+    pendingList: pending.slice(0, 6).map((r) => {
+      const m = metaOf(r.doc)
+      return { subject: r.subject, from: r.from, sifat: r.sifat, due: m?.due ?? null, to: m ? m.disposition.to.map(opdName) : [] }
+    }),
+  }
 }

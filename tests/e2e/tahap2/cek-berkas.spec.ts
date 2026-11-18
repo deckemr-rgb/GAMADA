@@ -12,14 +12,18 @@ test.describe.configure({ timeout: 150_000 })
 test('Cek Berkas · all 5 missions + extracted fields + 3 duplicate pairs + CSV (1440, ID)', async ({ page, errors }) => {
   await openDemo(page, 'cek-berkas')
 
-  // 1 · verify the clean specimen KTP (preselected): every field has a value and a confidence; NIK has 16 digits
+  // 1 · verify the clean specimen KTP (preselected): every field has a value and a confidence; the NIK is listed
+  // masked (area code + birth-date code readable, serial hidden) like every other surface
   await page.locator('[data-hotspot="cek-go"]').first().click()
   await expect(page.locator('.dk-cb-verdict')).toBeVisible({ timeout: 15_000 })
   const rows = page.locator('.dk-xp-row')
   await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(8)
   const values = await page.locator('.dk-xp-row .dk-xp-value').allInnerTexts()
   expect(values.every((v) => v.trim().length > 0)).toBe(true)
-  expect(values.some((v) => /^\d{16}$/.test(v.replace(/\s/g, '')))).toBe(true)
+  expect(values.some((v) => /^\d{12}•{4}$/.test(v.replace(/\s/g, '')))).toBe(true)
+  expect(values.some((v) => /^\d{16}$/.test(v.replace(/\s/g, '')))).toBe(false)
+  // a KTP has no amount field: no number (NIK, RT/RW, date) is shown as Rupiah
+  expect(values.some((v) => /Rp/.test(v))).toBe(false)
   await expect.poll(() => missionsDone(page, 'cek-berkas')).toContain('verify-ktp')
 
   // 2 · the deliberately edited KTP: tamper heatmap + "Perlu Cek Manual"
@@ -45,13 +49,27 @@ test('Cek Berkas · all 5 missions + extracted fields + 3 duplicate pairs + CSV 
   await expect(page.locator('.dk-cb-card.is-ganda')).toHaveCount(pairs * 2)
   expect(await W<number>(page, `Object.values(s.documents.byId).filter((d) => d.program === 'bansos-banjir' && d.status && d.status !== 'baru').length`)).toBeGreaterThanOrEqual(50)
 
-  // 5 · CSV export: header + 50 rows
+  // 5 · CSV export: "# SIMULASI" header lines, column header + 50 rows
   const [dl] = await Promise.all([page.waitForEvent('download'), csvBtn.click()])
-  const csv = readFileSync((await dl.path())!, 'utf8').trim().split(/\r?\n/)
+  const lines = readFileSync((await dl.path())!, 'utf8').trim().split(/\r?\n/)
+  const csv = lines.filter((l) => !l.replace(/^\uFEFF/, '').startsWith('#'))
   expect(dl.suggestedFilename()).toMatch(/\.csv$/)
+  expect(lines[0]).toMatch(/SIMULA/)
   expect(csv.length).toBe(51)
   await expect.poll(() => missionsDone(page, 'cek-berkas')).toContain('export')
   await expectGuideComplete(page, 5)
+
+  // 6 · the world clock opens the bansos quota by itself (scenario warning 07:20); re-run for the programme: every
+  // finding survives (Kurang does not vanish behind Luar zona) and most flood applicants pass
+  const kurang = await page.locator('.dk-cb-fchip.is-kurang b').innerText()
+  await page.evaluate(() => (window as unknown as { __gamada: { clock: { setTime(m: number): void } } }).__gamada.clock.setTime(7 * 60 + 25))
+  await expect(page.locator('.dk-cb-banner.is-open')).toBeVisible({ timeout: 15_000 })
+  await page.locator('.dk-cb-stale button').click()
+  await expect(csvBtn).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.dk-cb-card.is-done')).toHaveCount(50)
+  await expect(page.locator('.dk-cb-fchip.is-kurang b')).toHaveText(kurang)
+  expect(Number(await page.locator('.dk-cb-fchip.is-luar-zona b').innerText())).toBeLessThanOrEqual(10)
+  expect(Number(await page.locator('.dk-cb-fchip.is-lolos b').innerText())).toBeGreaterThanOrEqual(30)
   expect(errors.filter(notNoise)).toEqual([])
 })
 

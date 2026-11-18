@@ -74,7 +74,14 @@ export const Minutes = memo(function Minutes({ reached, writing, meetingId, summ
     const last = fresh.length ? el.querySelector<HTMLElement>(`[data-mkey="${fresh[fresh.length - 1]}"]`) : null
     if (body && last) {
       const top = last.offsetTop - body.offsetTop
-      if (top + last.offsetHeight > body.scrollTop + body.clientHeight || top < body.scrollTop) body.scrollTo({ top: Math.max(0, top - body.clientHeight + last.offsetHeight + 24), behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      if (top + last.offsetHeight > body.scrollTop + body.clientHeight || top < body.scrollTop) {
+        let to = Math.max(0, top - body.clientHeight + last.offsetHeight + 24)
+        /* snap to the start of a row (a heading or a minutes line), so the top never shows half a line */
+        const starts = [...body.querySelectorAll<HTMLElement>('[data-mkey], h4')].map((r) => r.offsetTop - body.offsetTop - 8)
+        const snap = starts.find((y) => y >= to - 1)
+        if (snap !== undefined && snap <= top) to = Math.max(0, snap)
+        body.scrollTo({ top: to, behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      }
     }
     const kills = anims.current
     if (kills.length > 40) kills.splice(0, 20)
@@ -115,7 +122,31 @@ export const Minutes = memo(function Minutes({ reached, writing, meetingId, summ
         )}
       </header>
       {empty ? (
-        <p className="dk-np-empty">{S.nEmpty}</p>
+        <div className="dk-np-pre">
+          <p className="dk-np-pre-h">{S.nPreTitle}</p>
+          <ol className="dk-np-pre-list">
+            <li>
+              <Icon name="user" size={14} />
+              {S.nPre.who}
+            </li>
+            <li>
+              <Icon name="check" size={14} />
+              {S.nPre.decisions(SCRIPT.decisions.length)}
+            </li>
+            <li>
+              <Icon name="kanban" size={14} />
+              {S.nPre.actions(SCRIPT.actions.length, LANES.length)}
+            </li>
+            <li>
+              <Icon name="doc" size={14} />
+              {S.nPre.paper}
+            </li>
+          </ol>
+          <p className="dk-np-pre-x">
+            <Icon name="link" size={14} />
+            {S.nPre.cross}
+          </p>
+        </div>
       ) : (
         <div className="dk-np-mbody" aria-live="polite" aria-relevant="additions">
           <div className="dk-np-msec">
@@ -284,6 +315,7 @@ export const Lanes = memo(function Lanes({ reached, nav }: { reached: number; na
                 <span className="dk-num">{mine.length}</span>
               </span>
               <span className="dk-np-lane-list">
+                {mine.length === 0 && <span className="dk-np-lane-wait">{S.laneWait}</span>}
                 {mine.map((a) => (
                   <span key={a.key} className="dk-np-lchip" data-lchip={a.key}>
                     <span className="dk-flash" aria-hidden="true" />

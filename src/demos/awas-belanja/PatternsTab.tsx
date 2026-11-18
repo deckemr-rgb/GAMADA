@@ -5,8 +5,8 @@
  */
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { Button, Icon, StatusChip, Timeline, dropChips, motionMode, type TimelineItem } from '../../demo-kit/ui'
-import { auditFor, hhmm, useWorld, type ProcurementFinding, type WorldState } from '../../demo-kit/world'
-import { DETECTORS, LEVEL_TONE, isAnalysed, noteText, type Detector } from './model'
+import { auditFor, hhmm, useWorld, type AuditEntry, type ProcurementFinding, type WorldState } from '../../demo-kit/world'
+import { DETECTORS, LEVEL_TONE, isAnalysed, noteText, rpFull, weightOf, type Detector } from './model'
 import { useT, type Strings, type Lang } from './strings'
 import type { RoleKey } from './types'
 
@@ -69,7 +69,13 @@ export default function PatternsTab({ id, scan, onAnalyse, roleKey, stepSec }: {
           return <DetRow key={d.id} det={d.id} index={i} name={d.name[lang]} checks={d.checks[lang]} state={state} f={state === 'done' ? f : undefined} t={t} lang={lang} />
         })}
       </ol>
-      {roleKey === 'inspektorat' && <AuditTrail id={id} lang={lang} />}
+      {!running && analysed && p.riskScore != null && (
+        <p className="dk-ab-scorehow">
+          <Icon name="info" size={16} />
+          <span>{t.scoreHow(p.riskScore)}</span>
+        </p>
+      )}
+      {roleKey === 'inspektorat' && <AuditTrail id={id} lang={lang} roleKey={roleKey} />}
     </div>
   )
 }
@@ -98,7 +104,10 @@ const DetRow = memo(function DetRow({ det, index, name, checks, state, f, t, lan
       </div>
       <span ref={chip} className="dk-ab-det-s">
         {state === 'done' && f ? (
-          <StatusChip label={t.levels[f.level] ?? f.level} tone={LEVEL_TONE[f.level]} />
+          <>
+            <StatusChip label={t.levels[f.level] ?? f.level} tone={LEVEL_TONE[f.level]} />
+            {f.level !== 'lolos' && <small className="dk-ab-det-w dk-num">{t.weight(Math.round(weightOf(f) * 100))}</small>}
+          </>
         ) : state === 'scan' ? (
           <span className="dk-ab-det-st is-scan">{t.scanning}</span>
         ) : state === 'wait' ? (
@@ -109,18 +118,31 @@ const DetRow = memo(function DetRow({ det, index, name, checks, state, f, t, lan
   )
 })
 
-function AuditTrail({ id, lang }: { id: string; lang: Lang }) {
+/** who acted (role, system or AI) — an audit trail without the actor is not one */
+function actorOf(a: AuditEntry, t: Strings, role: RoleKey): string {
+  if (a.type === 'procurement.flagged') return a.source === 'clock' ? t.actor.auto! : t.actor.system!
+  if (a.type === 'procurement.recommended') return t.actor[role]!
+  if (a.type === 'flood.alert' || a.type === 'procurement.created' || a.origin === 'siaga-wilayah') return t.actor.siaga!
+  return t.actor.other!
+}
+
+function AuditTrail({ id, lang, roleKey }: { id: string; lang: Lang; roleKey: RoleKey }) {
+  const { t } = useT()
   const rowsA = useWorld((s) => auditFor(s, id))
+  const p = useWorld(sel(id))
   const items = useMemo<TimelineItem[]>(
     () =>
       rowsA.slice(-8).reverse().map((a) => ({
         id: a.id,
         time: hhmm(a.at),
-        title: a.summary[lang],
-        source: a.source,
+        title:
+          a.type === 'procurement.recommended' && p?.recommendation
+            ? `${t.trailRecommended[roleKey]} · ${roleKey === 'inspektorat' ? t.trailReview(rpFull(p.recommendation.hpsCorrected, lang)) : t.trailHps(rpFull(p.hps, lang), rpFull(p.recommendation.hpsCorrected, lang))}`
+            : a.summary[lang],
+        source: actorOf(a, t, roleKey),
         tone: a.type === 'procurement.flagged' ? 'danger' : a.type === 'procurement.recommended' ? 'done' : 'neutral',
       })),
-    [rowsA, lang],
+    [rowsA, lang, t, roleKey, p],
   )
   if (!items.length) return null
   return (

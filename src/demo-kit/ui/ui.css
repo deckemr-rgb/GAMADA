@@ -433,6 +433,10 @@ button.dk-chip:hover {
   background: var(--dk-accent-12);
   color: var(--dk-text);
 }
+button.dk-chip[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .dk-chip--accent {
   border-color: var(--dk-line-act);
   color: var(--dk-text);
@@ -972,6 +976,14 @@ button.dk-chip:hover {
 .dk-kpi-tag:empty {
   display: none;
 }
+.dk-kpi-tag[data-tone='bad'] {
+  background: var(--dk-danger-12);
+  color: var(--dk-danger-ink);
+}
+.dk-kpi-tag[data-tone='good'] {
+  background: color-mix(in srgb, var(--dk-pos) 14%, transparent);
+  color: var(--dk-pos);
+}
 .dk-kpi.is-wrap .dk-kpi-label {
   overflow: visible;
   white-space: normal;
@@ -989,6 +1001,12 @@ button.dk-chip:hover {
   display: inline-flex;
   margin-bottom: 4px;
   color: var(--dk-accent);
+}
+/* a Sparkline sizes itself from its box (ResizeObserver): give it whatever room is left beside the number */
+.dk-kpi-spark > .dk-viz-micro {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
 }
 .dk-kpi-target {
   display: grid;
@@ -1904,6 +1922,35 @@ button.dk-chip:hover {
   right: 16px;
   top: calc(var(--nav-h, 64px) + 16px);
 }
+/* the "+n" marker for toasts hidden behind the newest one (phones only) */
+.dk-toasts-more {
+  display: none;
+}
+/* phones: bottom, above the home indicator; only the newest toast (+n marker); held (hidden, timers paused) while a Modal / Drawer
+   is open, so it never covers a sheet's title, close button or footer actions */
+@media (max-width: 767px) {
+  .dk-toasts--bottom-left,
+  .dk-toasts--bottom-right {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .dk-toasts > .dk-toast:nth-last-child(n + 2) {
+    display: none;
+  }
+  .dk-toasts-more {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 2px 8px;
+    border: 1px solid var(--dk-line-2);
+    border-radius: 999px;
+    background: var(--dk-s2);
+    color: var(--dk-muted);
+    font: 600 var(--dk-t12) var(--dk-font);
+    pointer-events: none;
+  }
+  .dk-toasts.is-held {
+    visibility: hidden;
+  }
+}
 .dk-toast {
   position: relative;
   display: flex;
@@ -1982,6 +2029,16 @@ button.dk-toast-main:focus-visible {
 .dk-toast-body {
   color: var(--dk-muted);
   font: 400 var(--dk-t12) var(--dk-font);
+}
+/* phones: a compact toast (body at most 3 lines on screen; screen readers still get the whole text) */
+@media (max-width: 767px) {
+  .dk-toast-body {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+  }
 }
 .dk-toast-go {
   margin-top: 4px;
@@ -2195,9 +2252,14 @@ button.dk-toast-main:focus-visible {
   .dk-input.dk-input,
   .dk-select.dk-select,
   .dk-table-sort .dk-select {
-    height: var(--dk-target);
+    /* + the 1 px border on each side: the inner input / select itself is the full 44 px */
+    height: calc(var(--dk-target) + 2px);
   }
   .dk-tab {
+    height: var(--dk-target);
+  }
+  /* toggle chips (filters) are real controls: a full 44 px, not only a 44 px hit area */
+  button.dk-chip[aria-pressed] {
     height: var(--dk-target);
   }
   .dk-menu-item {
@@ -2260,4 +2322,14 @@ button.dk-toast-main:focus-visible {
 .dk-table--panel.is-cards .dk-table-more {
   width: 100%;
   margin: 8px 0 0;
+}
+
+/* screen-reader-only text (e.g. what a tab badge counts) */
+.dk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

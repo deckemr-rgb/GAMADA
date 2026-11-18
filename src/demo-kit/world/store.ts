@@ -12,7 +12,7 @@ import type { EventMap, EventSource, EventType, TableKey, WorldEvent, WorldState
 import type { ProductSlug } from '../../content/products'
 import { createEvent } from './events'
 import { clock } from './clock'
-import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, type Persisted } from './persist'
+import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted } from './persist'
 import { TABLE_KEYS, WORLD, emptyTable } from './util'
 import type { Seq } from './ids'
 
@@ -141,7 +141,9 @@ function flush() {
         }
       }
     }
-    schedulePersist(snapshot)
+    // a batch that holds a visitor's own action (not the clock's background) is saved almost at once: a link click to
+    // another product right after a bulk run used to lose it (the pagehide save does not finish before navigation)
+    schedulePersist(snapshot, r.processed.some((e) => e.source !== 'clock' && !e.depth) ? PERSIST_USER_MS : undefined)
   }
   if (!queue.length && !scheduled) {
     const w = idleWaiters

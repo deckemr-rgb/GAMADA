@@ -24,6 +24,17 @@
 .dk-wave-played rect {
   fill: var(--dk-accent);
 }
+/* the played overlay: a clip box slid by transform (Waveform.tsx setPlayed), never a per-frame repaint */
+.dk-wave-clip,
+.dk-wave-clip-in {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.dk-wave-clip {
+  overflow: hidden;
+}
 .dk-wave.is-seek {
   cursor: pointer;
   border-radius: 6px;

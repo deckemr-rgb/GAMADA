@@ -83,6 +83,34 @@ const LBL = { fs: 11, cw: 0.62, cwBold: 0.68, gap: 5 }
 type LBox = { x0: number; y0: number; x1: number; y1: number }
 const lboxHit = (a: LBox, b: LBox) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 const lboxCircle = (b: LBox, x: number, y: number, r: number) => Math.hypot(Math.max(b.x0, Math.min(x, b.x1)) - x, Math.max(b.y0, Math.min(y, b.y1)) - y) < r
+/** does the segment (ax,ay)–(bx,by) cross the box (Liang–Barsky clip)? */
+function lboxSeg(b: LBox, ax: number, ay: number, bx: number, by: number): boolean {
+  let t0 = 0
+  let t1 = 1
+  const dx = bx - ax
+  const dy = by - ay
+  const edges: [number, number][] = [
+    [-dx, ax - b.x0],
+    [dx, b.x1 - ax],
+    [-dy, ay - b.y0],
+    [dy, b.y1 - ay],
+  ]
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false
+      continue
+    }
+    const r = q / p
+    if (p < 0) {
+      if (r > t1) return false
+      if (r > t0) t0 = r
+    } else {
+      if (r < t0) return false
+      if (r < t1) t1 = r
+    }
+  }
+  return t0 <= t1
+}
 
 const edgeKey = (e: NetEdge, i: number) => e.id ?? `${e.source}->${e.target}#${i}`
 const CL = (id: string) => `cluster:${id}`
@@ -91,6 +119,8 @@ export function NetworkGraph(props: NetworkProps) {
   const { nodes, edges, clusters = [], onEdgeSelect, onNodeSelect, onClusterToggle } = props
   const { s } = useVizLang()
   const mode = vizMode()
+  /* touch: every node gets an invisible hit circle of at least 22 px radius (44 px target) */
+  const coarse = useMemo(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches, [])
   const wrapRef = useRef<HTMLDivElement>(null)
   const { w } = useSize(wrapRef)
   useRevealDom(wrapRef)
@@ -207,7 +237,7 @@ export function NetworkGraph(props: NetworkProps) {
         { x: 0, y: g + th - 2, a: 'middle', box: { x0: n.x - tw / 2, y0: n.y + g, x1: n.x + tw / 2, y1: n.y + g + th } },
       ]
       if (prefLeft) sides.unshift(sides.splice(1, 1)[0]!)
-      const fit = sides.find(
+      const free = sides.filter(
         (c) =>
           c.box.x0 >= 2 &&
           c.box.x1 <= W - 2 &&
@@ -216,6 +246,22 @@ export function NetworkGraph(props: NetworkProps) {
           taken.every((t) => !lboxHit(c.box, t)) &&
           sim.nodes.every((o) => o === n || !lboxCircle(c.box, o.x, o.y, o.r + 2)),
       )
+      // among the free spots, the one crossed by the fewest edges (ties keep the side order above)
+      const crossings = (b: LBox) => {
+        let k = 0
+        for (const l of sim.links) if (lboxSeg(b, l.s.x, l.s.y, l.t.x, l.t.y)) k++
+        return k
+      }
+      let fit: (typeof sides)[number] | undefined
+      let best = Infinity
+      for (const c of free) {
+        const k = crossings(c.box)
+        if (k < best) {
+          best = k
+          fit = c
+          if (k === 0) break
+        }
+      }
       const use = fit ?? (keep.has(n.id) || meta.count !== undefined ? sides[0]! : null)
       if (use) {
         taken.push(use.box)
@@ -529,6 +575,7 @@ export function NetworkGraph(props: NetworkProps) {
                   onKeyDown={(e) => onNodeKey(e, n)}
                   onFocus={() => setAnnounce('')}
                 >
+                  {coarse && <circle r={Math.max(22, n.r + 4)} className="is-hit" />}
                   <circle r={n.r + 4} className="is-ring" />
                   <circle r={n.r} className="is-body" style={{ fill, fillOpacity: isCluster ? 0.9 : 1 }} />
                   {isCluster && (

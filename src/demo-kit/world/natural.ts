@@ -46,34 +46,96 @@ export function useNaturalEvents(): boolean {
   )
 }
 
-// One listener for the whole app: every minute the running clock crosses.
+// One queue for the whole app: every minute the running clock crosses, and the minutes a forward jump skips.
+// `mark` = the last minute whose natural events were emitted: a minute is never emitted twice, so setting the clock
+// back and running it again (Back, a rewind) cannot duplicate complaints under new ids. A world (re)install moves
+// the mark to the clock it installs with.
 let gen: typeof import('./natural-gen') | null = null
 let loading = false
-let pending: number[] = []
+let mark = clock.get().minutes
+const queue: number[] = []
+let pumping = false
+/** jumps replay at most this many minutes per idle slice */
+const SLICE = 60
+
 function run(g: typeof import('./natural-gen'), minute: number) {
+  if (minute <= mark) return
+  mark = minute
   for (const o of g.naturalEventsAt(world.get(), minute)) emit(o.type, o.payload as never, o.source, { at: minute, ...(o.origin ? { origin: o.origin } : {}) })
 }
-/** @internal the clock listener (exported for the self-test, which cannot drive gsap.ticker) */
-export function _onNaturalMinute(minute: number): void {
-  if (!enabled || world.status() !== 'ready') return
-  if (gen) return run(gen, minute)
-  pending.push(minute)
+const idle = (fn: () => void) => {
+  const w = globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+  if (w.requestIdleCallback) w.requestIdleCallback(fn, { timeout: 120 })
+  else setTimeout(fn, 0)
+}
+const replaySubs = new Set<() => void>()
+/** minutes still to replay after a jump (0 = caught up); for a "memutar kejadian…" hint */
+export const naturalBacklog = (): number => queue.length
+export function onNaturalBacklog(fn: () => void): () => void {
+  replaySubs.add(fn)
+  return () => replaySubs.delete(fn)
+}
+function pump() {
+  if (!gen) return
+  const g = gen
+  const now = clock.get().minutes
+  let n = 0
+  while (queue.length && n < SLICE) {
+    const m = queue.shift()!
+    // never minutes the clock was since set back past (e.g. a reset)
+    if (enabled && world.status() === 'ready' && m <= now) run(g, m)
+    n++
+  }
+  for (const fn of [...replaySubs]) fn()
+  if (queue.length) idle(pump)
+  else pumping = false
+}
+function load() {
   if (loading) return
   loading = true
   import('./natural-gen').then(
     (m) => {
       gen = m
-      const due = pending
-      pending = []
-      // replay the minutes crossed meanwhile (not ones the clock was since set back past, e.g. a world reset)
-      const now = clock.get().minutes
-      for (const x of due) if (enabled && world.status() === 'ready' && x <= now) run(m, x)
+      if (!pumping && queue.length) {
+        pumping = true
+        pump()
+      }
     },
     (err: unknown) => {
       loading = false
-      pending = []
+      queue.length = 0
       console.error('[world] natural events failed to load', err)
     },
   )
 }
+/** @internal the clock listener (exported for the self-test, which cannot drive gsap.ticker) */
+export function _onNaturalMinute(minute: number): void {
+  if (!enabled || world.status() !== 'ready' || minute <= mark) return
+  if (gen && !queue.length) return run(gen, minute)
+  queue.push(minute)
+  if (!gen) return load()
+  if (!pumping) {
+    pumping = true
+    idle(pump)
+  }
+}
+function onJump(from: number, to: number) {
+  if (!enabled || world.status() !== 'ready') return
+  const start = Math.max(from, mark) + 1
+  if (start > to) return
+  const last = queue.length ? queue[queue.length - 1]! : -Infinity
+  for (let m = Math.max(start, last + 1); m <= to; m++) queue.push(m)
+  for (const fn of [...replaySubs]) fn()
+  if (!gen) return load()
+  if (!pumping) {
+    pumping = true
+    idle(pump)
+  }
+}
 clock.onMinute(_onNaturalMinute)
+clock.onJump(onJump)
+clock.onReset((minutes) => {
+  mark = minutes
+  queue.length = 0
+  for (const fn of [...replaySubs]) fn()
+})

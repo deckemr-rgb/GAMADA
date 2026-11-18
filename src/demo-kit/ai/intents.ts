@@ -122,7 +122,7 @@ export function normalize(text: string): string {
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
-    .replace(/([a-z]+)-/g, '$1') // reduplication: bolong-bolong → bolong
+    .replace(/\b([a-z]+)-\1\b/g, '$1') // reduplication: bolong-bolong → bolong
     .replace(/[^a-z0-9\s]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

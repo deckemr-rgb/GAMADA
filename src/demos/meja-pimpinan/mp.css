@@ -212,6 +212,23 @@
   box-shadow: var(--dk-e2);
 }
 
+/* handled: the clarification is ordered; amber, quieter, no second "order" button */
+.dk-mp-hoax.is-handled,
+.dk-mp-hoax.is-overlay.is-handled {
+  border-color: color-mix(in srgb, var(--dk-warn) 55%, transparent);
+  background: color-mix(in srgb, var(--dk-warn) 12%, var(--dk-s1));
+}
+.dk-mp-hoax.is-handled .dk-mp-hoax-ic {
+  background: var(--dk-warn);
+  color: var(--dk-bg, #111);
+}
+.dk-mp-hoax.is-handled .dk-mp-hoax-t strong {
+  color: var(--dk-warn-ink);
+}
+.dk-mp-kpis .dk-kpi.is-warn .dk-kpi-cap {
+  color: var(--dk-warn-ink);
+}
+
 /* ------------------------------------------------------------------ KPIs */
 .dk-mp-kpis {
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -220,20 +237,7 @@
   padding: 10px 14px;
   container-type: inline-size;
 }
-.dk-mp-kpis .dk-kpi-val {
-  flex: none;
-}
-.dk-mp-kpis .dk-kpi-spark {
-  flex: 0 1 120px;
-  min-width: 0;
-  overflow: hidden;
-}
-/* the sparkline sizes itself to its box (ResizeObserver): let the box be whatever room is left beside the number */
-.dk-mp-kpis .dk-kpi-spark > .dk-viz-micro {
-  flex: 1 1 0;
-  width: 100%;
-  min-width: 0;
-}
+/* the kit sizes the spark beside the number; it does not make .dk-kpi a container, so the narrow-tile hide is ours */
 @container (max-width: 160px) {
   .dk-mp-kpis .dk-kpi-spark {
     display: none;
@@ -253,9 +257,11 @@
   color: var(--dk-warn-ink);
 }
 .dk-mp-kpis .dk-kpi-cap {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
 }
 .dk-mp-na {
   color: var(--dk-faint);
@@ -373,11 +379,45 @@
 .dk-mp-mapover > .dk-mp-hoax {
   align-self: stretch;
 }
+/* the AI insight is a compact card in the map's top-left corner (≈ 270 × 80 px), so the region stays readable */
 .dk-mp-insight {
-  max-width: min(300px, 100%);
+  position: relative;
+  max-width: min(272px, 100%);
 }
 .dk-mp-insight .dk-insight {
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 6px 34px 6px 10px;
+}
+.dk-mp-insight .dk-insight-ic {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.dk-mp-insight .dk-insight-ic .dk-icon {
+  width: 13px;
+  height: 13px;
+}
+.dk-mp-insight .dk-insight-title {
+  margin: 0;
+  font-size: 10px;
+  line-height: 14px;
+}
+.dk-mp-insight .dk-insight-text {
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.dk-mp-insight .dk-insight-act {
+  margin: 2px 0 0 -8px;
+}
+.dk-mp-insight .dk-insight-act .dk-btn {
+  min-height: 28px;
+  padding-inline: 8px;
+}
+.dk-mp-insight-x.dk-ibtn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
 }
 .dk-mp-tipchip {
   display: inline-flex;
@@ -399,8 +439,6 @@
   margin: 0;
   background: rgba(26, 22, 56, 0.95);
   box-shadow: var(--dk-e2);
-  font-size: 12px;
-  line-height: 17px;
 }
 .dk-mp-ramp {
   position: absolute;
@@ -605,6 +643,51 @@
 .dk-mp-asm li > .dk-icon {
   color: var(--dk-accent);
 }
+/* empty briefing: what it would gather right now, one row per source product (follows the world) */
+.dk-mp-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  color: var(--dk-text);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-mp-ready-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dk-accent);
+  box-shadow: 0 0 0 3px var(--dk-accent-12);
+}
+.dk-mp-srcs.is-ready {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 6px;
+  width: 100%;
+}
+.dk-mp-srcs.is-ready li {
+  display: flex;
+  min-width: 0;
+  padding: 6px 10px 6px 8px;
+  border-radius: var(--dk-r-input);
+  background: var(--dk-s2);
+}
+.dk-mp-srcs-n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dk-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-mp-srcs-c {
+  flex: none;
+  color: var(--dk-accent);
+}
+.dk-mp-empty > .dk-mp-empty-cta {
+  justify-self: stretch;
+  margin-top: 4px;
+}
 .dk-mp-asm {
   display: grid;
   gap: 10px;
@@ -685,21 +768,42 @@
 }
 
 /* ------------------------------------------------------------------ leaderboard */
+.dk-mp-lb {
+  container: dk-mp-lb / inline-size;
+}
 .dk-mp-lb-keys,
 .dk-mp-lb-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 48px 28px 40px 34px 34px;
+  grid-template-columns: 22px minmax(0, 1fr) 48px 28px 42px 40px 40px;
   align-items: center;
   gap: 6px;
 }
 .dk-mp-lb-keys {
   flex: none;
+  align-items: end;
   margin: 0;
   padding: 6px 20px 2px 14px;
   color: var(--dk-faint);
-  font: 600 10px/14px var(--dk-font);
-  letter-spacing: 0.04em;
+  font: 600 10px/12px var(--dk-font);
+  letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+.dk-mp-lb-na {
+  grid-column: 3 / 5;
+  overflow: hidden;
+  color: var(--dk-faint);
+  font-size: 10.5px;
+  font-style: italic;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-mp-lb-rule {
+  flex: none;
+  margin: 0;
+  padding: 4px 14px 8px;
+  color: var(--dk-muted);
+  font: 400 10.5px/14px var(--dk-font);
 }
 .dk-mp-lb-keys span:first-child {
   grid-column: 1 / 3;
@@ -718,6 +822,12 @@
   gap: 1px;
   padding-top: 2px;
   list-style: none;
+}
+.dk-mp-lb-n {
+  margin-left: 6px;
+  color: var(--dk-faint);
+  font: 500 10px/1 var(--dk-font);
+  white-space: nowrap;
 }
 .dk-mp-lb-row {
   width: 100%;
@@ -792,6 +902,28 @@
   color: var(--dk-danger-ink);
   font-weight: 700;
 }
+/* a narrow panel (the stacked desktop layout beside the open guide): no score bar, so the agency names fit */
+@container dk-mp-lb (max-width: 400px) {
+  .dk-mp:not(.is-phone) .dk-mp-lb-bar {
+    display: none;
+  }
+  .dk-mp:not(.is-phone) .dk-mp-lb-row,
+  .dk-mp:not(.is-phone) .dk-mp-lb-keys {
+    grid-template-columns: 22px minmax(0, 1fr) 30px 42px 40px 40px;
+  }
+  .dk-mp:not(.is-phone) .dk-mp-lb-keys span:nth-child(2),
+  .dk-mp:not(.is-phone) .dk-mp-lb-na {
+    grid-column: 3 / 4;
+  }
+  .dk-mp:not(.is-phone) .dk-mp-lb-na {
+    font-size: 0;
+  }
+  .dk-mp:not(.is-phone) .dk-mp-lb-na::before {
+    content: '–';
+    font-size: 12px;
+    font-style: normal;
+  }
+}
 
 /* ------------------------------------------------------------------ events */
 .dk-mp-ev .dk-tl {
@@ -808,6 +940,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* wall screen on a smaller desktop (≈ 1280 px): when the example questions would be cut at the cell's bottom edge,
+   the one-line hint gives its room to them (the placeholder and the chips say the same) */
+.dk-mp-screen.is-wall .dk-mp-ask:not(.is-active) > .dk-mp-pb {
+  container: dk-mp-askb / size;
+}
+@container dk-mp-askb (max-height: 110px) {
+  .dk-mp-pb > .dk-mp-meta:has(+ .dk-mp-chips) {
+    display: none;
+  }
 }
 .dk-mp-qchip {
   min-height: 28px;
@@ -1385,6 +1527,63 @@
   color: var(--dk-faint);
   font: 600 clamp(14px, 1.1vw, 18px) / 1.3 var(--dk-font);
 }
+/* the trend fills the tile's lower part (the tiles stretch to the screen height) */
+.dk-mp-mm-kpis li {
+  grid-template-rows: auto auto auto 1fr;
+}
+.dk-mp-mm-kpis .dk-mp-mm-spark {
+  align-self: end;
+  width: 100%;
+  min-width: 0;
+}
+.dk-mp-mm-late {
+  display: grid;
+  gap: 6px;
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-mp-mm-kpis .dk-mp-mm-late li {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  display: grid;
+  grid-template-columns: minmax(0, 9em) minmax(0, 1fr) 2em;
+  align-items: center;
+  gap: 10px;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t13) var(--dk-font);
+}
+.dk-mp-mm-kpis .dk-mp-mm-late em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-mp-mm-kpis .dk-mp-mm-late li > span {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--dk-line-2);
+}
+.dk-mp-mm-late li > span > span {
+  display: block;
+  height: 100%;
+  background: var(--dk-warn);
+  transform-origin: left center;
+}
+.dk-mp-mm-late b {
+  color: var(--dk-text);
+  font-weight: 600;
+  text-align: right;
+}
+.dk-mp-mm-kpis li.is-warn strong {
+  color: var(--dk-warn-ink);
+}
+.dk-mp-mm-kpis li.is-danger strong {
+  color: var(--dk-danger-ink);
+}
 .dk-mp-mm-brief,
 .dk-mp-mm-opd,
 .dk-mp-mm-ev {
@@ -1572,22 +1771,6 @@
 .dk-mp.is-phone .dk-mp-actions .dk-btn--primary {
   flex: 1 1 100%;
 }
-/* phones: the start hotspot anchors its label 18 px below the target's top edge, which would cover the label of a
-   48 px full-width button; the anchor box therefore starts 14 px above the button's bottom edge (the button hangs
-   up out of it) so the hint lands just under the button, in the gap before the KPIs */
-.dk-mp-cta {
-  position: relative;
-  flex: 1 1 100%;
-  height: 14px;
-  margin: 34px 0 20px;
-}
-.dk-mp-cta > .dk-btn {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 48px;
-}
 .dk-mp.is-phone .dk-mp-hoax {
   flex-wrap: wrap;
   align-items: flex-start;
@@ -1638,7 +1821,7 @@
 }
 .dk-mp.is-phone .dk-mp-lb-row,
 .dk-mp.is-phone .dk-mp-lb-keys {
-  grid-template-columns: 22px minmax(0, 1fr) 40px 30px 40px 32px 32px;
+  grid-template-columns: 22px minmax(0, 1fr) 36px 28px 42px 40px 40px;
 }
 .dk-mp.is-phone .dk-mp-lb-keys {
   padding: 6px 18px 2px 14px;
@@ -1663,7 +1846,16 @@
   min-height: var(--dk-target, 44px);
 }
 .dk-mp.is-phone .dk-mp-insight .dk-insight {
-  font-size: 12px;
+  padding-right: 48px;
+}
+.dk-mp.is-phone .dk-mp-insight .dk-insight-act .dk-btn,
+.dk-mp.is-phone .dk-mp-insight-x.dk-ibtn {
+  min-width: var(--dk-target, 44px);
+  min-height: var(--dk-target, 44px);
+}
+.dk-mp.is-phone .dk-mp-insight-x.dk-ibtn {
+  top: 0;
+  right: 0;
 }
 @media (max-width: 400px) {
   /* no score bar: 6 columns, and the "score" key moves onto the score column (it spans bar + score on wider rows) */
@@ -1672,10 +1864,19 @@
   }
   .dk-mp.is-phone .dk-mp-lb-row,
   .dk-mp.is-phone .dk-mp-lb-keys {
-    grid-template-columns: 22px minmax(0, 1fr) 30px 40px 32px 32px;
+    grid-template-columns: 22px minmax(0, 1fr) 30px 40px 40px 40px;
   }
-  .dk-mp.is-phone .dk-mp-lb-keys span:nth-child(2) {
+  .dk-mp.is-phone .dk-mp-lb-keys span:nth-child(2),
+  .dk-mp.is-phone .dk-mp-lb-na {
     grid-column: 3 / 4;
+  }
+  .dk-mp.is-phone .dk-mp-lb-na {
+    font-size: 0;
+  }
+  .dk-mp.is-phone .dk-mp-lb-na::before {
+    content: '–';
+    font-size: 12px;
+    font-style: normal;
   }
 }
 
@@ -1800,15 +2001,168 @@ html[data-dk-calm] .dk-mp-asm-ok {
   top: 4px;
   right: 4px;
 }
-/* desktop start hint: the anchor box starts 14 px above the button's bottom edge (the button hangs up out of it), so
-   the kit hotspot label, placed 16 px under the anchor's top, lands just under the button in the empty panel */
-.dk-mp-cta--panel {
-  display: grid;
-  width: max-content;
-  height: 14px;
-  margin: 26px 0 30px;
+
+/* wall screen: the empty briefing fits its cell without scrolling (the per-source rows say what the body text says),
+   so the start button and its hint stay in view */
+.dk-mp-screen.is-wall .dk-mp-empty {
+  gap: 8px;
+  padding-block: 2px 0;
 }
-.dk-mp-cta--panel > .dk-btn {
-  height: 40px;
-  margin-top: -26px;
+.dk-mp-screen.is-wall .dk-mp-empty-b {
+  display: none;
+}
+.dk-mp-screen.is-wall .dk-mp-empty-t {
+  font-size: 18px;
+}
+.dk-mp-screen.is-wall .dk-mp-srcs.is-ready li {
+  padding-block: 4px;
+}
+
+/* phones: room under the full-width compose button for the kit's start hint (it hangs 6 px under the button), so the
+   hint never covers the first KPI labels */
+.dk-mp-phone .dk-mp-head {
+  margin-bottom: 18px;
+}
+
+/* ------------------------------------------------------------------ wow-audit round 1 */
+/* the world clock chip in the eyebrow: "Langsung ×10" while it runs, "Jam dijeda" + play while paused */
+.dk-mp-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--dk-accent) 55%, transparent);
+  border-radius: var(--dk-r-pill);
+  background: none;
+  color: var(--dk-accent);
+  font: 600 11px/16px var(--dk-font);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.dk-mp-skip:hover {
+  background: color-mix(in srgb, var(--dk-accent) 12%, transparent);
+}
+.dk-mp-skip:focus-visible {
+  outline: none;
+  box-shadow: var(--dk-focus);
+}
+@media (pointer: coarse) {
+  .dk-mp-skip {
+    min-height: 44px;
+  }
+}
+.dk-mp-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.dk-mp-paused {
+  padding: 1px 8px;
+  border: 1px solid var(--dk-line-2);
+  border-radius: var(--dk-r-pill);
+  color: var(--dk-muted);
+  font: 600 11px/16px var(--dk-font);
+}
+/* first open of a lazy dialog: an immediate, quiet frame while its code arrives */
+.dk-mp-dlgwait {
+  position: fixed;
+  inset: 0;
+  z-index: var(--dk-z-overlay);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--dk-bg) 55%, transparent);
+}
+.dk-mp-dlgwait > * {
+  padding: 12px 18px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--dk-r-card);
+  background: var(--dk-s1);
+  box-shadow: var(--dk-e2);
+}
+/* "Instruksikan …" follow-ups open a draft: marked as an action */
+.dk-mp-qchip.is-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: color-mix(in srgb, var(--dk-accent) 55%, transparent);
+  color: var(--dk-accent);
+  font-weight: 600;
+}
+/* answer charts: the previous period as a visible outline around its full length (the kit ghost bar sits behind the
+   current bar and was nearly invisible); its legend swatch matches */
+.dk-mp-qbar .dk-viz-bar.is-ghost {
+  fill: none !important;
+  stroke: var(--dk-text);
+  stroke-dasharray: 3 2;
+  stroke-opacity: 0.75;
+  stroke-width: 1.25;
+}
+.dk-mp-qbar .dk-viz-legend li:nth-child(2) .dk-viz-key {
+  background: none;
+  outline: 1.25px dashed var(--dk-text);
+  outline-offset: -1px;
+}
+/* answer charts: the folded rest as one line under the bars */
+.dk-mp-qrest {
+  margin: 4px 0 0;
+  color: var(--dk-muted);
+  font: 500 var(--dk-t12) var(--dk-font);
+}
+/* the instruction dialog: who it goes to, in words, next to the deadline */
+.dk-mp-sendto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dk-muted);
+  font: 600 var(--dk-t12) var(--dk-font);
+}
+.dk-mp-opds .dk-chip[aria-pressed='true'] {
+  border-color: var(--dk-accent);
+  background: var(--dk-accent);
+  color: var(--dk-on-accent);
+}
+.dk-mp-linkbtn.is-big {
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--dk-line-2);
+}
+@media (pointer: coarse) {
+  .dk-mp-opds .dk-chip,
+  .dk-mp-ideas .dk-mp-idea,
+  .dk-mp-linkbtn {
+    min-height: 44px;
+  }
+  .dk-mp-opds .dk-mp-chips {
+    gap: 8px;
+  }
+}
+/* phones: the AI insight as a strip above the map */
+.dk-mp-insight-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--dk-line);
+  border-radius: 10px;
+  background: var(--dk-s1);
+  color: var(--dk-accent);
+}
+.dk-mp-insight-strip p {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--dk-text);
+  font: 500 12px/16px var(--dk-font);
+}
+.dk-mp-insight-strip .dk-btn {
+  flex: none;
+  min-height: 44px;
 }

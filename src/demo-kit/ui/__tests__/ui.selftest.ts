@@ -110,7 +110,7 @@ const cases: [number, 'id' | 'en', boolean, string, string][] = [
   [0, 'id', true, 'Tuntas', 'done'],
   [7 * 60 + 59, 'en', false, '8 h left', 'warn'],
   [-30, 'en', false, '30 min late', 'late'],
-  [3 * 24 * 60, 'id', false, '3 hr lagi', 'ok'],
+  [3 * 24 * 60, 'id', false, '3 hari lagi', 'ok'],
 ]
 for (const [m, l, d, text, tone] of cases) {
   const r = formatSla(m, l, d)

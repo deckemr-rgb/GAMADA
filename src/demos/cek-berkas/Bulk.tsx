@@ -8,27 +8,28 @@
  * (lazy ZoneMap). The finished run emits one `document.verified` per file in one go (the world processes them as one
  * batch) and keeps that batch on screen: a later zone change marks the result stale until it is run again.
  */
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { lazy, memo, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { gsap } from 'gsap'
 import { useShell } from '../../demo-kit/shell'
 import { Button, Drawer, Icon, LoadingText, motionMode } from '../../demo-kit/ui'
-import { activeAlerts, emit, rows, useWorld, world, type WorldState } from '../../demo-kit/world'
-import { bansosBatch, bansosCsv, type BansosBatch, type BansosRow } from '../../demo-kit/world/satu-daerah'
+import { clock, emit, hhmm, rows, useWorld, world, type WorldState } from '../../demo-kit/world'
 import { useI18n, type Lang } from '../../lib/i18n'
-import { bulkLog, bulkProcessed, CEK, maskNik, STATUS_OF, summarize, zoneKey, type BulkResult, type CekRole } from './model'
+import { bulkLog, saveWorldSoon, CEK, maskNik, nikTail, pad2, STATUS_OF, summarize, zoneKey, type BulkFile, type BulkResult, type CekBatch, type CekRole, type CekRow, type Finding, type ZoneSource } from './model'
+import { cekBatch, cekBatchFor, cekCsv } from './batch'
 import { STR, type CekStrings } from './strings'
 
 const ZoneMap = lazy(() => import('./ZoneMap').then((m) => ({ default: memo(m.default) })))
 
 type Phase = 'idle' | 'running' | 'done'
 type Filter = 'all' | BulkResult
-type Source = 'program' | 'alert' | 'scenario'
 type CardState = 'done' | 'scan' | 'queued'
 
-const batchOf = (s: WorldState): BansosBatch => bansosBatch(s)
-const zoneSource = (s: WorldState): Source =>
-  rows(s.programs).some((p) => p.open && p.kind === 'bansos-banjir') ? 'program' : activeAlerts(s).some((a) => a.kind === 'banjir') ? 'alert' : 'scenario'
+const batchOf = (s: WorldState): CekBatch => cekBatch(s)
+const programOpen = (s: WorldState): boolean => rows(s.programs).some((p) => p.open && p.kind === 'bansos-banjir')
 const kecList = (s: WorldState) => s.region.kecamatan
+/** a file matches a chip when it carries that finding (lolos = no finding) */
+const matches = (r: CekRow, f: Filter) => f === 'all' || (f === 'lolos' ? r.findings.length === 0 : r.findings.includes(f as Finding))
+const narrowNow = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
 
 const RESULT_ICON: Record<BulkResult, 'check' | 'info' | 'link' | 'pin'> = { lolos: 'check', kurang: 'info', ganda: 'link', 'luar-zona': 'pin' }
 
@@ -40,15 +41,25 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
   const t = STR[lang]
   const shell = useShell()
   const live = useWorld(batchOf)
-  const liveSource = useWorld(zoneSource)
+  const open = useWorld(programOpen)
   const kec = useWorld(kecList)
-  const processed = useWorld(bulkProcessed)
-  // the batch the last run used and emitted: what the grid, chips, map and AI show until the next run
-  const [ran, setRan] = useState<{ batch: BansosBatch; source: Source } | null>(() => (processed ? { batch: live, source: liveSource } : null))
-  const [phase, setPhase] = useState<Phase>(() => (processed ? 'done' : 'idle'))
-  const [count, setCount] = useState(() => (processed ? live.rows.length : 0))
-  const [elapsed, setElapsed] = useState<number | null>(null)
+  // the batch the last run used and emitted: what the grid, chips, map and AI show until the next run. The session's
+  // last run comes back after a hop to another product (same zone it used; a newer warning marks it stale), so the
+  // screen, the KPI strip and the audit log keep telling the same story; a reset world starts idle.
+  const [init] = useState(() => {
+    const r = bulkLog.get()
+    if (!r) return null
+    const b = cekBatchFor(world.get(), r)
+    return b.rows.length === r.summary.total ? { batch: b, at: r.at, ms: r.ms } : null
+  })
+  const [ran, setRan] = useState<{ batch: CekBatch; at: number } | null>(init ? { batch: init.batch, at: init.at } : null)
+  const [phase, setPhase] = useState<Phase>(init ? 'done' : 'idle')
+  const [count, setCount] = useState(init ? init.batch.rows.length : 0)
+  const [elapsed, setElapsed] = useState<number | null>(init ? init.ms / 1000 : null)
+  const summaryRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  // the chip answers the tap at once; the 50-card grid restyles in a deferred render right after (INP)
+  const gridFilter = useDeferredValue(filter)
   const [detail, setDetail] = useState<string | null>(null)
   const tl = useRef<gsap.core.Timeline | null>(null)
   const t0 = useRef(0)
@@ -56,9 +67,11 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
   const desaName = useCallback((kid: string, did: string) => kec.find((k) => k.id === kid)?.desa.find((d) => d.id === did)?.name ?? '', [kec])
 
   const batch = phase === 'idle' || !ran ? live : ran.batch
-  const source = phase === 'idle' || !ran ? liveSource : ran.source
+  const source: ZoneSource = batch.source
+  // before any warning the 50 files are practice data (the programme does not exist yet)
+  const practice = source === 'scenario'
   const total = batch.rows.length
-  const stale = phase === 'done' && !!ran && zoneKey(ran.batch.zone) !== zoneKey(live.zone)
+  const stale = phase === 'done' && !!ran && (zoneKey(ran.batch.zone) !== zoneKey(live.zone) || ran.batch.source !== live.source)
 
   useEffect(() => () => void tl.current?.kill(), [])
   // the drawer is a portal: close it when the mode is switched away
@@ -67,15 +80,25 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
   }, [active])
 
   const finish = useCallback(
-    (b: BansosBatch) => {
+    (b: CekBatch, at: number) => {
       for (const r of b.rows) emit('document.verified', { documentId: r.doc.id, status: STATUS_OF[r.result], ...(r.missing ? { notes: r.missing } : {}) }, 'cek-berkas')
       const ms = performance.now() - t0.current
       const summary = summarize(b)
-      bulkLog.set({ summary, zone: b.zone, ms, manual: summary.ganda + summary.luarZona })
+      const files: Record<string, BulkFile> = {}
+      b.rows.forEach((r, i) => (files[r.doc.id] = { n: i + 1, name: r.doc.ownerName, findings: r.findings, pairNos: r.pairNos }))
+      bulkLog.set({ summary, zone: b.zone, warnZone: b.warnZone, source: b.source, at, ms, manual: summary.manual, files })
+      saveWorldSoon()
       setCount(b.rows.length)
       setPhase('done')
       setElapsed(ms / 1000)
       shell.markMission('bulk')
+      // the result leads: bring the chips + first cards into view when they sit below the fold (phones)
+      requestAnimationFrame(() => {
+        const el = summaryRef.current
+        if (!el) return
+        const r = el.getBoundingClientRect()
+        if (r.top > window.innerHeight * 0.55 || r.bottom < 0) el.scrollIntoView({ block: 'start', behavior: motionMode() === 'full' ? 'smooth' : 'auto' })
+      })
     },
     [shell],
   )
@@ -87,21 +110,21 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
     setDetail(null)
     t0.current = performance.now()
     afterPaint(() => {
-      const s = world.get()
-      const b = bansosBatch(s)
-      setRan({ batch: b, source: zoneSource(s) })
+      const b = cekBatch(world.get())
+      const at = clock.get().minutes
+      setRan({ batch: b, at })
       setFilter('all')
       setElapsed(null)
       setCount(0)
       const n = b.rows.length
       // reduced motion / ?off=demoAnimations / ?static=1: the final state at once
       if (motionMode() !== 'full' || n === 0) {
-        afterPaint(() => finish(b))
+        afterPaint(() => finish(b, at))
         return
       }
       const line = gsap.timeline()
       for (let i = 1; i <= n; i++) line.call(() => setCount(i), [], CEK.bulkLead + i * CEK.bulkStagger)
-      line.call(() => finish(b), [], CEK.bulkLead + n * CEK.bulkStagger + 0.25)
+      line.call(() => finish(b, at), [], CEK.bulkLead + n * CEK.bulkStagger + 0.25)
       tl.current = line
     })
   }, [finish])
@@ -118,7 +141,7 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
   const chipsLive = shownCount > 0
 
   const exportCsv = () => {
-    const csv = bansosCsv(batch, lang)
+    const csv = cekCsv(batch, { lang, at: hhmm(ran?.at ?? clock.get().minutes), role: t.roleName[role] ?? role, kecName, desaName, resultLabel: t.result, zoneLabel: sourceLabel })
     const blob = new Blob([String.fromCharCode(0xfeff), csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -128,8 +151,13 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
     a.click()
     a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
-    shell.markMission('export')
-    shell.toast({ title: t.exportCsv, body: t.csvSaved, tone: 'accent', icon: 'download' })
+    // the download starts inside the tap; the toast + guide tick come one paint later (INP)
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        shell.markMission('export')
+        shell.toast({ title: t.exportCsv, body: t.csvSaved, tone: 'accent', icon: 'download' })
+      }, 0),
+    )
   }
 
   const zoneNames = batch.zone.map(kecName)
@@ -140,14 +168,25 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
   const pick = (f: Filter) => {
     if (chipsLive) setFilter(f)
   }
-  const note = phase === 'running' ? t.runningNote(total) : phase === 'done' && elapsed !== null ? `${t.doneNote(fmtS(elapsed), total)} ${sum.gandaPairs > 0 ? t.dupLines : ''}` : sum.gandaPairs > 0 ? t.dupLines : ''
+  const firstPair = batch.duplicateGroups.find((g) => g.length > 1)
+  const pairEx = firstPair ? firstPair.map((id) => `#${pad2(batch.rows.findIndex((r) => r.doc.id === id) + 1)}`).join(' = ') : ''
+  const hasNamesake = batch.rows.some((r) => r.sameName.length > 0)
+  const note =
+    phase === 'running'
+      ? t.runningNote(total)
+      : phase === 'done'
+        ? `${elapsed !== null ? `${t.doneNote(fmtS(elapsed), total)} ` : ''}${t.multiNote}${sum.gandaPairs > 0 && pairEx ? ` ${t.dupLines(pairEx)}` : ''}${hasNamesake ? ` ${t.sameNameNote}` : ''}`
+        : ''
 
   return (
     <div className="dk-cb-bulk">
       <div className="dk-cb-bulk-head">
         <div>
-          <h3>{t.bulkTitle}</h3>
-          <p>{phase === 'done' ? t.bulkLeadDone(total) : t.bulkLead(total)}</p>
+          <h3>
+            {practice ? t.bulkTitlePractice(total) : t.bulkTitle}
+            {practice && <span className="dk-cb-tag">{t.simLabel}</span>}
+          </h3>
+          <p>{practice ? t.bulkLeadPractice(total) : phase === 'done' ? t.bulkLeadDone(total) : t.bulkLead(total)}</p>
           <p className="dk-cb-zone">
             <Icon name="map" size={14} />
             <span>
@@ -156,14 +195,15 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
           </p>
         </div>
         <div className="dk-cb-bulk-act">
-          <Button variant="primary" icon={phase === 'done' ? 'replay' : 'play'} onClick={run} busy={phase === 'running'} disabled={phase === 'running'} data-hotspot="cek-go">
-            {phase === 'running' ? t.running : phase === 'done' ? t.rerun : t.run(total)}
-          </Button>
+          {/* once done, the next step (export) leads; re-running is secondary */}
           {phase === 'done' && (
-            <Button variant="secondary" icon="download" onClick={exportCsv}>
+            <Button variant="primary" icon="download" onClick={exportCsv}>
               {t.exportCsv}
             </Button>
           )}
+          <Button variant={phase === 'done' ? 'secondary' : 'primary'} icon={phase === 'done' ? 'replay' : 'play'} onClick={run} busy={phase === 'running'} disabled={phase === 'running'} data-hotspot="cek-go">
+            {phase === 'running' ? t.running : phase === 'done' ? t.rerun : t.run(total)}
+          </Button>
         </div>
       </div>
 
@@ -171,17 +211,18 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
         <div className="dk-cb-stale" role="status">
           <Icon name="alert" size={16} />
           <p>
-            <b>{t.staleTitle}</b> {t.staleBody(live.zone.map(kecName).join(', '), zoneNames.join(', '))}
+            <b>{open && ran?.batch.source === 'scenario' ? t.staleOpenTitle : t.staleTitle}</b>{' '}
+            {open && ran?.batch.source === 'scenario' ? t.staleOpenBody : t.staleBody(live.zone.map(kecName).join(', '), zoneNames.join(', '))}
           </p>
           <Button size="sm" variant="primary" icon="replay" onClick={run}>
-            {t.staleRun}
+            {open && ran?.batch.source === 'scenario' ? t.staleOpenRun : t.staleRun}
           </Button>
         </div>
       )}
 
       {/* the sticky summary lives with the grid only: it lets go before the cross-check map */}
       <div className="dk-cb-results">
-        <div className="dk-cb-summary" role="group" aria-label={lang === 'id' ? 'Ringkasan hasil' : 'Result summary'}>
+        <div className="dk-cb-summary" ref={summaryRef} role="group" aria-label={lang === 'id' ? 'Ringkasan hasil' : 'Result summary'}>
           <div className="dk-cb-prog">
             <span className="dk-cb-prog-t dk-num">
               {t.progress(shownCount, total)}
@@ -194,13 +235,13 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
           <div className={`dk-cb-filters${chipsLive ? '' : ' is-idle'}`} role="group" aria-label={chipsLive ? t.filter : `${t.filter} · ${t.chipsIdle}`}>
             <FilterChip on={filter === 'all'} live={chipsLive} onClick={() => pick('all')} label={t.all} value={shownCount} tone="all" />
             <FilterChip on={filter === 'lolos'} live={chipsLive} onClick={() => pick('lolos')} label={t.sumLolos} value={sum.lolos} tone="lolos" />
-            <FilterChip on={filter === 'kurang'} live={chipsLive} onClick={() => pick('kurang')} label={t.sumKurang} value={sum.kurang} tone="kurang" />
-            <FilterChip on={filter === 'ganda'} live={chipsLive} onClick={() => pick('ganda')} label={t.sumGanda} value={sum.ganda} sub={t.sumGandaPairs(sum.gandaPairs)} tone="ganda" />
-            <FilterChip on={filter === 'luar-zona'} live={chipsLive} onClick={() => pick('luar-zona')} label={t.sumLuar} value={sum.luarZona} sub={sum.outsideGanda ? t.sumLuarSub(sum.outsideGanda) : undefined} tone="luar-zona" />
+            <FilterChip on={filter === 'kurang'} live={chipsLive} onClick={() => pick('kurang')} label={t.sumKurang} value={sum.kurang} sub={sum.kurangAlso ? t.sumAlso(sum.kurangAlso) : undefined} tone="kurang" />
+            <FilterChip on={filter === 'ganda'} live={chipsLive} onClick={() => pick('ganda')} label={t.sumGanda} value={sum.ganda} sub={sum.ganda > sum.gandaPairs * 2 ? t.sumGandaWait : t.sumGandaPairs(sum.gandaPairs)} tone="ganda" />
+            <FilterChip on={filter === 'luar-zona'} live={chipsLive} onClick={() => pick('luar-zona')} label={t.sumLuar} value={sum.luarZona} sub={sum.luarGanda ? t.sumLuarSub(sum.luarGanda) : undefined} tone="luar-zona" />
           </div>
         </div>
 
-        <Grid batch={batch} count={shownCount} phase={phase} filter={filter} onOpen={setDetail} t={t} kecName={kecName} />
+        <Grid batch={batch} count={shownCount} phase={phase} filter={gridFilter} onOpen={setDetail} t={t} kecName={kecName} />
 
         <p className="dk-cb-bulk-note" aria-live="polite">
           {note}
@@ -209,7 +250,7 @@ export default function Bulk({ role, active, focusDoc, onFocusDone }: { role: Ce
 
       {phase === 'done' && (
         <Suspense fallback={<LoadingText>{t.crossLoading}</LoadingText>}>
-          <ZoneMap batch={batch} lang={lang} kecName={kecName} role={role} />
+          <ZoneMap batch={batch} lang={lang} kecName={kecName} role={role} warnNames={batch.warnZone?.map(kecName) ?? null} />
         </Suspense>
       )}
 
@@ -249,7 +290,7 @@ interface Line {
   last: number
 }
 
-function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: BansosBatch; count: number; phase: Phase; filter: Filter; onOpen: (id: string) => void; t: CekStrings; kecName: (id: string) => string }) {
+function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: CekBatch; count: number; phase: Phase; filter: Filter; onOpen: (id: string) => void; t: CekStrings; kecName: (id: string) => string }) {
   const wrap = useRef<HTMLDivElement>(null)
   const cards = useRef(new Map<string, HTMLButtonElement>())
   const [focusIdx, setFocusIdx] = useState(0)
@@ -261,6 +302,13 @@ function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: Bans
     return m
   }, [batch])
   const indexOf = useMemo(() => new Map(batch.rows.map((r, i) => [r.doc.id, i])), [batch])
+  // phones with the NIK ganda filter: the two files of a pair sit side by side (CSS order), the rest are hidden
+  const pairOrder = useMemo(() => {
+    const m = new Map<string, number>()
+    let k = 0
+    batch.duplicateGroups.forEach((g) => g.forEach((id) => m.set(id, k++)))
+    return m
+  }, [batch])
 
   // geometry of the duplicate lines (re-measured on resize; positions in the wrapper's box). Each end sits on the
   // card's top edge above its NIK chip, so neither the line nor its dot covers a name.
@@ -269,6 +317,11 @@ function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: Bans
     if (!w) return
     const box = w.getBoundingClientRect()
     const narrow = box.width < 640
+    // phones: no long cross-grid lines; each duplicate card names its pair ("=#13") instead
+    if (narrow || narrowNow()) {
+      setLines((l) => (l.length ? [] : l))
+      return
+    }
     const anchor = (el: HTMLElement): [number, number] => {
       const r = el.getBoundingClientRect()
       const nik = el.querySelector('.dk-cb-card-nik')?.getBoundingClientRect()
@@ -346,11 +399,12 @@ function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: Bans
   }, [groupOf])
   const onLeave = useCallback(() => setHot(null), [])
 
-  const allHot = filter === 'ganda'
+  // over the cards: only the hovered / focused pair (the "=#nn" label on each duplicate card carries the rest)
+  const allHot = false
   const drawn = lines.filter((l) => l.last < count)
-  const top = drawn.filter((l) => allHot || l.group === hot)
+  const top = drawn.filter((l) => l.group === hot)
   return (
-    <div className={`dk-cb-gridwrap${filter !== 'all' && filter !== 'ganda' ? ' is-filtered' : ''}`} ref={wrap}>
+    <div className={`dk-cb-gridwrap${filter !== 'all' && filter !== 'ganda' ? ' is-filtered' : ''}${filter !== 'all' && count > 0 ? ` is-f is-f-${filter}` : ''}`} ref={wrap}>
       <svg className="dk-cb-lines" aria-hidden="true" width="100%" height="100%">
         {lines.map((l) => (
           <path key={l.key} d={l.d} pathLength={1} className={l.last < count ? 'is-on' : ''} />
@@ -359,8 +413,8 @@ function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: Bans
       <div className="dk-cb-grid" role="group" aria-label={t.gridLabel}>
         {batch.rows.map((r, i) => {
           const state: CardState = i < count ? 'done' : i === count && phase === 'running' ? 'scan' : 'queued'
-          const dim = state === 'done' && filter !== 'all' && r.result !== filter
-          return <Card key={r.doc.id} row={r} i={i} state={state} dim={dim} tabbable={i === focusIdx} kec={kecName(r.doc.kecamatanId)} t={t} onOpen={onOpen} onKey={onKey} onEnter={onEnter} onLeave={onLeave} setRef={setRef} />
+          const dim = state === 'done' && !matches(r, filter)
+          return <Card key={r.doc.id} row={r} i={i} state={state} dim={dim} pairOrder={pairOrder.get(r.doc.id) ?? null} tabbable={i === focusIdx} kec={kecName(r.doc.kecamatanId)} t={t} onOpen={onOpen} onKey={onKey} onEnter={onEnter} onLeave={onLeave} setRef={setRef} />
         })}
       </div>
       <svg className="dk-cb-lines is-top" aria-hidden="true" width="100%" height="100%">
@@ -379,10 +433,11 @@ function Grid({ batch, count, phase, filter, onOpen, t, kecName }: { batch: Bans
 }
 
 interface CardProps {
-  row: BansosRow
+  row: CekRow
   i: number
   state: CardState
   dim: boolean
+  pairOrder: number | null
   tabbable: boolean
   kec: string
   t: CekStrings
@@ -394,7 +449,7 @@ interface CardProps {
 }
 
 /** one applicant card — memoised: a bulk step or a filter click re-renders only the cards whose state changed */
-const Card = memo(function Card({ row: r, i, state, dim, tabbable, kec, t, onOpen, onKey, onEnter, onLeave, setRef }: CardProps) {
+const Card = memo(function Card({ row: r, i, state, dim, pairOrder, tabbable, kec, t, onOpen, onKey, onEnter, onLeave, setRef }: CardProps) {
   const id = r.doc.id
   const res = state === 'done' ? t.result[r.result]! : state === 'scan' ? t.running : t.queued
   return (
@@ -402,7 +457,7 @@ const Card = memo(function Card({ row: r, i, state, dim, tabbable, kec, t, onOpe
       ref={(el) => setRef(id, el)}
       type="button"
       className={`dk-cb-card is-${state}${state === 'done' ? ` is-${r.result}` : ''}${r.outsideZone && state === 'done' ? ' is-out' : ''}${dim ? ' is-dim' : ''}`}
-      style={{ '--i': i } as CSSProperties}
+      style={{ '--i': i, ...(pairOrder !== null ? { '--po': pairOrder } : {}) } as CSSProperties}
       tabIndex={tabbable ? 0 : -1}
       onFocus={() => onEnter(id, i)}
       onBlur={onLeave}
@@ -410,19 +465,26 @@ const Card = memo(function Card({ row: r, i, state, dim, tabbable, kec, t, onOpe
       onPointerLeave={onLeave}
       onKeyDown={(e) => onKey(e, i)}
       onClick={() => onOpen(id)}
-      aria-label={t.cardLabel(i + 1, r.doc.ownerName, res)}
+      aria-label={`${t.cardLabel(i + 1, r.doc.ownerName, state === 'done' && r.findings.length > 1 ? r.findings.map((f) => t.result[f]).join(', ') : res)}${state === 'done' && r.sameName.length ? ` · ${t.dSameName} #${r.sameName.map(pad2).join(', #')}` : ''}`}
       data-result={state === 'done' ? r.result : state}
     >
       <span className="dk-cb-card-top">
-        <span className="dk-cb-card-n dk-num">{String(i + 1).padStart(2, '0')}</span>
-        <span className="dk-cb-card-nik dk-num">{r.doc.nik ? `…${r.doc.nik.slice(-4)}` : ''}</span>
+        <span className="dk-cb-card-n dk-num">{pad2(i + 1)}</span>
+        <span className="dk-cb-card-nik dk-num">{nikTail(r.doc.nik)}</span>
       </span>
       <span className="dk-cb-card-name">{r.doc.ownerName}</span>
       <span className="dk-cb-card-kec">{kec}</span>
       <span className="dk-cb-card-res" aria-hidden="true">
         {state === 'done' && <Icon name={RESULT_ICON[r.result]} size={11} strokeWidth={2.2} />}
-        {state === 'done' ? t.result[r.result] : state === 'scan' ? '' : t.queued}
+        {state === 'done' ? t.cardResult[r.result] : state === 'scan' ? '' : t.queued}
       </span>
+      {state === 'done' && (r.pairNos.length > 0 || r.findings.length > 1 || r.sameName.length > 0) && (
+        <span className="dk-cb-card-also dk-num" aria-hidden="true">
+          {r.pairNos.length > 0 && <em>{r.pairNos.map((n) => `= #${pad2(n)}`).join(' ')}</em>}
+          {r.sameName.length > 0 && <i title={t.dSameName}>{r.sameName.map((n) => `≈ #${pad2(n)}`).join(' ')}</i>}
+          {r.findings.length > 1 && <span>+ {r.findings.slice(1).map((f) => t.cardResult[f]).join(' · ')}</span>}
+        </span>
+      )}
       <span className="dk-cb-card-tint" aria-hidden="true" />
       {state === 'scan' && <span className="dk-cb-card-scan" aria-hidden="true" />}
     </button>
@@ -431,20 +493,22 @@ const Card = memo(function Card({ row: r, i, state, dim, tabbable, kec, t, onOpe
 
 /* ------------------------------------------------------------------ detail */
 
-function Address({ row, lang, kecName, desaName }: { row: BansosRow; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string }) {
+function Address({ row, lang, kecName, desaName }: { row: CekRow; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string }) {
   const desa = desaName(row.doc.kecamatanId, row.doc.desaId)
   return <>{lang === 'id' ? `${desa ? `Desa ${desa}, ` : ''}Kec. ${kecName(row.doc.kecamatanId)}` : `${desa ? `${desa} village, ` : ''}${kecName(row.doc.kecamatanId)} district`}</>
 }
 
 /** a queued file: who and where, no result yet */
-function Pending({ row, idx, lang, kecName, desaName }: { row: BansosRow; idx: number; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string }) {
+function Pending({ row, idx, lang, kecName, desaName }: { row: CekRow; idx: number; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string }) {
   const t = STR[lang]
   return (
     <div className="dk-cb-detail">
       <p className="dk-cb-dres is-pending">
         <Icon name="clock" size={16} strokeWidth={2} />
         {t.pendingTitle}
-        <span className="dk-num">#{String(idx + 1).padStart(2, '0')}</span>
+        <span className="dk-num">
+          #{pad2(idx + 1)} · {row.doc.id}
+        </span>
       </p>
       <dl className="dk-cb-dl">
         <div>
@@ -470,16 +534,18 @@ function Pending({ row, idx, lang, kecName, desaName }: { row: BansosRow; idx: n
   )
 }
 
-function Detail({ row, idx, batch, done, lang, kecName, desaName, zoneNames, onGoto }: { row: BansosRow; idx: number; batch: BansosBatch; done: number; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string; zoneNames: string[]; onGoto: (id: string) => void }) {
+function Detail({ row, idx, batch, done, lang, kecName, desaName, zoneNames, onGoto }: { row: CekRow; idx: number; batch: CekBatch; done: number; lang: Lang; kecName: (id: string) => string; desaName: (k: string, d: string) => string; zoneNames: string[]; onGoto: (id: string) => void }) {
   const t = STR[lang]
-  const reason = row.result === 'ganda' ? t.dDupReason : row.result === 'luar-zona' ? t.dZoneOut(zoneNames.join(', ')) : row.result === 'kurang' ? (row.missing?.[lang] ?? '') : t.dLolos
+  const reasonOf = (f: Finding) => (f === 'ganda' ? t.dDupReason : f === 'luar-zona' ? t.dZoneOut(zoneNames.join(', ')) : (row.missing?.[lang] ?? ''))
   const pairs = row.duplicateOf.map((id) => ({ id, j: batch.rows.findIndex((r) => r.doc.id === id) })).filter((p) => p.j >= 0 && p.j < done)
   return (
     <div className="dk-cb-detail">
       <p className={`dk-cb-dres is-${row.result}`}>
         <Icon name={RESULT_ICON[row.result]} size={16} strokeWidth={2} />
         {t.result[row.result]}
-        <span className="dk-num">#{String(idx + 1).padStart(2, '0')}</span>
+        <span className="dk-num">
+          #{pad2(idx + 1)} · {row.doc.id}
+        </span>
       </p>
       <dl className="dk-cb-dl">
         <div>
@@ -497,16 +563,53 @@ function Detail({ row, idx, batch, done, lang, kecName, desaName, zoneNames, onG
           </dd>
         </div>
         <div>
-          <dt>{t.dReason}</dt>
-          <dd>{reason}</dd>
+          <dt>{row.findings.length > 1 ? t.dFindings(row.findings.length) : t.dReason}</dt>
+          <dd>
+            {row.findings.length === 0 ? (
+              t.dLolos
+            ) : (
+              <ul className="dk-cb-dfind">
+                {row.findings.map((f) => (
+                  <li key={f} className={`is-${f}`}>
+                    <b>{t.result[f]}</b> {reasonOf(f)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </dd>
         </div>
-        {row.result !== 'luar-zona' && row.result !== 'lolos' && (
+        {!row.findings.includes('luar-zona') && row.findings.length > 0 && (
           <div>
             <dt>{lang === 'id' ? 'Zona' : 'Zone'}</dt>
-            <dd>{row.outsideZone ? t.dZoneOut(zoneNames.join(', ')) : t.dZoneOk}</dd>
+            <dd>{t.dZoneOk}</dd>
           </div>
         )}
       </dl>
+      {row.sameName.length > 0 && (
+        <div className="dk-cb-dup is-same">
+          <h4>{t.dSameName}</h4>
+          <p className="dk-cb-same-body">{t.dSameNameBody}</p>
+          <ul>
+            {row.sameName.map((n) => {
+              const other = batch.rows[n - 1]
+              if (!other) return null
+              return (
+                <li key={other.doc.id}>
+                  <span>
+                    <b>{other.doc.ownerName}</b>
+                    <small className="dk-num">
+                      #{pad2(n)} · {other.doc.id} · {kecName(other.doc.kecamatanId)} · NIK {nikTail(other.doc.nik)}
+                    </small>
+                  </span>
+                  <Button size="sm" variant="quiet" iconEnd="arrowRight" onClick={() => onGoto(other.doc.id)}>
+                    {t.open}
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
       {pairs.length > 0 && (
         <div className="dk-cb-dup">
           <h4>{t.dDup}</h4>
@@ -518,7 +621,7 @@ function Detail({ row, idx, batch, done, lang, kecName, desaName, zoneNames, onG
                   <span>
                     <b>{other?.doc.ownerName ?? id}</b>
                     <small className="dk-num">
-                      #{String(j + 1).padStart(2, '0')} · {other ? kecName(other.doc.kecamatanId) : ''}
+                      #{pad2(j + 1)} · {id} · {other ? kecName(other.doc.kecamatanId) : ''}
                     </small>
                   </span>
                   <Button size="sm" variant="quiet" iconEnd="arrowRight" onClick={() => onGoto(id)}>
