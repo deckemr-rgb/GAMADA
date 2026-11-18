@@ -289,8 +289,25 @@ export function extendUsahaPintar(s0: WorldState, pack: RegionPack | null): Worl
 
   /* ---------------------------------------------------------------- ledger: opening balance, wages, today's sales */
   const rl = S('ledger')
+  // the core seed's weekly purchases cover ~6 of 7 days of cost of goods: scale them (deterministically) so the
+  // purchases of the history match its HPP (+3 %) and Persediaan never ends negative on the balance sheet
+  let hppHist = 0
+  let buyHist = 0
+  for (const j of rows(s0.ledger)) {
+    if (j.businessId !== shopId) continue
+    for (const l of j.lines) {
+      if (l.account !== 'Persediaan') continue
+      if (j.source === 'purchase') buyHist += l.debit
+      else hppHist += l.credit
+    }
+  }
+  const buyScale = buyHist > 0 && hppHist > buyHist ? (hppHist * 1.03) / buyHist : 1
   const ledgerRows: LedgerEntry[] = rows(s0.ledger).map((j) =>
-    j.memo.id === 'Gaji karyawan' ? { ...j, lines: j.lines.map((l) => (l.debit ? { ...l, debit: wages } : { ...l, credit: wages })) } : j,
+    j.memo.id === 'Gaji karyawan'
+      ? { ...j, lines: j.lines.map((l) => (l.debit ? { ...l, debit: wages } : { ...l, credit: wages })) }
+      : j.source === 'purchase' && j.businessId === shopId && buyScale !== 1
+        ? { ...j, lines: j.lines.map((l) => ({ ...l, debit: roundTo(l.debit * buyScale, 1000), credit: roundTo(l.credit * buyScale, 1000) })) }
+        : j,
   )
   let inv = 0
   for (const id of s0.stock.ids) {

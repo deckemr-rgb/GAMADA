@@ -72,6 +72,13 @@ export const DEMO_READY: Partial<Record<ProductSlug, true>> = {
   'siaga-wilayah': true,
   'awas-belanja': true,
   'cek-berkas': true,
+  // tahap 3 · Usaha Pintar (integrated 2026-11-18)
+  'toko-autopilot': true,
+  'pajak-beres': true,
+  'juara-jualan': true,
+  'kenal-mitra': true,
+  'pantau-merek': true,
+  tenderpilot: true,
 }
 
 const cache = new Map<ProductSlug, LazyExoticComponent<ComponentType<DemoCanvasProps>>>()

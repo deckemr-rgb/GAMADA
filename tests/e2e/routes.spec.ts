@@ -1,7 +1,8 @@
 /** (a) routes render without console errors · (b) legacy redirects · (f) the deleted /lab/_design is a 404. */
 import { test, expect, settle } from './fixtures'
 
-const ROUTES = ['/', '/ekosistem', '/ekosistem/satu-daerah', '/produk/sapa-warga', '/demo/sapa-warga', '/demo/siaga-wilayah', '/tur', '/lab', '/karya', '/lab/_kit']
+const ROUTES = ['/', '/ekosistem', '/ekosistem/satu-daerah', '/produk/sapa-warga', '/demo/sapa-warga', '/demo/siaga-wilayah', '/ekosistem/usaha-pintar', '/produk/toko-autopilot',
+  '/demo/toko-autopilot', '/demo/pajak-beres', '/demo/juara-jualan', '/demo/kenal-mitra', '/demo/pantau-merek', '/demo/tenderpilot', '/tur', '/lab', '/karya', '/lab/_kit']
 
 for (const path of ROUTES) {
   test(`renders ${path} with no console errors`, async ({ page, errors }) => {

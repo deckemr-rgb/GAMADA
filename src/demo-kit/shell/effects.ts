@@ -168,7 +168,9 @@ export function createEffectTracker(product: ProductSlug) {
     feed(e: WorldEvent, s: WorldState): CrossEffect | null {
       remember(e)
       // a root this product raised whose consumers read state (EFFECT_ALSO): announced as its own toast
-      const also = !e.depth && e.source === product ? EFFECT_ALSO[e.type] : undefined
+      // partner.verified reads as a vendor badge only for a business (KYB); a KYC or CV verification raises no toast
+      const kybOnly = e.type !== 'partner.verified' || (e.payload as { subjectKind?: string }).subjectKind === 'business'
+      const also = !e.depth && e.source === product && kybOnly ? EFFECT_ALSO[e.type] : undefined
       if (also) {
         let out: CrossEffect | null = null
         for (const t of also.targets) out = announce(e, recent.get(e.id)!, t, s, also.focus(s, recent.get(e.id)!)) ?? out

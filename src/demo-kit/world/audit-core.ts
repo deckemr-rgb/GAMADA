@@ -33,7 +33,8 @@ export function describeCore(e: AnyWorldEvent, s: WorldState): { summary: Bi; re
       return { summary: { id: `Transaksi ${e.payload.code} · ${fmtRp(sale?.total ?? 0)} (${e.payload.payment.toUpperCase()})`, en: `Sale ${e.payload.code} · ${fmtRp(sale?.total ?? 0)} (${e.payload.payment.toUpperCase()})` }, refs: [ref('sales', e.payload.id ?? '')] }
     }
     case 'ledger.posted': {
-      const total = e.payload.lines.reduce((a, l) => a + l.debit, 0)
+      // the entry's amount, not its debit sum: a sale also books HPP/Persediaan, which must not inflate the total
+      const total = e.payload.lines.reduce((a, l) => a + (l.account === 'HPP' ? 0 : l.debit), 0)
       return { summary: { id: `Jurnal: ${e.payload.memo.id} (${fmtRp(total)})`, en: `Journal: ${e.payload.memo.en} (${fmtRp(total)})` }, refs: [ref('ledger', e.payload.id ?? ''), ...(e.payload.refId ? [ref('sales', e.payload.refId)] : [])] }
     }
     case 'score.updated':

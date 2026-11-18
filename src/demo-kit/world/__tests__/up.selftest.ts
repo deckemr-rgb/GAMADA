@@ -24,7 +24,7 @@ import { generateCvs, CV } from '../../docs/samples/cv-data'
 import { COMPANY_WORDS } from '../catalog'
 import {
   CALL_CLIPS, EMERGENCY_TENDER, PPH_FINAL, activeBrandAlert, callScore, kybCase, kycRisk, mutasiRows, omzetByMonth, outletKpis, pendingNotas, pphFinalMonth, reputationScore,
-  requirementsFor, trialBalance, vendorProfile, poSuggestions, demandForecast, floodBanner, teamBoard, tenderFeed, brandKpi, complaintClusters, cvShortlist, catalogPreview,
+  requirementsFor, trialBalance, balanceSheet, vendorProfile, poSuggestions, demandForecast, floodBanner, teamBoard, tenderFeed, brandKpi, complaintClusters, cvShortlist, catalogPreview,
 } from '../usaha-pintar'
 import { terbilang } from '../../i18n/terbilang'
 import { diffWords } from '../../docs/diff'
@@ -132,6 +132,8 @@ export async function runUpSelftest(ok: Ok, section: (n: string) => void, packs:
       const period = m === 0 ? p : new Date(Date.UTC(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1 + m, 1)).toISOString().slice(0, 7)
       ok(trialBalance(s, shopId, period).balanced, `trial balance ${period} balanced`)
     }
+    const inv = balanceSheet(s, shopId, WORLD.clockStart).assets.find((a) => a.account === 'Persediaan')?.amount ?? 0
+    ok(inv > 0, `balance sheet Persediaan positive (${inv})`)
     const wages = rows(s.staff).reduce((a, x) => a + x.gross, 0)
     ok(rows(s.ledger).filter((j) => j.memo.id === 'Gaji karyawan').every((j) => j.lines.some((l) => l.account === 'Beban Gaji' && l.debit === wages)), `Beban Gaji = Σ staff gross (${wages})`)
     ok(rows(s.ledger).some((j) => j.memo.id === 'Saldo awal'), 'opening balance entry')

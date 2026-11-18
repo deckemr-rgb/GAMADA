@@ -573,6 +573,8 @@ export interface LedgerEntry {
   refId: string | null
   needsReview: boolean
   confidence: number
+  /** set by ledger.reviewed: the row was a review row (the bank statement keeps showing it, now matched) */
+  reviewed?: true
 }
 
 export interface TaxItem {

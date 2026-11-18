@@ -55,7 +55,7 @@ export const pendingNotas = createParamSelector((s) => [s.purchaseOrders, s.ledg
     .map((po) => ({ po, supplierName: suppliers.byId[po.supplierId]?.name ?? po.supplierId, at: po.notaAt ?? po.reply?.at ?? po.at, received: po.status === 'diterima', isNew: po.notaAt != null }))
     .sort((a, b) => b.at - a.at || b.po.id.localeCompare(a.po.id))
   if (list.length) return list
-  const last = rows(pos).filter((p) => p.businessId === bizId && p.status === 'diterima').sort((a, b) => b.at - a.at)[0]
+  const last = rows(pos).filter((p) => p.businessId === bizId && p.status === 'diterima' && !booked.has(p.id)).sort((a, b) => b.at - a.at)[0]
   return last ? [{ po: last, supplierName: suppliers.byId[last.supplierId]?.name ?? last.supplierId, at: last.reply?.at ?? last.at, received: true, isNew: false }] : []
 })
 
@@ -211,10 +211,11 @@ const mutasiSel = createParamSelector((s) => [s.ledger, s.suppliers, s.seed, s.r
     if (bank > 0) out.push({ date: iso(j.at + DAY_MIN), at: j.at + DAY_MIN - 13 * 60, desc: `SETTLEMENT QRIS/TRF ${iso(j.at).slice(5).replace('-', '/')}`, amount: bank, status: 'cocok', ledgerId: j.id, lines: null })
   }
   // the 3 review rows (same memo and amount as the journal)
-  for (const j of mine.filter((x) => x.needsReview && x.source === 'bank' && x.at >= from && x.at < from + 16 * DAY_MIN)) {
+  // (a reviewed row stays on the statement, now 'cocok', so the statement never changes after a review)
+  for (const j of mine.filter((x) => (x.needsReview || x.reviewed) && x.source === 'bank' && x.at >= from && x.at < from + 16 * DAY_MIN)) {
     const bank = j.lines.find((l) => l.account === 'Bank')
     const amount = bank ? bank.debit - bank.credit : -(j.lines.find((l) => l.credit > 0)?.credit ?? 0)
-    out.push({ date: iso(j.at), at: j.at, desc: j.memo.id.toUpperCase(), amount, status: 'tinjau', ledgerId: j.id, lines: j.lines })
+    out.push({ date: iso(j.at), at: j.at, desc: j.memo.id.toUpperCase(), amount, status: j.reviewed ? 'cocok' : 'tinjau', ledgerId: j.id, lines: j.lines })
   }
   const sup = rows(suppliers)
   const fill: [string, string, number, number][] = [

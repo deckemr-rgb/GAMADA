@@ -51,7 +51,7 @@ export const UP_REDUCERS: { [K in EventType]?: R<K> } = {
   'nota.received': (s, e) => ({ ...s, purchaseOrders: patch(s.purchaseOrders, e.payload.poId, (po) => (po.notaAt != null ? po : { ...po, notaAt: e.at })) }),
   'ledger.reviewed': (s, e) => ({
     ...s,
-    ledger: patch(s.ledger, e.payload.ledgerId, (j) => ({ ...j, needsReview: false, confidence: 1, ...(e.payload.lines ? { lines: e.payload.lines } : {}) })),
+    ledger: patch(s.ledger, e.payload.ledgerId, (j) => ({ ...j, needsReview: false, reviewed: true, confidence: 1, ...(e.payload.lines ? { lines: e.payload.lines } : {}) })),
   }),
   'bank.imported': (s, e) => {
     const p = e.payload

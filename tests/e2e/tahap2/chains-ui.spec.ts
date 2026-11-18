@@ -17,6 +17,9 @@ async function siagaWarning(page: Page): Promise<void> {
   const cta = page.locator('[data-sw="cta"]')
   await cta.click()
   await expect.poll(() => W<number>(page, 's.rainCells.ids.length'), { timeout: 30_000 }).toBeGreaterThan(0)
+  // the rain cells land ~200 ms after the click while the CTA still reads "Jalankan prediksi" (then "Menghitung model
+  // desa…" for 3–9 s): wait for the send step itself, or the second click replays the forecast instead
+  await expect(cta).toHaveText(/Kirim peringatan dini/, { timeout: 30_000 })
   await expect(cta).toBeEnabled()
   await cta.click()
   await page.locator('[data-sw="bc-send"]').click({ timeout: 15_000 })

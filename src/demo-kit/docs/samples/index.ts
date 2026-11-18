@@ -1,9 +1,8 @@
 /**
- * samples/ — every bundled sample document (data only, no React). getSample(id) also resolves generated CVs
- * ("cv-0001" … "cv-0200").
+ * samples/ — every bundled sample document (data only, no React). Generated CVs are NOT resolved by getSample (that
+ * kept the CV generator in every docs first load, e.g. Cek Berkas): build one with `cvDoc(cv)` from `./cv`.
  */
 import type { SampleDoc, SampleKind } from '../types'
-import { cvDoc, generateCvs } from './cv'
 import { FINANCE } from './finance'
 import { HOUSES } from './house'
 import { IDENTITY } from './identity'
@@ -21,21 +20,9 @@ export { generateCvs, cvDoc, CV } from './cv'
 export const SAMPLES: SampleDoc[] = [...LETTERS, ...IDENTITY, ...PERMITS, ...HOUSES, ...FINANCE]
 
 const BY_ID = new Map(SAMPLES.map((s) => [s.id, s]))
-const cvDocs = new Map<string, SampleDoc>()
 
 export function getSample(id: string): SampleDoc | undefined {
-  const hit = BY_ID.get(id)
-  if (hit) return hit
-  if (/^cv-\d{4}$/.test(id)) {
-    const c = cvDocs.get(id)
-    if (c) return c
-    const cv = generateCvs().find((x) => x.id === id)
-    if (!cv) return undefined
-    const d = cvDoc(cv)
-    cvDocs.set(id, d)
-    return d
-  }
-  return undefined
+  return BY_ID.get(id)
 }
 
 export function samplesOf(kind: SampleKind): SampleDoc[] {

@@ -105,7 +105,7 @@ function lokasiDoc(s: KybSubject, at: [number, number]): SampleDoc {
   const PH = 640
   const b = new DocBuilder(PW, PH, { font: 'sans', size: 16, fill: '#ffffff' })
   b.shape({ t: 'rect', x: 0, y: 0, w: PW, h: PH, fill: '#6f8297' })
-  b.shape({ t: 'house', x: 150, y: 120, w: 600, h: 380, flood: 0 })
+  b.shape({ t: 'house', x: 150, y: 90, w: 600, h: 440, flood: 0 })
   b.shape({ t: 'rect', x: 230, y: 150, w: 440, h: 54, fill: '#f2efe6', r: 4 })
   b.text(PW / 2, 186, s.name.toUpperCase(), { size: s.name.length > 24 ? 20 : 26, weight: 700, anchor: 'middle', fill: '#2a2833' })
   b.shape({ t: 'rect', x: 0, y: PH - 92, w: PW, h: 92, fill: '#000000', opacity: 0.55 })

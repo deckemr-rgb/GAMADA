@@ -348,6 +348,17 @@ const shiftSel = createParamSelector((s) => [s.shifts, s.staff, s.salesDaily, s.
       })
     }
   })
+  // flood days (Mon–Wed of an active banjir alert) always ask the toko for one more cashier in the afternoon peak
+  const o = outlets.byId[outletId ?? '']
+  if (o?.kind === 'toko' && rows(alerts).some((a) => a.kind === 'banjir' && a.status === 'aktif')) {
+    for (let day = 0; day <= 2; day++) {
+      if (extra.some((x) => x.day === day)) continue
+      extra.push({
+        day, start: 13 * 60, end: 17 * 60, job: 'kasir', staffId: cashier?.id ?? null,
+        reason: { id: 'Hari banjir: pembeli pompa, terpal dan karung naik ±35% (simulasi)', en: 'Flood day: pump, tarp and sack buyers up ±35% (simulated)' },
+      })
+    }
+  }
   extra.sort((a, b) => b.end - b.start - (a.end - a.start) || a.day - b.day)
   return { blocks, extra: extra.slice(0, 3) }
 })

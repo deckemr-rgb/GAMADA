@@ -593,3 +593,161 @@ link out of the sandbox is hovered, focused or touched.
   `viz/__tests__/monotone.test.ts`), so a demo with only sparklines no longer loads the shared d3-shape chunk.
 - `MapView` shows a quiet "Memuat citra peta…" / "Loading map tiles…" pill (top centre, after 450 ms) while basemap or
   imagery tiles are still arriving, and sets `aria-busy` on the map region meanwhile.
+
+## Tahap 3 (2026-11-18): what the kit adds for Usaha Pintar (P8–P13)
+
+Plan: `docs/build/tahap3-plan.md` §1 (APIs), §3 (chains C14–C29), §5 (sizes). Where this section and the plan differ,
+**this section is what the code does**. Builders own `src/demos/<slug>/**`, their prompt file and their own spec only.
+
+### Measured floors (gzip -9, beyond home, `VITE_DEMO_CONTROLS=1` build, 1440, networkidle + 3 s)
+
+| What | Measured | Rule |
+|---|---|---|
+| Home initial JS | 252.7 KB | ≤ 253.6 (unchanged vs Tahap 2) |
+| Satu Daerah demos, first load ID / EN vs final Tahap 2 | sapa-warga 149.8 / 151.4 (−0.7) · meja-pimpinan 173.2 / 174.8 (±0) · naskah-pintar 143.5 / 145.1 (−0.7) · radar-isu 157.8 / 163.3 (−0.7) · siaga-wilayah 158.9 / 160.5 (−0.7) · awas-belanja 148.1 / 149.7 (±0) · cek-berkas 158.9 / 160.4 (+0.4) | ≤ Tahap 2 + 0.5 |
+| Satu Daerah after a flood action | siaga-wilayah +30.6, awas-belanja +29.8 (the UP boot + chains chunks, fetched AFTER the action) | reported, allowed |
+| Satu Daerah kit floor (shell + world + pack JSON, no product) | ≈ 105.3 KB (demo-core 41.5 + demo-gen 36.8 + pack 15.4 + icons 4.9 + products 4.6 + small) | — |
+| UP boot (`up/boot` 12.9 + shared `texts` 6.5 + `cv-data` 1.8) | **21.2 KB** | plan said ≤ 12: NOT met (seed extension + natural events + their texts; all needed before the first paint of data) |
+| **UP stub floor** (`/demo/<up-slug>?controls=all`, stub canvas) | **126.5 KB** (JS 111.2 + JSON 15.4) | plan said ≤ 112: NOT met |
+| UP chains chunk (`up/chains`) | ≈ 10 KB, fetched on the first pointerdown / keydown, never in the first load | after-action |
+
+**Consequence for builders: own allowance = 175 − 126.5 ≈ 48 KB** for each role landing (hard limit 180 ⇒ 53 KB), not
+the plan's ≈ 64. Product chunks, product strings, the selectors you import from `world/usaha-pintar` and any kit UI/viz/
+docs module you pull in all count. Toko Autopilot `?role=kasir` (plan ≈ 54 KB own) must lazy-load the payment drawer
+and receipt and keep the Kasir first screen ≤ 48 KB own.
+
+Measure with `.shots/t3-kit/budget.mjs` (copy of `.shots/t2-int/budget.mjs` + a UP stub loop at the end; edit the
+slug list / add your role URLs).
+
+### Lazy ecosystem module (`world/eco.ts`, in the world barrel)
+
+- `preloadEcosystem(product.eco)` (DemoShell, in parallel with the region) loads `world/up/boot`: seed extension
+  `extendUsahaPintar` (deterministic, patches the installed world once: `s.meta.ext['usaha-pintar'] = 1`), the UP natural
+  events and the reducers/reactions of the boot-only types. `preloadEcosystemChains` (first pointerdown / keydown on a
+  UP page) loads `world/up/chains` (reactions C15–C29 + user-action reducers).
+- The store gate holds events (in order) of `ECO_TRIGGERS['usaha-pintar']` until the needed chunk is in, so any page may
+  emit them (a Satu Daerah flood loads both chunks AFTER the action). Invariant: UP handlers registered ⇔ UP data present.
+- Products: `const ready = useEcosystemReady('usaha-pintar')`; render a skeleton with the final layout boxes until true
+  (`useDemoStrings().upLoading` = "Menyiapkan data usaha…" / "Preparing the business data…"). Never call
+  `ensureEcosystem` yourself. `?e2e=1` exposes `__gamada.ensure('usaha-pintar')` (both chunks) for specs.
+- `setNaturalBoost('sale', 3)` is set by DemoShell on toko-autopilot / pajak-beres (opening hours rhythm ×3).
+- `WORLD.version` = 5.
+- Low-level: `world/ext.ts` (`registerExtension`, `applyExtensions`, `extCovers`), `engine-core.withExtensions`,
+  `natural.registerNaturalSource`. Only for a future ecosystem module (Pasar Daerah); products never touch them.
+
+### `world/usaha-pintar` (ONE import path; not in the barrel; tree-shaken)
+
+Everything of plan §1.5 exists with the plan's names. Shapes that differ from or add to the plan:
+- `outletKpis(s, now)` → `{ total, byOutlet, month }`; `total` / each outlet `{ revenue, tx, avgTicket, cost, grossMargin,
+  vsYesterday: { revenue, tx, avgTicket, grossMargin } }` (ratios, e.g. 0.12 = +12 %); `month` = `omzetByMonth()[demo month]`.
+- `floodBanner(s)` → `{ text: Bi, factor, pct, alertId, productIds } | null` (`pct` 340 for factor 4.4).
+- `demandForecast(s, productId, now)` → `{ history30, forecast14, lo, hi, factors[{ key, pct, label, cause? }], daysLeft } | null`.
+- `poSuggestions(s, now)` rows carry `poId` / `code` when a `po.drafted` draft exists for that supplier (send that id with
+  `po.sent` so the draft is patched, not duplicated). `poLines(s, productIds, leadDays)` and `supplierReply(s, poId)` are the
+  same formulas the reactions use.
+- `cashierShift(s, staffId, now)` → `{ staffId, outletId, start, tx, cashSales, expectedCash } | null` (float `UP.cashFloat`).
+- `omzetByMonth(s, bizId)` → `Record<'YYYY-MM', number>`; `pphFinalOf(s, bizId, period)` → `{ omzet, cumulativeBefore,
+  taxable, amount }`; `pphFinalMonth(omzet, cumulativeBefore)` *plain* (the rule); `notaLines(po, paidCash?)` = the nota
+  journal lines (Persediaan D / Kas or Utang Usaha C). `mutasiRows(s, bizId, '2026-11')` rows `{ date, desc, amount,
+  balance, status: 'cocok'|'baru'|'tinjau', category?, ledgerId?, lines? }`.
+- `trialBalance` → `{ rows, debit, credit, balanced }`; `balanceSheet` → `{ assets, liabilities, equity, … }`;
+  `cashFlow(s, bizId, 'YYYY-MM')` → `{ opening, inflow, outflow, closing }`.
+- Sales: `CRITERIA_KEYS`, `PRAPESAN_CLIP` ('tb-wa-prapesan'), `clipOf(key)`, `clipsOf(industry)`, `FLAG_OF`, `IND_SHORT`
+  ('tb'|'mf'|'asr' ↔ industry, for `?industry=`), `teamRadar(board)`; `callDetail(s, id)` → `{ call, agent, clip, po, alertId }`;
+  `agentProfile(s, now, agentId)` → `{ row, of, coachings, roleplays }`. Industry keys: `toko-bangunan|multifinance|asuransi`.
+- Mitra: `catalogPreview(s, bizId?)` → `{ needs, suppliers: CatalogCard[] }`; `cvShortlist(cvs, criteria, blind, size = 10)` →
+  `{ funnel: { total, education, years, skills, distance }, top }`; `kycInputOf(s, documentId)` → the `kycRisk` input;
+  `KYB_RULE`, `shopDistance(s)(kecamatanId)`, `subjectName(s, request)`; `cvFit` re-exported.
+- Brand: `brandStream(s, now, { brand: 'shop'|'competitor'|'kategori'|'all', topic, sentiment, outletId, … })`;
+  `reputationScore(s, now, brand?)` → `{ score, at }`; `reputationAt(s, now, brandId)` *plain*; `brandAlertsAt(s, now)`;
+  `mentionPlace(s, m)` → `{ desa, kecamatan }`; `CHANNELS`, `TOPICS`, `REPUTATION`; `brandSpike` → `{ count, rule,
+  baselinePer2h, crossed, preSignalIds }`; `affectedOrders` → `{ count, value, orderCodes }`.
+- Tender: `tenderFeed(s, now, { kbli: 'cocok'|'semua', kecamatanId, value: 'kecil'|'sedang'|'besar', deadlineDays: 3|7 })` →
+  `{ rows: { tender, probability, kbliOk, deadlineIn, risk, mirror, isNew }[], counts }`; `tenderKpi` → `{ openMatched,
+  avgProbability, dueIn3Days, activeBidValue }`; `priceAdvice` → `{ hps, cost, range, suggested, margin, ratio, history }`;
+  `bidHistory` → `{ rows, winRate, valueWon }`; `procurementOfTender`, `WIN_MODEL`, `itemCost`, `kbliOf`.
+- Config: `UP`, `UP_SCENARIO`, `BRAND_BURST`, `EMERGENCY_TENDER` (key `karung-terpal-darurat`, unit HPS karung 15.500 /
+  terpal 135.000 ⇒ Bojonegoro HPS Rp 37.750.000, chance 0,78), `SHOP_KBLI`, `FLOOD_TAGS`; labels incl. `ANNOUNCE_CHANNEL`.
+- Base helpers: `shopOutlets(s)`, `outletKey(outlet)` ('toko'|'kopi'|'warung', for `?outlet=`), `kecName`, `desaName`.
+- Scenario: `ensureFloodScenario(s, now)` (idempotent, also while queued), `activeFloodAlert(s)`, `useFloodAutoplay(on)`.
+- Payloads *plain*: `salePayload({ outletId, lines, discount?, payments?, staffId?, cashGiven? })`, `bidPayload(tenderId,
+  bizId, price, docSections, pages = 34)`, `repliesPayload(mentionIds, tone, replies, by, alertId?)`.
+
+Seeded facts (`s.meta.facts.up`): `payrollStaffIds`, `newCashierStaffId`, `newCashierAgentId`, `lowCall[industry]`,
+`kenalMitra { heroBusinessId, heroRequestId, mismatchBusinessId, kycCleanDocId, kycEditedDocId, cvOpening, cvCount,
+shortlistSize }`, `brand { baselinePer2h, preSignalIds, reputationAt0700 }`, `shopBidderId`, `omzetYtdBefore`. Shop id:
+`s.meta.shopId`; competitors `s.meta.competitors`.
+
+### Events and toasts
+
+All events of plan §1.4 exist with the plan's payloads (types in `world/types.ts` `EventMap`). Follow-ups carry the
+CONSUMING product as `source`, so the cross-product toast is automatic; the toast link is `/demo/<target>?focus=<id>`
+where `<id>` is the first entity of the follow-up's audit row. **Toasts carry only `?focus=`** (no `?tab=`,
+`?industry=`, `?outlet=`): route the id to the right tab yourself. Ids your canvas receives:
+
+| Chain | Target | `?focus=` is |
+|---|---|---|
+| C14 sale → ledger | pajak-beres | ledger entry id (`JR-…`) |
+| C17 PO → WA chat | juara-jualan | call id (`CL-…`, industry toko-bangunan) |
+| C18 reply → nota | pajak-beres | purchase order id (`PO-…`) |
+| C20 price anomaly | toko-autopilot | product id (`SKU-…`, a warung/kopi `cm:` SKU ⇒ tab prediksi, its outlet) |
+| C22 tender matched | tenderpilot | tender id (`TD-…`) |
+| C25 bid → procurement | awas-belanja | procurement id (`PK-…`) |
+| C26 need → KYB | kenal-mitra | verification request id (`KM-…`, kind kyb) |
+| C28 flood → brand | pantau-merek | brand alert id (`BA-…`) |
+| C29 announcement → Kasir | toko-autopilot | announcement id (`BN-…`; `s.posNotices` is keyed by it) |
+| L1 `tax.ready` / L2 `partner.verified` (`EFFECT_ALSO`) | tenderpilot | latest tender matched to the shop |
+
+`'ledger→score'` emits `score.updated` only when the Rapor score actually changes (one small sale usually does not).
+
+### Kit components (import paths as plan §1.2)
+
+- `ChatThread({ messages, typing?, quickReplies?, onQuick?, quickDisabled?: Bi, highlightId?, label })` + `ChatComposer({
+  onSend, placeholder, label, sendLabel?, disabledReason?: Bi, value?, onFocus? })` from `demo-kit/ui`. Messages `{ id, side:
+  'me'|'them'|'system', text: Bi|string, at? (world minutes), status?: 'sent'|'delivered'|'read', author? }`. `role="log"
+  aria-live="polite"`; new bubbles slide 8 px (transform/opacity), opacity only under reduced motion, nothing under static.
+- `MoneyInput({ value: number|null, onChange(n|null), max?, …input props })`; `MonthCalendar({ month, today, events: { id,
+  at: 'YYYY-MM-DD', label, tone?, href? }[], onSelect?(date, events), compact?, label })` (arrows / Home / End / PageUp /
+  PageDown, week strip < 640 px); `icsFor(events, { lang?, calName?, stamp? })` → iCalendar text; `flyBetween(from, to, { duration })`.
+- `TextDiff({ before, after, mode: 'inline'|'split', label })` and `diffWords(a, b)` from `demo-kit/docs/TextDiff` (also in
+  the docs barrel); `terbilang(n, lang)` from `demo-kit/i18n/terbilang`; `useCamera({ facing })` from `demo-kit/media`.
+- Docs samples (import by MODULE): `finance` (`notaDoc(meta, { crumple?, tilt?, edited?, id? })`, `fakturDoc(meta, id?)`,
+  `mutasiDoc(rows, { bank?, holder, account?, period?, id? })`, `FICTIONAL_BANK` = 'Bank Wiyata Sentosa'); `permits`
+  (`kybSpecimens(subject, { mismatch?: 'alamat'|'nama' })` → `{ nib, npwp, akta|null, lokasi }`); `identity` (`ktpSpecimen`,
+  samples `ktp-joko`, `ktp-siti-edit`, `ktp-bambang`); `cv` (`generateCvs`, `cvFit`, `cvDoc`, `CV`). `simulateExtract`
+  handles kinds `npwp`, `akta`, `lokasi`. `kybCase(s, bizId).docs` already builds the KYB specimens for a business.
+- `Waveform` markers: ≥ 24 px hit area, `data-tone`, `data-marker=<id>`.
+- `/lab/_kit?only=up` shows ChatThread + ChatComposer, MonthCalendar (+ .ics), TextDiff and MoneyInput + terbilang.
+
+### Stubs and tests
+
+- `src/demos/<slug>/index.tsx` for the 6 slugs are STUBS (skeleton until ready, `missions = []`); the registry loaders
+  point at them; `DEMO_READY` is untouched (integrator). Builders replace the stub file.
+- World: `npx tsx src/demo-kit/world/__tests__/world.selftest.ts` runs `up.selftest.ts` (determinism, numbers, texts,
+  alive 07:01–07:03, C14–C29, store gate) on the mini fixture and the Bojonegoro pack.
+- `tests/e2e/chains.spec.ts` "chains 14 …" – "chain 29" = the world-level C14–C29 contract in the browser (lab shell +
+  `__gamada.ensure`).
+
+### Tahap 3 integration notes (2026-11-18, integrator)
+
+- `DEMO_READY` is flipped for the 6 Usaha Pintar demos. Links to them render as real `AppLink`s with `?focus=`.
+- `partner.verified` raises its `EFFECT_ALSO` toast (TenderPilot / Katalog Lokal) only for `subjectKind: 'business'`
+  (KYB). KYC and CV verifications raise no cross-product toast (a CV batch used to raise 10, naming candidates).
+- `ledger.reviewed` marks the entry `reviewed: true`; `mutasiRows` keeps the reviewed rows on the statement as `cocok`,
+  so the November statement is the same 40 rows before and after a review.
+- `pendingNotas` cold-start fallback never returns a PO whose nota is already booked.
+- `shiftPlan(s, toko, now).extra` always holds "+1 kasir 13.00–17.00" on Mon–Wed while a banjir alert is active.
+- The UP seed scales the history's weekly stock purchases to the history's HPP (+3 %): Persediaan is positive on the
+  balance sheet (self-test asserts it).
+- `kybSpecimens` site photo: house shape `y: 90, h: 440` (the door no longer gets a negative height).
+- `getSample(id)` (docs samples barrel) no longer resolves generated CVs (`cv-0001`…): the CV generator stayed in every
+  docs first load (Cek Berkas +3 KB). Build a CV document with `cvDoc(cv)` from `docs/samples/cv` (Kenal Mitra does).
+- Never `import()` a kit barrel (`demo-kit/ui`, `demo-kit/docs` …) dynamically from a product: it turns the barrel into
+  a dynamic entry and split `AppLink` / `routeLoaders` / `SectionHeader` out of the home entry chunk (home JS +1.1 KB).
+- Known kit limits (worked around in products, not changed): `stockRisk` skips `bahan` SKUs (C20 `cm:` SKUs show only
+  through `?focus=`); `LineChart` has no forecast band (use `AreaChart` with `forecast`); the kit `Gauge` and `Donut` pull
+  d3-shape + ChartFrame (≈ 9–12 KB) into a first load; `docs/extract.ts` imports the samples barrel (after-action only);
+  `world/usaha-pintar` lands as one ≈ 14.6 KB shared chunk for every UP product; Waveform markers at the same time stack.
+- React: `useEffect(() => el?.scrollIntoView(...))` returns whatever `scrollIntoView` returns (a Promise in current
+  Chrome), which React then calls as a cleanup ("destroy is not a function"). Always use a block body:
+  `useEffect(() => { el?.scrollIntoView(...) }, [...])`.

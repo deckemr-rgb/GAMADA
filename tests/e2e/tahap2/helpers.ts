@@ -9,7 +9,10 @@
 import type { Page, TestInfo } from '@playwright/test'
 import { expect } from '../fixtures'
 
-export const SLUGS = ['sapa-warga', 'meja-pimpinan', 'naskah-pintar', 'radar-isu', 'siaga-wilayah', 'awas-belanja', 'cek-berkas'] as const
+export const SD_SLUGS = ['sapa-warga', 'meja-pimpinan', 'naskah-pintar', 'radar-isu', 'siaga-wilayah', 'awas-belanja', 'cek-berkas'] as const
+/** tahap 3 · Usaha Pintar (DEMO_READY since 2026-11-18): the shared suites (no dead controls, region + language) cover them too */
+export const UP_SLUGS = ['toko-autopilot', 'pajak-beres', 'juara-jualan', 'kenal-mitra', 'pantau-merek', 'tenderpilot'] as const
+export const SLUGS = [...SD_SLUGS, ...UP_SLUGS] as const
 export type Slug = (typeof SLUGS)[number]
 
 /** default role + one alternative role per product (content/products.ts) */
@@ -21,6 +24,12 @@ export const ROLES: Record<Slug, [string, string]> = {
   'siaga-wilayah': ['bpbd', 'kepala-daerah'],
   'awas-belanja': ['ukpbj', 'inspektorat'],
   'cek-berkas': ['perizinan', 'dinsos'],
+  'toko-autopilot': ['pemilik-toko', 'kasir'],
+  'pajak-beres': ['pemilik-toko', 'konsultan-pajak'],
+  'juara-jualan': ['supervisor-sales', 'agen-sales'],
+  'kenal-mitra': ['analis-kyc', 'bank-mitra'],
+  'pantau-merek': ['brand-manager', 'pemilik-toko'],
+  tenderpilot: ['vendor', 'vendor'],
 }
 
 /** the product's root element (CSS prefix of each product) */
@@ -32,6 +41,13 @@ export const ROOT: Record<Slug, string> = {
   'siaga-wilayah': '.dk-sg',
   'awas-belanja': '.dk-ab',
   'cek-berkas': '.dk-cb',
+  // Usaha Pintar canvases render a skeleton until the ecosystem module is in: the root is the loaded one
+  'toko-autopilot': '.dk-ta:not([aria-busy])',
+  'pajak-beres': '.dk-pb:not(.dk-pb-skel)',
+  'juara-jualan': '.dk-jj:not([aria-busy])',
+  'kenal-mitra': '.dk-km:not(.dk-km-skel)',
+  'pantau-merek': '.dk-pm:not(:has(.dk-pm-skel))',
+  tenderpilot: '.dk-tp:not(.dk-tp-skel)',
 }
 
 export const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } as const
@@ -49,6 +65,15 @@ export async function openDemo(page: Page, slug: Slug, o: OpenOpts = {}): Promis
   const q = new URLSearchParams({ off: 'preloader', e2e: '1' })
   if (o.lang) q.set('lang', o.lang)
   if (o.role) q.set('role', o.role)
+  // Pantau Merek and TenderPilot start the clock by themselves once per session: mark it as done (deterministic)
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('gamada:pm:autoplay', '1')
+      sessionStorage.setItem('gamada:tp:autoplay', '1')
+    } catch {
+      /* ignore */
+    }
+  })
   await page.goto(`/demo/${slug}?${q.toString()}${o.extra ? `&${o.extra}` : ''}`)
   await waitWorld(page)
   await expect(page.locator(ROOT[slug]).first()).toBeVisible({ timeout: 20_000 })

@@ -1,0 +1,116 @@
+/**
+ * demos/juara-jualan/clips-tb.ts — Toko Bangunan transcripts (first load): 3 WA chats + 3 phone calls, one per weak
+ * criterion, plus the WA pre-order chat of chain C17 (`tb-wa-prapesan`). Lines: [speaker, id, en, tags, fixId, fixEn].
+ */
+import type { ClipLib } from './clips'
+
+export const TB: ClipLib = {
+  'tb-wa-salam': {
+    items: [['keramik', 'Keramik 40x40 polos']],
+    lines: [
+      ['c', 'Pagi, stok {item} masih ada?', 'Morning, is {item} still in stock?'],
+      ['a', 'Ada. Mau berapa?', 'Yes. How many?', 'salam-',
+        'Seharusnya: “Selamat pagi {Hon} {cust}, saya {agent} dari {org}. {item} ada, untuk berapa meter persegi?”',
+        'Should have: “Good morning {Hon} {cust}, this is {agent} from {org}. {item} is in stock, for how many square metres?”'],
+      ['c', 'Buat lantai dapur, kira-kira 12 meter persegi.', 'For a kitchen floor, about 12 square metres.'],
+      ['a', 'Dapurnya sering basah, {hon}? Kalau iya saya sarankan permukaan yang tidak licin.', 'Does the kitchen get wet often, {hon}? If so I would suggest a non-slip surface.', 'gali+'],
+      ['c', 'Kok lebih mahal dari toko sebelah ya?', 'Why is it pricier than the shop next door?'],
+      ['a', 'Selisihnya sedikit, {hon}, tapi kami antar gratis dalam kota dan bisa tukar kalau ada yang pecah.', 'The difference is small, {hon}, but we deliver free in town and swap any broken tiles.', 'keberatan+'],
+      ['a', '{item} {price} per {unit}; untuk 12 m² butuh sekitar 8 {unit}.', '{item} is {price} per {unit}; 12 m² needs about 8.', 'penawaran+ kepatuhan+'],
+      ['c', 'Oke, saya ambil sore ini.', 'OK, I will pick them up this afternoon.'],
+      ['a', 'Siap, saya catat 8 {unit} atas nama {Hon} {cust}, siap diambil jam 3 sore.', 'Done, 8 noted under {Hon} {cust}, ready for pick-up at 3 pm.', 'closing+'],
+    ],
+  },
+  'tb-wa-gali': {
+    items: [['cat', 'Cat tembok'], ['semen', 'Semen tahan air']],
+    lines: [
+      ['c', 'Mas, cat tembok yang bagus apa ya?', 'Hi, which wall paint is good?'],
+      ['a', 'Selamat siang {Hon} {cust}, saya {agent} dari {org}.', 'Good afternoon {Hon} {cust}, this is {agent} from {org}.', 'salam+'],
+      ['a', 'Pakai {item} saja, {hon}, {price} per {unit}, paling laku.', 'Just take {item}, {hon}, {price} per {unit}, our best seller.', 'gali- penawaran+',
+        'Seharusnya: tanya dulu dinding dalam atau luar, luasnya berapa, dan ada rembesan atau tidak, baru sarankan cat.',
+        'Should have: ask first whether it is an inside or outside wall, how big, and whether it seeps, then suggest a paint.'],
+      ['c', 'Lho, ini buat dinding luar yang suka rembes kalau hujan.', 'Well, it is for an outside wall that seeps when it rains.'],
+      ['a', 'Untuk dinding luar yang rembes sebaiknya dilapis {item2} dulu, baru dicat.', 'For a seeping outside wall it is better to coat it with {item2} first, then paint.', 'keberatan+'],
+      ['c', 'Jadi tambah biaya dong.', 'So it costs more.'],
+      ['a', 'Iya, {hon}, tapi tidak perlu cat ulang tiap musim hujan. Saya hitungkan totalnya sebelum {hon} memutuskan.', 'Yes, {hon}, but you will not repaint every rainy season. I will work out the total before you decide.', 'kepatuhan+'],
+      ['a', 'Rinciannya saya kirim sekarang; kalau cocok, barang bisa diantar besok pagi.', 'I am sending the breakdown now; if it suits you, we can deliver tomorrow morning.', 'closing+'],
+    ],
+  },
+  'tb-wa-penawaran': {
+    items: [['atap', 'Spandek 0,30']],
+    lines: [
+      ['c', 'Mau tanya harga atap spandek buat kanopi 3x5 meter.', 'I would like a price for metal roofing for a 3x5 metre canopy.'],
+      ['a', 'Selamat pagi {Hon} {cust}, saya {agent} dari {org}. Kanopinya untuk carport atau teras?', 'Good morning {Hon} {cust}, this is {agent} from {org}. Is the canopy for a carport or a terrace?', 'salam+ gali+'],
+      ['c', 'Carport, mobil satu.', 'A carport, one car.'],
+      ['a', 'Ada macam-macam, {hon}, ada yang tipis ada yang tebal, harganya beda-beda.', 'There are all kinds, {hon}, thin ones and thick ones, prices vary.', 'penawaran-',
+        'Seharusnya: sebut satu pilihan lengkap dengan harganya, misalnya {item} {price} per {unit}, berapa yang dibutuhkan, dan ongkos antarnya.',
+        'Should have: name one option with its price, e.g. {item} at {price} per {unit}, how much is needed, and the delivery cost.'],
+      ['c', 'Jadi totalnya kira-kira berapa?', 'So roughly how much in total?'],
+      ['a', 'Maaf kurang jelas, {hon}. Saya hitungkan atap dan rangka baja ringannya, lalu saya kirim dalam 10 menit.', 'Sorry that was unclear, {hon}. I will price the roofing and the light-steel frame and send it within 10 minutes.', 'keberatan+ kepatuhan+'],
+      ['c', 'Oke, ditunggu.', 'OK, I will wait.'],
+      ['a', 'Siap. Setelah {hon} setuju, saya jadwalkan antar Kamis pagi.', 'Sure. Once you agree I will book the delivery for Thursday morning.', 'closing+'],
+    ],
+  },
+  'tb-tel-keberatan': {
+    items: [['semen', 'Semen PCC']],
+    lines: [
+      ['a', 'Selamat pagi {Hon} {cust}, saya {agent} dari {org}, menindaklanjuti pesanan {item} kemarin.', 'Good morning {Hon} {cust}, this is {agent} from {org}, following up on yesterday’s {item} order.', 'salam+'],
+      ['a', 'Bangunannya berapa lantai, {hon}, dan kapan mulai dicor?', 'How many floors is the building, {hon}, and when does the pour start?', 'gali+'],
+      ['c', 'Dua lantai, mulai Senin. Tapi di tempat lain lebih murah lima ribu per sak.', 'Two floors, from Monday. But elsewhere it is five thousand cheaper per bag.'],
+      ['a', 'Harga kami memang segitu, {hon}. Jadi tetap pesan?', 'That is simply our price, {hon}. So are you still ordering?', 'keberatan-',
+        'Seharusnya: jangan langsung mendesak; sebut nilai yang didapat (antar gratis, bayar setelah barang sampai, stok terjamin sampai Senin), lalu tawarkan harga grosir mulai 50 sak.',
+        'Should have: not push straight away; name the value (free delivery, pay on arrival, stock held until Monday), then offer the wholesale price from 50 bags.'],
+      ['c', 'Ya nanti saya bandingkan lagi.', 'Well, I will compare again later.'],
+      ['a', '{item} {price} per {unit}, siap kirim hari Sabtu.', '{item} is {price} per {unit}, ready to ship on Saturday.', 'penawaran+'],
+      ['a', 'Harga sudah termasuk antar dalam kota, tidak ada biaya lain.', 'The price includes delivery in town, no other charges.', 'kepatuhan+'],
+      ['a', 'Saya tahan stoknya sampai jam 5 sore ini, {hon}; kabari saya kalau jadi.', 'I will hold the stock until 5 pm today, {hon}; let me know if you go ahead.', 'closing+'],
+    ],
+  },
+  'tb-tel-closing': {
+    items: [['bata', 'Bata ringan 10']],
+    lines: [
+      ['a', 'Selamat siang {Hon} {cust}, saya {agent} dari {org}.', 'Good afternoon {Hon} {cust}, this is {agent} from {org}.', 'salam+'],
+      ['a', 'Kemarin {hon} tanya {item}; untuk rumah baru atau tambah kamar?', 'Yesterday you asked about {item}; is it for a new house or an extra room?', 'gali+'],
+      ['c', 'Tambah satu kamar, dindingnya sekitar 30 meter persegi.', 'One extra room, about 30 square metres of wall.'],
+      ['a', 'Untuk 30 m² butuh sekitar 3 {unit} {item}, {price} per {unit}, ditambah semen perekat.', 'For 30 m² you need about 3 {unit} of {item}, {price} per {unit}, plus bonding mortar.', 'penawaran+'],
+      ['c', 'Kok mahal ya dibanding bata merah?', 'Isn’t that expensive compared with red brick?'],
+      ['a', 'Per meternya memang lebih mahal, tapi pasangnya cepat dan hemat semen, jadi ongkos tukang turun.', 'Per metre it costs more, but it goes up fast and saves mortar, so labour costs drop.', 'keberatan+'],
+      ['a', 'Hitungan ini perkiraan; jumlah pastinya kita cek dari gambar kamarnya.', 'This is an estimate; we will check the exact amount against the room plan.', 'kepatuhan+'],
+      ['c', 'Oke, makasih infonya.', 'OK, thanks for the info.'],
+      ['a', 'Sama-sama, {hon}, selamat siang.', 'You are welcome, {hon}, good afternoon.', 'closing-',
+        'Seharusnya: tawarkan langkah berikutnya, misalnya “Boleh kirim foto denahnya? Saya hitungkan pasti dan kami bisa antar Sabtu pagi.”',
+        'Should have: offer the next step, e.g. “Could you send a photo of the plan? I will price it exactly and we can deliver on Saturday morning.”'],
+    ],
+  },
+  'tb-tel-kepatuhan': {
+    items: [['pipa', 'Pipa PVC']],
+    lines: [
+      ['a', 'Selamat pagi {Hon} {cust}, saya {agent} dari {org}.', 'Good morning {Hon} {cust}, this is {agent} from {org}.', 'salam+'],
+      ['a', 'Pipanya untuk air bersih atau pembuangan, {hon}?', 'Is the pipe for clean water or drainage, {hon}?', 'gali+'],
+      ['c', 'Air bersih dari sumur. Pipanya awet tidak?', 'Clean water from the well. Does the pipe last?'],
+      ['a', 'Dijamin tidak bocor seumur hidup, {hon}, 100 persen.', 'Guaranteed never to leak for life, {hon}, 100 percent.', 'kepatuhan-',
+        'Seharusnya: sebut garansi pabrik yang sebenarnya dan syaratnya (dipasang sesuai standar), tanpa janji “seumur hidup”.',
+        'Should have: state the real factory warranty and its conditions (installed to standard), with no “for life” promise.'],
+      ['c', 'Harganya berapa?', 'How much is it?'],
+      ['a', '{item} {price} per {unit}.', '{item} is {price} per {unit}.', 'penawaran+'],
+      ['c', 'Wah, di pasar ada yang lebih murah.', 'Hmm, there are cheaper ones at the market.'],
+      ['a', 'Yang murah biasanya lebih tipis, {hon}; untuk tekanan pompa sumur lebih aman yang ini, dan kami bantu potong sesuai ukuran.', 'The cheap ones are usually thinner, {hon}; for well-pump pressure this one is safer, and we cut it to size for you.', 'keberatan+'],
+      ['a', 'Saya siapkan 10 {unit}; diambil besok pagi atau diantar?', 'I will set aside 10; pick up tomorrow morning or delivered?', 'closing+'],
+    ],
+  },
+  'tb-wa-prapesan': {
+    lines: [
+      ['c', 'Assalamualaikum. Kami pengurus musala Desa {desa}. Air sungai naik, kami butuh {item} dan {item2} secepatnya.', 'Good morning. We are the prayer-house committee of {desa} village. The river is rising and we need {item} and {item2} as soon as possible.'],
+      ['a', 'Waalaikumsalam, {Hon}. Saya {agent} dari {org}. Kebutuhannya berapa banyak?', 'Good morning. This is {agent} from {org}. How many do you need?', 'salam+ gali+'],
+      ['c', 'Sekitar 200 karung dan 4 terpal. Ada stoknya?', 'About 200 bags and 4 tarps. Do you have stock?'],
+      ['a', 'Stok kami sedang menipis; sudah kami pesan ke pemasok dengan nomor {poCode}.', 'Our stock is running low; we have ordered from the supplier under {poCode}.', 'kepatuhan+'],
+      ['a', '{item} {price} per {unit}, {item2} {price2} per {unit2}. Harga tidak kami naikkan selama banjir.', '{item} is {price} per {unit}, {item2} {price2} per {unit2}. We do not raise prices during the flood.', 'penawaran+'],
+      ['c', 'Kapan barangnya datang? Kami tidak bisa menunggu lama.', 'When will the goods arrive? We cannot wait long.'],
+      ['a', 'Perkiraan tiba dari pemasok: {eta}. Begitu barang masuk, pesanan musala kami siapkan lebih dulu.', 'Expected arrival from the supplier: {eta}. As soon as the goods are in, we prepare the prayer-house order first.', 'keberatan+'],
+      ['c', 'Ya sudah, kabari kami ya.', 'All right, keep us posted.'],
+      ['a', 'Baik.', 'Will do.', 'closing-',
+        'Seharusnya: kunci pesanannya sekarang, misalnya catat jumlahnya untuk {poCode}, minta nomor penerima, dan tawarkan bayar di tempat saat barang diantar.',
+        'Should have: lock in the order now, e.g. note the quantity against {poCode}, ask for the recipient’s number and offer cash on delivery.'],
+    ],
+  },
+}

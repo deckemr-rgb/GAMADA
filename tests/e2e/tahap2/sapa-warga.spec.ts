@@ -52,10 +52,31 @@ test('Sapa Warga · all 5 missions + pass checks (1440, ID)', async ({ page, err
   await page.locator('[data-sw="verify"]').click()
   const phoneMsgs = () => phone.locator('[data-wmsg]').count()
   const n0 = await phoneMsgs()
-  const tf = Date.now()
+  // the ≤ 1 s is measured in the page, from the click event to the new phone message (a wall clock around
+  // Playwright's click + polling also counted the harness's own round trips, > 1 s under the 4-worker full suite)
+  const latency = page.evaluate(
+    (count) =>
+      new Promise<number>((resolve) => {
+        const root = document.querySelector('.dk-sw-phone, .dk-sw')!
+        document.querySelector('[data-sw="forward"]')!.addEventListener(
+          'click',
+          () => {
+            const t0 = performance.now()
+            const tick = () => {
+              if (root.querySelectorAll('[data-wmsg]').length > count) resolve(performance.now() - t0)
+              else if (performance.now() - t0 > 5_000) resolve(Number.POSITIVE_INFINITY)
+              else requestAnimationFrame(tick)
+            }
+            tick()
+          },
+          { once: true, capture: true },
+        )
+      }),
+    n0,
+  )
   await page.locator('[data-sw="forward"]').click()
-  await expect.poll(phoneMsgs, { timeout: 1_000, intervals: [50, 100, 100, 100, 200, 200, 250] }).toBeGreaterThan(n0)
-  expect(Date.now() - tf).toBeLessThanOrEqual(1_000)
+  expect(await latency).toBeLessThanOrEqual(1_000)
+  expect(await phoneMsgs()).toBeGreaterThan(n0)
   await expect.poll(() => missionsDone(page, 'sapa-warga')).toContain('forward')
   await page.locator('[data-sw="process"]').click()
   await page.locator('[data-sw="after-photo"]').click()
