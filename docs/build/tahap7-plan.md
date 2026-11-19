@@ -342,7 +342,7 @@ laporan akhir`. No push, no deploy.
 
 ---
 
-## 7 · Owner questions (each with a default)
+## 7 · Owner questions: ALL APPROVED by the owner on 2026-11-19 ("oke semua"); use the defaults exactly as written below (Q4: one wow pass, no re-score)
 
 **Q1 · Bahasa daerah dan teks contoh.** Kota Bandung memakai **Basa Sunda** dan Kota Padang memakai **Baso Minang**.
 Kalimat aduan dan sapaan contoh (minimal 12 per kota) ditulis tim GAMADA, diberi terjemahan ID + EN, dan diberi
