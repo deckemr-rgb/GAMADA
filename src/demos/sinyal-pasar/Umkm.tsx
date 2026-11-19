@@ -41,7 +41,7 @@ const S = {
     noSku: 'Bahan ini tidak ada di stok toko Anda.',
     forecast: 'Buka prediksi stok',
     side: 'Bahan yang Anda pakai',
-    sideLead: 'Stok bahan warung dari Toko Autopilot (simulasi).',
+    sideLead: 'Stok bahan di outlet makanan usaha Anda, per outlet (Toko Autopilot, simulasi). Toko bangunan tidak memakai komoditas ini.',
     left: (q: string, u: string) => `stok ${q} ${u}`,
     days: (d: string) => `cukup ±${d} hari`,
     subTitle: 'Langganan peringatan',
@@ -74,7 +74,7 @@ const S = {
     noSku: 'This ingredient is not in your shop’s stock.',
     forecast: 'Open the stock forecast',
     side: 'Ingredients you use',
-    sideLead: 'Eatery ingredient stock from Toko Autopilot (simulated).',
+    sideLead: 'Ingredient stock of your business’s food outlets, per outlet (Toko Autopilot, simulated). The building-supply shop does not use these commodities.',
     left: (q: string, u: string) => `${q} ${u} in stock`,
     days: (d: string) => `lasts about ${d} days`,
     subTitle: 'Alert subscription',
@@ -285,7 +285,8 @@ function Ingredients({ t, L, now }: { t: T; L: Lang; now: number }) {
     (s) =>
       rows(s.products)
         .filter((p) => p.businessId === shop && p.tags.some((x) => x.startsWith('cm:')))
-        .map((p) => ({ id: p.id, name: p.name, unit: p.unit, onHand: s.stock.byId[p.id]?.onHand ?? 0, daysLeft: demandForecast(s, p.id, now)?.daysLeft ?? null })),
+        .map((p) => ({ id: p.id, outlet: s.outlets.byId[p.outletId]?.name ?? '', name: p.name, unit: p.unit, onHand: s.stock.byId[p.id]?.onHand ?? 0, daysLeft: demandForecast(s, p.id, now)?.daysLeft ?? null }))
+        .sort((a, b) => a.outlet.localeCompare(b.outlet)),
     (a, b) => a.length === b.length && a.every((x, i) => x.id === b[i]!.id && x.onHand === b[i]!.onHand && x.daysLeft === b[i]!.daysLeft),
   )
   const n = (v: number, d = 0) => v.toLocaleString(L === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: d })
@@ -293,15 +294,20 @@ function Ingredients({ t, L, now }: { t: T; L: Lang; now: number }) {
     <aside className="dk-sp-ingr" aria-label={t.side}>
       <h3>{t.side}</h3>
       <p className="dk-sp-muted">{t.sideLead}</p>
-      <ul>
-        {list.map((x) => (
-          <li key={x.id} data-sku={x.id}>
-            <strong>{x.name}</strong>
-            <span className="dk-num">{t.left(n(x.onHand, 1), x.unit)}</span>
-            {x.daysLeft != null && <span className="dk-sp-muted dk-num">{t.days(n(x.daysLeft, 1))}</span>}
-          </li>
-        ))}
-      </ul>
+      {[...new Set(list.map((x) => x.outlet))].map((o) => (
+        <div key={o} data-sp="ingr-outlet">
+          <h4 className="dk-sp-muted">{o}</h4>
+          <ul>
+            {list.filter((x) => x.outlet === o).map((x) => (
+              <li key={x.id} data-sku={x.id}>
+                <strong>{x.name}</strong>
+                <span className="dk-num">{t.left(n(x.onHand, 1), x.unit)}</span>
+                {x.daysLeft != null && <span className="dk-sp-muted dk-num">{t.days(n(x.daysLeft, 1))}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
       <CommodityNote L={L} />
     </aside>
   )

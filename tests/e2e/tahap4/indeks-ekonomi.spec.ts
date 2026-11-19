@@ -80,6 +80,8 @@ test.describe('indeks-ekonomi · desktop', () => {
     const ev = await W<{ kec: string; index: number; delta: number }[]>(page, `const out = []; for (const id of s.econIndex.ids) { const c = s.econIndex.byId[id]; for (const e of c.events ?? []) if (e.kind === 'banjir') out.push({ kec: c.kecamatanId, index: e.index, delta: e.delta }) } return out`)
     expect(ev.length).toBeGreaterThan(0)
     for (const e of ev) expect(e.index).toBeCloseTo(Math.round(before[e.kec]!.index * (1 - (0.04 + 0.05 * before[e.kec]!.risk)) * 10) / 10, 5)
+    // T5 (b): the scrubber label (latest month) reads the same index as the regency KPI after the flood
+    await expect.poll(async () => (await page.locator('[data-hotspot="ie-play"] output').innerText()).endsWith(`indeks ${(await page.locator('.dk-ie-kpis .dk-kpi.is-hero .dk-kpi-val .dk-num').first().innerText()).trim()}`), { timeout: 4000 }).toBe(true)
     await expect.poll(() => missions(page)).toContain('banjir')
     await page.locator('[data-ie="flood-banner"]').click()
     const lowEv = ev.filter((e) => !f.hidden.includes(e.kec)).sort((a, b) => a.index - b.index)[0]!

@@ -95,6 +95,8 @@ test('Rapor Usaha · 5 missions + numbers agree: 710 → 740 → 820, plafon 150
   await page.locator('[data-ru="approve-reviews"]').click()
   await expect.poll(() => shopScore(page), { timeout: 8000 }).toBe(740)
   await expect.poll(() => dialText(page)).toBe(740)
+  // T5 (d): the live line names the change since the session start (+30), the last step (+10) apart
+  await expect(page.locator('.dk-ru-dialcard [aria-live]')).toHaveText('Skor sekarang 740 (+30 sejak awal sesi; langkah terakhir +10)')
   await expect.poll(() => missionsDone(page)).toContain('naik')
   expect(await W<string[]>(page, `Object.values(s.ledger.byId).filter((j) => j.businessId === s.meta.shopId && j.reviewed).map((j) => j.lines.reduce((a, l) => a + l.debit - l.credit, 0) === 0)`)).toEqual([true, true, true])
   await page.keyboard.press('Escape')

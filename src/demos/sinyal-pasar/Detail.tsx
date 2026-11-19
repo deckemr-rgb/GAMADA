@@ -35,7 +35,8 @@ const S = {
     source: 'Data simulasi · pola musiman 60 hari dunia demo (bukan harga acuan resmi)',
     summary: (item: string, p: string, d: number, now: string) => `${item} sekarang ${now}; prakiraan puncak ${p} dari pola musiman pada hari +${d} (proyeksi, simulasi).`,
     factors: 'Faktor prakiraan',
-    econ: (k: string, d: string) => `Indeks omzet Kec. ${k} ${d} hari ini (Indeks Ekonomi, simulasi)`,
+    factorsSum: (p: string) => `Puncak prakiraan ${p} =`,
+    econ: (k: string, d: string) => `Indeks ekonomi Kec. ${k} ${d} poin hari ini (Indeks Ekonomi, simulasi)`,
     actions: 'Tindakan',
     recommend: 'Rekomendasikan operasi pasar',
     watch: 'Pantau distributor',
@@ -76,7 +77,8 @@ const S = {
     source: 'Simulated data · 60-day seasonal pattern of the demo world (not an official reference price)',
     summary: (item: string, p: string, d: number, now: string) => `${item} now ${now}; forecast peak ${p} above the seasonal pattern on day +${d} (projection, simulated).`,
     factors: 'Forecast factors',
-    econ: (k: string, d: string) => `Turnover index of ${k} ${d} today (Indeks Ekonomi, simulated)`,
+    factorsSum: (p: string) => `Forecast peak ${p} =`,
+    econ: (k: string, d: string) => `Economic index of ${k} ${d} points today (Indeks Ekonomi, simulated)`,
     actions: 'Actions',
     recommend: 'Recommend a market operation',
     watch: 'Watch distributors',
@@ -174,6 +176,7 @@ export default function Detail({ id }: { id: string }) {
           summary={t.summary(item, pct(outlook.peakPct, L), outlook.peakDay, rp(row.price))}
         />
         <div className="dk-sp-factors" role="group" aria-label={t.factors}>
+          <span className="dk-sp-muted" data-sp="factor-sum">{t.factorsSum(pct(outlook.peakPct, L))}</span>
           {outlook.factors.map((f) => (
             <span key={f.key} className={`dk-sp-factor is-${f.key}`} data-factor={f.key}>
               {f.label[L]} <strong className="dk-num">{pct(f.pct, L)}</strong>
@@ -182,7 +185,7 @@ export default function Detail({ id }: { id: string }) {
         </div>
         {ev && (
           <p className="dk-sp-context" data-sp="econ-line">
-            {t.econ(kecName, pct(ev.delta, L))}
+            {t.econ(kecName, pct(ev.delta, L).slice(0, -1))}
           </p>
         )}
         <section className="dk-sp-actions" aria-label={t.actions}>

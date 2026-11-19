@@ -206,11 +206,11 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
         )}
       </div>
       <form ref={formRef} className="dk-mp-askform" onSubmit={submit}>
-        <Input value={text} onChange={(e) => setText(e.target.value)} onFocus={prepare} placeholder={A.ph[lang]} aria-label={A.label[lang]} />
+        <Input value={text} onChange={(e) => setText(e.target.value)} onFocus={prepare} placeholder={A.ph[lang]} aria-label={A.label[lang]} data-tour="mp-ask" />
         {chat.busy ? (
           <IconButton icon="close" variant="quiet" label={A.stop[lang]} onClick={chat.stop} />
         ) : (
-          <Button type="submit" variant="primary" size="sm" icon="send" disabled={!text.trim()}>
+          <Button type="submit" variant="primary" size="sm" icon="send" disabled={!text.trim()} data-tour="mp-ask-send">
             {A.send[lang]}
           </Button>
         )}

@@ -14,6 +14,9 @@
  * 6. interim — on a placeholder canvas the shell shows no role / clock / AI / reset controls; the "Yang akan bisa Anda
  *              coba" panel shows the ?t time and the ?role chip as current, and holds no button / input.
  * 7. gutter  — placeholder at 390 px: the title and the preview panel start 16 px (± 2) from the viewport edge.
+ * 8. tour    — (Tahap 5 K2/K4) /demo/<slug>?world=tour&from=tur-4: "Kembali ke tur" (44 px) → /tur/4?resume=1 with region +
+ *              lang, the shell keeps ?world=tour&from=tur-4 in its URL, the world scope is 'tour', and the bar still fits;
+ *              without ?world the button is absent and the scope is the visitor's own ('default').
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -23,7 +26,7 @@ import { join } from 'node:path'
 const BASE = (process.argv[2] || 'http://127.0.0.1:5173').replace(/\/$/, '')
 // interim + gutter need a product that is not DEMO_READY: since tahap 4 every product is READY, so they only run when
 // asked for explicitly (e.g. after un-flipping a product locally)
-const ONLY = (process.argv[3] || 'fit,touch,focus,lang,live').split(',')
+const ONLY = (process.argv[3] || 'fit,touch,focus,lang,live,tour').split(',')
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -250,7 +253,22 @@ async function gutter(b) {
   ok(q && [q.title, q.chips, q.digits].every((x) => x !== null && Math.abs(x - 16) <= 2) && q.stages !== null && Math.abs(q.stages - 374) <= 2, `preview panel edges: ${JSON.stringify(q)} (left 16, right 374)`)
 }
 
-const TESTS = { fit, touch, focus, lang, live, interim, gutter }
+async function tour(b) {
+  console.log('tour: a sandbox taken over from the tour (K2 ?world=tour&from, K4 "Kembali ke tur")')
+  for (const [w, h, mobile] of [[1440, 900, false], [1024, 768, false], [390, 844, true]]) {
+    await b.open('/demo/sapa-warga?world=tour&from=tur-4&lang=en&e2e=1', w, h, mobile, 1200, '[data-tour="back-to-tour"]')
+    const r = await b.ev(`(() => { const a = document.querySelector('[data-tour="back-to-tour"]'); if (!a) return null; const q = a.getBoundingClientRect(); return { href: a.getAttribute('href'), h: Math.round(q.height), w: Math.round(q.width), label: a.getAttribute('aria-label'), url: location.search, scope: window.__gamada ? window.__gamada.world.scope() : null } })()`)
+    ok(!!r && /^\/tur\/4\?resume=1&region=bojonegoro&lang=en$/.test(r.href) && r.h >= 44 && r.w >= 44 && r.label === 'Back to the tour' && r.scope === 'tour', `${w}: back-to-tour ${JSON.stringify(r)}`)
+    ok(!!r && /world=tour/.test(r.url) && /from=tur-4/.test(r.url), `${w}: the shell keeps world=tour&from=tur-4 in its URL (${r?.url})`)
+    const m = await b.ev(MEASURE_BAR)
+    ok(!!m && m.barSW <= m.barCW, `${w}: bar fits with the button (${m?.barSW}/${m?.barCW})`)
+  }
+  await b.open('/demo/sapa-warga?lang=id&e2e=1', 1440, 900, false, 1500)
+  ok(!(await b.ev(`!!document.querySelector('[data-tour="back-to-tour"]')`)), 'a plain sandbox has no "Kembali ke tur"')
+  ok((await b.ev(`window.__gamada ? window.__gamada.world.scope() : null`)) === 'default', 'a plain sandbox runs the visitor world (scope default)')
+}
+
+const TESTS = { fit, touch, focus, lang, live, interim, gutter, tour }
 const b = await browser()
 try {
   for (const name of ONLY) if (TESTS[name]) await TESTS[name](b)

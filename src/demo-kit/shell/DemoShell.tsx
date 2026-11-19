@@ -53,6 +53,14 @@ export interface DemoShellProps {
    * clock, AI mode or reset, so those controls are not shown and the clock is paused (spec §8.5: no dead controls).
    */
   interim?: boolean
+  /**
+   * 'tour' (Tahap 5, the tour's stage): only the product name, the toasts and `tourSlot` stay. No role / clock / AI /
+   * reset / palette / guide / hotspot / "⋯", no keyboard shortcuts, never writes the URL, never applies ?t (the tour owns
+   * the clock), AI forced to Simulasi, the session scope is 'tour' (the tour's world). Default 'sandbox'.
+   */
+  mode?: 'sandbox' | 'tour'
+  /** mode 'tour': rendered at the end of the top bar (the tour's "Ambil alih" button) */
+  tourSlot?: ReactNode
   className?: string
 }
 
@@ -118,7 +126,11 @@ export function DemoShell(props: DemoShellProps) {
   )
 }
 
-function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, toastPlacement, splitTabs, layout = 'page', syncUrl = true, interim = false, className }: DemoShellProps) {
+function DemoShellFrame({ product: slug, canvas, children, missions: missionsProp, hotspot: hotspotProp, toastPlacement, splitTabs, layout = 'page', syncUrl: syncUrlProp = true, interim = false, mode = 'sandbox', tourSlot, className }: DemoShellProps) {
+  const tour = mode === 'tour'
+  const missions = tour ? undefined : missionsProp
+  const hotspot = tour ? undefined : hotspotProp
+  const syncUrl = syncUrlProp && !tour
   const product: ProductDef = PRODUCT_BY_SLUG[slug]
   const t = useDemoStrings()
   const { lang, setLang } = useI18n()
@@ -137,7 +149,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
   const sameWorld = () => {
     const s = world.get()
     const want = getSession()
-    return world.status() === 'ready' && s.regionId === want.regionId && s.seed === want.seed
+    return world.status() === 'ready' && s.regionId === want.regionId && s.seed === want.seed && world.scope() === want.scope
   }
 
   useLayoutEffect(() => {
@@ -149,11 +161,14 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       regionId: query.region ?? (s.regionId || DEFAULT_REGION_ID),
       seed: query.seed ?? s.seed,
       role: query.role ?? product.defaultRole,
-      present: query.present ?? false,
+      present: !tour && (query.present ?? false),
       // Live survives cross-product jumps (demoHref carries ?ai=live); ?ai=sim forces Simulasi. Live is dropped only
       // when the proxy is down (effect below).
-      aiMode: query.ai ?? s.aiMode,
+      aiMode: tour ? 'sim' : (query.ai ?? s.aiMode),
       lang: want,
+      // the tour's stage always runs on the tour's world; a sandbox on ?world=tour (Ambil alih) too, else the visitor's own
+      scope: tour ? 'tour' : (query.world ?? 'default'),
+      from: tour ? null : (query.from ?? null),
     })
     if (interim) clock.pause()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,11 +193,12 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
 
   useEffect(() => {
     let alive = true
-    const { regionId, seed } = session
+    const { regionId, seed, scope } = session
     const applyT = () => {
       if (appliedT.current) return
       appliedT.current = true
-      if (query.t == null) return
+      // the tour owns the clock
+      if (query.t == null || tour) return
       // a restored or already-running world never goes back in time (Back restores an older ?t=): events after
       // that minute already exist, so moving the clock behind them would show the future
       const cur = clock.get().minutes
@@ -204,7 +220,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     ;(async () => {
       try {
         const p = await loadRegion(regionId)
-        if (!reuse) await loadWorld(p, seed)
+        if (!reuse) await loadWorld(p, seed, { scope })
         if (!alive) return
         applyT()
         setPack(p)
@@ -217,7 +233,9 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.regionId, session.seed, attempt, interim])
+  }, [session.regionId, session.seed, session.scope, attempt, interim])
+
+
 
   // the event pipeline chunk is fetched on the first emit(); start it on the visitor's first interaction instead,
   // so the first event a click raises does not wait for it (live canvases only)
@@ -229,6 +247,8 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       window.removeEventListener('pointerdown', go, true)
       window.removeEventListener('keydown', go, true)
     }
+    // the tour plays its steps without a visitor's first interaction: the pipeline + the eco's chains are intent
+    if (tour) return go()
     window.addEventListener('pointerdown', go, true)
     window.addEventListener('keydown', go, true)
     // cleanup only detaches: unmounting must not start the download
@@ -359,8 +379,9 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
   )
   const fullscreen = useFullscreen(() => root.current)
 
-  // Ctrl/Cmd + K → palette; "?" (outside text fields) → guide
+  // Ctrl/Cmd + K → palette; "?" (outside text fields) → guide (not on the tour's stage: the tour owns the keyboard)
   useEffect(() => {
+    if (tour) return
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -379,7 +400,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [hasGuide, slug])
+  }, [hasGuide, slug, tour])
 
   /* ---------------------------------------------------------------- reset (rewind the clock, then reseed) */
   const rewind = useRef<{ kill: () => void } | null>(null)
@@ -508,6 +529,10 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       id: guideId,
     },
     onOpenPalette: () => setPaletteOpen(true),
+    tour,
+    tourSlot,
+    // K4: a sandbox taken over from the tour (?world=tour&from=tur-<n>) offers "Kembali ke tur"
+    fromTour: !tour && !!session.from,
   }
 
   const hs = typeof hotspot === 'string' ? { target: hotspot } : hotspot

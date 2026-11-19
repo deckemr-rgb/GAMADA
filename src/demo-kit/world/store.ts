@@ -13,7 +13,7 @@ import type { EventMap, EventSource, EventType, TableKey, WorldEvent, WorldState
 import type { ProductSlug } from '../../content/products'
 import { createEvent } from './events'
 import { clock } from './clock'
-import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted } from './persist'
+import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted, type WorldScope } from './persist'
 import { TABLE_KEYS, WORLD, emptyTable } from './util'
 import { coreCovers } from './engine-scope'
 import { applyExtensions } from './ext'
@@ -43,6 +43,8 @@ export function emptyWorld(): WorldState {
 let current: WorldState = emptyWorld()
 let seq: Seq = {}
 let status: WorldStatus = 'idle'
+/** which world is installed: the visitor's own (default) or the tour's (Tahap 5); persisted under its own key */
+let scope: WorldScope = 'default'
 let pack: RegionPack | null = null
 let loadToken = 0
 let queue: WorldEvent[] = []
@@ -156,7 +158,7 @@ function setStatus(s: WorldStatus) {
 }
 function snapshot(): Persisted | null {
   if (status !== 'ready' || !current.regionId) return null
-  return { format: 'gamada-world', version: WORLD.version, clock: clock.get().minutes, state: current }
+  return { format: 'gamada-world', version: WORLD.version, clock: clock.get().minutes, state: current, scope }
 }
 
 function flush() {
@@ -207,6 +209,8 @@ export const world = {
   },
   status: (): WorldStatus => status,
   pack: (): RegionPack | null => pack,
+  /** the installed world's scope ('default' = the visitor's own sandbox world, 'tour' = the tour's) */
+  scope: (): WorldScope => scope,
 }
 
 /**
@@ -252,12 +256,17 @@ function install(state: WorldState, clockMinutes: number) {
   notify()
 }
 
-/** load the world for a region + seed: from IndexedDB when present, else generated (deterministic). */
-export async function loadWorld(p: RegionPack, seed: number): Promise<void> {
+/**
+ * load the world for a region + seed (+ scope, default 'default'): from IndexedDB when present, else generated
+ * (deterministic). The outgoing world is saved first (a scope switch must not lose the last changes of the other one).
+ */
+export async function loadWorld(p: RegionPack, seed: number, opts: { scope?: WorldScope } = {}): Promise<void> {
   const token = ++loadToken
+  flushPersist()
   pack = p
+  scope = opts.scope ?? 'default'
   setStatus('loading')
-  const saved = await loadPersisted(p.id, seed)
+  const saved = await loadPersisted(p.id, seed, scope)
   if (token !== loadToken) return
   if (saved) return install(saved.state, saved.clock)
   const { generateWorld } = await loadGenerator()
@@ -265,16 +274,21 @@ export async function loadWorld(p: RegionPack, seed: number): Promise<void> {
   install(generateWorld(p, seed), WORLD.clockStart)
 }
 
-/** back to the seed: regenerate, forget the saved copy, clock to the default morning */
-export async function resetWorld(): Promise<void> {
+/**
+ * back to the seed: regenerate, forget the saved copy, clock to the default morning (or `opts.clock`, world minutes:
+ * the tour starts at 06:00). Keeps the scope: resetting the tour world never touches the visitor's own world.
+ */
+export async function resetWorld(opts: { clock?: number } = {}): Promise<void> {
   if (!pack) return
   const p = pack
   const seed = current.seed
+  const sc = scope
   const { generateWorld } = await loadGenerator()
   cancelPersist()
-  await clearPersisted(p.id, seed)
+  await clearPersisted(p.id, seed, sc)
   loadToken++
-  install(generateWorld(p, seed), WORLD.clockStart)
+  scope = sc
+  install(generateWorld(p, seed), opts.clock ?? WORLD.clockStart)
 }
 
 /**

@@ -12,6 +12,9 @@ export const LazyCommandPalette = lazy(() => loadPalette().then((m) => ({ defaul
 export const LazyGuidePanel = lazy(() => import('./GuidePanel').then((m) => ({ default: m.GuidePanel })))
 export const LazyHotspot = lazy(() => import('./Hotspot').then((m) => ({ default: m.Hotspot })))
 export const LazySplitStage = lazy(() => import('./SplitStage').then((m) => ({ default: m.SplitStage })))
+/** Tahap 5: the tour stage's product name / "Kembali ke tur" (shell/TourBar.tsx) */
+const loadTourBar = () => import('./TourBar')
+export const LazyTourBar = lazy(() => loadTourBar().then((m) => ({ default: m.TourBar })))
 
 /** Warm the palette chunk on intent (hover / focus of the search button); never rejects. */
 export function preloadPalette(): void {

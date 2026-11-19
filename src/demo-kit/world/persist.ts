@@ -1,22 +1,29 @@
 /**
- * world/persist.ts — per-browser persistence in IndexedDB (idb-keyval), namespace `gamada:world:<regionId>:<seed>`.
+ * world/persist.ts — per-browser persistence in IndexedDB (idb-keyval), namespace `gamada:world:<regionId>:<seed>`
+ * (the visitor's own sandbox world) or `gamada:world:tour:<regionId>:<seed>` (the tour's world, scope 'tour').
  * Debounced (WORLD.persistDebounceMs, with a max wait so a busy clock still saves). Every call is wrapped:
  * private windows, blocked storage or Node (self-tests) simply run without persistence.
  */
 import type { WorldState } from './types'
 import { WORLD } from './util'
 
+/** which world: the visitor's own sandbox world, or the tour's separate world (Tahap 5) */
+export type WorldScope = 'default' | 'tour'
+
 export interface Persisted {
   format: 'gamada-world'
   version: number
   clock: number
   state: WorldState
+  /** absent = 'default' (worlds saved before Tahap 5) */
+  scope?: WorldScope
 }
 
 /** a busy world (×60 with natural events) still saves at least this often (ms) */
 const PERSIST_MAX_WAIT_MS = 5000
 
-export const persistKey = (regionId: string, seed: number): string => `gamada:world:${regionId}:${seed}`
+export const persistKey = (regionId: string, seed: number, scope: WorldScope = 'default'): string =>
+  `gamada:world:${scope === 'tour' ? 'tour:' : ''}${regionId}:${seed}`
 
 type Idb = typeof import('idb-keyval')
 let idbP: Promise<Idb | null> | null = null
@@ -27,11 +34,11 @@ function idb(): Promise<Idb | null> {
   return idbP
 }
 
-export async function loadPersisted(regionId: string, seed: number): Promise<Persisted | null> {
+export async function loadPersisted(regionId: string, seed: number, scope: WorldScope = 'default'): Promise<Persisted | null> {
   try {
     const db = await idb()
     if (!db) return null
-    const v = (await db.get(persistKey(regionId, seed))) as Persisted | undefined
+    const v = (await db.get(persistKey(regionId, seed, scope))) as Persisted | undefined
     if (!v || v.format !== 'gamada-world' || v.version !== WORLD.version || v.state?.regionId !== regionId || v.state?.seed !== seed) return null
     return v
   } catch {
@@ -43,17 +50,17 @@ export async function savePersisted(p: Persisted): Promise<boolean> {
   try {
     const db = await idb()
     if (!db) return false
-    await db.set(persistKey(p.state.regionId, p.state.seed), p)
+    await db.set(persistKey(p.state.regionId, p.state.seed, p.scope ?? 'default'), p)
     return true
   } catch {
     return false
   }
 }
 
-export async function clearPersisted(regionId: string, seed: number): Promise<void> {
+export async function clearPersisted(regionId: string, seed: number, scope: WorldScope = 'default'): Promise<void> {
   try {
     const db = await idb()
-    if (db) await db.del(persistKey(regionId, seed))
+    if (db) await db.del(persistKey(regionId, seed, scope))
   } catch {
     /* ignore */
   }

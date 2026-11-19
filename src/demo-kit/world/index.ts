@@ -28,7 +28,7 @@ export {
   type WorldEco, type WorldModule,
 } from './eco'
 export { useSession, setSession, getSession, subscribeSession, DEFAULT_SEED, type DemoSession } from './session'
-export { loadPersisted, savePersisted, clearPersisted, flushPersist, persistKey, type Persisted } from './persist'
+export { loadPersisted, savePersisted, clearPersisted, flushPersist, persistKey, type Persisted, type WorldScope } from './persist'
 export * from './selectors'
 export { computeScore, scoreOf, SCORE_WEIGHTS } from './score'
 export { CATEGORY_LABEL } from './labels'

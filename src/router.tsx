@@ -26,6 +26,8 @@ const moved =
 
 /** /demo/:slug is a full-screen sandbox: no site chrome (an unknown slug renders the 404 with chrome). */
 const sandbox: RouteHandle = { chrome: (params) => (isProductSlug(params.slug) ? 'none' : 'site') }
+/** /tur and /tur/:bab (Tahap 5, owner P5): full screen like a sandbox (no navbar / footer / WhatsApp float / curtain) */
+const tourScreen: RouteHandle = { chrome: 'none' }
 
 function PageFallback() {
   return <div className="page-fallback" aria-hidden="true" />
@@ -50,8 +52,8 @@ export const router = createBrowserRouter([
       { path: 'ekosistem/:eco', lazy: page(LOADERS.ekosistemDetail) },
       { path: 'produk/:slug', lazy: page(LOADERS.produk) },
       { path: 'demo/:slug', handle: sandbox, lazy: page(LOADERS.demo) },
-      { path: 'tur', lazy: page(LOADERS.tur) },
-      { path: 'tur/:bab', lazy: page(LOADERS.tur) },
+      { path: 'tur', handle: tourScreen, lazy: page(LOADERS.tur) },
+      { path: 'tur/:bab', handle: tourScreen, lazy: page(LOADERS.tur) },
       { path: 'lab', lazy: page(LOADERS.lab) },
       { path: 'panel/phonefarm', lazy: page(LOADERS.phonefarm) },
       { path: 'lab/_kit', lazy: page(LOADERS.labKit) },

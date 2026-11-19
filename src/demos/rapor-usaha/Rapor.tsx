@@ -27,7 +27,7 @@ const S = {
     dial: 'Skor kesehatan usaha',
     ribbon: 'Skor simulasi · bukan keputusan kredit',
     vs: (d: number, m: string) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d)} vs ${m}`,
-    live: (n: number, d: number) => `Skor sekarang ${n}${d ? ` (${d > 0 ? '+' : '−'}${Math.abs(d)})` : ''}`,
+    live: (n: number, total: number, step: number) => `Skor sekarang ${n}${total ? ` (${sg(total)} sejak awal sesi${step !== total ? `; langkah terakhir ${sg(step)}` : ''})` : ''}`,
     trend: 'Skor 12 bulan',
     trendBtn: 'Lihat 12 bulan',
     feedTitle: 'Data masuk hari ini',
@@ -72,7 +72,7 @@ const S = {
     dial: 'Business health score',
     ribbon: 'Simulated score · not a credit decision',
     vs: (d: number, m: string) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d)} vs ${m}`,
-    live: (n: number, d: number) => `Score now ${n}${d ? ` (${d > 0 ? '+' : '−'}${Math.abs(d)})` : ''}`,
+    live: (n: number, total: number, step: number) => `Score now ${n}${total ? ` (${sg(total)} since the session start${step !== total ? `; last step ${sg(step)}` : ''})` : ''}`,
     trend: '12-month score',
     trendBtn: 'See 12 months',
     feedTitle: 'Data in today',
@@ -161,12 +161,17 @@ function useLang(): [L, Lang] {
   return [S[lang], lang]
 }
 
+/** the shop's score when this page session first showed it, for "sejak awal sesi" */
+let sessionStart: number | null = null
+const sg = (d: number) => `${d > 0 ? '+' : '−'}${Math.abs(d)}`
+
 const DialCard = memo(function DialCard({ L, lang, score, band, delta, prevMonth, history, onTrend }: { L: L; lang: Lang; score: number; band: number; delta: number; prevMonth: string; history: { month: string; score: number }[]; onTrend: () => void }) {
   const last = useRef(score)
+  sessionStart ??= score
   const [said, setSaid] = useState('')
   useEffect(() => {
     if (score !== last.current) {
-      setSaid(L.live(score, score - last.current))
+      setSaid(L.live(score, score - (sessionStart ?? score), score - last.current))
       last.current = score
     }
   }, [score, L])

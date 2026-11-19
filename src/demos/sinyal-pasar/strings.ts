@@ -79,7 +79,7 @@ const id = {
   hotFlood: 'Mulai di sini: putar skenario banjir',
   hotWarn: 'Lanjut: buka peringatan dini',
   // toasts
-  toastAnom: (item: string, market: string, p: string) => `Harga ${item} di ${market} ${p} di atas pola`,
+  toastAnom: (item: string, market: string, p: string) => `Harga ${item} di ${market} ${p} di atas pola saat terdeteksi`,
   toastAnomBody: 'Buka detail untuk prakiraan 14 hari dan tindakan.',
   toastWarn: (item: string, p: string, d: number) => `Peringatan dini: ${item} diperkirakan ${p} dalam ${d} hari`,
   toastApproved: (item: string) => `Operasi pasar ${item} disetujui (simulasi)`,
@@ -142,7 +142,7 @@ const en: Strings = {
   hotspot: 'Start here: open the price anomaly',
   hotFlood: 'Start here: play the flood scenario',
   hotWarn: 'Next: open the early warning',
-  toastAnom: (item, market, p) => `${item} at ${market} ${p} above its pattern`,
+  toastAnom: (item, market, p) => `${item} at ${market} ${p} above its pattern when detected`,
   toastAnomBody: 'Open the details for the 14-day forecast and actions.',
   toastWarn: (item, p, d) => `Early warning: ${item} expected ${p} within ${d} days`,
   toastApproved: (item) => `${item} market operation approved (simulated)`,

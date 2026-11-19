@@ -69,7 +69,11 @@ export function StepScrubber(props: StepScrubberProps) {
   cbs.current = { onChange, onFrame, onEnd }
 
   /** the time as read out and shown: snapped to `step` (quarter hours print 2 decimals: '+0,25 j', '+1,5 j', '+2 j') */
+  // the labels can change while Play runs (its frame loop keeps the closure of its first render): read the latest
+  const stepsRef = useRef(steps)
+  stepsRef.current = steps
   const text = (h: number) => {
+    const steps = stepsRef.current
     if (steps) return steps[Math.max(0, Math.min(steps.length - 1, Math.round(h)))]?.label[lang] ?? ''
     const q = Math.round(h / step) * step
     if (q < 0.005) return ms('now', lang)
@@ -117,6 +121,12 @@ export function StepScrubber(props: StepScrubberProps) {
     } else write(cur.current, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, lang])
+
+  // new step labels (the data behind them changed, e.g. a flood moved this month's index): rewrite the shown text
+  useEffect(() => {
+    write(cur.current, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps])
 
   useEffect(() => {
     if (!playing) return

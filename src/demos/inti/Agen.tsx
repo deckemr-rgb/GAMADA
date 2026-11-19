@@ -30,11 +30,16 @@ const S = {
     trace: 'Reasoning trace',
   },
 }
-const wall = (ms: number, lang: Lang) => {
-  const d = new Date(ms)
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
+const hm = (hh: number, mm: number, lang: Lang) => {
+  const h = String(hh).padStart(2, '0')
+  const m = String(mm).padStart(2, '0')
   return lang === 'id' ? `${h}.${m}` : `${h}:${m}`
+}
+/** the world clock of the answer (a trace saved before it carried one: its wall-clock time) */
+const when = (t: { at: number; worldAt?: number }, lang: Lang) => {
+  if (t.worldAt != null) return hm(Math.floor(t.worldAt / 60) % 24, Math.floor(t.worldAt) % 60, lang)
+  const d = new Date(t.at)
+  return hm(d.getHours(), d.getMinutes(), lang)
 }
 
 export default function Agen({ role, scope, onShowTrail }: { role: RoleId; scope: Scope; onShowTrail: () => void }) {
@@ -60,7 +65,7 @@ export default function Agen({ role, scope, onShowTrail }: { role: RoleId; scope
               {traces.map((t) => (
                 <li key={t.id}>
                   <button type="button" className={`dk-in-tr${t.id === cur.id ? ' is-on' : ''}`} aria-pressed={t.id === cur.id} data-eco={PRODUCT_BY_SLUG[t.product]?.eco} onClick={() => setSel(t.id)}>
-                    <span className="dk-in-tr-from">{L.from(PRODUCT_BY_SLUG[t.product]?.name ?? t.product, wall(t.at, lang as Lang))}</span>
+                    <span className="dk-in-tr-from">{L.from(PRODUCT_BY_SLUG[t.product]?.name ?? t.product, when(t, lang as Lang))}</span>
                     <span className="dk-in-tr-q">{t.prompt}</span>
                     <span className="dk-in-muted">
                       {L.as(ROLES[t.role]?.name[lang as Lang] ?? t.role)} · {t.mode === 'live' ? 'Live' : 'Sim'}

@@ -826,6 +826,12 @@
   padding: 0;
   list-style: none;
 }
+.dk-sp-ingr h4 {
+  margin: 6px 0 0;
+  font: 650 var(--dk-t12) var(--dk-font);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .dk-sp-ingr li {
   display: grid;
   gap: 2px;

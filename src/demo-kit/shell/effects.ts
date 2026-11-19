@@ -146,7 +146,8 @@ export function createEffectTracker(product: ProductSlug) {
     recent.set(e.id, {
       id: e.id,
       type: e.type,
-      source: e.source,
+      // Tahap 5: a tour step on this product's stage (source 'tour', origin = this product) reads as the product's own
+      source: e.source === 'tour' && e.origin === product ? product : e.source,
       causeId: e.causeId ?? null,
       depth: e.depth ?? 0,
       payload: e.payload,
@@ -173,8 +174,8 @@ export function createEffectTracker(product: ProductSlug) {
       // a root this product raised whose consumers read state (EFFECT_ALSO): announced as its own toast
       // partner.verified reads as a vendor badge only for a business (KYB); a KYC or CV verification raises no toast
       const kybOnly = e.type !== 'partner.verified' || (e.payload as { subjectKind?: string }).subjectKind === 'business'
-      const also = !e.depth && e.source === product && kybOnly ? EFFECT_ALSO[e.type] : undefined
       const me = recent.get(e.id)!
+      const also = !e.depth && me.source === product && kybOnly ? EFFECT_ALSO[e.type] : undefined
       // only READY products (a not-yet-built one is never linked; the toast opens the first announced target)
       const alsoTargets = also ? (typeof also.targets === 'function' ? also.targets(s, me) : also.targets).filter((t) => t !== product && DEMO_READY[t]) : []
       if (also && alsoTargets.length) {

@@ -97,6 +97,8 @@ test.describe('sinyal-pasar · desktop', () => {
     expect(`${a0.marketId}:${a0.commodityId}`).toBe('pasar-kota-bojonegoro:cabai-rawit')
     const cabaiRow = page.locator('.dk-sp-row[data-sp-pair="pasar-kota-bojonegoro:cabai-rawit"]')
     await expect(cabaiRow).toContainText('Anomali')
+    // T5 (a): the anomaly toast names its value as "when detected" (the row keeps moving)
+    await expect(page.locator('.dk-toast').filter({ hasText: /^Harga .* di atas pola/ }).first()).toContainText('saat terdeteksi')
     // Δ vs musiman: board row = price.anomaly deltaPct = C13 reason (at the anomaly's minute)
     await expect(cabaiRow.locator('.dk-sp-c-delta')).toHaveText(pctId(a0.deltaPct))
     await expect.poll(() => W<string>(page, `return Object.values(s.marketOps.byId).find((o) => o.commodityId === 'cabai-rawit' && !o.sentBy)?.reason.id ?? ''`)).toContain(`${Math.round(a0.deltaPct)}%`)
@@ -115,6 +117,9 @@ test.describe('sinyal-pasar · desktop', () => {
     const pair = (await drawer.getAttribute('data-pair'))!
     expect(await drawer.locator('[data-sp="detail-price"]').innerText()).toContain(rp(await W<number>(page, `return s.prices.byId['${pair}'].price`)))
     await expect.poll(() => missions(page)).toContain('anomali')
+    // T5 (c): the forecast factor chips add up to the forecast peak shown in front of them
+    const chips = (await drawer.locator('[data-factor] strong').allInnerTexts()).map((x) => Number(x.replace('−', '-').replace('%', '').replace(',', '.')))
+    expect(Math.round(chips.reduce((a, b) => a + b, 0) * 10) / 10).toBe(Number((await drawer.locator('[data-sp="factor-sum"]').innerText()).replace(/[^0-9,−+-]/g, '').replace('−', '-').replace(',', '.')))
     // mission 2: recommend ⇒ patches the C13 op (sentBy disperindag, effect = opSimulate)
     await page.locator('[data-tour="sp-recommend"]').click()
     const effect = Number(await page.locator('[data-sp="rekom-effect"]').getAttribute('data-effect'))
@@ -161,6 +166,8 @@ test.describe('sinyal-pasar · desktop', () => {
     await open(page, '&role=pemilik-toko')
     await expect(page.locator('.dk-sp-app')).toBeVisible()
     await expect(page.locator('.dk-sp-ingr li').first()).toBeVisible()
+    // T5 (f): the ingredient stock is listed per food outlet of the business (never as the building-supply shop's)
+    await expect(page.locator('[data-sp="ingr-outlet"] h4')).toHaveText(await W<string[]>(page, `return [...new Set(Object.values(s.products.byId).filter((p) => p.businessId === s.meta.shopId && p.tags.some((t) => t.startsWith('cm:'))).map((p) => s.outlets.byId[p.outletId].name))].sort((a, b) => a.localeCompare(b))`))
     // alive within 10 s on this side: the latest market tick
     await page.evaluate(() => (window as G).__gamada.clock.play())
     await expect(page.locator('[data-sp="latest"]')).toBeVisible({ timeout: 10_000 })

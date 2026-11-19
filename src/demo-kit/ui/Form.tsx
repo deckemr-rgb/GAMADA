@@ -100,6 +100,8 @@ export interface SegmentedOption<V extends string> {
   icon?: IconName
   /** hide the text, keep it as the accessible name */
   iconOnly?: boolean
+  /** `data-tour` hook on this option's button (Tahap 5 tour selectors) */
+  hook?: string
 }
 
 export interface SegmentedProps<V extends string> {
@@ -150,6 +152,7 @@ export function Segmented<V extends string>({ options, value, onChange, label, s
             aria-label={o.iconOnly ? o.label : undefined}
             title={o.iconOnly ? o.label : undefined}
             onClick={() => onChange(o.value)}
+            data-tour={o.hook}
           >
             {o.icon && <Icon name={o.icon} size={16} />}
             {!o.iconOnly && <span>{o.label}</span>}

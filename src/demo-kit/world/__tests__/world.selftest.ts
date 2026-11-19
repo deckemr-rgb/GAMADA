@@ -32,6 +32,7 @@ import { nikRegion, nikRegions, parseNik } from '../../docs/nik'
 import { isProductSlug } from '../../../content/products'
 import { runUpSelftest } from './up.selftest'
 import { runPdSelftest } from './pd.selftest'
+import { runTourSelftest } from './tour.selftest'
 
 let failures = 0
 let passes = 0
@@ -700,6 +701,9 @@ await runUpSelftest(ok, section, packs)
 
 /* ------------------------------------------------------------------ 7. tahap 4: Pasar Daerah + Inti */
 await runPdSelftest(ok, section, packs)
+
+/* ------------------------------------------------------------------ 8. tahap 5: tour world scope + K6 determinism probe */
+await runTourSelftest(ok, section, packs)
 
 console.log(`\n${failures ? '✗' : '✓'} ${passes} passed, ${failures} failed`)
 exit(failures ? 1 : 0)

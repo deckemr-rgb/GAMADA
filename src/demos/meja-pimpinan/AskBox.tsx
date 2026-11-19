@@ -69,8 +69,8 @@ export function AskBox(props: AskProps) {
           ask(draft)
         }}
       >
-        <Input value={draft} onChange={(e) => setDraft(e.target.value)} onFocus={() => { focused.current = true; wake() }} onBlur={(e) => { if (e.relatedTarget) focused.current = false }} placeholder={tr('askPh', lang)} aria-label={tr('askLabel', lang)} />
-        <Button type="submit" variant="primary" size="sm" icon="send" disabled={!draft.trim()}>
+        <Input value={draft} onChange={(e) => setDraft(e.target.value)} onFocus={() => { focused.current = true; wake() }} onBlur={(e) => { if (e.relatedTarget) focused.current = false }} placeholder={tr('askPh', lang)} aria-label={tr('askLabel', lang)} data-tour="mp-ask" />
+        <Button type="submit" variant="primary" size="sm" icon="send" disabled={!draft.trim()} data-tour="mp-ask-send">
           {tr('askSend', lang)}
         </Button>
       </form>

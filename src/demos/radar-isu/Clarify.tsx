@@ -320,6 +320,7 @@ export default function Clarify({ open, mode, hoaxId, onClose }: { open: boolean
             busy={busy || stage === 'asking'}
             disabled={!draft || busy || stage !== 'draft' || !channels.length || alert?.status !== 'aktif'}
             data-testid="ri-publish"
+            data-tour="ri-clarify"
           >
             {busy ? T.publishBusy : stage !== 'draft' ? fill(T.waiting, { a: approval.approvedBy[lang] }) : head ? T.approve : fill(T.submit, { a: approval.approvedBy[lang] })}
           </Button>

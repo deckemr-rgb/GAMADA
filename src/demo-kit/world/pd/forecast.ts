@@ -56,7 +56,8 @@ export const shockDay = (shock: PriceShock, now: number): number => Math.max(0, 
 export const opOn = (s: WorldState, marketId: string, commodityId: string): MarketOperation | undefined =>
   rows(s.marketOps).find((o) => o.commodityId === commodityId && o.marketIds.includes(marketId) && o.stage === 'running')
 
-export type OutlookFactorKey = 'musim' | 'pasokan' | 'banjir' | 'operasi'
+/** 'lainnya' = the rest (price steps + the interaction of the factors), so the chips add up to `peakPct` */
+export type OutlookFactorKey = 'musim' | 'pasokan' | 'banjir' | 'operasi' | 'lainnya'
 export interface Outlook {
   history30: number[]
   forecast14: number[]
@@ -113,9 +114,13 @@ export function priceOutlook(s: WorldState, priceId: string, now: number): Outlo
   if (sh) factors.push({ key: 'banjir', pct: round(f.shockAt[k]! * 100, 1), label: { id: 'Banjir: pasokan terganggu', en: 'Flood: supply disrupted' }, ...(sh.cause ? { cause: sh.cause } : {}) })
   if (sh && sh.damp > 0) factors.push({ key: 'operasi', pct: -round(shockPath({ ...sh, damp: 0 }, shockDay(sh, now) + peakDay) * sh.damp * 100, 1), label: { id: 'Operasi pasar berjalan', en: 'Market operation running' } })
   else if (f.op) factors.push({ key: 'operasi', pct: round(f.op.effectPct, 1), label: { id: 'Operasi pasar berjalan', en: 'Market operation running' }, cause: `marketOps:${f.op.id}` })
+  const peakPct = round((f.values[k]! / exp0 - 1) * 100, 1)
+  // the factors explain the peak: whatever they leave (rounding to price steps, factors multiplying) is one chip
+  const rest = round(peakPct - factors.reduce((a, x) => a + x.pct, 0), 1)
+  if (Math.abs(rest) >= 0.1) factors.push({ key: 'lainnya', pct: rest, label: { id: 'Lainnya (pembulatan)', en: 'Other (rounding)' } })
   return {
     history30: [...p.history.slice(-29), p.price], forecast14: f.values, lo: f.lo, hi: f.hi, peakDay,
-    peakPct: round((f.values[k]! / exp0 - 1) * 100, 1), deltaPct: round((p.price / exp0 - 1) * 100, 1), expected: exp0, factors,
+    peakPct, deltaPct: round((p.price / exp0 - 1) * 100, 1), expected: exp0, factors,
   }
 }
 

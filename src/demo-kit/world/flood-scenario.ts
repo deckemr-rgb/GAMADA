@@ -20,6 +20,11 @@ export const FLOOD_AT = 7 * 60 + 6
 export const activeFloodAlert = (s: WorldState): Alert | null => rows(s.alerts).find((a) => a.kind === 'banjir' && a.status === 'aktif') ?? null
 
 let queued: { seed: number; region: string; id: string; now: number } | null = null
+// a new / restored / reset world (same seed ⇒ the same next alert id) forgets the queued marker: the tour's "Mulai tur"
+// resets its world and plays the flood again at the same minute
+clock.onReset(() => {
+  queued = null
+})
 /** start the scenario flood once; returns the new alert id, or null */
 export function ensureFloodScenario(s: WorldState, now: number): string | null {
   if (!s.regionId || activeFloodAlert(s)) return null

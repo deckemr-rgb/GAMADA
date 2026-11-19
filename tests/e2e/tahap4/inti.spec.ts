@@ -103,6 +103,9 @@ test.describe('inti · desktop', () => {
     await expect(page.locator('[data-in="timeline"]')).toHaveAttribute('data-steps', '8', { timeout: 20_000 })
     await expect(page.locator('[data-in="plan"] li')).toHaveCount(5)
     await expect(page.locator('.dk-in-tl-step.is-tool')).toHaveCount(5)
+    // T5 (e): the request history shows the world clock of the answer (not the wall clock)
+    const wAt = await page.evaluate(() => JSON.parse(sessionStorage.getItem('gamada:ai-traces') ?? '[]')[0]?.worldAt as number)
+    await expect(page.locator('.dk-in-tr-from').first()).toContainText(`${String(Math.floor(wAt / 60) % 24).padStart(2, '0')}.${String(wAt % 60).padStart(2, '0')}`)
     await expect.poll(() => missions(page)).toContain('agen')
     // the KPI on Inti Data counts the run
     await tab(page, 'data')

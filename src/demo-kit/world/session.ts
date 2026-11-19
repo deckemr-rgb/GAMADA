@@ -4,6 +4,7 @@
  */
 import { useDeferredValue, useMemo, useSyncExternalStore } from 'react'
 import type { RoleId } from '../../content/products'
+import type { WorldScope } from './persist'
 
 export const DEFAULT_SEED = 2026
 
@@ -14,9 +15,13 @@ export interface DemoSession {
   aiMode: 'sim' | 'live'
   present: boolean
   lang: 'id' | 'en'
+  /** which world the shells load: the visitor's own ('default') or the tour's ('tour', `?world=tour`) */
+  scope: WorldScope
+  /** the tour chapter a taken-over sandbox came from (`?from=tur-<n>` ⇒ 'tur-<n>'), for "Kembali ke tur"; else null */
+  from: string | null
 }
 
-let session: DemoSession = { regionId: 'bojonegoro', seed: DEFAULT_SEED, role: 'warga', aiMode: 'sim', present: false, lang: 'id' }
+let session: DemoSession = { regionId: 'bojonegoro', seed: DEFAULT_SEED, role: 'warga', aiMode: 'sim', present: false, lang: 'id', scope: 'default', from: null }
 const subs = new Set<() => void>()
 
 export function getSession(): DemoSession {

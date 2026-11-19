@@ -944,3 +944,88 @@ are READY products only) · floors above the plan (see the table).
 - Tests: `tests/e2e/tahap2/helpers.ts` `SLUGS` includes the 5 new demos (no dead controls, region + language); the
   crawler waits until the number of first-screen controls is steady (lazy map / list pieces). UI chain variants:
   `tests/e2e/tahap4/chains.spec.ts`.
+
+## Tahap 5 (2026-11-19): what the kit adds for the tour (`/tur`, plan `docs/build/tahap5-plan.md` §1.3 K1–K7)
+
+Where this section and the plan differ, **this section is what the code does**.
+
+### K1 · world scope (`world/persist.ts`, `world/store.ts`, `world/session.ts`)
+- `type WorldScope = 'default' | 'tour'` (world barrel). `persistKey(region, seed, scope = 'default')`: default
+  `gamada:world:<region>:<seed>` (unchanged, Tahap 2–4 worlds stay readable), tour `gamada:world:tour:<region>:<seed>`.
+  `loadPersisted` / `clearPersisted` take the scope as 3rd arg; `Persisted.scope?` (absent = default).
+- `loadWorld(pack, seed, { scope? })` saves the outgoing world first (`flushPersist`), then loads / generates the one of
+  that scope. `world.scope()` = the installed world's scope. `resetWorld({ clock? })` keeps the scope (the tour:
+  `await resetWorld({ clock: 6 * 60 })` = "Mulai tur" at 06:00; the visitor's world is untouched).
+- Session: `scope: WorldScope` (default 'default') and `from: string | null` ('tur-<n>' of a taken-over sandbox).
+  DemoShell's "same world" check compares the scope too, so switching scope reloads the right world.
+- The tour sets `setSession({ scope: 'tour', regionId, seed })` itself; the stage shell then loads the tour world.
+
+### K2 · URL (`shell/url.ts`)
+- `readDemoQuery` reads `?world=tour` (`q.world`) and, only with it, `?from=tur-<n>` (`q.from`, `/^tur-\d\d?$/`).
+- `sessionParams` writes `world=tour` + `from` while the session is in the tour scope (a reload of a taken-over sandbox
+  stays in the tour world); `demoHref(slug, session, focus)` carries `world=tour` (+ `from`) the same way. Every shell
+  link (cross-product toasts, guide "next product", palette) and every product link built with `demoHref(…, session)`
+  keeps the tour world. **Not carried:** links products build by hand (`world/inti` `activityRows` / `unifiedInbox`
+  hrefs, Inti `hrefTo`, `?controls=all` helpers): those open the visitor's own world.
+- DemoShell (sandbox mode): `scope = query.world ?? 'default'`, `from = query.from ?? null`.
+
+### K3 · `DemoShell mode="tour"` (+ `tourSlot`)
+- `<DemoShell product={slug} mode="tour" layout="contained" tourSlot={<AmbilAlih/>} canvas={…} />`. The bar shows only
+  the product name (plain text, no link) and `tourSlot` at its end; no logo, region, role, clock, AI, mode badge, language,
+  palette, guide, reset, fullscreen, "⋯", hotspot, mission pill; Ctrl K / "?" are not bound. Never writes the URL
+  (`syncUrl` forced off) and never applies `?t` (the tour owns the clock). Session on mount: `scope 'tour'`,
+  `from null`, `present false`, `aiMode 'sim'`, role = `?role` (URL handoff) or the product's default, region/seed from
+  the URL or the current session. Toasts stay (`toastPlacement` prop / `setToastPlacement`). The event pipeline and the
+  eco's chains are preloaded at mount (no first click needed).
+- `useShell().link` still holds the handoff query (`?role ?tab ?focus …`) and `useShell().focus` the `?focus=` id.
+- Products still write their own params (`?tab=` etc.) with `replaceQuery`: on `/tur/<n>` the Stage must clean them.
+
+### K4 · "Kembali ke tur" (`shell/TourBar.tsx`, lazy chunk)
+- A sandbox whose session has `scope 'tour'` and `from 'tur-<n>'` (i.e. opened with `?world=tour&from=tur-<n>`) shows
+  `[data-tour=back-to-tour]` (44 × 44 px min, left of the product name, label hidden < 768 px) →
+  `/tur/<n>?resume=1&region=<id>&lang=<lang>` (+ `&seed=` when not the default seed). After a cross-product hop
+  (`demoHref` carries `world` + `from`) it is still there.
+
+### K5 · `playDayStory({ gapMs?, onStep?, source?: 'clock' | 'tour', until?: StoryKey })`
+- `source` sets the events' source (default 'clock'; origin stays the step's product). `until` stops after that key
+  (`until: 'siti'` = flood + siti; a skipped key also stops there). The `flood` step goes through `ensureFloodScenario`,
+  which always emits with source **'clock'** (origin siaga-wilayah).
+- Shell toasts: an event with source 'tour' and origin = the shell's product counts as that product's own root (its
+  cross-product effects toast in the stage). A 'tour' root with another origin raises no toast.
+- `ensureFloodScenario`: its "already queued" guard is cleared on every world install / reset (before: a reset world
+  that replays the flood at the same minute got NO flood, because the new alert has the same id).
+
+### K6 · determinism probe (`world/__tests__/tour.selftest.ts`, run by `world.selftest.ts`)
+- Fresh tour world on the Bojonegoro pack, UP + PD modules registered, natural events ON, clock jumped 06:00 → 17:00
+  through the 19 chapter times (`TOUR_TIMES`), story keys at ch. 2 (flood), 4 (siti + neighbours), 5 (instruction), 7
+  (recommend) with `source: 'tour'`; waits for the natural replay + settle after each jump. Twice ⇒ **identical audit
+  fingerprint** (FNV of `at|type|source|refs` of every audit row ≥ 06:00): **DETERMINISTIC** — `72060f0e`, 979 rows (729
+  natural, 4 tour) on seed 2026. ⇒ plan §0.4 holds: natural events stay ON in the tour, no fallback needed.
+  `TOUR_DIAG=1` prints the first differing rows if it ever breaks. Browser caveat: a jump replays ≤ 60 minutes per idle
+  slice with the state of the slice start (same in the probe); jump only after the previous replay caught up
+  (`naturalBacklog() === 0` and `settled()`), as the probe does.
+
+### K7 · router
+- `/tur` and `/tur/:bab` have `handle: { chrome: 'none' }` (no navbar / footer / WhatsApp float / cursor / reading bar;
+  the skip link uses the bare text). `lib/i18n` `sandboxRoute()` still matches `/demo/*` only: the site dictionary of
+  an EN visitor is fetched on `/tur` like on any site page.
+
+### Tour hooks (attributes only, no behaviour change)
+`[data-tour=po-approve]` (already there: Toko Autopilot PO tab, first "Kirim PO"), `[data-tour=mp-ask]` +
+`[data-tour=mp-ask-send]` (Meja Pimpinan ask input + send, both the AskBox stub and AskData), `[data-tour=sw-recipients]`
+(Siaga Wilayah broadcast recipient list `ul`, inside the broadcast composer preview), `[data-tour=cb-bulk]` (Cek Berkas
+"Massal" option of the mode switch; `SegmentedOption.hook` puts `data-tour` on an option), `[data-tour=ri-clarify]`
+(Radar Isu clarification publish button = `[data-testid=ri-publish]`).
+
+### Tahap 4 number fixes (kit side)
+- `priceOutlook().factors` adds a `'lainnya'` factor ("Lainnya (pembulatan)") when the factors leave ≥ 0,1 pt, so the
+  chips always add up to `peakPct` (selftest). Sinyal Pasar's drawer shows "Puncak prakiraan +x% =" in front of them.
+- `StepScrubber` reads its step labels from a ref and rewrites the label when `steps` change (a flood during Play left
+  the old "indeks 100,2").
+- `AiTrace.worldAt` (world minutes of the answer); Inti Agen shows it (wall clock only for older traces).
+
+### Sizes (gzip -9, beyond home, chunk-by-chunk vs the Tahap 4 `dist/`)
+Home JS 252.7 (unchanged). `demo-core` +0.50 KB ⇒ every demo +0.5 (budget.mjs: 13 Satu Daerah / Usaha Pintar landings
++0.5, kenal-mitra +0.6 by rounding). The Tahap 4 fixes add on the PD landings: shared `forecast` +0.07, Rapor +0.09,
+`trace` +0.04 (lazy) ⇒ Katalog Lokal / Indeks Ekonomi / Inti +0.6, Rapor Usaha / Sinyal Pasar +0.6…0.7. `TourBar` is
+its own small lazy chunk (only on the tour stage / a taken-over sandbox).

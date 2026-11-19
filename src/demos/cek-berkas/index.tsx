@@ -308,7 +308,7 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
             onIntent={onIntent}
             options={[
               { value: 'single', label: t.single, icon: 'doc' },
-              { value: 'bulk', label: t.bulk, icon: 'layers' },
+              { value: 'bulk', label: t.bulk, icon: 'layers', hook: 'cb-bulk' },
             ]}
           />
         </header>

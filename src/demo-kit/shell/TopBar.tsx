@@ -9,14 +9,14 @@
  * Fit: the bar measures itself (fitBar) and steps through data-tight 1..3 (badge → dot, region → icon, shorter
  * role label) until the middle group and the product name fit; it never overlaps the end group.
  */
-import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { Suspense, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { ECOSYSTEMS, type EcoOrInti, type ProductDef } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { Button, Drawer, IconButton } from '../ui'
 import { useDemoStrings } from '../i18n'
 import { AiModeToggle, BackToProduct, ClockChip, ClockControl, FullscreenButton, LangToggle, ModeBadge, RegionSwitcher, ResetButton, RoleSwitcher, type HealthState } from './controls'
 import type { ShellSize } from './hooks'
-import { preloadPalette } from './lazy'
+import { LazyTourBar, preloadPalette } from './lazy'
 
 export const ecoShortName = (eco: EcoOrInti): string => ECOSYSTEMS[eco].name.replace(/^GAMADA\s+/, '')
 
@@ -100,13 +100,21 @@ export interface TopBarProps {
   guide: { available: boolean; open: boolean; toggle: () => void; id: string }
   onOpenPalette: () => void
   onOpenMore: () => void
+  /** the tour's stage (DemoShell mode="tour"): only the product name (plain text) + `tourSlot` */
+  tour?: boolean
+  tourSlot?: ReactNode
+  /** K4: a sandbox taken over from the tour (session scope 'tour' + from 'tur-<n>'): "Kembali ke tur" (44 px) left of the product name */
+  fromTour?: boolean
 }
 
-export function TopBar({ product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette, onOpenMore }: TopBarProps) {
+
+export function TopBar({ product, size, health, interim, onLiveUnavailable, rewinding, onReset, fullscreen, guide, onOpenPalette, onOpenMore, tour, tourSlot, fromTour }: TopBarProps) {
   const t = useDemoStrings()
   const lg = size === 'lg' || size === 'xl'
   const bar = useRef<HTMLElement>(null)
-  useFitBar(bar, [size, interim, product.slug])
+  useFitBar(bar, [size, interim, product.slug, tour, fromTour])
+  // the tour's stage: no session controls (the tour owns them)
+  const bare = interim || tour
   const guideBtn = guide.available && (
     <IconButton
       icon="help"
@@ -118,38 +126,47 @@ export function TopBar({ product, size, health, interim, onLiveUnavailable, rewi
     />
   )
   return (
-    <header ref={bar} className={`dk-topbar is-${size}`} aria-label={t.topBar}>
-      {size !== 'sm' && (
+    <header ref={bar} className={`dk-topbar is-${size}${tour ? ' is-tour' : ''}`} aria-label={t.topBar}>
+      {size !== 'sm' && !tour && (
         <AppLink to="/" className="dk-topbar-logo" aria-label="GAMADA">
           <Mark />
         </AppLink>
       )}
-      <Breadcrumb product={product} size={size} />
+      {(tour || fromTour) && (
+        <Suspense fallback={null}>
+          <LazyTourBar name={tour ? product.name : undefined} />
+        </Suspense>
+      )}
+      {!tour && <Breadcrumb product={product} size={size} />}
       <div className="dk-topbar-mid">
-        {lg && <RegionSwitcher />}
-        {size !== 'sm' && !interim && <RoleSwitcher product={product.slug} />}
-        {size !== 'sm' && !interim && <ClockControl rewinding={rewinding} />}
-        {size === 'sm' && !interim && <ClockChip />}
-        {lg && !interim && <AiModeToggle health={health} onUnavailable={onLiveUnavailable} />}
-        {lg && <ModeBadge />}
+        {lg && !tour && <RegionSwitcher />}
+        {size !== 'sm' && !bare && <RoleSwitcher product={product.slug} />}
+        {size !== 'sm' && !bare && <ClockControl rewinding={rewinding} />}
+        {size === 'sm' && !bare && <ClockChip />}
+        {lg && !bare && <AiModeToggle health={health} onUnavailable={onLiveUnavailable} />}
+        {lg && !tour && <ModeBadge />}
       </div>
       <div className="dk-topbar-end">
-        {lg && <LangToggle />}
-        {lg && (
-          <IconButton
-            icon="search"
-            label={`${t.palette} (${t.kbdOpen})`}
-            aria-keyshortcuts="Control+K Meta+K"
-            onClick={onOpenPalette}
-            onPointerEnter={preloadPalette}
-            onFocus={preloadPalette}
-          />
+        {tour ? tourSlot : (
+          <>
+            {lg && <LangToggle />}
+            {lg && (
+              <IconButton
+                icon="search"
+                label={`${t.palette} (${t.kbdOpen})`}
+                aria-keyshortcuts="Control+K Meta+K"
+                onClick={onOpenPalette}
+                onPointerEnter={preloadPalette}
+                onFocus={preloadPalette}
+              />
+            )}
+            {size !== 'sm' && guideBtn}
+            {lg && !interim && <ResetButton onRequest={onReset} />}
+            {lg && fullscreen.supported && <FullscreenButton active={fullscreen.active} onToggle={fullscreen.toggle} />}
+            {lg && <BackToProduct product={product.slug} compact={size !== 'xl'} />}
+            {!lg && <IconButton icon="more" label={t.more} onClick={onOpenMore} data-dk-more="" />}
+          </>
         )}
-        {size !== 'sm' && guideBtn}
-        {lg && !interim && <ResetButton onRequest={onReset} />}
-        {lg && fullscreen.supported && <FullscreenButton active={fullscreen.active} onToggle={fullscreen.toggle} />}
-        {lg && <BackToProduct product={product.slug} compact={size !== 'xl'} />}
-        {!lg && <IconButton icon="more" label={t.more} onClick={onOpenMore} data-dk-more="" />}
       </div>
     </header>
   )

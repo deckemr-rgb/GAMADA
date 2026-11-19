@@ -408,7 +408,7 @@ export default function Broadcast() {
               {L('recipients')} · {nf(officials.length + citizens.length, lang)}
             </p>
             <p className="dk-sg-fine">{L('rcptSum', { o: nf(officials.length, lang), c: nf(citizens.length, lang) })}</p>
-            <ul className="dk-sg-rcpts">
+            <ul className="dk-sg-rcpts" data-tour="sw-recipients">
               {officials.slice(0, 6).map((r) => (
                 <li key={r.id}>
                   <Icon name={r.kind === 'camat' ? 'building' : 'user'} size={14} />

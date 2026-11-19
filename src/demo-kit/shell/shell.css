@@ -160,6 +160,28 @@
 .dk-topbar.is-sm .dk-crumbs-product {
   font: 650 var(--dk-t16) var(--dk-font);
 }
+/* Tahap 5: the tour's stage bar (plain product name + the tour slot) and "Kembali ke tur" on a taken-over sandbox */
+.dk-topbar.is-tour .dk-crumbs-product {
+  display: inline-flex;
+  align-items: center;
+  font: 650 var(--dk-t13) var(--dk-font);
+  white-space: nowrap;
+}
+.dk-topbar-tour {
+  flex: none;
+  min-height: 44px;
+  min-width: 44px;
+  gap: 6px;
+  justify-content: center;
+}
+.dk-topbar.is-sm .dk-topbar-tour-l {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 .dk-eco-dot {
   flex: none;
   width: 8px;

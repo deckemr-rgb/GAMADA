@@ -270,7 +270,7 @@ function AlertRow({ a, lang, canSend: send }: { a: Alert; lang: 'id' | 'en'; can
             {t('sentTo', { n: nf(a.broadcast.recipients, lang), ch: a.broadcast.channels.join(', ').toUpperCase() })}
           </span>
         ) : send ? (
-          <Button size="sm" variant="secondary" icon="send" onClick={() => ui.set({ broadcastOpen: true, draft: { level: a.level, message: '', channels: ['wa', 'sms'], areas: a.kecamatanIds.map((k) => world.get().region.kecamatan.find((x) => x.id === k)?.name ?? k) } })}>
+          <Button size="sm" variant="secondary" icon="send" data-tour="sw-send-now" onClick={() => ui.set({ broadcastOpen: true, draft: { level: a.level, message: '', channels: ['wa', 'sms'], areas: a.kecamatanIds.map((k) => world.get().region.kecamatan.find((x) => x.id === k)?.name ?? k) } })}>
             {t('sendNow')}
           </Button>
         ) : (

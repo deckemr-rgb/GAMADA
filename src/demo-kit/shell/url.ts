@@ -1,5 +1,6 @@
 /**
- * shell/url.ts — the demo query string (spec §4): ?region ?role ?t ?ai ?lang ?present ?seed ?focus.
+ * shell/url.ts — the demo query string (spec §4): ?region ?role ?t ?ai ?lang ?present ?seed ?focus, and (Tahap 5)
+ * ?world=tour (the tour's world) + ?from=tur-<n> (the chapter a taken-over sandbox came from).
  * Reading validates every value; writing uses history.replaceState (keeps the router's state object, no
  * scroll, no navigation) and preserves unrelated params (?tab, ?only …).
  */
@@ -18,6 +19,10 @@ export interface DemoQuery {
   present?: boolean
   seed?: number
   focus?: string
+  /** ?world=tour: open the tour's world (Tahap 5 "Ambil alih" / "Coba sendiri"); absent = the visitor's own world */
+  world?: 'tour'
+  /** ?from=tur-<n> (n 1–20), only together with ?world=tour: "Kembali ke tur" goes back to chapter n */
+  from?: string
 }
 
 const isRole = (r: string | null): r is RoleId => !!r && r in ROLES
@@ -48,6 +53,11 @@ export function readDemoQuery(search: string, product?: ProductSlug): DemoQuery 
   if (seed && /^\d{1,9}$/.test(seed)) q.seed = Number(seed)
   const focus = p.get('focus')
   if (focus && focus.length <= 120) q.focus = focus
+  if (p.get('world') === 'tour') {
+    q.world = 'tour'
+    const from = p.get('from')
+    if (from && /^tur-\d\d?$/.test(from)) q.from = from
+  }
   return q
 }
 
@@ -61,6 +71,8 @@ export function sessionParams(s: DemoSession, minutes: number): Record<string, s
     seed: s.seed !== DEFAULT_SEED ? String(s.seed) : null,
     ai: s.aiMode === 'live' ? 'live' : null,
     present: s.present ? '1' : null,
+    world: s.scope === 'tour' ? 'tour' : null,
+    from: s.from,
   }
 }
 
@@ -81,8 +93,16 @@ export function replaceQuery(patch: Record<string, string | null | undefined>): 
   return true
 }
 
-/** Link to another product's sandbox, carrying region / seed / language / Live AI (and an optional focus entity). */
-export function demoHref(slug: ProductSlug, s: Pick<DemoSession, 'regionId' | 'seed' | 'lang' | 'present'> & Partial<Pick<DemoSession, 'aiMode'>>, focus?: string | null): string {
+/**
+ * Link to another product's sandbox, carrying region / seed / language / Live AI (and an optional focus entity).
+ * In the tour's world (session scope 'tour') it also carries ?world=tour (+ ?from=tur-<n>), so a cross-product hop
+ * inside a taken-over sandbox stays in the tour's day and "Kembali ke tur" still knows the chapter.
+ */
+export function demoHref(
+  slug: ProductSlug,
+  s: Pick<DemoSession, 'regionId' | 'seed' | 'lang' | 'present'> & Partial<Pick<DemoSession, 'aiMode' | 'scope' | 'from'>>,
+  focus?: string | null,
+): string {
   const p = new URLSearchParams()
   p.set('region', s.regionId)
   if (s.seed !== DEFAULT_SEED) p.set('seed', String(s.seed))
@@ -90,5 +110,8 @@ export function demoHref(slug: ProductSlug, s: Pick<DemoSession, 'regionId' | 's
   if (s.aiMode === 'live') p.set('ai', 'live')
   if (s.present) p.set('present', '1')
   if (focus) p.set('focus', focus)
+  // `from` is set only in the tour's world (DemoShell)
+  if (s.scope === 'tour') p.set('world', 'tour')
+  if (s.from) p.set('from', s.from)
   return `/demo/${slug}?${p.toString()}`
 }

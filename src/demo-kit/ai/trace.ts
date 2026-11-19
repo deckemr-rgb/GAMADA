@@ -6,13 +6,16 @@
 import { useSyncExternalStore } from 'react'
 import type { ProductSlug, RoleId } from '../../content/products'
 import type { ToolCall } from './types'
+import { clock } from '../world/clock'
 
 export interface AiTrace {
   id: string
   product: ProductSlug
   role: RoleId
-  /** wall-clock ms (Date.now) */
+  /** wall-clock ms (Date.now): the id and the order */
   at: number
+  /** the world clock (minutes) when the answer finished: what the UI shows (absent in traces saved before Tahap 5) */
+  worldAt?: number
   /** the visitor's question, ≤ 120 chars */
   prompt: string
   intentId: string | null
@@ -60,7 +63,7 @@ export function pushTrace(t: Omit<AiTrace, 'id'>, persist = true): void {
 /** @internal useAiChat: a finished answer → one trace */
 export function traceOf(product: ProductSlug, role: RoleId, prompt: string, m: { intentId?: string; confidence?: number; mode?: 'sim' | 'live'; fellBack?: boolean; toolCalls?: ToolCall[]; timing?: AiTrace['timing'] | undefined; structured?: unknown[] }): void {
   pushTrace({
-    product, role, at: Date.now(), prompt, intentId: m.intentId ?? null, confidence: m.confidence ?? null, mode: m.mode ?? 'sim', fellBack: !!m.fellBack, steps: m.toolCalls ?? [], timing: m.timing ?? null,
+    product, role, at: Date.now(), worldAt: clock.get().minutes, prompt, intentId: m.intentId ?? null, confidence: m.confidence ?? null, mode: m.mode ?? 'sim', fellBack: !!m.fellBack, steps: m.toolCalls ?? [], timing: m.timing ?? null,
     structuredKinds: (m.structured ?? []).map((v) => String((v as { kind?: unknown }).kind ?? 'structured')),
   })
 }

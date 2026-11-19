@@ -42,12 +42,12 @@ export function storyDone(s: WorldState, now = clock.get().minutes): Record<Stor
   }
 }
 
-function runStep(key: StoryKey, s: WorldState, now: number): boolean {
+function runStep(key: StoryKey, s: WorldState, now: number, src: 'clock' | 'tour' = 'clock'): boolean {
   const origin = DAY_STORY.find((x) => x.key === key)!.product
   if (key === 'flood') return !!ensureFloodScenario(s, now)
   if (key === 'siti') {
     const p = sitiComplaintPayload(s, world.pack())
-    if (p) emit('complaint.created', p, 'clock', { at: now, origin })
+    if (p) emit('complaint.created', p, src, { at: now, origin })
     return !!p
   }
   const siti = sitiComplaint(s, now)
@@ -59,7 +59,7 @@ function runStep(key: StoryKey, s: WorldState, now: number): boolean {
     for (let i = 0; i < Math.max(0, WORLD.clusterMin - near); i++) {
       const p = neighbourComplaintPayload(s, siti.coord, siti.kecamatanId, siti.desaId, n0 + i, now)
       if (p) {
-        emit('complaint.created', p, 'clock', { at: now, origin })
+        emit('complaint.created', p, src, { at: now, origin })
         ok = true
       }
     }
@@ -74,7 +74,7 @@ function runStep(key: StoryKey, s: WorldState, now: number): boolean {
     emit('instruction.issued', {
       text: { id: `Tangani banjir Kec. ${kec}: evakuasi warga, pasang pompa darurat, salurkan bantuan hari ini`, en: `Handle the ${kec} flood: evacuate residents, deploy emergency pumps, deliver aid today` },
       opdIds: [opd(/bpbd/i, s.region.categoryOpd.banjir), opd(/dinsos|sosial/i, 'dinsos')], dueAt: now + 6 * 60, refs: [ref('clusters', cl.id), ...(alert ? [ref('alerts', alert.id)] : [])],
-    }, 'clock', { at: now, origin })
+    }, src, { at: now, origin })
     return true
   }
   const p = pump(s)
@@ -82,7 +82,7 @@ function runStep(key: StoryKey, s: WorldState, now: number): boolean {
   emit('procurement.recommended', {
     procurementId: p.id, hpsCorrected: Math.round((p.hps * 0.88) / 1000) * 1000, inviteLocal: true,
     note: { id: 'Koreksi HPS ke harga pasar dan undang UMKM lokal lewat Katalog Lokal (simulasi)', en: 'Correct the HPS to market prices and invite local SMEs through Katalog Lokal (simulated)' },
-  }, 'clock', { at: now, origin })
+  }, src, { at: now, origin })
   return true
 }
 
@@ -90,17 +90,22 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /**
  * Play the missing steps in order (`gapMs` apart; each waits until its events and reactions settled).
  * `onStep(key, 'done' | 'skip' | 'fail')` per step. Resolves with the keys that ran.
+ * `until` (Tahap 5 tour): stop after this key (`playDayStory({ until: 'siti' })` = flood + siti). `source` (K5): the
+ * events' source, 'clock' (default) or 'tour'; the origin stays the step's product either way.
  */
-export async function playDayStory(opts: { gapMs?: number; onStep?: (key: StoryKey, r: 'done' | 'skip' | 'fail') => void } = {}): Promise<StoryKey[]> {
+export async function playDayStory(
+  opts: { gapMs?: number; onStep?: (key: StoryKey, r: 'done' | 'skip' | 'fail') => void; source?: 'clock' | 'tour'; until?: StoryKey } = {},
+): Promise<StoryKey[]> {
   const ran: StoryKey[] = []
   for (const step of DAY_STORY) {
     if (world.status() !== 'ready') break
     const now = clock.get().minutes
     if (storyDone(world.get(), now)[step.key]) {
       opts.onStep?.(step.key, 'skip')
+      if (step.key === opts.until) break
       continue
     }
-    const ok = runStep(step.key, world.get(), now)
+    const ok = runStep(step.key, world.get(), now, opts.source ?? 'clock')
     // wait until it landed (a chunk may be downloading: the store queues the events meanwhile)
     for (let i = 0; i < 60 && ok && !storyDone(world.get(), now)[step.key]; i++) {
       await settled()
@@ -109,6 +114,7 @@ export async function playDayStory(opts: { gapMs?: number; onStep?: (key: StoryK
     const done = storyDone(world.get(), now)[step.key]
     opts.onStep?.(step.key, done ? 'done' : 'fail')
     if (done) ran.push(step.key)
+    if (step.key === opts.until) break
     if (opts.gapMs ?? 600) await sleep(opts.gapMs ?? 600)
   }
   return ran
