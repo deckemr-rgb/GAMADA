@@ -1,10 +1,11 @@
-/** Home: the stat strip right after the scenes (values come from content/site.ts → SITE.stats). */
+/** Home: the stat strip right after the scenes. Numbers come from content/ecoNav.ts (SITE_COUNTS, DEMO_COUNT) and
+ * content/site.ts (response hours); the copy never hard-codes them. */
 const id = {
   eyebrow: 'GAMADA dalam angka',
-  title: 'Studio kecil, jejak yang bisa dicoba.',
-  pagesAndDemos: 'Halaman & demo yang bisa dicoba',
-  mobileApps: 'Demo aplikasi mobile',
-  enterpriseProjects: 'Proyek enterprise',
+  title: 'Satu ekosistem yang bisa Anda coba hari ini.',
+  products: 'Produk yang saling terhubung',
+  ecosystems: 'Ekosistem',
+  demos: 'Demo interaktif di browser',
   responseHours: 'Respons maksimal',
   hoursSuffix: ' jam',
 }

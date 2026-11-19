@@ -1,65 +1,30 @@
-/** Home section copy: ecosystem (ID). The English copy lives in ./ecosystem.en.ts
- * (a separate module so the EN dictionary can load lazily, spec §14) and must have exactly this shape. */
+/** Home section copy: ecosystem teaser (ID): GAMADA Inti in the centre, the three ecosystems around it. Node labels
+ * and names come from content/ecoNav.ts. The English copy lives in ./ecosystem.en.ts (lazy) with this exact shape. */
 const id = {
   eyebrow: 'Ekosistem terhubung',
-  title: 'Satu panel untuk semua perangkat dan layanan.',
-  lead: 'Website, aplikasi, bot otomasi, AI, dan server Anda tidak perlu berjalan sendiri-sendiri. Semuanya melapor ke satu dasbor, jadi cukup satu tempat untuk tahu apa yang sedang terjadi.',
+  title: 'Satu kejadian, tiga ekosistem ikut bergerak.',
+  lead: 'Saat banjir diperkirakan datang, aduan warga, stok toko, dan harga pasar saling memberi tahu lewat GAMADA Inti.',
   hint: 'Arahkan kursor, ketuk, atau tekan Tab pada tiap simpul untuk melihat perannya.',
-  diagramLabel: 'Diagram ekosistem: Panel GAMADA di tengah, terhubung ke website, aplikasi, otomasi, AI, dan infrastruktur.',
+  diagramLabel: 'Diagram ekosistem: GAMADA Inti di tengah, terhubung ke Satu Daerah, Usaha Pintar, dan Pasar Daerah.',
+  cta: 'Jelajahi ekosistem',
+  nodeCta: 'Lihat {name}',
+  hubKicker: 'Fondasi',
   nodes: {
     hub: {
-      label: 'Panel GAMADA',
-      sub: 'Dasbor',
-      kicker: 'Pusat kendali',
-      title: 'Satu dasbor untuk semuanya',
-      body: 'Pesanan dari website, pengguna aplikasi, jadwal bot, dan kondisi server tampil di satu layar. Hak akses diatur per peran, jadi setiap orang hanya melihat yang memang perlu ia lihat.',
-      points: ['Data dari semua kanal di satu tempat', 'Hak akses per peran dan riwayat perubahan', 'Notifikasi penting ke WhatsApp atau email'],
-      cta: 'Lihat demo panel',
+      title: 'Satu akun, satu data, satu jejak audit',
+      body: 'Hak akses, data wilayah, asisten AI, dan jejak audit dipakai bersama semua produk.',
     },
-    web: {
-      label: 'Website',
-      sub: '',
-      kicker: 'Pintu depan',
-      title: 'Website yang mengirim data, bukan sekadar brosur',
-      body: 'Formulir, katalog, dan pemesanan langsung masuk ke panel. Tidak ada lagi menyalin pesanan dari kotak masuk ke spreadsheet satu per satu.',
-      points: ['Formulir dan pesanan tercatat otomatis', 'Katalog dan harga diubah dari panel', 'Statistik kunjungan di layar yang sama'],
-      cta: 'Lihat demo website',
+    'satu-daerah': {
+      title: 'Layanan publik yang saling terhubung',
+      body: 'Aduan dikelompokkan, pimpinan menerima ringkasan pagi, peringatan dini sampai ke kecamatan.',
     },
-    app: {
-      label: 'Aplikasi',
-      sub: '',
-      kicker: 'Di genggaman pelanggan',
-      title: 'Aplikasi mobile yang berbagi akun dan data',
-      body: 'Aplikasi memakai akun, stok, dan riwayat yang sama dengan website. Ubah sekali di panel, semua kanal ikut berubah tanpa sinkronisasi manual.',
-      points: ['Satu akun untuk web dan aplikasi', 'Notifikasi push dikirim dari panel', 'Data tetap rapi walau kanalnya bertambah'],
-      cta: 'Lihat demo aplikasi',
+    'usaha-pintar': {
+      title: 'Operasional yang berjalan sendiri',
+      body: 'Kasir, stok, pembukuan, dan tim penjualan terhubung dan ikut menyesuaikan saat ada kejadian di daerah.',
     },
-    auto: {
-      label: 'Otomasi',
-      sub: '',
-      kicker: 'Bekerja di luar jam kantor',
-      title: 'Pekerjaan berulang dijalankan oleh bot',
-      body: 'Laporan harian, pengingat tagihan, unggahan terjadwal, dan pengecekan data berjalan sendiri. Setiap hasil dan kegagalan tercatat di panel, bukan hilang di log.',
-      points: ['Jadwal tugas yang bisa dijeda kapan saja', 'Riwayat jalan dan pesan error yang jelas', 'Pemicu dari pesanan, formulir, atau jam tertentu'],
-      cta: 'Lihat studi kasus otomasi',
-    },
-    ai: {
-      label: 'AI',
-      sub: '',
-      kicker: 'Asisten yang membaca data Anda',
-      title: 'AI yang menyatu dengan alur kerja',
-      body: 'Meringkas percakapan pelanggan, mengelompokkan sentimen, dan menyiapkan draf jawaban dari data Anda sendiri. Keputusan akhir tetap di tangan tim.',
-      points: ['Ringkasan dan klasifikasi otomatis', 'Draf balasan untuk pertanyaan umum', 'Hasilnya bisa diperiksa sebelum dipakai'],
-      cta: 'Coba ScrapPulse',
-    },
-    infra: {
-      label: 'Infrastruktur',
-      sub: '',
-      kicker: 'Fondasi yang tidak terlihat',
-      title: 'Server, cadangan, dan pemantauan',
-      body: 'Semua layanan berjalan di server yang kami siapkan dan awasi: backup terjadwal, sertifikat SSL yang memperpanjang diri, dan peringatan dini kalau ada yang tidak beres.',
-      points: ['Backup terjadwal ke lokasi terpisah', 'Pemantauan uptime dan peringatan', 'Standar keamanan yang sama di setiap server'],
-      cta: 'Lihat standar keamanan',
+    'pasar-daerah': {
+      title: 'Belanja daerah yang menggerakkan UMKM',
+      body: 'Kebutuhan pemda dicocokkan ke UMKM lokal, skor usaha membuka akses modal, harga pokok terpantau.',
     },
   },
 }

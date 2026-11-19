@@ -994,3 +994,72 @@ html[data-motion='reduced'] .firefly-glow {
   min-height: 300vh;
   background: var(--c-ink-2);
 }
+
+/* =================================================================== navbar: Ekosistem dropdown (Tahap 6, B3) */
+.gnav-drop--split {
+  display: flex;
+  align-items: center;
+}
+.gnav-drop--split > .gnav-link:first-child {
+  padding-right: 4px;
+}
+.gnav-drop-chev {
+  padding: 10px 8px;
+}
+.gnav-drop-chev::after {
+  content: none;
+}
+.gnav-eco-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+.gnav-panel-sep {
+  height: 1px;
+  margin: 6px 14px;
+  background: var(--c-line);
+}
+.gnav-menu-sub a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+/* footer: five columns (Ekosistem column, Tahap 6) + 44 px rows on phones */
+@media (min-width: 961px) {
+  .sfoot-grid {
+    grid-template-columns: 1.4fr 1fr 1.15fr 1fr 1fr;
+  }
+}
+@media (max-width: 768px) {
+  .sfoot-col a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+/* /karya merged entries on the home Card (Tahap 6, B3): the Card carries surface + glow, the link fills it */
+.karya-merged-card {
+  --sec-surface: var(--c-surface);
+  --sec-line: var(--c-line);
+  --sec-fg: var(--c-text);
+  height: 100%;
+}
+.karya-merged-card > .karya-merged {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  border-radius: inherit;
+}
+.karya-merged-card > .karya-merged:focus-visible {
+  outline: 2px solid var(--c-peach-soft);
+  outline-offset: -4px;
+}
+.stub-list a {
+  min-height: 44px;
+  align-items: center;
+}

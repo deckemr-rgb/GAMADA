@@ -46,6 +46,8 @@ export const router = createBrowserRouter([
       { path: 'proses', lazy: page(LOADERS.proses) },
       { path: 'faq', lazy: page(LOADERS.faq) },
       { path: 'karya/kasirku', loader: moved('/produk/toko-autopilot#kasir') },
+      { path: 'karya/scrappulse', loader: moved('/produk/radar-isu#analisis') },
+      { path: 'produk/inti', loader: moved('/ekosistem/inti') },
       { path: 'tools', loader: moved('/lab') },
       { path: 'tools/scrappulse', loader: moved('/demo/radar-isu?tab=analisis') },
       { path: 'ekosistem', lazy: page(LOADERS.ekosistem) },

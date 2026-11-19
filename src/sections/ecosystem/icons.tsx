@@ -1,7 +1,7 @@
 /** Ecosystem node icons (24 × 24, stroke = currentColor, decorative). */
 import type { ReactElement } from 'react'
 
-export type EcoNodeId = 'hub' | 'web' | 'app' | 'auto' | 'ai' | 'infra'
+export type EcoNodeId = 'hub' | 'satu-daerah' | 'usaha-pintar' | 'pasar-daerah'
 
 const base = {
   width: 24,
@@ -17,60 +17,34 @@ const base = {
 }
 
 export const ECO_ICONS: Record<EcoNodeId, () => ReactElement> = {
+  // GAMADA Inti: stacked layers
   hub: () => (
     <svg {...base}>
-      <rect x="3" y="3" width="8" height="10" rx="1.6" />
-      <rect x="13" y="3" width="8" height="6" rx="1.6" />
-      <rect x="13" y="11" width="8" height="10" rx="1.6" />
-      <rect x="3" y="15" width="8" height="6" rx="1.6" />
+      <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z" />
+      <path d="m3 12 9 4.5 9-4.5" />
+      <path d="m3 16.5 9 4.5 9-4.5" />
     </svg>
   ),
-  web: () => (
+  'satu-daerah': () => (
     <svg {...base}>
-      <rect x="2.5" y="4" width="19" height="16" rx="2.2" />
-      <path d="M2.5 8.5h19" />
-      <circle cx="5.6" cy="6.25" r="0.5" fill="currentColor" />
-      <circle cx="7.8" cy="6.25" r="0.5" fill="currentColor" />
-      <path d="M6.5 13h6M6.5 16h9" />
+      <path d="M3 9.5 12 4l9 5.5H3Z" />
+      <path d="M6 12.5v6M10 12.5v6M14 12.5v6M18 12.5v6" />
+      <path d="M3 21h18" />
     </svg>
   ),
-  app: () => (
+  'usaha-pintar': () => (
     <svg {...base}>
-      <rect x="6.5" y="2.5" width="11" height="19" rx="2.4" />
-      <path d="M10.5 18.5h3" />
-      <path d="M9.5 5.5h5" />
+      <path d="M4.5 10v10h15V10" />
+      <path d="M3 5h18l-1.5 5h-15L3 5Z" />
+      <path d="M10 20v-5h4v5" />
     </svg>
   ),
-  auto: () => (
+  'pasar-daerah': () => (
     <svg {...base}>
-      <path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2" />
-      <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" />
-      <path d="M17.6 3.2v3.6H14" />
-      <path d="M6.4 20.8v-3.6H10" />
-      <circle cx="12" cy="12" r="2" />
+      <path d="M2 17h20" />
+      <path d="M5 17v-7M19 17v-7" />
+      <path d="M5 10c3 5 11 5 14 0" />
+      <path d="M9 17v-3.5M12 17v-3M15 17v-3.5" />
     </svg>
   ),
-  ai: () => (
-    <svg {...base}>
-      <path d="M11 3.5c.6 3.9 2.3 5.6 6.2 6.2-3.9.6-5.6 2.3-6.2 6.2-.6-3.9-2.3-5.6-6.2-6.2 3.9-.6 5.6-2.3 6.2-6.2Z" />
-      <path d="M18 14.5c.3 1.9 1.1 2.7 3 3-1.9.3-2.7 1.1-3 3-.3-1.9-1.1-2.7-3-3 1.9-.3 2.7-1.1 3-3Z" />
-    </svg>
-  ),
-  infra: () => (
-    <svg {...base}>
-      <rect x="3.5" y="3.5" width="17" height="7" rx="1.8" />
-      <rect x="3.5" y="13.5" width="17" height="7" rx="1.8" />
-      <circle cx="7.2" cy="7" r="0.6" fill="currentColor" />
-      <circle cx="7.2" cy="17" r="0.6" fill="currentColor" />
-      <path d="M11 7h6M11 17h6" />
-    </svg>
-  ),
-}
-
-export function CheckIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d="M3.5 8.4 6.6 11.4 12.5 4.8" />
-    </svg>
-  )
 }

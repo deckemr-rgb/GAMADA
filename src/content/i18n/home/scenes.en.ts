@@ -8,7 +8,7 @@ export const scenes: typeof idCopy = {
     title: 'Ideas, made real.',
     body: 'GAMADA designs and builds websites, mobile apps, AI and business systems, from the first sketch to the day your customers actually use them.',
     ctaPrimary: 'Consult on WhatsApp',
-    ctaSecondary: 'Explore the GAMADA ecosystem',
+    ctaSecondary: 'See the ecosystem demos',
     demoNote: 'Interactive demos · try them right in your browser',
     waPrefill: 'Hi GAMADA, I have a project idea and would like a free consultation.',
   },

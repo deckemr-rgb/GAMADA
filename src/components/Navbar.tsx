@@ -12,7 +12,7 @@
  *
  * navIntro() is still called by timelines/intro.ts on the home page.
  */
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent as RPointerEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { gsap } from 'gsap'
 import { DUR, EASE, SITE_MOTION, UI, prefersReducedMotion } from '../lib/motion'
@@ -20,6 +20,7 @@ import { getLenis } from '../lib/smoothScroll'
 import { useI18n, type Lang } from '../lib/i18n'
 import { waLink } from '../content/site'
 import { workMenuTitle } from '../content/work'
+import { ECO_NAV, LAB_NAV, TOUR_NAV } from '../content/ecoNav'
 import AppLink from './AppLink'
 import '../styles/site.css'
 
@@ -103,21 +104,153 @@ function Chevron() {
   )
 }
 
-export default function Navbar() {
-  const { t } = useI18n()
+/**
+ * NavDrop — one desktop dropdown (disclosure pattern). Without `to` the trigger is a button (Karya); with `to` it is
+ * a link plus a chevron button (Ekosistem: the link goes to the hub; the chevron, a click or ArrowDown opens).
+ * Opens on mouse hover or click; Enter / Space on the button or ArrowDown open from the keyboard; Escape closes and
+ * returns focus to the trigger; a pointer down outside, focus leaving it, or a route change close it.
+ */
+function NavDrop({
+  label,
+  to,
+  menuLabel,
+  current,
+  drop,
+  render,
+}: {
+  label: string
+  to?: string
+  menuLabel?: string
+  current?: 'page' | 'true'
+  drop: string
+  render: (close: () => void) => ReactNode
+}) {
   const location = useLocation()
+  const ref = useRef<HTMLLIElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const linkRef = useRef<HTMLAnchorElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const timer = useRef(0)
+  const [open, setOpen] = useState(false)
+  const id = useId()
+
+  const close = useCallback((focusTrigger = false) => {
+    window.clearTimeout(timer.current)
+    setOpen(false)
+    if (focusTrigger) (linkRef.current ?? btnRef.current)?.focus()
+  }, [])
+
+  useEffect(() => {
+    setOpen(false)
+  }, [location.pathname, location.hash])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        close(ref.current?.contains(document.activeElement) ?? false)
+      }
+    }
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) close()
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onDown)
+    }
+  }, [open, close])
+
+  /** keyboard open: the panel is visibility:hidden until the state lands, so focus its first link next frame */
+  const openAndFocus = () => {
+    setOpen(true)
+    requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>('a[href]')?.focus())
+  }
+  const onKeyDown = (e: RKeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      openAndFocus()
+    }
+  }
+  const onEnter = (e: RPointerEvent) => {
+    if (e.pointerType !== 'mouse') return
+    window.clearTimeout(timer.current)
+    setOpen(true)
+  }
+  const onLeave = (e: RPointerEvent) => {
+    if (e.pointerType !== 'mouse') return
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setOpen(false), NAV.dropdownCloseDelayMs)
+  }
+  const onBlur = (e: FocusEvent) => {
+    if (!ref.current?.contains(e.relatedTarget as Node | null)) close()
+  }
+
+  return (
+    <li
+      ref={ref}
+      className={to ? 'gnav-drop gnav-drop--split' : 'gnav-drop'}
+      data-nav-item
+      data-drop={drop}
+      data-open={open}
+      onPointerEnter={onEnter}
+      onPointerLeave={onLeave}
+      onBlur={onBlur}
+    >
+      {to ? (
+        <>
+          <AppLink ref={linkRef} className="gnav-link" to={to} aria-current={current} data-current={current ? true : undefined} onKeyDown={onKeyDown}>
+            {label}
+          </AppLink>
+          <button
+            ref={btnRef}
+            type="button"
+            className="gnav-link gnav-drop-chev"
+            aria-expanded={open}
+            aria-controls={id}
+            aria-label={menuLabel ?? label}
+            onClick={(e) => (open ? close() : e.detail === 0 ? openAndFocus() : setOpen(true))}
+            onKeyDown={onKeyDown}
+          >
+            <Chevron />
+          </button>
+        </>
+      ) : (
+        <button
+          ref={btnRef}
+          type="button"
+          className="gnav-link gnav-drop-btn"
+          aria-expanded={open}
+          aria-controls={id}
+          data-current={current ? true : undefined}
+          onClick={() => setOpen((v) => !v)}
+          onKeyDown={onKeyDown}
+        >
+          {label}
+          <Chevron />
+        </button>
+      )}
+      <div ref={panelRef} id={id} className="gnav-panel" data-open={open}>
+        {render(() => close())}
+      </div>
+    </li>
+  )
+}
+
+export default function Navbar() {
+  const { t, lang } = useI18n()
+  const location = useLocation()
+  const isEco = location.pathname.startsWith('/ekosistem') || location.pathname.startsWith('/produk/')
   const headerRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const dropRef = useRef<HTMLLIElement>(null)
-  const dropBtnRef = useRef<HTMLButtonElement>(null)
   const restoreInertRef = useRef<(() => void) | null>(null)
-  const dropTimer = useRef(0)
   const [open, setOpen] = useState(false)
-  const [dropOpen, setDropOpen] = useState(false)
   const [reduced] = useState(() => prefersReducedMotion())
   const menuId = useId()
-  const dropId = useId()
 
   /* ---------------------------------------------------------------- solid bar after a few px */
   useEffect(() => {
@@ -136,59 +269,16 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', check)
   }, [])
 
-  /* ---------------------------------------------------------------- dropdown */
-  const closeDrop = useCallback((focusButton = false) => {
-    window.clearTimeout(dropTimer.current)
-    setDropOpen(false)
-    if (focusButton) dropBtnRef.current?.focus()
-  }, [])
-
-  useEffect(() => {
-    if (!dropOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closeDrop(dropRef.current?.contains(document.activeElement) ?? false)
-      }
-    }
-    const onDown = (e: PointerEvent) => {
-      if (!dropRef.current?.contains(e.target as Node)) closeDrop()
-    }
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('pointerdown', onDown)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('pointerdown', onDown)
-    }
-  }, [dropOpen, closeDrop])
-
-  const onDropEnter = (e: RPointerEvent) => {
-    if (e.pointerType !== 'mouse') return
-    window.clearTimeout(dropTimer.current)
-    setDropOpen(true)
-  }
-  const onDropLeave = (e: RPointerEvent) => {
-    if (e.pointerType !== 'mouse') return
-    window.clearTimeout(dropTimer.current)
-    dropTimer.current = window.setTimeout(() => setDropOpen(false), NAV.dropdownCloseDelayMs)
-  }
-  const onDropBlur = (e: FocusEvent) => {
-    if (!dropRef.current?.contains(e.relatedTarget as Node | null)) closeDrop()
-  }
-
   /* ---------------------------------------------------------------- mobile menu */
   const close = useCallback((restoreFocus = true) => {
     setOpen(false)
     if (restoreFocus) toggleRef.current?.focus({ preventScroll: true })
   }, [])
 
-  // route change closes everything
+  // route change closes the menu (each dropdown closes itself)
   useEffect(() => {
     setOpen(false)
-    setDropOpen(false)
   }, [location.pathname, location.hash])
-
-  useEffect(() => () => window.clearTimeout(dropTimer.current), [])
 
   useEffect(() => {
     if (!open) return
@@ -260,6 +350,7 @@ export default function Navbar() {
   const cta = waLink(t.wa.prefill)
   const menuLinks = [
     { label: t.nav.services, to: '/#layanan' },
+    { label: t.nav.eco, to: '/ekosistem' },
     { label: t.nav.work, to: '/karya' },
     { label: t.nav.process, to: '/proses' },
     { label: t.nav.faq, to: '/faq' },
@@ -288,43 +379,61 @@ export default function Navbar() {
               {t.nav.services}
             </AppLink>
           </li>
-          <li
-            ref={dropRef}
-            className="gnav-drop"
-            data-nav-item
-            data-open={dropOpen}
-            onPointerEnter={onDropEnter}
-            onPointerLeave={onDropLeave}
-            onBlur={onDropBlur}
-          >
-            <button
-              ref={dropBtnRef}
-              type="button"
-              className="gnav-link gnav-drop-btn"
-              aria-expanded={dropOpen}
-              aria-controls={dropId}
-              data-current={location.pathname.startsWith('/karya') || undefined}
-              onClick={() => setDropOpen((v) => !v)}
-            >
-              {t.nav.work}
-              <Chevron />
-            </button>
-            <div id={dropId} className="gnav-panel" data-open={dropOpen}>
-              <ul className="gnav-panel-list">
-                {t.nav.workMenu.map((m) => (
-                  <li key={m.hash}>
-                    <AppLink className="gnav-panel-link" to={`/karya#${m.hash}`} onClick={() => closeDrop()}>
-                      <span className="gnav-panel-title">{workMenuTitle(m)}</span>
-                      <span className="gnav-panel-desc">{m.desc}</span>
+          <NavDrop
+            label={t.nav.eco}
+            to="/ekosistem"
+            menuLabel={t.nav.ecoMenu}
+            current={isEco ? (location.pathname === '/ekosistem' ? 'page' : 'true') : undefined}
+            drop="eco"
+            render={(close) => (
+              <>
+                <ul className="gnav-panel-list">
+                  {ECO_NAV.map((e) => (
+                    <li key={e.id}>
+                      <AppLink className="gnav-panel-link" to={e.to} onClick={close}>
+                        <span className="gnav-panel-title">
+                          <i className="gnav-eco-dot" style={{ background: `var(${e.accent})` }} aria-hidden="true" />
+                          {e.name}
+                        </span>
+                        <span className="gnav-panel-desc">{e.audience[lang]}</span>
+                      </AppLink>
+                    </li>
+                  ))}
+                  <li className="gnav-panel-sep" role="separator" />
+                  <li>
+                    <AppLink className="gnav-panel-link" to={TOUR_NAV.to} onClick={close}>
+                      <span className="gnav-panel-title">{TOUR_NAV.title[lang]}</span>
                     </AppLink>
                   </li>
-                ))}
-              </ul>
-              <AppLink className="gnav-panel-all" to="/karya" onClick={() => closeDrop()}>
-                {t.nav.workAll} <span aria-hidden="true">→</span>
-              </AppLink>
-            </div>
-          </li>
+                </ul>
+                <AppLink className="gnav-panel-all" to={LAB_NAV.to} onClick={close}>
+                  {LAB_NAV.title[lang]} <span aria-hidden="true">→</span>
+                </AppLink>
+              </>
+            )}
+          />
+          <NavDrop
+            label={t.nav.work}
+            current={location.pathname.startsWith('/karya') ? 'true' : undefined}
+            drop="work"
+            render={(close) => (
+              <>
+                <ul className="gnav-panel-list">
+                  {t.nav.workMenu.map((m) => (
+                    <li key={m.hash}>
+                      <AppLink className="gnav-panel-link" to={`/karya#${m.hash}`} onClick={close}>
+                        <span className="gnav-panel-title">{workMenuTitle(m)}</span>
+                        <span className="gnav-panel-desc">{m.desc}</span>
+                      </AppLink>
+                    </li>
+                  ))}
+                </ul>
+                <AppLink className="gnav-panel-all" to="/karya" onClick={close}>
+                  {t.nav.workAll} <span aria-hidden="true">→</span>
+                </AppLink>
+              </>
+            )}
+          />
           <li data-nav-item>
             <AppLink className="gnav-link" to="/proses" aria-current={location.pathname === '/proses' ? 'page' : undefined}>
               {t.nav.process}
@@ -389,6 +498,23 @@ export default function Navbar() {
                 </span>
                 {l.label}
               </AppLink>
+              {l.to === '/ekosistem' ? (
+                <ul className="gnav-menu-sub">
+                  {ECO_NAV.map((e) => (
+                    <li key={e.id}>
+                      <AppLink to={e.to} onClick={onMenuLink}>
+                        <i className="gnav-eco-dot" style={{ background: `var(${e.accent})` }} aria-hidden="true" />
+                        {e.name}
+                      </AppLink>
+                    </li>
+                  ))}
+                  <li>
+                    <AppLink to={TOUR_NAV.to} onClick={onMenuLink}>
+                      {TOUR_NAV.title[lang]}
+                    </AppLink>
+                  </li>
+                </ul>
+              ) : null}
               {l.to === '/karya' ? (
                 <ul className="gnav-menu-sub">
                   {t.nav.workMenu.map((m) => (

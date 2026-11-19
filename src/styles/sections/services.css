@@ -1,4 +1,4 @@
-/* services.css — "Layanan & Produk" (#layanan): dawn section, four service cards + WhatsApp strip.
+/* services.css — "Layanan & Produk" (#layanan): dawn section, three ecosystem cards + Inti line + WhatsApp strip.
  * Hover language: Card (tilt + spotlight + glow) + the line icon redrawing itself
  * (stroke-dashoffset keyframes, the one non-transform property the brief allows here). */
 
@@ -28,9 +28,15 @@
     gap: 20px;
   }
 }
-@media (min-width: 1140px) {
+@media (min-width: 640px) and (max-width: 959px) {
+  /* two columns: the third card spans the row instead of leaving a hole */
+  .svc-grid > .svc-card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 960px) {
   .svc-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 /* side-by-side cards share their rows (icon · title + text · "included" · list · footer), so the
@@ -141,33 +147,6 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.svc-list {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.svc-list li {
-  position: relative;
-  padding-left: 22px;
-  color: var(--sec-fg);
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-/* small check drawn with borders (no icon font) */
-.svc-list li::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 0.32em;
-  width: 9px;
-  height: 5px;
-  border-left: 2px solid #0d6b58;
-  border-bottom: 2px solid #0d6b58;
-  transform: rotate(-45deg);
-}
 .svc-foot {
   display: flex;
   flex-wrap: wrap;
@@ -192,6 +171,75 @@
 }
 .svc-cta .btn:focus-visible {
   border-radius: var(--radius-pill);
+}
+
+/* ------------------------------------------------------------------ ecosystem accents (AA on the dawn stops) */
+.svc-card--satu-daerah {
+  --svc-acc: #0b6656;
+}
+.svc-card--usaha-pintar {
+  --svc-acc: #8f3f1a;
+}
+.svc-card--pasar-daerah {
+  --svc-acc: #6e3a80;
+}
+.svc-card .svc-icon {
+  color: var(--svc-acc, var(--c-violet));
+}
+.svc-aud {
+  margin: 0 0 6px;
+  color: var(--svc-acc, var(--sec-accent));
+  font: 700 0.74rem/1.3 var(--font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.svc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.svc-chips li {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(74, 53, 119, 0.16);
+  color: var(--sec-fg);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.svc-more {
+  display: grid;
+  gap: 6px;
+  margin-top: clamp(24px, 3vw, 36px);
+  color: var(--sec-muted);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+.svc-more p {
+  margin: 0;
+}
+.svc-more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--sec-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+.svc-more-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.svc-more-link:focus-visible {
+  outline: 2px solid var(--c-violet);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* ------------------------------------------------------------------ WhatsApp strip */

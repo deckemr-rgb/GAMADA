@@ -14,28 +14,25 @@
 }
 
 /* per-node colour */
-.eco-link--web,
-.eco-node--web {
-  --node-c: var(--c-lavender);
-}
-.eco-link--app,
-.eco-node--app {
-  --node-c: #e3c2ee;
-}
-.eco-link--auto,
-.eco-node--auto {
+.eco-link--satu-daerah,
+.eco-node--satu-daerah {
   --node-c: var(--c-teal);
 }
-.eco-link--ai,
-.eco-node--ai {
-  --node-c: var(--c-cyan);
+.eco-link--usaha-pintar,
+.eco-node--usaha-pintar {
+  --node-c: var(--c-peach);
 }
-.eco-link--infra,
-.eco-node--infra {
-  --node-c: var(--c-gold);
+.eco-link--pasar-daerah,
+.eco-node--pasar-daerah {
+  --node-c: #c08ad0;
 }
 .eco-node--hub {
-  --node-c: var(--c-peach);
+  --node-c: var(--c-lavender-soft);
+}
+.eco-more {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(28px, 4vw, 48px);
 }
 
 /* =================================================================== diagram */
@@ -370,4 +367,9 @@ html[data-motion='reduced'] .eco-node-orb {
 }
 html[data-motion='reduced'] .eco-node-ring {
   transition: opacity 0.35s ease;
+}
+
+/* narrow diagram: the satellites' audience line does not fit beside the edge; the panel carries it */
+[data-layout='narrow'] .eco-node:not(.eco-node--hub) .eco-node-sub {
+  display: none;
 }

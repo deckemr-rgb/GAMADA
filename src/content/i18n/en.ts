@@ -49,6 +49,8 @@ export const en: Dict = {
   },
   nav: {
     services: 'Services & Products',
+    eco: 'Ecosystem',
+    ecoMenu: 'Open the Ecosystem menu',
     work: 'Work',
     process: 'Process',
     faq: 'FAQ',
@@ -71,11 +73,10 @@ export const en: Dict = {
       'A software & automation studio for Indonesian businesses. We design, build and look after digital products, from websites to automation engines, with a calm and transparent process.',
     servicesTitle: 'Services',
     services: [
-      { label: 'Websites & Web Apps', to: '/#layanan' },
-      { label: 'Mobile Apps', to: '/#layanan' },
-      { label: 'Machine Learning & AI', to: '/#layanan' },
-      { label: 'POS & Business Systems', to: '/#layanan' },
+      { label: 'Services & Products', to: '/#layanan' },
+      { label: 'All ecosystems', to: '/ekosistem' },
     ],
+    ecoTitle: 'Ecosystem',
     portfolioTitle: 'Portfolio',
     allWork: 'All Work',
     nowPartOf: 'now part of {name}',

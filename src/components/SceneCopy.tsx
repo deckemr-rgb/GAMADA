@@ -17,6 +17,8 @@ import LearnMore from './LearnMore'
 import { MagneticLink, WaIcon } from './ui/Button'
 import { useI18n } from '../lib/i18n'
 import { waLink } from '../content/site'
+import { useLocation, useNavigate } from 'react-router'
+import { goTo } from './AppLink'
 
 gsap.registerPlugin(SplitText)
 
@@ -39,6 +41,8 @@ function EyebrowIcon() {
  */
 export default function SceneCopy({ def }: { def: SceneDef }) {
   const { t } = useI18n()
+  const navigate = useNavigate()
+  const location = useLocation()
   const { copy } = def
 
   if (def.id === 'hero') {
@@ -60,7 +64,8 @@ export default function SceneCopy({ def }: { def: SceneDef }) {
             <MagneticLink href={waLink(h.waPrefill)} variant="primary" icon={<WaIcon />} className="copy-cta-wa">
               {h.ctaPrimary}
             </MagneticLink>
-            <StartButton label={h.ctaSecondary} arrow="down" />
+            {/* Tahap 6 (spec §4): the second hero CTA opens the ecosystem hub (same button look, curtain navigation) */}
+            <StartButton label={h.ctaSecondary} arrow="right" onClick={() => void goTo('/ekosistem', navigate, location.pathname)} />
           </div>
           <p className="copy-demo">
             <span className="copy-demo-dot" aria-hidden="true" />

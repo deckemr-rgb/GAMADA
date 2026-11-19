@@ -1,42 +1,40 @@
 /**
- * Services — "Layanan & Produk" (#layanan, the navbar + footer target). Dawn tone with the ambient
- * drift. Four Cards (tilt + spotlight + lavender glow) with a line icon that redraws itself on
- * hover / keyboard focus (stroke-dashoffset, CSS — see services.css), a short description, what is
- * included, the demo count (computed from content/work.ts) and a link into /karya.
- * Closes with a WhatsApp consultation strip.
+ * Services — "Layanan & Produk" (#layanan, the navbar + footer target). Dawn tone with the ambient drift.
+ * Tahap 6 (spec §4): three ecosystem Cards (tilt + spotlight + glow) with a line icon that redraws itself on
+ * hover / keyboard focus (stroke-dashoffset, CSS — see services.css): audience, name, a 2-line pitch, three example
+ * products, "{n} produk" and a link to /ekosistem/:eco. Then a slim GAMADA Inti line, one sentence for the studio's
+ * custom work (→ /karya) and the WhatsApp consultation strip. Names, counts and examples come from
+ * content/ecoNav.ts only (home never imports products.ts or the registry).
  */
 import { useRef } from 'react'
 import { useI18n } from '../lib/i18n'
 import { useReveal } from '../lib/reveal'
 import { waLink } from '../content/site'
-import { WORK, findWork } from '../content/work'
+import { ECO_NAV } from '../content/ecoNav'
 import Section from '../components/ui/Section'
 import SectionHeader from '../components/ui/SectionHeader'
 import Card from '../components/ui/Card'
-import Tag, { type TagTone } from '../components/ui/Tag'
+import Tag from '../components/ui/Tag'
+import AppLink from '../components/AppLink'
 import { ButtonLink, WaIcon } from '../components/ui/Button'
 import ServiceIcon, { type ServiceIconKey } from './services/ServiceIcon'
 import '../styles/sections/services.css'
 
-/** Where each card links, which tag tone its count uses, and how many entries it counts. */
-const SERVICE_META: Record<ServiceIconKey, { to: string; tone: TagTone; count: number }> = {
-  web: { to: '/karya#web', tone: 'live', count: WORK.filter((w) => w.kind === 'web').length },
-  apk: { to: '/karya#apk', tone: 'mobile', count: WORK.filter((w) => w.kind === 'apk').length },
-  ml: { to: '/karya#proyek', tone: 'real', count: WORK.filter((w) => w.kind === 'case').length },
-  pos: { to: '/karya/kasirku', tone: 'live', count: findWork('kasirku') ? 1 : 0 },
-}
+const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (m, k: string) => String(v[k] ?? m))
 
 export default function Services() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const c = t.home.services
   const ref = useRef<HTMLDivElement>(null)
+  const ecos = ECO_NAV.filter((e): e is (typeof ECO_NAV)[number] & { id: ServiceIconKey } => e.id !== 'inti')
+  const inti = ECO_NAV.find((e) => e.id === 'inti')
 
   useReveal(ref, (kit, root) => {
     kit.eyebrow(root.querySelector('[data-rv="eyebrow"]'))
     kit.heading(root.querySelector('[data-rv="heading"]'))
     kit.fadeUp(root.querySelector('[data-rv="lead"]'))
     kit.cards(root.querySelectorAll('.svc-grid [data-rv="card"]'))
-    kit.fadeUp(root.querySelector('.svc-cta'))
+    kit.fadeUp(root.querySelectorAll('.svc-more, .svc-cta'))
   })
 
   return (
@@ -45,43 +43,60 @@ export default function Services() {
         <SectionHeader eyebrow={c.eyebrow} title={c.title} titleId="layanan-title" lead={c.lead} />
 
         <ul className="svc-grid" role="list">
-          {c.items.map((item, i) => {
-            const meta = SERVICE_META[item.key]
-            const titleId = `layanan-${item.key}`
+          {ecos.map((e, i) => {
+            const titleId = `layanan-${e.id}`
             return (
-              <Card as="li" key={item.key} className="svc-card">
+              <Card as="li" key={e.id} className={`svc-card svc-card--${e.id}`}>
                 <div className="svc-top">
                   <span className="svc-icon">
-                    <ServiceIcon name={item.key} />
+                    <ServiceIcon name={e.id} />
                   </span>
                   <span className="svc-num" aria-hidden="true">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                 </div>
                 <div className="svc-body">
+                  <p className="svc-aud">{e.audience[lang]}</p>
                   <h3 className="svc-title" id={titleId}>
-                    {item.title}
+                    {e.name}
                   </h3>
-                  <p className="svc-desc">{item.desc}</p>
+                  <p className="svc-desc">{c.pitch[e.id]}</p>
                 </div>
-                <p className="svc-inc-label" id={`${titleId}-inc`}>
-                  {c.includedLabel}
+                <p className="svc-inc-label" id={`${titleId}-ex`}>
+                  {c.examples}
                 </p>
-                <ul className="svc-list" aria-labelledby={`${titleId}-inc`}>
-                  {item.bullets.map((b) => (
-                    <li key={b}>{b}</li>
+                <ul className="svc-chips" aria-labelledby={`${titleId}-ex`}>
+                  {e.examples.map((x) => (
+                    <li key={x.slug}>{x.name}</li>
                   ))}
                 </ul>
                 <div className="svc-foot">
-                  <Tag tone={meta.tone}>{item.count(meta.count)}</Tag>
-                  <ButtonLink to={meta.to} variant="text" className="svc-link">
-                    {item.cta}
+                  <Tag tone="live">{fill(c.count, { n: e.count })}</Tag>
+                  <ButtonLink to={e.to} variant="text" className="svc-link" ariaLabel={`${c.cta}: ${e.name}`}>
+                    {c.cta}
                   </ButtonLink>
                 </div>
               </Card>
             )
           })}
         </ul>
+
+        <div className="svc-more">
+          {inti ? (
+            <p>
+              <span>{fill(c.inti, { name: inti.name })}</span>{' '}
+              <AppLink to={inti.to} className="svc-more-link">
+                {fill(c.intiCta, { name: inti.name })} <span aria-hidden="true">→</span>
+              </AppLink>
+            </p>
+          ) : null}
+          <p>
+            <span>{c.custom}</span>{' '}
+            <AppLink to="/karya" className="svc-more-link">
+              {c.customCta} <span aria-hidden="true">→</span>
+            </AppLink>
+          </p>
+        </div>
 
         <div className="svc-cta">
           <div className="svc-cta-copy">

@@ -51,6 +51,8 @@ export const id = {
   },
   nav: {
     services: 'Layanan & Produk',
+    eco: 'Ekosistem',
+    ecoMenu: 'Buka menu Ekosistem',
     work: 'Karya',
     process: 'Proses',
     faq: 'FAQ',
@@ -73,11 +75,10 @@ export const id = {
       'Studio software & otomasi untuk bisnis Indonesia. Kami merancang, membangun, dan merawat produk digital: dari website sampai mesin otomasi, dengan proses yang tenang dan transparan.',
     servicesTitle: 'Layanan',
     services: [
-      { label: 'Website & Web App', to: '/#layanan' },
-      { label: 'Aplikasi Mobile', to: '/#layanan' },
-      { label: 'Machine Learning & AI', to: '/#layanan' },
-      { label: 'POS & Sistem Bisnis', to: '/#layanan' },
+      { label: 'Layanan & Produk', to: '/#layanan' },
+      { label: 'Semua ekosistem', to: '/ekosistem' },
     ],
+    ecoTitle: 'Ekosistem',
     portfolioTitle: 'Portofolio',
     allWork: 'Semua Karya',
     nowPartOf: 'kini bagian dari {name}',

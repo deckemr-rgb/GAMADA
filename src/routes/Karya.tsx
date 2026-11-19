@@ -1,5 +1,6 @@
-/** /karya — portfolio. Phase 1: grouped index with the #web / #apk / #proyek anchors (full page in phase 3).
- * Entries folded into an ecosystem product (KasirKu, ScrapPulse) render a "Kini bagian dari …" card instead. */
+/** /karya — portfolio. Grouped index with the #web / #apk / #proyek anchors (the full portfolio page is deferred).
+ * Entries folded into an ecosystem product (KasirKu, ScrapPulse) render a "Kini bagian dari …" card instead: the
+ * home Card (tilt + spotlight + glow) linking /produk/toko-autopilot#kasir and /produk/radar-isu#analisis. */
 import { useEcoI18n } from '../content/i18n/useEco'
 import { WORK, workMenuTitle, type WorkKind } from '../content/work'
 import { PRODUCT_BY_SLUG } from '../content/products'
@@ -8,6 +9,7 @@ import AppLink from '../components/AppLink'
 import { Icon } from '../demo-kit/ui/icons'
 import { EcoBadge, fill } from './EcoParts'
 import Arrow from '../components/ui/Arrow'
+import Card from '../components/ui/Card'
 
 const GROUPS: Array<{ id: string; kind: WorkKind; menuIndex: number }> = [
   { id: 'web', kind: 'web', menuIndex: 1 },
@@ -44,7 +46,7 @@ export default function Karya() {
                   const prod = PRODUCT_BY_SLUG[m.product]
                   const note = w.slug === 'kasirku' ? k.kasirku : w.slug === 'scrappulse' ? k.scrappulse : prod.tagline[lang]
                   return (
-                    <li key={w.slug}>
+                    <Card as="li" key={w.slug} className="karya-merged-card">
                       <AppLink to={m.to} className="karya-merged" data-eco={prod.eco}>
                         <span className="eco-pcard-icon">
                           <Icon name={prod.icon} size={22} />
@@ -64,7 +66,7 @@ export default function Karya() {
                           <Arrow />
                         </span>
                       </AppLink>
-                    </li>
+                    </Card>
                   )
                 })}
               </ul>

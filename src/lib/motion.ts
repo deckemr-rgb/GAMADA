@@ -641,3 +641,46 @@ export const DEMO = {
   /** map rain animation cap (fps) on mid tier */
   rainFpsMid: 30,
 } as const
+
+/* ------------------------------------------------------------------ site pages (Tahap 6) */
+
+/**
+ * ECO_SITE — timings of the ecosystem site pages (/ekosistem, /ekosistem/:eco, /produk/:slug, /lab) and the
+ * product mini-demos (src/demos/mini-kit.tsx). Seconds unless the name says ms / px / vh.
+ * Flag `constellation` (FLAGS above, ?off=constellation) gates the hub sky; reduced motion and ?static=1 show
+ * final states (lines drawn, no twinkle, no zoom; minis on their final frame with a "Putar" button).
+ */
+export const ECO_SITE = {
+  constellation: {
+    /** relation lines draw in on enter (stroke-dashoffset): per-line duration and total stagger spread */
+    lineDraw: 1.2,
+    lineStagger: 1.2,
+    /** hover / focus: other lines + stars dim to this opacity */
+    dimTo: 0.25,
+    /** stars twinkling at once (opacity only) and one twinkle cycle */
+    twinkleCount: 6,
+    twinkle: 2.4,
+    /** click → star scales 1 → zoomScale while the sky fades, then navigate (ms) */
+    zoomScale: 8,
+    zoomMs: 300,
+    /** min hit area of a star (px) */
+    hitPx: 44,
+  },
+  flow: {
+    /** desktop pinned length of the "Bagaimana semuanya terhubung" diagram (vh), scrub smoothing */
+    pinVh: 150,
+    scrub: 0.6,
+  },
+  mini: {
+    /** mount a mini when its frame is this close to the viewport (IntersectionObserver rootMargin) */
+    rootMargin: '200px',
+    /** autoplay while at least this share of the frame is visible */
+    playThreshold: 0.5,
+    /** /lab: hover / focus delay before the preview loads (ms) and max minis kept mounted (LRU) */
+    previewDelayMs: 220,
+    maxMounted: 3,
+    /** default hold per frame when a script step gives none (ms), and the cross-fade between frames (s) */
+    frameMs: 2200,
+    crossfade: 0.35,
+  },
+} as const

@@ -1,61 +1,30 @@
 /**
- * Home: "Layanan & Produk" (#layanan). Four service cards; the demo counts are computed from
- * content/work.ts and passed to the `count` formatters, so the copy never hard-codes a number.
+ * Home: "Layanan & Produk" (#layanan). Three ecosystem cards (names, audience, counts and example products come
+ * from content/ecoNav.ts, so the copy never retypes a product name or a number), a slim GAMADA Inti line, the
+ * custom-work sentence and the WhatsApp strip. `{n}` / `{name}` are filled by the section.
  */
-type ServiceKey = 'web' | 'apk' | 'ml' | 'pos'
-
-interface ServiceCopy {
-  key: ServiceKey
-  title: string
-  desc: string
-  bullets: [string, string, string]
-  count: (n: number) => string
-  cta: string
-}
+type CardEco = 'satu-daerah' | 'usaha-pintar' | 'pasar-daerah'
 
 const id = {
   eyebrow: 'Layanan & Produk',
-  title: 'Empat hal yang kami kerjakan setiap hari.',
-  lead: 'Dari situs pertama sampai sistem yang menyambungkan kasir, stok, dan laporan. Setiap layanan punya contoh yang bisa Anda coba langsung di browser sebelum kita bicara anggaran.',
-  includedLabel: 'Sudah termasuk',
-  items: [
-    {
-      key: 'web',
-      title: 'Website & Web App',
-      desc: 'Profil usaha, toko online, sampai dasbor internal. Tetap ringan di sinyal pas-pasan.',
-      bullets: ['Desain responsif & SEO dasar', 'Panel admin untuk ubah konten', 'Tombol WhatsApp & pembayaran'],
-      count: (n: number) => `${n} demo`,
-      cta: 'Lihat demo web',
-    },
-    {
-      key: 'apk',
-      title: 'Aplikasi Mobile',
-      desc: 'Aplikasi Android dan iOS untuk pelanggan atau tim lapangan Anda.',
-      bullets: ['Android & iOS dari satu kode', 'Notifikasi & mode offline', 'Dibantu sampai rilis di toko aplikasi'],
-      count: (n: number) => `${n} demo`,
-      cta: 'Coba demo aplikasi',
-    },
-    {
-      key: 'ml',
-      title: 'Machine Learning & AI',
-      desc: 'Otomasi kerja berulang dan model yang belajar dari data usaha Anda sendiri.',
-      bullets: ['Scraping & pengolahan data', 'Bot & otomasi alur kerja', 'Dasbor untuk memantau hasil'],
-      count: (n: number) => `${n} proyek asli`,
-      cta: 'Lihat proyek asli',
-    },
-    {
-      key: 'pos',
-      title: 'POS & Sistem Bisnis',
-      desc: 'Kasir, stok, dan laporan dalam satu sistem. Siap pakai, atau dirakit sesuai cara kerja Anda.',
-      bullets: ['Kasir dengan QRIS & struk', 'Stok & laporan harian otomatis', 'Hak akses per karyawan'],
-      count: (n: number) => `${n} demo POS + sistem custom`,
-      cta: 'Coba demo kasir',
-    },
-  ] as ServiceCopy[],
+  title: 'Tiga ekosistem, satu fondasi.',
+  lead: 'Produk yang saling terhubung untuk pemda, bisnis, dan jembatan di antara keduanya. Setiap produk punya demo interaktif di browser.',
+  pitch: {
+    'satu-daerah': 'Aduan warga, arahan pimpinan, dan peringatan dini bergerak dalam satu alur, dari kecamatan sampai meja kepala daerah.',
+    'usaha-pintar': 'Kasir, pembukuan, tim penjualan, dan reputasi berjalan sendiri, lalu ikut membaca kejadian di daerah.',
+    'pasar-daerah': 'Belanja pemda mengalir ke UMKM lokal yang terverifikasi, dan harga serta ekonomi daerah terbaca setiap hari.',
+  } satisfies Record<CardEco, string>,
+  count: '{n} produk',
+  examples: 'Contoh produk',
+  cta: 'Lihat ekosistem',
+  inti: 'Semua produk berdiri di atas {name}: satu akun, satu data, satu jejak audit.',
+  intiCta: 'Kenali {name}',
+  custom: 'Juga: website & aplikasi custom untuk kebutuhan di luar ekosistem.',
+  customCta: 'Lihat karya studio',
   ctaTitle: 'Belum yakin harus mulai dari mana?',
-  ctaText: 'Ceritakan masalahnya. Kami bantu memilih langkah yang paling masuk akal untuk skala usaha Anda.',
+  ctaText: 'Ceritakan masalahnya. Kami bantu memilih langkah yang paling masuk akal untuk skala Anda.',
   ctaButton: 'Konsultasi via WhatsApp',
-  waText: 'Halo GAMADA, saya ingin konsultasi soal layanan yang cocok untuk usaha saya.',
+  waText: 'Halo GAMADA, saya ingin konsultasi soal produk ekosistem yang cocok untuk kami.',
 }
 
 export const services = id

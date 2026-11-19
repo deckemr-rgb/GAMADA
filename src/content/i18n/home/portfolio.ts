@@ -1,32 +1,22 @@
-/** Home section copy: portfolio (ID). The English copy lives in ./portfolio.en.ts
- * (a separate module so the EN dictionary can load lazily, spec §14) and must have exactly this shape. */
+/** Home section copy: portfolio (ID) — three featured ecosystem demos. Product names come from the slugs' data in
+ * the section; the English copy lives in ./portfolio.en.ts (lazy) with this exact shape. */
 const id = {
-  eyebrow: 'Portofolio unggulan',
-  title: 'Karya pilihan yang bisa Anda buka dan uji sendiri.',
-  lead: 'Dua proyek asli GAMADA dan satu paket demo aplikasi mobile. Seluruh {n} karya kami bisa Anda jelajahi di halaman Karya.',
+  eyebrow: 'Demo unggulan',
+  title: 'Tiga produk yang bisa Anda coba sekarang.',
+  lead: 'Data di setiap demo adalah simulasi, tetapi alurnya sama dengan produk yang kami pasang.',
   tags: {
-    real: 'Proyek Asli',
-    automation: 'Otomasi',
-    live: 'Live Demo',
-    ai: 'AI',
-    mobile: 'Mobile',
+    gov: 'Pemerintah daerah',
+    biz: 'Bisnis',
+    live: 'Demo interaktif',
   },
-  phonefarm: {
-    title: 'PhoneFarm',
-    desc: 'Satu panel untuk menjalankan banyak ponsel Android sekaligus: antrean tugas, status perangkat, dan log dalam satu layar.',
-    cta: 'Lihat demo',
+  items: {
+    'sapa-warga': 'Aduan WhatsApp dikelompokkan otomatis, tiket bergerak sampai selesai, warga diberi kabar.',
+    'siaga-wilayah': 'Prakiraan hujan per kecamatan, peringatan dini terkirim, petugas tahu desa mana didatangi dulu.',
+    'toko-autopilot': 'Kasir, stok, dan PO yang membaca peringatan banjir: prediksi berubah sebelum rak kosong.',
   },
-  automation: {
-    title: 'Sistem Automasi',
-    desc: 'Pekerjaan yang dulu diketik ulang setiap hari kini jalan sendiri. AI membaca data yang masuk, sistem mengerjakan sisanya.',
-    cta: 'Lihat studi kasus',
-  },
-  mobile: {
-    title: '{n} Demo Aplikasi Mobile',
-    desc: 'Konsep aplikasi dari jajanan sampai kebugaran yang bisa langsung dicoba di browser, tanpa perlu memasang apa pun.',
-    cta: 'Lihat demo',
-  },
-  all: 'Lihat semua karya',
+  try: 'Coba demo',
+  detail: 'Detail',
+  all: 'Portofolio studio lainnya',
 }
 
 export const portfolio = id

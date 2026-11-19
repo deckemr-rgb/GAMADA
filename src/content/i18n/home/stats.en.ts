@@ -3,10 +3,10 @@ import type { stats as idCopy } from './stats'
 
 export const stats: typeof idCopy = {
   eyebrow: 'GAMADA in numbers',
-  title: 'A small studio with work you can try.',
-  pagesAndDemos: 'Pages & demos you can try',
-  mobileApps: 'Mobile app demos',
-  enterpriseProjects: 'Enterprise projects',
+  title: 'An ecosystem you can try today.',
+  products: 'Connected products',
+  ecosystems: 'Ecosystems',
+  demos: 'Interactive browser demos',
   responseHours: 'Maximum response time',
   hoursSuffix: ' h',
 }

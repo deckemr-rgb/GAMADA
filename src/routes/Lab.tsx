@@ -4,12 +4,19 @@
  * dibangun", from DEMO_READY in demos/registry.ts) and try-time (2 / 5 / 10 minutes). Filters start from ?eco= /
  * ?status= / ?menit= and are written back to the URL (replaceState, no navigation) so a filtered view can be shared.
  * Honesty: a demo that is not built yet shows its try-time as an estimate ("Perkiraan") and its CTA reads
- * "Lihat rencana demo" (it opens the tahap-1 plan panel), never "Buka demo". Mini-demo previews on hover arrive with the mini demos (tahap 2–4 / 6).
+ * "Lihat rencana demo" (it opens the tahap-1 plan panel), never "Buka demo".
+ * Tahap 6 (plan §2.4): cards in the home Card style with an art box; on hover / focus (fine pointer only) a
+ * ECO_SITE.mini.previewDelayMs-delayed preview mounts the product's mini (MINIS via useMini) and plays it; on leave it
+ * pauses and stays mounted, at most ECO_SITE.mini.maxMounted at once (LRU). Touch: static icon art.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEcoI18n } from '../content/i18n/useEco'
-import { ECOSYSTEMS, PRODUCTS, ECOSYSTEM_STATS, fullName, type EcoOrInti, type ProductSlug } from '../content/products'
-import { DEMO_READY, DEMO_STAGE } from '../demos/registry'
+import { ECOSYSTEMS, PRODUCTS, fullName, type EcoOrInti, type ProductSlug } from '../content/products'
+import { useEcoPages } from '../content/ecoPages'
+import { ECO_SITE } from '../lib/motion'
+import LabArt from './eco/LabArt'
+import { useMedia } from './eco/parts'
+import { SITE_DEMO_READY as DEMO_READY, SITE_DEMO_STAGE as DEMO_STAGE } from './eco/ready'
 import PageShell from '../components/PageShell'
 import AppLink from '../components/AppLink'
 import Card from '../components/ui/Card'
@@ -59,6 +66,8 @@ const NO_FILTERS: Filters = { eco: 'all', status: 'all', time: 'all' }
 
 interface LabItem {
   key: string
+  /** product with a mini-demo (null for the portfolio tools) */
+  slug: ProductSlug | null
   group: EcoOrInti | 'portfolio'
   minutes: TryMin
   icon: string
@@ -103,6 +112,7 @@ function writeUrl({ eco, status, time }: Filters) {
 
 export default function Lab() {
   const { lang, eco: copy } = useEcoI18n()
+  const P = useEcoPages(lang)
   const s = copy.lab
   const c = copy.common
   const [filters, setFilters] = useState(readInitial)
@@ -118,6 +128,7 @@ export default function Lab() {
     ...ECO_ORDER.flatMap((g) =>
       PRODUCTS.filter((p) => p.eco === g).map<LabItem>((p) => ({
         key: p.slug,
+        slug: p.slug,
         group: g,
         minutes: TRY_MINUTES[p.slug],
         icon: p.icon,
@@ -132,6 +143,7 @@ export default function Lab() {
     ),
     {
       key: 'phonefarm',
+      slug: null,
       group: 'portfolio',
       minutes: TRY_MINUTES.phonefarm,
       icon: 'phone',
@@ -144,6 +156,7 @@ export default function Lab() {
     },
     {
       key: 'scrappulse',
+      slug: null,
       group: 'portfolio',
       minutes: TRY_MINUTES.scrappulse,
       icon: 'pulse',
@@ -163,7 +176,8 @@ export default function Lab() {
       (status === 'all' || (status === 'siap') === (it.stage === null)) &&
       (time === 'all' || it.minutes === time),
   )
-  const demoCount = ECOSYSTEM_STATS.products
+  const demoCount = PRODUCTS.filter((p) => p.slug !== 'inti' && DEMO_READY[p.slug]).length
+  const preview = usePreview()
 
   return (
     <PageShell eyebrow={s.eyebrow} title={s.title} lead={fill(s.lead, { n: demoCount })} docTitle={s.docTitle}>
@@ -197,13 +211,22 @@ export default function Lab() {
         <p className="eco-results" aria-live="polite">
           {fill(s.results, { n: shown.length })}
         </p>
+        {preview.enabled && P ? <p className="es-lab-hint">{P.lab.previewHint}</p> : null}
         </div>
 
         {shown.length > 0 ? (
           <ul className="eco-grid eco-lab-grid">
             {shown.map((it) => (
-              <Card key={it.key} as="li" className="eco-lab-card">
-                <div className="eco-lab-in" data-eco={it.group === 'portfolio' ? undefined : it.group}>
+              <Card key={it.key} as="li" className="eco-lab-card es-lab-card">
+                <div className="eco-lab-in" data-eco={it.group === 'portfolio' ? undefined : it.group} {...preview.bind(it.slug)}>
+                  <LabArt
+                    slug={it.slug}
+                    icon={it.icon}
+                    eco={it.group === 'portfolio' ? undefined : it.group}
+                    mounted={!!it.slug && preview.mounted.includes(it.slug)}
+                    playing={!!it.slug && preview.hovered === it.slug}
+                    label={P?.lab.preview ?? ''}
+                  />
                   <div className="eco-pcard-top">
                     <span className="eco-pcard-icon">
                       <Icon name={it.icon} size={22} />
@@ -282,4 +305,43 @@ function FilterGroup<V extends string | number>({
       </div>
     </div>
   )
+}
+
+/**
+ * Hover / focus preview state: `hovered` = the card playing now, `mounted` = minis kept mounted (LRU, newest last,
+ * at most ECO_SITE.mini.maxMounted). Only for a fine pointer that can hover (desktop); touch keeps static art.
+ */
+function usePreview() {
+  const enabled = useMedia('(hover: hover) and (pointer: fine)')
+  const [hovered, setHovered] = useState<ProductSlug | null>(null)
+  const [mounted, setMounted] = useState<ProductSlug[]>([])
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  const start = (slug: ProductSlug) => {
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      setHovered(slug)
+      setMounted((m) => [...m.filter((x) => x !== slug), slug].slice(-ECO_SITE.mini.maxMounted))
+    }, ECO_SITE.mini.previewDelayMs)
+  }
+  const stop = (slug: ProductSlug) => {
+    window.clearTimeout(timer.current)
+    setHovered((h) => (h === slug ? null : h))
+  }
+  const bind = (slug: ProductSlug | null) =>
+    !enabled || !slug
+      ? {}
+      : {
+          onPointerEnter: (e: React.PointerEvent) => e.pointerType === 'mouse' && start(slug),
+          onPointerLeave: (e: React.PointerEvent) => {
+            const el = e.currentTarget as HTMLElement
+            if (!el.contains(document.activeElement)) stop(slug)
+          },
+          onFocus: () => start(slug),
+          onBlur: (e: React.FocusEvent) => {
+            if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) stop(slug)
+          },
+        }
+  return { enabled, hovered, mounted, bind }
 }

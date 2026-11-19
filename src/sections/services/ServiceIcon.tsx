@@ -1,51 +1,39 @@
 /**
- * ServiceIcon — 48×48 line icons for the service cards. Every stroke is a <path> with
+ * ServiceIcon — 48×48 line icons for the ecosystem cards (#layanan). Every stroke is a <path> with
  * pathLength=1 so services.css can redraw it on card hover / focus (stroke-dashoffset 1 → 0,
  * staggered by --i). Accent strokes are peach. Decorative: aria-hidden.
  */
 import type { CSSProperties } from 'react'
 
-export type ServiceIconKey = 'web' | 'apk' | 'ml' | 'pos'
+export type ServiceIconKey = 'satu-daerah' | 'usaha-pintar' | 'pasar-daerah'
 
 interface Stroke {
   d: string
   accent?: boolean
 }
 
-/** Circle as a path (keeps pathLength support uniform across browsers). */
-const ring = (cx: number, cy: number, r: number) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${r * 2} 0a${r} ${r} 0 1 0 ${-r * 2} 0`
-
 const ICONS: Record<ServiceIconKey, Stroke[]> = {
-  web: [
-    { d: 'M7 9h34a3 3 0 0 1 3 3v24a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V12a3 3 0 0 1 3-3Z' },
-    { d: 'M4 16h40' },
-    { d: 'M18.5 22.5 13 28l5.5 5.5', accent: true },
-    { d: 'M29.5 22.5 35 28l-5.5 5.5', accent: true },
-    { d: 'M26.5 21 21.5 35' },
+  // town hall: pediment, columns, steps, a flag
+  'satu-daerah': [
+    { d: 'M6 18 24 8l18 10H6Z' },
+    { d: 'M11 22v13M19 22v13M29 22v13M37 22v13' },
+    { d: 'M6 39h36M4 43h40' },
+    { d: 'M24 8V3h7', accent: true },
   ],
-  apk: [
-    { d: 'M17 4h14a4 4 0 0 1 4 4v32a4 4 0 0 1-4 4H17a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z' },
-    { d: 'M21 9h6' },
-    { d: 'M18 17h12' },
-    { d: 'M18 23h8', accent: true },
-    { d: 'M18 29h10' },
-    { d: 'M22 38.5h4' },
+  // shop: awning, counter, a rising line
+  'usaha-pintar': [
+    { d: 'M8 20v20h32V20' },
+    { d: 'M5 12h38l-3 8H8l-3-8Z' },
+    { d: 'M19 40V29h10v11' },
+    { d: 'M12 6h24', accent: true },
   ],
-  ml: [
-    { d: 'M12.5 14.5 21.5 22.5M35.5 14.5 26.5 22.5M12.5 33.5 21.5 25.5M35.5 33.5 26.5 25.5' },
-    { d: 'M10 17v14M38 17v14' },
-    { d: ring(24, 24, 4), accent: true },
-    { d: ring(10, 13, 3) },
-    { d: ring(38, 13, 3) },
-    { d: ring(10, 35, 3) },
-    { d: ring(38, 35, 3) },
-  ],
-  pos: [
-    { d: 'M12 5h24v36l-4-3-4 3-4-3-4 3-4-3-4 3V5Z' },
-    { d: 'M17 13h14' },
-    { d: 'M17 19h14' },
-    { d: 'M17 25h8' },
-    { d: 'M17 31.5h5M27 31.5h4', accent: true },
+  // bridge between two banks, with a flow across
+  'pasar-daerah': [
+    { d: 'M3 34h42' },
+    { d: 'M8 34V20M40 34V20' },
+    { d: 'M8 20c6 10 26 10 32 0' },
+    { d: 'M16 34v-7M24 34v-5M32 34v-7' },
+    { d: 'M14 42h20', accent: true },
   ],
 }
 

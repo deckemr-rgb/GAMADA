@@ -9,7 +9,7 @@ const id = {
     title: 'Ide jadi nyata.',
     body: 'GAMADA merancang dan membangun website, aplikasi mobile, AI, dan sistem bisnis, dari coretan pertama sampai benar-benar dipakai pelanggan Anda.',
     ctaPrimary: 'Konsultasi via WhatsApp',
-    ctaSecondary: 'Pelajari ekosistem GAMADA',
+    ctaSecondary: 'Lihat demo ekosistem',
     demoNote: 'Demo interaktif · coba langsung di browser',
     waPrefill: 'Halo GAMADA, saya punya ide project dan mau konsultasi gratis.',
   },

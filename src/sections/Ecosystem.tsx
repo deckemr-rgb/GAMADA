@@ -1,6 +1,7 @@
 /**
- * Ecosystem — "Satu panel untuk semua perangkat & layanan". An interactive hub diagram: the GAMADA
- * Panel in the middle, five satellites (website, app, automation, AI, infrastructure) around it.
+ * Ecosystem — home teaser of the GAMADA ecosystem (Tahap 6, spec §4): GAMADA Inti in the middle, the three
+ * ecosystems (Satu Daerah, Usaha Pintar, Pasar Daerah) around it; CTA "Jelajahi ekosistem" → /ekosistem.
+ * Names, audience lines and links come from content/ecoNav.ts (home never imports products.ts).
  *  - connection lines draw with scroll (kit.stroke, scrubbed stroke-dashoffset)
  *  - every node is a <button>: hover / focus previews it, click pins it (aria-pressed); the other
  *    links and nodes dim (opacity) and the side panel (aria-live) explains the node
@@ -19,7 +20,8 @@ import { prefersReducedMotion } from '../lib/motion'
 import Section from '../components/ui/Section'
 import SectionHeader from '../components/ui/SectionHeader'
 import { ButtonLink } from '../components/ui/Button'
-import { CheckIcon, ECO_ICONS, type EcoNodeId } from './ecosystem/icons'
+import { ECO_NAV } from '../content/ecoNav'
+import { ECO_ICONS, type EcoNodeId } from './ecosystem/icons'
 import '../styles/sections/ecosystem.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -31,15 +33,15 @@ const ECO = {
   layouts: {
     wide: {
       w: 1000,
-      h: 640,
-      rings: [118, 205],
-      pos: { hub: [500, 300], web: [175, 105], app: [825, 105], auto: [105, 425], ai: [895, 425], infra: [500, 545] },
+      h: 600,
+      rings: [120, 210],
+      pos: { hub: [500, 300], 'satu-daerah': [180, 120], 'usaha-pintar': [820, 120], 'pasar-daerah': [500, 525] },
     },
     narrow: {
       w: 360,
-      h: 560,
-      rings: [74],
-      pos: { hub: [180, 240], web: [78, 62], app: [282, 62], auto: [62, 382], ai: [298, 382], infra: [180, 486] },
+      h: 500,
+      rings: [78],
+      pos: { hub: [180, 235], 'satu-daerah': [76, 70], 'usaha-pintar': [284, 70], 'pasar-daerah': [180, 420] },
     },
   },
   /** Data pulse: travel time (s), random pause between trips (s), offset between links (s). */
@@ -59,18 +61,13 @@ const ECO = {
 } as const
 
 type Sat = Exclude<EcoNodeId, 'hub'>
-const NODES: readonly EcoNodeId[] = ['hub', 'web', 'app', 'auto', 'ai', 'infra']
-const SATS: readonly Sat[] = ['web', 'app', 'auto', 'ai', 'infra']
-/** Direction of the data pulse: true = node → panel. */
-const INBOUND: Record<Sat, boolean> = { web: true, app: true, auto: false, ai: false, infra: true }
-const LINKS: Record<EcoNodeId, string> = {
-  hub: '/panel/phonefarm',
-  web: '/karya#web',
-  app: '/karya#apk',
-  auto: '/karya/sistem-automasi',
-  ai: '/tools/scrappulse',
-  infra: '/#keamanan',
-}
+const SATS: readonly Sat[] = ['satu-daerah', 'usaha-pintar', 'pasar-daerah']
+const NODES: readonly EcoNodeId[] = ['hub', ...SATS]
+/** Direction of the data pulse: true = ecosystem → Inti. */
+const INBOUND: Record<Sat, boolean> = { 'satu-daerah': true, 'usaha-pintar': false, 'pasar-daerah': true }
+/** ecoNav entry of a node (hub = GAMADA Inti) */
+const navOf = (id: EcoNodeId) => ECO_NAV.find((e) => e.id === (id === 'hub' ? 'inti' : id)) ?? ECO_NAV[0]!
+const fill = (s: string, name: string) => s.replace('{name}', name)
 
 function useMedia(query: string): boolean {
   const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
@@ -85,7 +82,7 @@ function useMedia(query: string): boolean {
 }
 
 export default function Ecosystem() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const c = t.home.ecosystem
   const ref = useRef<HTMLDivElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -97,6 +94,9 @@ export default function Ecosystem() {
   const [preview, setPreview] = useState<EcoNodeId | null>(null)
   const shown = preview ?? pinned
   const node = c.nodes[shown]
+  const nav = navOf(shown)
+  /** small label of a node: Inti's own kicker, else the ecosystem's audience line (ecoNav) */
+  const kicker = (id: EcoNodeId) => (id === 'hub' ? c.hubKicker : navOf(id).audience[lang])
 
   useReveal(
     ref,
@@ -108,7 +108,7 @@ export default function Ecosystem() {
       kit.stroke(root.querySelectorAll('.eco-path'), stage, { start: ECO.strokeStart, end: ECO.strokeEnd })
       // the hub button is the trigger: 'top bottom' lands the orbs as the lines start drawing
       kit.fadeUp(root.querySelectorAll('.eco-node-btn'), { stagger: 0.07, start: ECO.nodesStart })
-      kit.fadeUp(root.querySelector('.eco-panel'))
+      kit.fadeUp(root.querySelectorAll('.eco-panel, .eco-more'))
       if (kit.reduced || !stage) return
 
       // data pulses: one repeating trip per link, all under one master that plays only while visible + drawn
@@ -204,7 +204,7 @@ export default function Ecosystem() {
               <ul className="eco-nodes" aria-label={c.diagramLabel}>
                 {NODES.map((id) => {
                   const [x, y] = L.pos[id]
-                  const n = c.nodes[id]
+                  const e = navOf(id)
                   const Icon = ECO_ICONS[id]
                   return (
                     <li
@@ -234,13 +234,13 @@ export default function Ecosystem() {
                           <Icon />
                         </span>
                         <span className="eco-node-label">
-                          {n.label}
-                          {n.sub ? <span className="eco-node-sub">{n.sub}</span> : null}
+                          {id === 'hub' ? e.name : e.short}
+                          <span className="eco-node-sub">{kicker(id)}</span>
                         </span>
                       </button>
                       {/* static per-node description (the live panel below carries the full text) */}
                       <span id={`eco-desc-${id}`} hidden>
-                        {n.kicker}
+                        {kicker(id)}
                       </span>
                     </li>
                   )
@@ -259,29 +259,27 @@ export default function Ecosystem() {
                 <span className="eco-kicker-icon" aria-hidden="true">
                   {ECO_ICONS[shown]()}
                 </span>
-                {node.kicker}
+                {kicker(shown)}
               </p>
               <h3 id="eco-detail-title" className="eco-detail-title">
                 {node.title}
               </h3>
               <p className="eco-detail-body">{node.body}</p>
-              <ul className="eco-points">
-                {node.points.map((p) => (
-                  <li key={p}>
-                    <CheckIcon />
-                    <span>{p}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
             {/* announce only a chosen (pinned) node, not every hover / focus preview */}
             <p className="sr-only" aria-live="polite" aria-atomic="true">
-              {`${c.nodes[pinned].kicker}: ${c.nodes[pinned].title}`}
+              {`${navOf(pinned).name}: ${c.nodes[pinned].title}`}
             </p>
-            <ButtonLink to={LINKS[shown]} variant="text" className="eco-cta">
-              {node.cta}
+            <ButtonLink to={nav.to} variant="text" className="eco-cta">
+              {fill(c.nodeCta, nav.name)}
             </ButtonLink>
           </aside>
+        </div>
+        <div className="eco-more">
+          <ButtonLink to="/ekosistem" variant="ghost">
+            {c.cta}
+            <span aria-hidden="true">→</span>
+          </ButtonLink>
         </div>
       </Section>
     </div>

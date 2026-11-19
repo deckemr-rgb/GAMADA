@@ -30,6 +30,8 @@ function loaderFor(pathname: string): Loader | null {
   if (p === '/karya') return LOADERS.karya
   // redirects (router.tsx): warm the destination's chunk
   if (p === '/karya/kasirku') return LOADERS.produk
+  if (p === '/karya/scrappulse') return LOADERS.produk
+  if (p === '/produk/inti') return LOADERS.ekosistemDetail
   if (p === '/tools') return LOADERS.lab
   if (p === '/tools/scrappulse') return LOADERS.demo
   if (p.startsWith('/karya/')) return LOADERS.karyaDetail

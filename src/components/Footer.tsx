@@ -1,5 +1,5 @@
 /**
- * Footer — four columns (brand · services · portfolio · contact) over a mini night scene:
+ * Footer — five columns (brand · services · ecosystem · portfolio · contact) over a mini night scene:
  * a light SVG hill silhouette with a few low-tier fireflies (Fireflies, paused off-screen).
  * Contact values come from content/site.ts; empty TODO values hide their row.
  * #info stays the landing point of the scene CTAs until the home content sections exist.
@@ -8,12 +8,13 @@ import { useId } from 'react'
 import { useI18n } from '../lib/i18n'
 import { SITE, waLink } from '../content/site'
 import { CASES } from '../content/work'
+import { ECO_NAV, LAB_NAV, TOUR_NAV } from '../content/ecoNav'
 import AppLink from './AppLink'
 import Fireflies from './Fireflies'
 import { Logo } from './Navbar'
 
 export default function Footer() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const f = t.footer
   const ids = useId()
   const year = new Date().getFullYear()
@@ -60,6 +61,23 @@ export default function Footer() {
                   <AppLink to={s.to}>{s.label}</AppLink>
                 </li>
               ))}
+            </ul>
+          </nav>
+
+          <nav className="sfoot-col" aria-labelledby={`${ids}-eco`} data-col="eco">
+            <h2 id={`${ids}-eco`}>{f.ecoTitle}</h2>
+            <ul>
+              {ECO_NAV.map((e) => (
+                <li key={e.id}>
+                  <AppLink to={e.to}>{e.name}</AppLink>
+                </li>
+              ))}
+              <li>
+                <AppLink to={TOUR_NAV.to}>{TOUR_NAV.title[lang]}</AppLink>
+              </li>
+              <li>
+                <AppLink to={LAB_NAV.to}>{LAB_NAV.title[lang]}</AppLink>
+              </li>
             </ul>
           </nav>
 

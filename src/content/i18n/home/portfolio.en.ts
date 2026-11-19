@@ -2,30 +2,20 @@
 import type { portfolio as idCopy } from './portfolio'
 
 export const portfolio: typeof idCopy = {
-  eyebrow: 'Featured work',
-  title: 'Selected work you can open and test yourself.',
-  lead: 'Two real GAMADA projects and a set of mobile app demos. You can browse all {n} pieces on the Work page.',
+  eyebrow: 'Featured demos',
+  title: 'Three products you can try right now.',
+  lead: 'The data in every demo is simulated, but the flow is the same as the product we install.',
   tags: {
-    real: 'Real project',
-    automation: 'Automation',
-    live: 'Live demo',
-    ai: 'AI',
-    mobile: 'Mobile',
+    gov: 'Local government',
+    biz: 'Business',
+    live: 'Interactive demo',
   },
-  phonefarm: {
-    title: 'PhoneFarm',
-    desc: 'One panel that runs many Android phones at once: task queue, device status and logs on a single screen.',
-    cta: 'View demo',
+  items: {
+    'sapa-warga': 'Citizen complaints from WhatsApp are clustered automatically, then each ticket moves to done and the citizen is kept informed.',
+    'siaga-wilayah': 'Rain forecasts read per district, early warnings sent, and officers know which villages to visit first.',
+    'toko-autopilot': 'Checkout, stock and supplier POs that read the flood warning: the demand forecast changes before the shelves run empty.',
   },
-  automation: {
-    title: 'Automation System',
-    desc: 'Work that used to be retyped every day now runs on its own. AI reads the incoming data and the system handles the rest.',
-    cta: 'View case study',
-  },
-  mobile: {
-    title: '{n} Mobile App Demos',
-    desc: 'App concepts, from street snacks to fitness, that you can try right in the browser without installing anything.',
-    cta: 'View demo',
-  },
-  all: 'See all work',
+  try: 'Try the demo',
+  detail: 'Details',
+  all: 'More studio portfolio',
 }

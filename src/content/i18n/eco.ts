@@ -79,6 +79,30 @@ const id = {
     tourTitle: 'Muncul di tur',
     contactTitle: 'Coba sendiri, lalu bicarakan dengan kami.',
     contactLead: 'Tanpa daftar harga: setiap daerah dan usaha berbeda. Ceritakan kebutuhan Anda dan kami siapkan demo personal.',
+    /** Tahap 6 template (§2.3): section titles, the fixed "Keamanan & data" blocks, hero labels */
+    sections: {
+      problems: 'Masalah yang diselesaikan',
+      steps: 'Cara kerja',
+      highlights: 'Momen unggulan',
+      related: 'Terhubung dengan',
+      roles: 'Untuk siapa',
+      security: 'Keamanan & data',
+      faq: 'Pertanyaan umum',
+      chapters: 'Muncul di tur',
+      cta: 'Coba sendiri, lalu bicarakan dengan kami.',
+    },
+    seeInTourAt: 'Lihat di tur (bab {n} · {time})',
+    security: {
+      rolesTitle: 'Hak akses per peran',
+      rolesBody: 'Setiap peran hanya melihat dan mengubah yang menjadi tugasnya. Peran di demo ini: {roles}.',
+      auditTitle: 'Jejak audit',
+      auditBody: 'Setiap tindakan tercatat di Inti Audit: siapa, kapan, dan apa yang berubah.',
+      auditCta: 'Lihat jejak audit',
+      serverTitle: 'Server dalam negeri',
+      serverBody: 'Dapat dipasang di server dalam negeri atau on-premise di instansi Anda. Pilihannya dibahas saat konsultasi.',
+      dataNoteTitle: 'Data di demo ini',
+    },
+    copyLoading: 'Memuat isi halaman',
     merged: {
       kasir: {
         title: 'Modul Kasir, dulu KasirKu',
@@ -154,6 +178,16 @@ const id = {
         cta: 'Buka di Radar Isu',
       },
     },
+  },
+  /** Tahap 6 mini-demos (hero of /produk, /lab preview): consumer-side labels (the chip lives in mini-kit) */
+  mini: {
+    caption: 'Simulasi · {caption}',
+    play: 'Putar',
+    pause: 'Jeda',
+    playLabel: 'Putar pratinjau {name}',
+    pauseLabel: 'Jeda pratinjau {name}',
+    summary: 'Pratinjau simulasi {name}: {tagline}',
+    loading: 'Memuat pratinjau',
   },
   karya: {
     mergedInto: 'Kini bagian dari {name}',
@@ -238,6 +272,30 @@ const en: typeof id = {
     tourTitle: 'Appears in the tour',
     contactTitle: 'Try it yourself, then talk to us.',
     contactLead: 'No price list: every region and business is different. Tell us what you need and we prepare a personal demo.',
+    /** Tahap 6 template (§2.3): section titles, the fixed "Keamanan & data" blocks, hero labels */
+    sections: {
+      problems: 'The problems it solves',
+      steps: 'How it works',
+      highlights: 'Standout moments',
+      related: 'Connected to',
+      roles: 'Who it is for',
+      security: 'Security & data',
+      faq: 'Frequently asked questions',
+      chapters: 'Appears in the tour',
+      cta: 'Try it yourself, then talk to us.',
+    },
+    seeInTourAt: 'See it in the tour (chapter {n} · {time})',
+    security: {
+      rolesTitle: 'Access per role',
+      rolesBody: 'Each role only sees and changes what its job needs. Roles in this demo: {roles}.',
+      auditTitle: 'Audit trail',
+      auditBody: 'Every action is recorded in Inti Audit: who, when and what changed.',
+      auditCta: 'See the audit trail',
+      serverTitle: 'Servers in Indonesia',
+      serverBody: 'Can be installed on servers in Indonesia or on-premise at your agency. The options are discussed during consultation.',
+      dataNoteTitle: 'Data in this demo',
+    },
+    copyLoading: 'Loading page content',
     merged: {
       kasir: {
         title: 'Checkout module, formerly KasirKu',
@@ -313,6 +371,16 @@ const en: typeof id = {
         cta: 'Open in Radar Isu',
       },
     },
+  },
+  /** Tahap 6 mini-demos (hero of /produk, /lab preview): consumer-side labels (the chip lives in mini-kit) */
+  mini: {
+    caption: 'Simulated · {caption}',
+    play: 'Play',
+    pause: 'Pause',
+    playLabel: 'Play the {name} preview',
+    pauseLabel: 'Pause the {name} preview',
+    summary: 'Simulated preview of {name}: {tagline}',
+    loading: 'Loading preview',
   },
   karya: {
     mergedInto: 'Now part of {name}',
