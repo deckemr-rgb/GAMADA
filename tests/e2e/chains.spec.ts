@@ -317,3 +317,78 @@ test('chain 29 · brand replies + service announcement ⇒ recovery mentions + K
   expect(await read<string>(page, `s.brandAlerts.byId['${a.alertId}'].status`)).toBe('ditangani')
   expect(errors).toEqual([])
 })
+
+/* ---------------------------------------------------------------- tahap 4 · Pasar Daerah chains C30–C38 (docs/build/tahap4-plan.md §3) */
+
+/** the lab shell is a Satu Daerah page: load the Pasar Daerah + Usaha Pintar world modules first */
+async function openPd(page: Page): Promise<void> {
+  await open(page)
+  await page.evaluate(async () => {
+    const g = (window as unknown as { __gamada: { ensure(eco: string): Promise<void> } }).__gamada
+    await g.ensure('usaha-pintar')
+    await g.ensure('pasar-daerah')
+  })
+  await page.waitForFunction(() => {
+    const g = (window as unknown as { __gamada: { world: { get(): { meta: { ext?: Record<string, number> } } } } }).__gamada
+    return !!g.world.get().meta.ext?.['usaha-pintar'] && !!g.world.get().meta.ext?.['pasar-daerah']
+  })
+}
+
+test('chains 30–33 + 35 + 36 · flood ⇒ price shocks, early warnings (5 days), the shop alert, econ nowcast, catalog matches; the shock path ⇒ anomaly', async ({ page, errors }) => {
+  await openPd(page)
+  const evs = await emitAll(page, [FLOOD])
+  expect(evs.filter((e) => e.type === 'price.shock' && e.source === 'sinyal-pasar').length).toBe(2)
+  expect(evs.filter((e) => e.type === 'price.warning' && e.source === 'sinyal-pasar').every((e) => e.payload.peakInDays === 5)).toBe(true)
+  expect(has(evs, 'price.warning', 'sinyal-pasar')).toBe(true)
+  expect(evs.some((e) => e.type === 'price.alertSent' && e.source === 'sinyal-pasar')).toBe(true)
+  expect(has(evs, 'econ.updated', 'indeks-ekonomi')).toBe(true)
+  expect(has(evs, 'match.made', 'katalog-lokal')).toBe(true)
+  // C33: the natural shock path steps the shocked prices; one pair leaves the seasonal band ⇒ price.anomaly ⇒ C13 op
+  await page.evaluate(() => {
+    const g = (window as unknown as { __gamada: { clock: { get(): { minutes: number }; setTime(m: number): void }; world: { get(): { alerts: { byId: Record<string, { at: number; status: string }> } } } } }).__gamada
+    const a = Object.values(g.world.get().alerts.byId).find((x) => x.status === 'aktif')
+    g.clock.setTime((a?.at ?? g.clock.get().minutes) + 5)
+  })
+  await page.waitForFunction(() => {
+    const s = (window as unknown as { __gamada: { world: { get(): { prices: { byId: Record<string, { anomaly: boolean }> } } } } }).__gamada.world.get()
+    return Object.values(s.prices.byId).some((p) => p.anomaly)
+  }, null, { timeout: 15_000 })
+  expect(await read<boolean>(page, `Object.values(s.marketOps.byId).some((o) => o.stage === 'recommended')`)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('chain 34 · a running market operation ⇒ the shock is damped + Indeks Ekonomi program event', async ({ page, errors }) => {
+  await openPd(page)
+  await emitAll(page, [FLOOD])
+  const sh = await read<{ commodityId: string; marketIds: string[] }>(page, `(() => { const x = Object.values(s.priceShocks.byId)[0]; return { commodityId: x.commodityId, marketIds: x.marketIds } })()`)
+  let evs = await emitAll(page, [['market.operation', { stage: 'recommended', commodityId: sh.commodityId, marketIds: sh.marketIds.slice(0, 1), volumeTon: 10, days: 3, sentBy: 'disperindag', effectPct: -8 }, 'sinyal-pasar']])
+  const id = evs.find((e) => e.type === 'market.operation')!.payload.id as string
+  evs = await emitAll(page, [['market.operation', { id, stage: 'running', commodityId: sh.commodityId, marketIds: sh.marketIds.slice(0, 1) }, 'sinyal-pasar']])
+  expect(has(evs, 'price.shock', 'sinyal-pasar')).toBe(true)
+  expect(has(evs, 'econ.updated', 'indeks-ekonomi')).toBe(true)
+  expect(await read<number>(page, `Math.max(...Object.values(s.priceShocks.byId).filter((x) => x.commodityId === '${sh.commodityId}').map((x) => x.damp))`)).toBeGreaterThanOrEqual(0.4)
+  expect(errors).toEqual([])
+})
+
+test('chains 37 + 38 · the shop order paid ⇒ Pajak Beres journal = order total; the shop loan approved ⇒ disbursal journal', async ({ page, errors }) => {
+  await openPd(page)
+  const shop = await read<{ id: string; kec: string }>(page, `({ id: s.meta.shopId, kec: s.region.floodKecamatanIds[0] })`)
+  let evs = await emitAll(page, [['need.created', { title: { id: 'Karung pasir posko', en: 'Sandbags' }, items: [{ name: { id: 'Karung pasir', en: 'Sandbags' }, category: 'karung-pasir', qty: 200, unit: 'lembar' }], kecamatanId: shop.kec, deadlineDays: 2, by: 'manual' }, 'katalog-lokal']])
+  expect(has(evs, 'match.made', 'katalog-lokal')).toBe(true)
+  const needId = evs.find((e) => e.type === 'need.created')!.payload.id as string
+  evs = await emitAll(page, [['order.created', { needId, businessId: shop.id, items: [{ name: { id: 'Karung pasir', en: 'Sandbags' }, qty: 200, unit: 'lembar', price: 15_000, category: 'karung-pasir' }] }, 'katalog-lokal']])
+  const orderId = evs.find((e) => e.type === 'order.created')!.payload.id as string
+  evs = await emitAll(page, [
+    ['order.confirmed', { orderId, qtyConfirmed: [150], etaDays: 2 }, 'katalog-lokal'],
+    ['order.shipped', { orderId }, 'katalog-lokal'],
+    ['order.paid', { orderId, amount: 2_250_000, method: 'transfer-kasda' }, 'katalog-lokal'],
+  ])
+  expect(has(evs, 'ledger.posted', 'pajak-beres')).toBe(true)
+  expect(await read<number>(page, `Object.values(s.ledger.byId).find((j) => j.source === 'katalog' && j.refId === '${orderId}').lines[0].debit`)).toBe(2_250_000)
+  evs = await emitAll(page, [['loan.applied', { businessId: shop.id, lender: 'Koperasi Mitra Usaha Sejahtera', amount: 100_000_000, tenorMonths: 12 }, 'rapor-usaha']])
+  const loanId = evs.find((e) => e.type === 'loan.applied')!.payload.id as string
+  evs = await emitAll(page, [['loan.approved', { loanId, amount: 100_000_000 }, 'rapor-usaha']])
+  expect(has(evs, 'ledger.posted', 'pajak-beres')).toBe(true)
+  expect(await read<boolean>(page, `Object.values(s.ledger.byId).some((j) => j.source === 'pinjaman' && j.refId === '${loanId}' && j.lines.some((l) => l.account === 'Utang Pinjaman' && l.credit === 100000000))`)).toBe(true)
+  expect(errors).toEqual([])
+})

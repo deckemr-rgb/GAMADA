@@ -6,8 +6,8 @@
  */
 import { useMemo, useState } from 'react'
 import { Button, Icon, Select } from '../../demo-kit/ui'
-import { emit, useWorld, type LedgerEntry, type LedgerLine, type WorldState } from '../../demo-kit/world'
-import { ACCOUNT, COA, coaOf, ledgerRows } from '../../demo-kit/world/usaha-pintar'
+import { emit, useWorld, type LedgerEntry, type WorldState } from '../../demo-kit/world'
+import { ACCOUNT, COA, coaOf, ledgerRows, reviewSuggestion, reviewedLines } from '../../demo-kit/world/usaha-pintar'
 import { SLUG, afterPaint, dateText, entryAmount, isoOf, lockedOf, rp, type Lang, type RoleKey } from './model'
 import { useT } from './strings'
 
@@ -51,21 +51,11 @@ const S = {
 }
 
 type Why = keyof (typeof S)['id']['why']
+/** THE review rule (world/up/books, shared with Rapor Usaha) */
 const isCash = (a: string) => a === 'Kas' || a === 'Bank'
 /** the line the review is about: the first non-cash line (the cash line stays) */
 const targetIdx = (j: LedgerEntry) => Math.max(0, j.lines.findIndex((l) => !isCash(l.account)))
-export function suggestion(j: LedgerEntry): { account: string; why: Why } {
-  const m = j.memo.id.toLowerCase()
-  if (m.includes('tarik tunai')) return { account: 'Kas', why: 'tarik' }
-  if (m.includes('toko online')) return { account: 'Persediaan', why: 'online' }
-  if (m.includes('transfer masuk')) return { account: 'Pendapatan Penjualan', why: 'masuk' }
-  if (j.source === 'nota') return { account: j.lines[targetIdx(j)]?.account ?? 'Persediaan', why: 'nota' }
-  return { account: j.lines[targetIdx(j)]?.account ?? 'Beban Lain-lain', why: 'other' }
-}
-export const reviewedLines = (j: LedgerEntry, account: string): LedgerLine[] => {
-  const i = targetIdx(j)
-  return j.lines.map((l, k) => (k === i ? { ...l, account } : l))
-}
+const suggestion = (j: LedgerEntry): { account: string; why: Why } => reviewSuggestion(j)
 
 const reviewSel = (s: WorldState) => ledgerRows(s, s.meta.shopId, { review: true })
 const sameIds = (a: LedgerEntry[], b: LedgerEntry[]) => a.length === b.length && a.every((x, i) => x === b[i])

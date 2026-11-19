@@ -45,7 +45,9 @@ test('NEW-3: EN then ID clicked while the EN chunk is still loading ends in ID (
   expect(errors).toEqual([])
 })
 
-test('interim preview panel: ?t=09:15 shows as 09.15, no controls inside, no region or world download', async ({ page, errors }) => {
+// Since tahap 4 every product is DEMO_READY, so no /demo/:slug shows the interim placeholder any more: the test is kept
+// (skipped) for a product that is un-flipped locally. The placeholder code path itself is unchanged.
+test.skip('interim preview panel: ?t=09:15 shows as 09.15, no controls inside, no region or world download', async ({ page, errors }) => {
   const json: string[] = []
   page.on('request', (r) => /\.json$/.test(new URL(r.url()).pathname) && json.push(new URL(r.url()).pathname))
   await page.goto('/demo/indeks-ekonomi?role=kepala-daerah&t=09:15&off=preloader')

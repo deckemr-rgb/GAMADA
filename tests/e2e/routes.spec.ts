@@ -2,7 +2,10 @@
 import { test, expect, settle } from './fixtures'
 
 const ROUTES = ['/', '/ekosistem', '/ekosistem/satu-daerah', '/produk/sapa-warga', '/demo/sapa-warga', '/demo/siaga-wilayah', '/ekosistem/usaha-pintar', '/produk/toko-autopilot',
-  '/demo/toko-autopilot', '/demo/pajak-beres', '/demo/juara-jualan', '/demo/kenal-mitra', '/demo/pantau-merek', '/demo/tenderpilot', '/tur', '/lab', '/karya', '/lab/_kit']
+  '/demo/toko-autopilot', '/demo/pajak-beres', '/demo/juara-jualan', '/demo/kenal-mitra', '/demo/pantau-merek', '/demo/tenderpilot',
+  // tahap 4 · Pasar Daerah + GAMADA Inti
+  '/ekosistem/pasar-daerah', '/ekosistem/inti', '/produk/katalog-lokal', '/demo/katalog-lokal', '/demo/rapor-usaha', '/demo/indeks-ekonomi', '/demo/sinyal-pasar', '/demo/inti',
+  '/tur', '/lab', '/karya', '/lab/_kit']
 
 for (const path of ROUTES) {
   test(`renders ${path} with no console errors`, async ({ page, errors }) => {

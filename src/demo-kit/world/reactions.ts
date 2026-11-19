@@ -90,7 +90,7 @@ export const REACTIONS: Reaction[] = [
     if (rows(s.catalogNeeds).some((n) => n.cause === cause)) return []
     const name = s.region.kecamatan.find((k) => k.id === kec)?.name ?? kec
     const bags = e.payload.level >= 3 ? 2000 : 1000
-    return [fu('need.created', {
+    return [fu('need.created', { by: 'reaction',
       title: { id: `Karung pasir & terpal untuk Kec. ${name}`, en: `Sandbags & tarps for ${name} district` },
       items: [
         { name: { id: 'Karung pasir', en: 'Sandbags' }, category: 'karung-pasir', qty: bags, unit: 'lembar' },
@@ -290,7 +290,7 @@ export const REACTIONS: Reaction[] = [
     if (rows(s.catalogNeeds).some((n) => n.cause === cause)) return []
     const kec = s.alerts.byId[pr.alertId ?? '']?.kecamatanIds[0] ?? s.region.floodKecamatanIds[0] ?? s.region.kecamatan[0]?.id ?? ''
     const cat = (n: string) => (/pompa|pump/i.test(n) ? 'pompa' : /genset|generator/i.test(n) ? 'genset' : /selang|hose/i.test(n) ? 'selang' : /solar|bbm|diesel fuel/i.test(n) ? 'bbm' : 'alat-kerja')
-    return [fu('need.created', {
+    return [fu('need.created', { by: 'reaction',
       title: { id: `${pr.name.id}: penawaran UMKM lokal`, en: `${pr.name.en}: local SME offers` },
       items: pr.items.map((it) => ({ name: it.name, category: cat(it.name.id), qty: it.qty, unit: it.unit })),
       kecamatanId: kec, deadlineDays: 3, emergency: pr.emergency, cause,

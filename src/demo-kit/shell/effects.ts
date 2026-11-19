@@ -31,19 +31,22 @@ export const EFFECT_TARGET: Partial<Record<EventType, ProductSlug>> = {
  * Roots whose effect in other products is read from STATE (no follow-up event): one toast per root names them
  * ("Status pajak … diteruskan ke TenderPilot …"); `focus` = the entity to open there (the latest matched tender).
  */
-const latestMatchedTender = (s: WorldState): string | null => {
+export const latestMatchedTender = (s: WorldState): string | null => {
   for (const id of s.tenders.ids) if (Object.keys(s.tenders.byId[id]?.matches ?? {}).includes(s.meta.shopId)) return id
   return null
 }
-export const EFFECT_ALSO: Partial<Record<EventType, { targets: ProductSlug[]; focus(s: WorldState, e: Recent): string | null }>> = {
+type AlsoTargets = ProductSlug[] | ((s: WorldState, e: Recent) => ProductSlug[])
+export type EffectRecent = Pick<WorldEvent, 'id' | 'type' | 'source' | 'causeId' | 'depth' | 'payload'>
+export const EFFECT_ALSO: Partial<Record<EventType, { targets: AlsoTargets; focus(s: WorldState, e: Recent, target: ProductSlug): string | null }>> = {
   'tax.ready': { targets: ['tenderpilot', 'katalog-lokal', 'rapor-usaha'], focus: latestMatchedTender },
   'partner.verified': { targets: ['tenderpilot', 'katalog-lokal'], focus: latestMatchedTender },
 }
-/** short root names of Usaha Pintar actions (the toast title) */
-const ROOT_UP: Partial<Record<EventType, [string, string]>> = {
+/** short root names of Usaha Pintar actions (the toast title; shell/effects-pd.ts adds the Pasar Daerah ones) */
+export const ROOT_UP: Partial<Record<EventType, [string, string]>> = {
   'po.sent': ['PO {code}', 'PO {code}'], 'tax.ready': ['Status pajak {period}', 'Tax status {period}'], 'partner.verified': ['Verifikasi mitra', 'Partner verification'],
   'bid.submitted': ['Penawaran tender', 'Tender bid'], 'brand.announced': ['Pengumuman layanan', 'Service notice'],
 }
+
 
 export interface CrossEffect {
   /** one toast per root event: the key stays the same while more targets are added */
@@ -171,9 +174,12 @@ export function createEffectTracker(product: ProductSlug) {
       // partner.verified reads as a vendor badge only for a business (KYB); a KYC or CV verification raises no toast
       const kybOnly = e.type !== 'partner.verified' || (e.payload as { subjectKind?: string }).subjectKind === 'business'
       const also = !e.depth && e.source === product && kybOnly ? EFFECT_ALSO[e.type] : undefined
-      if (also) {
+      const me = recent.get(e.id)!
+      // only READY products (a not-yet-built one is never linked; the toast opens the first announced target)
+      const alsoTargets = also ? (typeof also.targets === 'function' ? also.targets(s, me) : also.targets).filter((t) => t !== product && DEMO_READY[t]) : []
+      if (also && alsoTargets.length) {
         let out: CrossEffect | null = null
-        for (const t of also.targets) out = announce(e, recent.get(e.id)!, t, s, also.focus(s, recent.get(e.id)!)) ?? out
+        for (const t of alsoTargets) out = announce(e, me, t, s, also.focus(s, me, t)) ?? out
         return out
       }
       if (!e.depth || !e.causeId) return null

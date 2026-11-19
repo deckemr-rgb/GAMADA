@@ -107,13 +107,20 @@ test('C21–C24 + C26 + C28 · one Siaga Wilayah flood reaches TenderPilot, Awas
   expect(errors.filter(notNoise)).toEqual([])
 })
 
-test('C25 · a TenderPilot bid ⇒ toast to Awas Belanja ⇒ the bid row of the emergency package', async ({ page, errors }) => {
+test('C25 + L9 · a TenderPilot bid ⇒ one toast to Katalog Lokal + Awas Belanja ⇒ the bid row of the emergency package', async ({ page, errors }) => {
   await openDemo(page, 'tenderpilot')
   await flood(page)
   const t = await W<{ id: string; shop: string }>(page, `({ id: Object.values(s.tenders.byId).find((x) => x.key === 'karung-terpal-darurat').id, shop: s.meta.shopId })`)
   await emit(page, 'bid.submitted', { tenderId: t.id, businessId: t.shop, price: 35_900_000, pages: 34 }, 'tenderpilot')
+  // tahap 4: the same toast also names Katalog Lokal (L9, the bid prices the shop's offer on the need) and opens it
+  // first; Awas Belanja is reached with the procurement id, as the toast's second product
   await follow(page, 'Awas Belanja')
-  await expect(page).toHaveURL(/\/demo\/awas-belanja\?/)
+  await expect(page).toHaveURL(/\/demo\/katalog-lokal\?/)
+  // let Katalog Lokal finish its ?focus= arrival (it rewrites its URL) before navigating on
+  await expect(page.locator('.dk-kl-detail').first()).toBeVisible({ timeout: 20_000 })
+  await expect.poll(() => new URL(page.url()).searchParams.get('focus')).toBeNull()
+  const proc = await W<string>(page, `Object.values(s.procurements.byId).find((x) => x.key === 'karung-terpal-darurat').id`)
+  await spaGo(page, `/demo/awas-belanja?e2e=1&focus=${proc}`)
   await expect(page.locator('.dk-ab-dtitle')).toBeVisible({ timeout: 20_000 })
   await page.locator('.dk-ab').getByRole('tab', { name: /Peserta/ }).click()
   await expect(page.locator('.dk-ab').getByText('35.900.000').first()).toBeVisible({ timeout: 10_000 })

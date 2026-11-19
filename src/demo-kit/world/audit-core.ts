@@ -35,7 +35,7 @@ export function describeCore(e: AnyWorldEvent, s: WorldState): { summary: Bi; re
     case 'ledger.posted': {
       // the entry's amount, not its debit sum: a sale also books HPP/Persediaan, which must not inflate the total
       const total = e.payload.lines.reduce((a, l) => a + (l.account === 'HPP' ? 0 : l.debit), 0)
-      return { summary: { id: `Jurnal: ${e.payload.memo.id} (${fmtRp(total)})`, en: `Journal: ${e.payload.memo.en} (${fmtRp(total)})` }, refs: [ref('ledger', e.payload.id ?? ''), ...(e.payload.refId ? [ref('sales', e.payload.refId)] : [])] }
+      return { summary: { id: `Jurnal: ${e.payload.memo.id} (${fmtRp(total)})`, en: `Journal: ${e.payload.memo.en} (${fmtRp(total)})` }, refs: [ref('ledger', e.payload.id ?? ''), ...(e.payload.refId ? [ref(e.payload.source === 'katalog' ? 'orders' : e.payload.source === 'pinjaman' ? 'loanApps' : 'sales', e.payload.refId)] : [])] }
     }
     case 'score.updated':
       return { summary: { id: `Skor usaha ${bizName(s, e.payload.businessId)}: ${e.payload.score} (${e.payload.delta > 0 ? '+' : ''}${e.payload.delta})`, en: `Business score ${bizName(s, e.payload.businessId)}: ${e.payload.score} (${e.payload.delta > 0 ? '+' : ''}${e.payload.delta})` }, refs: [ref('bizScores', e.payload.businessId)] }

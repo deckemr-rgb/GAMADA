@@ -16,8 +16,9 @@ test('DemoShell boots from ?role= ?t= ?lang=en and keeps them in the URL', async
   await page.goto('/demo/indeks-ekonomi?role=kepala-daerah&t=10:00&lang=en&off=preloader')
   await settle(page)
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-  // the placeholder marks the session role (from ?role=) as current, in English
-  await expect(page.locator('[aria-current]').filter({ hasText: 'Regional Head' })).toBeVisible()
+  // the shell's role switcher shows the session role (from ?role=), in English (tahap 4: the demo is READY, so this is
+  // the real shell, no longer the placeholder's role chips)
+  await expect(page.locator('.dk-topbar')).toContainText('Regional Head')
   const params = () => {
     const u = new URL(page.url())
     return [u.searchParams.get('role'), u.searchParams.get('t'), u.searchParams.get('lang')]

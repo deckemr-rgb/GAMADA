@@ -6,6 +6,7 @@ import type { AnyWorldEvent, Bi, EntityRef, WorldState } from './types'
 import { CATEGORY_LABEL } from './texts'
 import { fmtRp, hhmm, ref } from './util'
 import { bizName, commodity, describeCore, kecName, marketName } from './audit-core'
+import { describeKatalog } from './reducers-katalog'
 
 const opdShort = (s: WorldState, id: string) => s.region.opd.find((o) => o.id === id)?.short ?? id
 const pct = (n: number) => `${n > 0 ? '+' : ''}${Math.round(n)}%`
@@ -192,9 +193,8 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'bid.submitted':
       return { summary: { id: `Penawaran ${fmtRp(e.payload.price)} dikirim oleh ${bizName(s, e.payload.businessId)}`, en: `Bid of ${fmtRp(e.payload.price)} submitted by ${bizName(s, e.payload.businessId)}` }, refs: [ref('bids', e.payload.id ?? ''), ref('tenders', e.payload.tenderId)] }
     case 'need.created':
-      return { summary: { id: `Kebutuhan pemda: ${e.payload.title.id}`, en: `Government need: ${e.payload.title.en}` }, refs: [ref('catalogNeeds', e.payload.id ?? ''), ...(e.payload.cause ? [e.payload.cause] : [])] }
     case 'match.made':
-      return { summary: { id: `Kebutuhan dicocokkan ke ${bizName(s, e.payload.businessId)} (${Math.round(e.payload.score * 100)}%)`, en: `Need matched to ${bizName(s, e.payload.businessId)} (${Math.round(e.payload.score * 100)}%)` }, refs: [ref('matches', e.payload.id ?? ''), ref('catalogNeeds', e.payload.needId)] }
+      return describeKatalog(e, s)!
     case 'order.created': {
       const o = s.orders.byId[e.payload.id ?? '']
       return { summary: { id: `Pesanan ${e.payload.code} ke ${bizName(s, e.payload.businessId)} (${fmtRp(o?.total ?? 0)})`, en: `Order ${e.payload.code} to ${bizName(s, e.payload.businessId)} (${fmtRp(o?.total ?? 0)})` }, refs: [ref('orders', e.payload.id ?? ''), ...(e.payload.needId ? [ref('catalogNeeds', e.payload.needId)] : [])] }
@@ -204,7 +204,7 @@ export function describe(e: AnyWorldEvent, s: WorldState): { summary: Bi; refs: 
     case 'loan.approved':
       return { summary: { id: `Pengajuan modal ${e.payload.loanId} disetujui`, en: `Loan ${e.payload.loanId} approved` }, refs: [ref('loanApps', e.payload.loanId)] }
     case 'econ.updated':
-      return { summary: { id: `Indeks ekonomi Kec. ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).id}`, en: `Economic index ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).en}` }, refs: [ref('econIndex', `${e.payload.kecamatanId}:${e.payload.month}`)] }
+      return { summary: { id: `Indeks ekonomi Kec. ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).id}`, en: `Economic index ${kecName(s, e.payload.kecamatanId)}: ${indexBi(e.payload.index, e.payload.delta).en}` }, refs: [ref('econIndex', `${e.payload.kecamatanId}:${e.payload.month}`), ...(e.payload.cause ? [e.payload.cause] : [])] }
     case 'price.anomaly': {
       const c = commodity(s, e.payload.commodityId)
       return { summary: { id: `Anomali harga ${c.id} di ${marketName(s, e.payload.marketId)} ${pct(e.payload.deltaPct)}`, en: `${c.en} price anomaly at ${marketName(s, e.payload.marketId)} ${pct(e.payload.deltaPct)}` }, refs: [ref('prices', `${e.payload.marketId}:${e.payload.commodityId}`)] }

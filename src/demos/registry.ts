@@ -32,9 +32,11 @@ export interface DemoModule {
 type DemoLoader = () => Promise<DemoModule>
 
 const placeholder: DemoLoader = () => import('./_placeholder')
+/** tahap 4: Pasar Daerah + Inti through one import() (demos/pd-loaders.ts) */
+const pd = (slug: 'inti' | 'katalog-lokal' | 'rapor-usaha' | 'indeks-ekonomi' | 'sinyal-pasar'): DemoLoader => () => import('./pd-loaders').then((m) => m.PD_LOADERS[slug]())
 
 export const DEMOS: Record<ProductSlug, DemoLoader> = {
-  inti: placeholder,
+  inti: pd('inti'),
   'sapa-warga': () => import('./sapa-warga'),
   'meja-pimpinan': () => import('./meja-pimpinan'),
   'naskah-pintar': () => import('./naskah-pintar'),
@@ -48,10 +50,10 @@ export const DEMOS: Record<ProductSlug, DemoLoader> = {
   'kenal-mitra': () => import('./kenal-mitra'),
   'pantau-merek': () => import('./pantau-merek'),
   tenderpilot: () => import('./tenderpilot'),
-  'katalog-lokal': placeholder,
-  'rapor-usaha': placeholder,
-  'indeks-ekonomi': placeholder,
-  'sinyal-pasar': placeholder,
+  'katalog-lokal': pd('katalog-lokal'),
+  'rapor-usaha': pd('rapor-usaha'),
+  'indeks-ekonomi': pd('indeks-ekonomi'),
+  'sinyal-pasar': pd('sinyal-pasar'),
 }
 
 /** Build stage in which each ecosystem's full demos arrive (spec §16): honest status on /produk, /lab, /demo. */
@@ -79,6 +81,12 @@ export const DEMO_READY: Partial<Record<ProductSlug, true>> = {
   'kenal-mitra': true,
   'pantau-merek': true,
   tenderpilot: true,
+  // tahap 4 · Pasar Daerah + GAMADA Inti (integrated 2026-11-19)
+  'katalog-lokal': true,
+  'rapor-usaha': true,
+  'indeks-ekonomi': true,
+  'sinyal-pasar': true,
+  inti: true,
 }
 
 const cache = new Map<ProductSlug, LazyExoticComponent<ComponentType<DemoCanvasProps>>>()

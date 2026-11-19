@@ -9,7 +9,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useI18n } from '../lib/i18n'
 import '../demo-kit/_showcase/showcase.css'
 
-const MODULES = ['ui', 'frames', 'viz', 'world', 'ai', 'region', 'map', 'docs', 'media', 'shell', 'up'] as const
+const MODULES = ['ui', 'frames', 'viz', 'world', 'ai', 'region', 'map', 'docs', 'media', 'shell', 'up', 'pd'] as const
 type ModuleId = (typeof MODULES)[number]
 
 const SECTIONS: Record<ModuleId, LazyExoticComponent<ComponentType>> = {
@@ -24,6 +24,7 @@ const SECTIONS: Record<ModuleId, LazyExoticComponent<ComponentType>> = {
   media: lazy(() => import('../demo-kit/_showcase/media')),
   shell: lazy(() => import('../demo-kit/_showcase/shell')),
   up: lazy(() => import('../demo-kit/_showcase/up')),
+  pd: lazy(() => import('../demo-kit/_showcase/pd')),
 }
 
 const TITLES: Record<ModuleId, { id: string; en: string }> = {
@@ -38,6 +39,7 @@ const TITLES: Record<ModuleId, { id: string; en: string }> = {
   media: { id: 'Suara & media', en: 'Voice & media' },
   shell: { id: 'DemoShell', en: 'DemoShell' },
   up: { id: 'Usaha Pintar: chat, kalender, diff', en: 'Usaha Pintar: chat, calendar, diff' },
+  pd: { id: 'Pasar Daerah & Inti: skor, lencana, rentang, kejadian', en: 'Pasar Daerah & Inti: score, badges, range, activity' },
 }
 
 export default function LabKit() {

@@ -1,0 +1,51 @@
+/* demo-kit/ui/pd.css — tahap 4 kit pieces: BizBadges, RangeField, ActivityFeed (tokens --dk-* only) */
+
+/* ---------------------------------------------------------------- BizBadges */
+.dk-bbs { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dk-bb {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 8px; border-radius: 999px;
+  font-size: 12px; line-height: 1.2; color: var(--dk-text); background: var(--dk-accent-12); border: 1px solid transparent; text-decoration: none;
+}
+.dk-bbs.is-md .dk-bb { min-height: 28px; font-size: 13px; padding: 3px 10px; }
+.dk-bb.is-ok { background: color-mix(in srgb, var(--dk-success, #3fb68b) 18%, transparent); }
+.dk-bb.is-score b { font-weight: 700; }
+.dk-bb.is-missing { background: transparent; border-color: var(--dk-line-2); color: var(--dk-text-2, var(--dk-text)); }
+a.dk-bb.is-link:hover { border-color: var(--dk-line-act); }
+a.dk-bb.is-link:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; }
+@media (max-width: 639px) { a.dk-bb.is-link { min-height: 44px; } }
+
+/* ---------------------------------------------------------------- RangeField */
+.dk-rangefield { display: grid; gap: 4px; }
+.dk-rangefield-h { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.dk-rangefield-h output { font-weight: 600; }
+.dk-rangefield input[type='range'] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 44px; background: transparent; margin: 0; cursor: pointer;
+}
+.dk-rangefield input[type='range']::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--dk-accent) var(--p, 0%), var(--dk-line-2) var(--p, 0%));
+}
+.dk-rangefield input[type='range']::-moz-range-track { height: 4px; border-radius: 4px; background: var(--dk-line-2); }
+.dk-rangefield input[type='range']::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--dk-accent); }
+.dk-rangefield input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: var(--dk-accent); border: 3px solid var(--dk-surface, #15131f);
+  box-shadow: 0 0 0 11px transparent;
+}
+.dk-rangefield input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--dk-accent); border: 3px solid var(--dk-surface, #15131f); }
+.dk-rangefield input[type='range']:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; border-radius: 6px; }
+.dk-rangefield.is-disabled { opacity: 0.55; }
+
+/* ---------------------------------------------------------------- ActivityFeed */
+.dk-actfeed ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dk-actfeed-row { display: grid; grid-template-columns: 10px auto 1fr; gap: 8px; align-items: baseline; padding: 6px 4px; border-radius: 8px; font-size: 13px; color: var(--dk-text); text-decoration: none; }
+a.dk-actfeed-row:hover { background: var(--dk-accent-12); }
+a.dk-actfeed-row:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
+.dk-actfeed-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dk-eco-acc, var(--dk-accent)); align-self: center; }
+.dk-actfeed time { color: var(--dk-text-2, var(--dk-text)); opacity: 0.8; font-size: 12px; }
+.dk-actfeed-text b { font-weight: 600; }
+.dk-actfeed li[data-tone='warn'] .dk-actfeed-text { color: var(--dk-warning-ink, var(--dk-text)); }
+.dk-actfeed li[data-tone='danger'] .dk-actfeed-text { color: var(--dk-danger-ink, var(--dk-text)); }
+.dk-actfeed-empty { margin: 0; padding: 8px 4px; font-size: 13px; opacity: 0.8; }
+@media (max-width: 639px) { a.dk-actfeed-row { min-height: 44px; align-items: center; } }
+
+/* screen-reader only (kit-wide helper, defined here too so these pieces stand alone) */
+.dk-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

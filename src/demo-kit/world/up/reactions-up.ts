@@ -13,6 +13,7 @@ import { COMPETITOR_TEXT, HANDLES, fillBi } from './texts'
 import { BURST_DELIVERY, BURST_HARGA, BURST_STOK, PO_REASON, RECOVERY_TEXT } from './texts-chains'
 import { pctTxt, poLines, shopPo, supplierReply } from './po'
 import { procurementOfTender } from './base'
+import { matchScore } from '../pd/match'
 
 export interface UpReaction { id: string; on: EventType; run(e: WorldEvent, s: WorldState): AnyFollowUp[] }
 const react = <K extends EventType>(id: string, on: K, run: (e: WorldEvent<K>, s: WorldState) => AnyFollowUp[]): UpReaction => ({ id, on, run: run as UpReaction['run'] })
@@ -146,7 +147,8 @@ export const UP_CHAIN_REACTIONS: readonly UpReaction[] = [
   /* C26 a need → up to 2 unverified suppliers in range get a priority KYB request (the hero first) */
   react('need→vendor-kyb', 'need.created', (e, s) => {
     const n = s.catalogNeeds.byId[e.payload.id ?? '']
-    if (!n) return []
+    // tahap 4: a natural (clock) need of Katalog Lokal does not raise priority KYB requests
+    if (!n || e.source === 'clock') return []
     const kec = s.region.kecamatan.find((k) => k.id === n.kecamatanId)
     const hero = s.meta.facts.up?.kenalMitra.heroBusinessId
     const cats = new Set(n.items.map((i) => i.category))
@@ -165,9 +167,8 @@ export const UP_CHAIN_REACTIONS: readonly UpReaction[] = [
     return rows(s.catalogNeeds)
       .filter((n) => (n.status === 'baru' || n.status === 'dicocokkan') && n.items.some((i) => b.supplies.includes(i.category)) && !rows(s.matches).some((m) => m.needId === n.id && m.businessId === b.id))
       .map((n) => {
-        const kec = s.region.kecamatan.find((k) => k.id === n.kecamatanId)
-        const km = kec ? distanceKm(b.coord, kec.centroid) : 10
-        return fu('match.made', { needId: n.id, businessId: b.id, score: Math.round(Math.max(0.55, Math.min(0.95, 0.95 - km / 80)) * 100) / 100 }, 'katalog-lokal')
+        // tahap 4: THE match score (world/pd/match.ts), the same number Katalog Lokal ranks with
+        return fu('match.made', { needId: n.id, businessId: b.id, score: matchScore(s, n.id, b.id).score }, 'katalog-lokal')
       })
   }),
   /* C28 flood → delivery complaints burst + the spike alert (once per business per day) */

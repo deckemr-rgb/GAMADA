@@ -127,7 +127,7 @@ export const kmScenario: Scenario<ReasonCtx> = {
         const c = w(ctx)
         const lang = ctx.lang
         const own = c.kind === 'kyb' && c.decided ? L(lang, ` ${caseName(c, lang)} sudah diputuskan: ${dec(c.decision, lang)}.`, ` ${caseName(c, lang)} is decided: ${dec(c.decision, lang)}.`) : ''
-        return { text: L(lang, `Lencana **Terverifikasi** berarti KYB lolos: dokumen saling cocok dan lokasi usaha sesuai. Katalog Lokal menaruh pemasok terverifikasi di urutan atas, TenderPilot mencentang syarat KYB, dan Rapor Usaha menambah faktor KYB (keduanya demo tahap 4).${own}`, `The **Verified** badge means KYB passed: the documents agree and the site matches. Katalog Lokal ranks verified suppliers first, TenderPilot ticks the KYB requirement and Rapor Usaha adds the KYB factor (both stage 4 demos).${own}`), followUps: chips(lang, 'kyb-docs-needed', 'next-step') }
+        return { text: L(lang, `Lencana **Terverifikasi** berarti KYB lolos: dokumen saling cocok dan lokasi usaha sesuai. Katalog Lokal menaruh pemasok terverifikasi di urutan atas, TenderPilot mencentang syarat KYB, dan Rapor Usaha menambah faktor KYB.${own}`, `The **Verified** badge means KYB passed: the documents agree and the site matches. Katalog Lokal ranks verified suppliers first, TenderPilot ticks the KYB requirement and Rapor Usaha adds the KYB factor.${own}`), followUps: chips(lang, 'kyb-docs-needed', 'next-step') }
       },
     },
     {

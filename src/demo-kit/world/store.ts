@@ -94,7 +94,7 @@ const coreOnly = () => queue.every(coreCovers)
 
 /* Ecosystem gate (world/eco.ts installs it): an event of an ecosystem whose world module is not loaded yet (e.g. a
    flood alert on a Satu Daerah page reaches Usaha Pintar) waits, queued in order, until that module is in. */
-type Gate = (types: ReadonlySet<string>) => Promise<void> | null
+type Gate = (events: readonly WorldEvent[]) => Promise<void> | null
 let gate: Gate | null = null
 /** @internal world/eco.ts */
 export function _setEventGate(g: Gate): void {
@@ -103,7 +103,7 @@ export function _setEventGate(g: Gate): void {
 /* decided in a microtask, once the synchronous emits of this tick are queued (so one batch = one notify), and again
    after a download (an event outside the core set may have been emitted meanwhile) */
 function drain() {
-  const wait = gate && queue.length ? gate(new Set(queue.map((e) => e.type))) : null
+  const wait = gate && queue.length ? gate(queue) : null
   if (wait) {
     wait.then(drain, (err: unknown) => {
       scheduled = false

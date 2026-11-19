@@ -751,3 +751,196 @@ where `<id>` is the first entity of the follow-up's audit row. **Toasts carry on
 - React: `useEffect(() => el?.scrollIntoView(...))` returns whatever `scrollIntoView` returns (a Promise in current
   Chrome), which React then calls as a cleanup ("destroy is not a function"). Always use a block body:
   `useEffect(() => { el?.scrollIntoView(...) }, [...])`.
+
+## Tahap 4 (2026-11-19): what the kit adds for Pasar Daerah (P14–P17) + GAMADA Inti (P0)
+
+Plan: `docs/build/tahap4-plan.md` §1 (APIs), §3 (chains C30–C38 + L7–L12), §5 (sizes). Where this section and the plan
+differ, **this section is what the code does** (the differences are listed at the end). Builders own
+`src/demos/<slug>/**`, their prompt file and their own spec only.
+
+### Measured floors (gzip -9, beyond home, `VITE_DEMO_CONTROLS=1` build, 1440, networkidle + 3 s)
+
+| What | Measured | Plan |
+|---|---|---|
+| Home initial JS | 252.7 KB | ≤ 253.6 |
+| Satu Daerah demos vs the final Tahap 3 build (chunk-by-chunk on the same preview) | ≈ +0.5 each (chunk-by-chunk vs the Tahap 3 dist on 4173: demo-core +0.41, Demo +0.06, demo-gen +0.03); budget.mjs vs Tahap 3 budget.json +0.5…+0.6 (radar-isu +4.5 against a stale Tahap 3 value, +0.5 vs the dist) | ≤ + 0.5 |
+| Usaha Pintar demos vs Tahap 3 (`budget.json`) | toko-autopilot +0.5; every other UP landing −1.8 … −12.2 (per-module UP selectors, up-data / up-live chunks) | ≤ + 0.5 |
+| **IE / SP-Disperindag stub floor** (`/demo/indeks-ekonomi?controls=all`, PD only) | **117.2 KB** | ≤ 110: NOT met |
+| **KL / RU / Inti / SP-Pemilik-Toko stub floor** (UP data + PD) | **135.9 KB** | ≤ 125: NOT met |
+| PD boot path (`boot` + shared `forecast` + `match` + `reducers-katalog` + `shock-commodities`) | ≈ 8.6 (boot 3.9 + forecast 2.1 + match 1.8 + reducers-katalog 0.6 + shock-commodities 0.2) KB | `pd/boot` ≤ 4.2 |
+| UP data chunk `up-data` (seed extension + its modules, one chunk) | 18.5 (up-live 6.0) KB | `up/data` ≤ 15.5 |
+| `eco-load` (the world-module loaders, UP / PD / Inti pages only) | 1.0 (+ pd-loaders 0.6 on PD pages) KB | — |
+| PD chains (`pasar-daerah/chains`, first pointerdown / keydown on a PD or Inti page) | 5.5 KB | ≤ 8, after-action |
+| Natural PD events in the first 10 s of a PD stub | 0 extra KB; no UP live / chains module | none |
+
+**Own allowance (175 − floor):** Indeks Ekonomi and Sinyal Pasar `disperindag` ≈ 57.8 KB (plan ≈ 65: IE must put the
+pulse sparkline + ActivityFeed on second paint and keep the map kit + kecamatan JSON as the only big first-load
+pieces); Katalog Lokal, Rapor Usaha, Inti, Sinyal Pasar `pemilik-toko` ≈ 39.1 KB (plan ≈ 50: KL cuts strings per side
+and keeps Umkm / Compare / map / AI lazy; RU and Inti fit their plan numbers).
+
+Measure with `.shots/t4-kit/budget.mjs <port> <dist>` (13 Tahap 2/3 demos + roles, the 5 Tahap 4 landings + roles,
+and a 10 s check that the natural PD events pull no UP live / chains module) and `.shots/t4-kit/cmp.mjs /demo/<slug>`
+(chunk-by-chunk vs the `dist/` preview on 4173).
+
+### World modules and readiness (`world/eco.ts`, `world/eco-load.ts`, `world/ready.ts`)
+
+| Module key | Chunk | What |
+|---|---|---|
+| `'usaha-pintar/data'` | `up-data` | `extendUsahaPintar` only (`meta.ext['usaha-pintar']`), incl. tahap 4 `seedPdLinks` |
+| `'usaha-pintar'` | `up-live` | UP live handlers + natural events (imports the data module first) |
+| `'usaha-pintar/chains'` | `chains` | C15–C29 (unchanged except the C26 guard and the C27 score) |
+| `'pasar-daerah'` | `boot` | PD data patch `extendPasarDaerah` (`meta.ext['pasar-daerah']`), the natural-event reducers + texts (need, match, order.paid), natural-pd, the boot reaction "a natural need brings its own matches" |
+| `'pasar-daerah/chains'` | `chains` | C30–C38 + the reducers / audit texts of every other PD type |
+
+- **Readiness (PD + Inti products):** `import { useWorldReady, preloadWorld } from '../../demo-kit/world/ready'` (NOT the
+  world barrel: Satu Daerah pages must not carry it). `useWorldReady(MODS)` with a module-level constant:
+  KL, RU, Inti, SP `pemilik-toko` side → `['usaha-pintar/data', 'pasar-daerah']`; IE, SP `disperindag` → `['pasar-daerah']`.
+  It is true once the modules are registered on a ready world that carries their data. `preloadWorld('usaha-pintar/data')`
+  on the SP role chip's intent. UP products keep `useEcosystemReady('usaha-pintar')` (barrel).
+- DemoShell preloads the landing's modules (`preloadWorldFor(slug, role, eco)`: table in `eco-load.ts`
+  `worldModulesFor`) next to the region, and the eco's chains on the first pointerdown / keydown (PD + Inti pages ⇒
+  `pasar-daerah/chains`). `?e2e=1`: `__gamada.ensure('pasar-daerah')` (boot + chains) / `ensure('usaha-pintar')`.
+- **Store gate (`ecoNeeds`)**: every event a PD product emits (source `katalog-lokal | rapor-usaha | indeks-ekonomi |
+  sinyal-pasar | inti`) waits for the PD chains (its reducer lives there; normally preloaded by the first click);
+  `flood.alert`, `procurement.recommended`, `need.created`, `order.paid`, `loan.approved`, `price.shock/warning/alertSent`,
+  `market.operation` **running** need the PD chains from any page; clock `need.created` / `order.paid` need the boot module
+  only. The UP gate skips clock-sourced non-emergency `need.created`. A natural price tick never loads PD.
+- The PD and UP data patches commute (either load order ⇒ the same world, self-test). `WORLD.version` = 6.
+- **Ids of PD rows are assigned at emit time** (the boot module registers every PD id field), so emit only after
+  `useWorldReady` is true.
+
+### `world/pasar-daerah` (ONE import path; not in the barrel; rewritten per name at build)
+
+Everything of plan §1.5 exists with the plan's names. Shapes that differ / add:
+- `LENDERS` (+ `PD`, `CATEGORY_REF`, `LOAN`) come from here (not from the world barrel): `LENDERS[0]` = Koperasi Mitra
+  Usaha Sejahtera.
+- `matchScore(s, needId, bizId)` → `{ score, parts: { coverage, distance, skor, pajak, kapasitas } }` (2 decimals).
+  `rankVerified`, `newMatchesFor(s, needId, n=6)` = the C36 / natural rule. `badgesOf(s, bizId)` → `{ verified, taxTidy,
+  score, kybAt? }`. `catalogShortlist(s, needId)` → `{ top: Card[], waiting: Card[] }`, `Card = { business, km, score,
+  parts, badges, offer, requestId? }`. `offerFor(...)` → `{ lines: { category, name, qty, unit, unitPrice, qtyAvailable }[],
+  total, source: 'bid'|'saran'|'katalog', tenderId }`. `listingOf(s, bizId, category)` → `{ category, unitPrice,
+  qtyAvailable, leadDays, unit }`. `catalogKpi(s, now)` also gives `paidOrdersMonth`. `needView` → `{ need, source:
+  'siaga-wilayah'|'awas-belanja'|'ukpbj'|'natural', sourceRef, tenderId, hps, flags[{ procurementId, pct, riskScore }],
+  matches, orders }`. `umkmInbox` rows add `isNew`, `need`. `vendorStorefront` rows `{ category, name, unit, unitPrice,
+  onHand, productId }`. `orderPayload(s, needId, bizId, qty?)` items carry `category` (the shop's stock leaves on
+  `order.shipped`). `umkmPoPayload(s, bizId, warningId)` → `po.drafted` payload | null.
+- Rapor: `SCORE_BANDS[{ min, label, tone }]`, `bandOf(score)` → band INDEX 0..4. `raporOf` → `{ score, band, deltaMonth,
+  history12, peerScore, peerLabel, factors[{ key, value, weight, contribution, live, source, evidence, focus }], recalcAt }`.
+  `scoreActions` → `[{ key, gain, kind, label, target }]` (target = href or null for the in-product drawer).
+  `loanOffer(s, bizId, now)` → `{ plafon, ratePct, tenors, installment(amount, tenor), dsr, netProfit, eligible, reason?,
+  nextBand: { min, plafon, label } | null }` — **plafon is capped per band (`LOAN.cap`: Baik 100 jt, Sangat baik 150 jt,
+  Prima 250 jt)** so the scenario shop gets Rp 100 jt at 710 and Rp 150 jt at ≥ 750 on every seed (the Sep–Oct net profit
+  is 64.9 jt on the demo seed 2026, 50.4 jt on seed 1). `installment(150e6, 0.85, 12)` = 13.775.000. `loanAdvice` →
+  `{ rec, reasons: Bi[3], maxAmount, scoreNow }`. `lenderQueue` rows `{ loan, business, scoreNow, scoreThen, badges, advice,
+  consent }`. `dataFeed(s, bizId, now)` → `{ rows, tx, revenue }` (tx = outletKpis().total.tx). `reviewSuggestion(j)` /
+  `reviewedLines(j, account)` are re-exported here (world/up/books, same rule as Pajak Beres).
+- Econ: `econSeries(s, kecId|null)` → `{ points: { month, index|null, omzet|null }[12], markers, hidden }`.
+  `econSectors(s, month, kecId|null)` → rows `{ key, label, businesses|null, omzet|null, share, merged }` (simulated sector
+  mix from the kecamatan's main sector). `econPulse` → `{ tx, revenue|null, panelBusinesses, revenueVisible, byHour }`.
+  `econEvents` rows add `index`, `hidden`. `programList` → the ops + `{ id: MODAL_PROGRAM_ID ('modal-kerja'), kind: 'modal' }`.
+  `programImpact` → `{ method, labels, treated, control, split, after: { values, lo, hi }, effectPct (= the op's
+  effectPct), didPct (measured), priceEffectPct?, measured, note }`. `dinkopCards(s, now)` → `{ sectors, scoreBins, modal:
+  { count, amount, kecIds }, katalog: { spendMonth, orders } }`. `briefingModel` returns the paper's numbers incl. `hiddenIds`
+  + footnote. Each econ cell keeps its `econ.updated` history in `EconIndex.events`.
+- Prices: `seasonalBand(p)` → `{ expected, lo, hi, sdPct }` (band ± 1.5 × spread clamped 2.5–4 %). `shockPath(shock, day)`
+  returns a FRACTION. **One world minute after a shock = one shock day** (the demo's acceleration).
+  `priceOutlook(s, priceId, now)` → `{ history30, forecast14, lo, hi, peakDay, peakPct, deltaPct, expected, factors }`.
+  `opSimulate(s, { commodityId, marketIds, volumeTon, days }, now?)` → `{ effectPct, damp, baseline, forecastAfter, lo, hi,
+  costRp }` (effect −(2 + 0.45 t + 0.6 d) % in 3–15; damp t × d / 60 ≤ 0.8; 10 t × 3 d ⇒ peak −50 %). `priceBoard(s, now,
+  { commodity?, market? })`, `priceTicker(s, now)`, `commodityIndex(s, id, days)` → `{ values, raw }`, `opView` → `{ op,
+  commodity, markets, stage, auto, canStart, endsAt, measured, approveBy }`, `pdKpi`, `alertsFor` rows `{ id, kind:
+  'peringatan'|'anomali', … }`, `distributorsFor` → 6 `{ id: 'DS-…', name, kecamatan, stockDays, watched }`, `cmSkuFor`.
+
+### `world/inti`, `world/story`
+
+- `TRAIL_SPINE`, `productOfAudit(a)`, `dataTrail(s, rootRef, { maxRows })` → `{ root, rows, spine[6], branches, complete }`,
+  `unifiedInbox(s, now, { channel?, eco?, unreadOnly?, scope })`, `inboxKpi(s, now, scope)` → `{ total, unread, byChannel,
+  callsToday }`, `accessMatrix()`, `scopeOf(role)` → `{ scope, allows(refs, s) }`, `auditQuery(s, filter)` rows `{ id, eventId,
+  at, product, eco, actor, type, summary, refs, causeId }`, `auditCsv(rows, lang)`, `auditJson(rows)`, `platformPulse(s, now)`,
+  `activityRows(s, now, { eco?, product?, max })` (→ `ActivityFeed` rows).
+- `world/story.ts` (import on click): `DAY_STORY`, `storyDone(s)`, `sitiComplaint(s)`, `playDayStory({ gapMs = 600,
+  onStep(key, 'done'|'skip'|'fail') })` → keys that ran. Twice ⇒ nothing new (self-test); after it `dataTrail(complaints:<Siti>)`
+  has 6/6 lanes with audit ids. `world/sd/persona.ts` holds the Siti voice + neighbour report payloads (also in the
+  satu-daerah barrel).
+
+### Events, chains, toasts
+
+- All events of plan §1.4 with the plan's payloads (`world/types.ts` EventMap). Extended types: `Order.items[].category`,
+  `Order.confirmedQty/etaDays/confirmedAt/shipAt/paidAt/note`, `MarketOperation.sentBy/sentAt/volumeTon/days/startedAt/
+  doneAt`, `LoanApp.consentId/purpose/ratePct/installment/decidedAmount/reason`, `CatalogNeed.by/budget`,
+  `NeedItem.spec`, `EconIndex.events`, `Complaint.readAt`, `Call.readAt`, `SeedFacts.pd`. New tables `consents` (IZ),
+  `priceSubs` (LG), `priceAlerts` (PA), `priceShocks` (GJ), `priceWarnings` (PDN), `distributorWatches` (DW).
+- `market.operation` patch (by id) may now set `marketIds`, `volumeTon`, `days`, `sentBy` (stamps `sentAt`), `reason`,
+  `effectPct`; `running` stamps `startedAt`, `done` stamps `doneAt`. SP's "Kirim ke Meja Pimpinan" = patch the open C13
+  op of that commodity (or a new op) with `stage: 'recommended', sentBy: 'disperindag', volumeTon, days, marketIds,
+  effectPct: opSimulate().effectPct`. The clock approves it after 4 world min (`instruction.issued` origin the op).
+- `order.created` with a tender closes it (`selesai`, ordered business's bid `menang`, others `kalah`).
+- C30–C38 as plan §3 (sources = the consuming product). Bojonegoro: the shocked markets are Pasar Banjarejo, Pasar Kota
+  Bojonegoro, Pasar Wisata Bojonegoro; cabai `price.anomaly` at flood +2 (Pasar Kota), beras at +4 (Pasar Banjarejo).
+  C36 skips `by: 'natural'` needs (they get their matches from the boot reaction, same batch, source katalog-lokal).
+- Toasts: `EFFECT_ALSO` targets now only READY products (a pending one is never linked); `shell/effects-pd.ts` adds the
+  PD landings (L8 RU, L9 `bid.submitted` → KL need, L10 `order.created` → TenderPilot bid, L11 `order.shipped` → Toko SKU,
+  `market.operation` recommended → Meja, running/done → Indeks Ekonomi `?focus=<opId>`) and PD root labels; it is
+  registered when the UP or PD chains module loads (i.e. after the visitor's first interaction). Toasts still carry only
+  `?focus=` — route the ids yourself (`OP-` ⇒ IE Dampak, `PA-` ⇒ SP Pemilik Toko inbox, `pajak` ⇒ RU factor drawer …).
+
+### Kit components
+
+- `ScoreDial` (`demo-kit/viz`): `{ value, prev?, bands, label, size: 'sm'|'md'|'lg', max? }`, role="meter", no d3, ≈ 1 KB.
+- `BizBadges` (`demo-kit/ui`): `{ badges, bizId?, size?, links? }`; `RangeField` (`demo-kit/ui`): `{ label, min, max, step,
+  value, onChange, format?, unit?, disabled?, hook? }`; `ActivityFeed` (`demo-kit/ui`): `{ rows, max?, live?, label, empty? }`.
+- `LineChart` now takes `forecast` (band + dashed line) and `markers: { x, label: string|Bi, tone? }[]` (listed in the text
+  summary); `AreaChart` takes `markers` too (`AreaProps` = `XYProps`).
+- **`StepScrubber`** (`demo-kit/map`, NOT a changed TimeScrubber — the flood demos keep the smaller original):
+  TimeScrubber + `steps: { value, label: Bi, short?: Bi }[]` (value = index, aria-valuetext = label) + `onEnd`; Play runs
+  the steps in 9 s, discrete under reduced motion, pauses off-screen.
+- **AI traces: `import { useAiTraces, lastTrace, allTraces, type AiTrace } from '../../demo-kit/ai/trace'`** (NOT `ai/chat`:
+  the chat surfaces would carry it). `useAiChat` pushes every finished answer (ring of 10, sessionStorage + memory).
+- **Strings: `import { usePdStrings } from '../../demo-kit/i18n/pd'`** → `pdLoading`, `anonHidden`, `simPrice`,
+  `simScore`, `projection` (NOT `useDemoStrings()`: kept out of every demo's first load).
+- `/lab/_kit?only=pd`: ScoreDial, BizBadges, RangeField, LineChart forecast + markers, StepScrubber, ActivityFeed.
+
+### Seed facts (demo seed 2026; seed 1 and the mini fixture: same numbers unless noted)
+
+Shop score **710** ("−40 vs Okt": history[10] = 750 is set by the UP data patch), peer median 629 (seed 1: 573);
+`scoreActions`: rapikan-jurnal +30, pajak-siap +80, stok-aman +8; 3 reviews ⇒ 720 / 730 / 740; then `tax.ready` ⇒ **820**
+(`tax.ready` first: 790); hero CV Sedeng Jaya Abadi 692 ⇒ 790 after KYB lolos. Loan: 710 ⇒ Rp 100 jt (1,0 %/bln); ≥ 750 ⇒
+Rp 150 jt, 0,85 %, 12 bln ⇒ Rp 13.775.000/bln (DSR 21 % on seed 2026, 27 % on seed 1). Hidden kecamatan (< 10 businesses):
+Kedewan + Ngambon (mini: Trucuk + Kanor). `facts.pd`: shock commodities cabai-rawit + beras-medium, tick market
+pasar-kota-bojonegoro, past op OP-0001 (beras, Pasar Banjarejo, −6 %, 35 days ago). Cooperative queue (`LENDERS[0]`):
+3 waiting (CV Sedeng Jaya Abadi 120 jt, UD Bumi Terpal Lestari 75 jt, a warung 25 jt), 1 approved, 1 declined (reason),
+each with a consent (scopes differ). The shop subscribes to price alerts (WA, 10 %, beras + cabai rawit first).
+
+### Differences from the plan (decided by the kit agent for the size limits)
+
+`useWorldReady` / `preloadWorld` from `world/ready` (not the barrel) · `LENDERS` from `world/pasar-daerah` · traces from
+`ai/trace` · PD strings from `i18n/pd` · `StepScrubber` instead of a changed `TimeScrubber` · `worldModulesFor()` instead
+of a `WORLD_MODULES` table · `bandOf` returns the band index · plafon capped per band · the PD data (facts.pd + past op) is
+the PD module's patch, not the core seed (Satu Daerah first loads unchanged) · per-target toast focus dropped (also-targets
+are READY products only) · floors above the plan (see the table).
+
+### Tahap 4 integration notes (2026-11-19, integrator)
+
+- `DEMO_READY` is flipped for Katalog Lokal, Rapor Usaha, Indeks Ekonomi, Sinyal Pasar and GAMADA Inti: every product
+  is READY, so no `/demo/:slug` shows the interim placeholder any more (`polish.spec` "interim preview panel" is skipped
+  and `shell.selftest` runs `interim,gutter` only when asked for explicitly).
+- `ScoreDial` colours fall back to the `--dk-*` tokens outside a `.dk-viz` box (the band tones were unset there).
+- `natural-pd` shock path: an anomaly already raised by an earlier step of the same shock is derived from the shock
+  path, so a replayed multi-minute jump (state not updated yet between minutes) raises one anomaly per shock, not two
+  (pd self-test "jump replay").
+- `reviewSuggestion` / `reviewedLines` are exported from `world/usaha-pintar` too; Pajak Beres uses them (one rule
+  with Rapor Usaha).
+- `ID_PREFIX` (world/ids.ts) now carries `consents: 'IZ'` and `priceSubs: 'LG'` in the core map: the UP data patch
+  (`seedPdLinks`) seeds them and can load before the PD module, which used to give them ids like `undefined-0005`
+  (Rapor Usaha `?focus=IZ-…` then missed; pd self-test asserts the prefixes).
+- Rapor Usaha's `?focus=` effect always applies the routed role (`setSession` is a no-op when unchanged): the deferred
+  session role of the first render may still hold the previous page's role.
+- TenderPilot routes a bid id (`?focus=BD-…`, the L10 toast after a Katalog Lokal order closed the tender) to the
+  tender + the Riwayat tab.
+- Dev-only: under React StrictMode a product that switches the session role inside its `?focus=` effect can be
+  overridden by the shell's mount replay when the canvas chunk is already cached (seen in Sinyal Pasar `PA-` arrivals
+  after an in-app navigation back to it). Production builds are not affected.
+- `playwright.config.ts` runs 3 workers locally (260 tests: with 4 the heaviest crawls time out on a busy machine).
+- Tests: `tests/e2e/tahap2/helpers.ts` `SLUGS` includes the 5 new demos (no dead controls, region + language); the
+  crawler waits until the number of first-screen controls is steady (lazy map / list pieces). UI chain variants:
+  `tests/e2e/tahap4/chains.spec.ts`.

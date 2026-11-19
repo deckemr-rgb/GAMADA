@@ -14,7 +14,9 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
-  workers: process.env.CI ? 2 : 4,
+  // 3 locally since tahap 4 (260 tests, 18 demos): with 4, the heaviest no-dead-controls crawls (Juara Jualan, Pantau
+  // Merek) time out on clicks while other workers load their demos; they pass alone and with 3 workers
+  workers: process.env.CI ? 2 : 3,
   retries: 0,
   reporter: [['list']],
   use: {

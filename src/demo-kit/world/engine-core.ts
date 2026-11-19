@@ -47,7 +47,8 @@ export function withExtensions(base: Handlers): Handlers {
     const reducers: Record<string, unknown> = { ...base.reducers }
     for (const x of xs)
       for (const [k, fn] of Object.entries(x.reducers)) {
-        if (k in reducers) throw new Error(`world ext ${x.id}: duplicate reducer for ${k}`)
+        // the same function may be registered twice (Pasar Daerah registers the shared need/match reducers of reducers-katalog.ts)
+        if (k in reducers && reducers[k] !== fn) throw new Error(`world ext ${x.id}: duplicate reducer for ${k}`)
         reducers[k] = fn
       }
     h = {

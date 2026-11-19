@@ -21,7 +21,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:5173').replace(/\/$/, '')
-const ONLY = (process.argv[3] || 'fit,touch,focus,lang,live,interim,gutter').split(',')
+// interim + gutter need a product that is not DEMO_READY: since tahap 4 every product is READY, so they only run when
+// asked for explicitly (e.g. after un-flipping a product locally)
+const ONLY = (process.argv[3] || 'fit,touch,focus,lang,live').split(',')
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 

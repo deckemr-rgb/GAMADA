@@ -217,7 +217,7 @@ const id = {
   memoSign: 'Ditandatangani secara elektronik (simulasi)',
   memoAiBy: (mode: string) => `Ringkasan disusun AI (${mode})`,
   memoFallback: 'AI Live tidak tersedia, memakai Simulasi',
-  memoSent: { ukpbj: 'Usulan tercatat dan menunggu persetujuan PPK; kebutuhan dicatat untuk Katalog Lokal (tahap 4)', inspektorat: 'Memo audit tercatat untuk Bupati; kebutuhan dicatat untuk Katalog Lokal (tahap 4)' } as Record<string, string>,
+  memoSent: { ukpbj: 'Usulan tercatat dan menunggu persetujuan PPK; kebutuhan dicatat untuk Katalog Lokal', inspektorat: 'Memo audit tercatat untuk Bupati; kebutuhan dicatat untuk Katalog Lokal' } as Record<string, string>,
   dataSource: 'Sumber data: simulasi. Pada implementasi, paket ditarik dari SPSE/SiRUP lewat API resmi atau ekspor, harga pasar dari e-Katalog dan survei harga.',
   // chat
   chatTitle: 'Asisten pengawas pengadaan',
@@ -485,7 +485,7 @@ const en: Strings = {
   memoSign: 'Signed electronically (simulated)',
   memoAiBy: (mode: string) => `Summary drafted by AI (${mode})`,
   memoFallback: 'Live AI unavailable, using Simulation',
-  memoSent: { ukpbj: 'Proposal recorded and awaiting PPK approval; the need is recorded for Katalog Lokal (stage 4)', inspektorat: 'Audit memo recorded for the Regent; the need is recorded for Katalog Lokal (stage 4)' },
+  memoSent: { ukpbj: 'Proposal recorded and awaiting PPK approval; the need is recorded for Katalog Lokal', inspektorat: 'Audit memo recorded for the Regent; the need is recorded for Katalog Lokal' },
   dataSource: 'Data source: simulated. In a deployment, packages come from SPSE/SiRUP through the official API or exports, market prices from e-Katalog and price surveys.',
   chatTitle: 'Procurement watchdog assistant',
   chatEyebrow: (code: string) => `Package ${code}`,

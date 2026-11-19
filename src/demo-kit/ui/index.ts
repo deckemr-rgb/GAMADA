@@ -45,3 +45,7 @@ export { ChatThread, ChatComposer, type ChatMessage, type ChatThreadProps, type 
 export { MoneyInput, type MoneyInputProps } from './MoneyInput'
 export { MonthCalendar, icsFor, type CalendarEvent, type MonthCalendarProps } from './MonthCalendar'
 export { flyBetween } from './fly'
+// tahap 4 (Pasar Daerah + Inti)
+export { BizBadges, type BizBadgesProps } from './BizBadges'
+export { RangeField, type RangeFieldProps } from './RangeField'
+export { ActivityFeed, type ActivityFeedProps, type ActivityRow } from './ActivityFeed'

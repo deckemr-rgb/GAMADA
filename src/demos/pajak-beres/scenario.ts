@@ -153,7 +153,7 @@ const INTENTS: Intent<PbContext>[] = [
   I('laporan-untuk-bank', ['laporan untuk bank', 'laporan untuk pinjaman', 'syarat kredit usaha', 'report for a bank loan', 'which report does the bank need', 'laporan kanggo utang bank'], (ctx) => {
     const w = ctx.world
     const L = ctx.lang
-    return { text: end(L, T(L, `Bank biasanya meminta laba rugi, neraca, dan arus kas 3 bulan terakhir. Tombol "Laporan bulanan" di tab Laporan menyusun ketiganya plus ringkasan pajak dalam satu halaman (laba ${monthName(w.period, 'id')} sejauh ini ${rp(w.laba.net, 'id')}). Status pajak rapi juga dibaca Rapor Usaha (demo tahap 4).`, `Banks usually ask for the profit and loss, balance sheet and cash flow of the last 3 months. The "Monthly report" button in the Reports tab puts all three plus a tax summary on one page (${monthName(w.period, 'en')} profit so far ${rp(w.laba.net, 'en')}). A tidy tax status is also read by Rapor Usaha (stage 4 demo).`)), followUps: chips(L, 'untung') }
+    return { text: end(L, T(L, `Bank biasanya meminta laba rugi, neraca, dan arus kas 3 bulan terakhir. Tombol "Laporan bulanan" di tab Laporan menyusun ketiganya plus ringkasan pajak dalam satu halaman (laba ${monthName(w.period, 'id')} sejauh ini ${rp(w.laba.net, 'id')}). Status pajak rapi juga dibaca Rapor Usaha.`, `Banks usually ask for the profit and loss, balance sheet and cash flow of the last 3 months. The "Monthly report" button in the Reports tab puts all three plus a tax summary on one page (${monthName(w.period, 'en')} profit so far ${rp(w.laba.net, 'en')}). A tidy tax status is also read by Rapor Usaha.`)), followUps: chips(L, 'untung') }
   }),
 ]
 

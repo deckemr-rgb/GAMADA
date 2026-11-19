@@ -99,10 +99,9 @@ export type BriefingItem = Briefing['items'][number] & {
  * Change vs 7 days ago as a fraction (0.155 = +15.5 %). `history` holds daily closes EXCLUDING today, so 7 days ago
  * is the 7th value from the end. Every product that quotes a weekly price change uses this one.
  */
-export function weekChangeOf(price: number, history: readonly number[]): number {
-  const base = history[history.length - 7] ?? history[0] ?? price
-  return base > 0 ? (price - base) / base : 0
-}
+// moved to world/price-math.ts (Pasar Daerah reads it without sd/leader); re-exported for the Satu Daerah barrel
+import { weekChangeOf } from '../price-math'
+export { weekChangeOf }
 
 const UNIT_EN: Record<string, string> = { kg: 'kg', liter: 'litre', l: 'litre', butir: 'egg', ikat: 'bunch', ekor: 'head', papan: 'tray', bungkus: 'pack', karung: 'sack' }
 

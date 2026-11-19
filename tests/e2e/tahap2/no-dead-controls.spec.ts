@@ -69,27 +69,51 @@ for (const slug of SLUGS) {
     let checked = 0
     const count = () =>
       page.evaluate((sel) => Array.from(document.querySelectorAll<HTMLElement>(sel)).filter((el) => el.getBoundingClientRect().width > 0 && !el.closest('[inert]')).length, CONTROLS)
+    // lazy first-screen pieces (a map kit, a list behind the world module) arrive after the root: wait until the
+    // number of controls stops changing before indexing them
+    const steady = async () => {
+      let prev = -1
+      let same = 0
+      for (let k = 0; k < 30; k++) {
+        const n = await count()
+        same = n === prev && n > 0 ? same + 1 : 0
+        if (same >= 2) return
+        prev = n
+        await page.waitForTimeout(400)
+      }
+    }
     const crawl = async (deeper?: () => Promise<void>) => {
       if (deeper) await deeper()
+      await steady()
       const base = await count()
       for (let i = 0; i < MAX; i++) {
-        const r = await probe(page, i)
+        let r = await probe(page, i)
+        // a re-opened demo may still be filling its first screen: settle once more before calling the list done
+        if (r.skipped) {
+          await page.waitForTimeout(1500)
+          await steady()
+          r = await probe(page, i)
+        }
         if (r.skipped) break
         checked++
         if (!r.changed) dead.push(r.label)
         if (new URL(page.url()).pathname !== path) {
           await openDemo(page, slug as Slug)
           if (deeper) await deeper()
+          await steady()
         } else {
           // close whatever the control opened (dialogs, drawers, meeting mode) before the next one
           for (let k = 0; k < 3 && (await page.locator('.dk-ov, .dk-mp-mm, [role="dialog"][aria-modal="true"]').count()); k++) {
             await page.keyboard.press('Escape')
             await page.waitForTimeout(400)
           }
-          // the control changed the screen (another mode / view): start the next one from the first screen again
-          if ((await page.locator('.dk-ov, .dk-mp-mm').count()) || (await count()) !== base) {
+          // the control changed the screen (another mode / view, or a side panel that makes the canvas inert and may
+          // open a moment after the click on a busy machine): start the next one from the first screen again
+          await page.waitForTimeout(300)
+          if ((await page.locator('.dk-ov, .dk-mp-mm, [inert]').count()) || (await count()) !== base) {
             await openDemo(page, slug as Slug)
             if (deeper) await deeper()
+            await steady()
           }
         }
       }

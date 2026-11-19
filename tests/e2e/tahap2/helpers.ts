@@ -12,7 +12,9 @@ import { expect } from '../fixtures'
 export const SD_SLUGS = ['sapa-warga', 'meja-pimpinan', 'naskah-pintar', 'radar-isu', 'siaga-wilayah', 'awas-belanja', 'cek-berkas'] as const
 /** tahap 3 · Usaha Pintar (DEMO_READY since 2026-11-18): the shared suites (no dead controls, region + language) cover them too */
 export const UP_SLUGS = ['toko-autopilot', 'pajak-beres', 'juara-jualan', 'kenal-mitra', 'pantau-merek', 'tenderpilot'] as const
-export const SLUGS = [...SD_SLUGS, ...UP_SLUGS] as const
+/** tahap 4 · Pasar Daerah + GAMADA Inti (DEMO_READY since 2026-11-19): covered by the shared suites as well */
+export const PD_SLUGS = ['katalog-lokal', 'rapor-usaha', 'indeks-ekonomi', 'sinyal-pasar', 'inti'] as const
+export const SLUGS = [...SD_SLUGS, ...UP_SLUGS, ...PD_SLUGS] as const
 export type Slug = (typeof SLUGS)[number]
 
 /** default role + one alternative role per product (content/products.ts) */
@@ -30,6 +32,11 @@ export const ROLES: Record<Slug, [string, string]> = {
   'kenal-mitra': ['analis-kyc', 'bank-mitra'],
   'pantau-merek': ['brand-manager', 'pemilik-toko'],
   tenderpilot: ['vendor', 'vendor'],
+  'katalog-lokal': ['ukpbj', 'pemilik-toko'],
+  'rapor-usaha': ['pemilik-toko', 'bank-mitra'],
+  'indeks-ekonomi': ['bappeda', 'dinkop'],
+  'sinyal-pasar': ['disperindag', 'pemilik-toko'],
+  inti: ['kepala-daerah', 'sekretariat'],
 }
 
 /** the product's root element (CSS prefix of each product) */
@@ -48,6 +55,12 @@ export const ROOT: Record<Slug, string> = {
   'kenal-mitra': '.dk-km:not(.dk-km-skel)',
   'pantau-merek': '.dk-pm:not(:has(.dk-pm-skel))',
   tenderpilot: '.dk-tp:not(.dk-tp-skel)',
+  // Pasar Daerah / Inti canvases: skeleton (aria-busy / -skel) until useWorldReady
+  'katalog-lokal': '.dk-kl[data-side]',
+  'rapor-usaha': '.dk-ru:not([aria-busy])',
+  'indeks-ekonomi': '.dk-ie:not(.dk-ie-skel)',
+  'sinyal-pasar': ':is(.dk-sp, .dk-sp-umkm):not([aria-busy])',
+  inti: '.dk-in:not([aria-busy])',
 }
 
 export const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } as const

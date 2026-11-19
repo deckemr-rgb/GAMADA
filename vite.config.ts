@@ -2,7 +2,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 
 /**
  * Preload ONLY what the first paint needs: the latin fonts and the hero layers (1920 AVIF variant,
@@ -42,46 +42,116 @@ function preloadHero(): Plugin {
 }
 
 /**
- * Build only: an import from the barrel world/satu-daerah.ts is rewritten to the world/sd/<domain>.ts modules that
- * define the imported names, so each demo's chunk carries only the Satu Daerah selectors it uses (the barrel would
- * otherwise put every product's selectors into one shared chunk). Same bindings, same modules, only the path changes;
- * a name the map does not know keeps importing from the barrel. Dynamic `import('…/satu-daerah').then(({ a }) => …)`
- * is rewritten when all its names come from one module.
+ * Build only: an import from a world barrel (world/satu-daerah.ts, world/usaha-pintar.ts, world/pasar-daerah.ts) is
+ * rewritten to the world modules that DEFINE the imported names (re-exports are followed: `export { a } from`,
+ * `export *`, an imported-then-exported name), so each demo's chunk carries only the selectors it uses (a barrel
+ * would otherwise put every product's selectors into one shared chunk). Same bindings, same modules, only the path
+ * changes; a name that cannot be resolved keeps importing from the barrel. Dynamic
+ * `import('…/<barrel>').then(({ a }) => …)` is rewritten when all its names come from one module.
  */
-function satuDaerahImports(): Plugin {
-  const dir = 'src/demo-kit/world/sd'
-  const owner = new Map<string, string>()
-  const fromRe = /import\s*(type\s+)?\{([^}]*)\}\s*from\s*(['"])([^'"]*\/world\/satu-daerah)\3;?/g
-  const dynRe = /import\((['"])([^'"]*\/world\/satu-daerah)\1\)\.then\(\(\{([^}]*)\}\)/g
+function barrelImports(barrels: Record<string, string>): Plugin {
+  const worldDir = 'src/demo-kit/world'
+  const read = new Map<string, string | null>()
+  const src = (rel: string): string | null => {
+    if (!read.has(rel)) {
+      let t: string | null = null
+      for (const ext of ['.ts', '.tsx', '/index.ts']) {
+        try {
+          t = readFileSync(`${worldDir}/${rel}${ext}`, 'utf8')
+          break
+        } catch {
+          /* next */
+        }
+      }
+      read.set(rel, t)
+    }
+    return read.get(rel)!
+  }
+  /** "up/../price-math" → "price-math" (paths relative to the world dir) */
+  const join = (from: string, spec: string): string | null => {
+    if (!spec.startsWith('.')) return null
+    const parts = from.split('/').slice(0, -1)
+    for (const p of spec.split('/')) {
+      if (p === '.' || p === '') continue
+      if (p === '..') {
+        if (!parts.length) return null
+        parts.pop()
+      } else parts.push(p)
+    }
+    return parts.join('/')
+  }
+  const listHas = (list: string, name: string) => list.split(',').map((x) => x.trim().replace(/^type\s+/, '')).includes(name)
+  const cache = new Map<string, string | null>()
+  function resolve(rel: string, name: string, depth = 0): string | null {
+    const key = `${rel}#${name}`
+    if (cache.has(key)) return cache.get(key)!
+    cache.set(key, null)
+    const t = src(rel)
+    let out: string | null = null
+    if (t && depth < 8) {
+      if (new RegExp(`^export (?:async )?(?:const|function|interface|type|class|let) ${name}(?![\\w$])`, 'm').test(t)) out = rel
+      for (const m of t.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+        if (out) break
+        if (listHas(m[1]!, name)) {
+          const p = join(rel, m[2]!)
+          out = p ? resolve(p, name, depth + 1) : null
+          if (!out) break
+        }
+      }
+      if (!out) {
+        for (const m of t.matchAll(/export\s*\{([^}]*)\}(?!\s*from)/g)) {
+          if (!listHas(m[1]!, name)) continue
+          for (const im of t.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+            if (!listHas(im[1]!, name)) continue
+            const p = join(rel, im[2]!)
+            out = p ? resolve(p, name, depth + 1) : null
+          }
+        }
+      }
+      if (!out) for (const m of t.matchAll(/export\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
+        const p = join(rel, m[1]!)
+        out = p ? resolve(p, name, depth + 1) : null
+        if (out) break
+      }
+    }
+    cache.set(key, out)
+    return out
+  }
+  const names = Object.keys(barrels).map((b) => b.replace(/^world\//, ''))
+  const alt = names.join('|')
+  const fromRe = new RegExp(`import\\s*(type\\s+)?\\{([^}]*)\\}\\s*from\\s*(['"])([^'"]*\\/world\\/(${alt}))\\3;?`, 'g')
+  const dynRe = new RegExp(`import\\((['"])([^'"]*\\/world\\/(${alt}))\\1\\)\\.then\\(\\(\\{([^}]*)\\}\\)`, 'g')
   const nameOf = (spec: string) => spec.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]!.trim()
   return {
-    name: 'gamada-satu-daerah-imports',
+    name: 'gamada-world-barrel-imports',
     apply: 'build',
     buildStart() {
-      for (const f of readdirSync(dir)) {
-        if (!f.endsWith('.ts')) continue
-        const src = readFileSync(`${dir}/${f}`, 'utf8')
-        for (const m of src.matchAll(/^export (?:const|function|interface|type) (\w+)/gm)) owner.set(m[1]!, f.slice(0, -3))
-      }
+      read.clear()
+      cache.clear()
     },
     transform(code, id) {
-      if (!/src[\\/](demos|demo-kit)[\\/]/.test(id) || /world[\\/](satu-daerah|sd[\\/])/.test(id) || !code.includes('/world/satu-daerah')) return null
-      let out = code.replace(fromRe, (all, typeOnly: string | undefined, list: string, q: string, path: string) => {
+      const p = id.replace(/\\/g, '/')
+      if (!/src\/(demos|demo-kit)\//.test(p) || names.some((n) => p.endsWith(`/world/${n}.ts`)) || !names.some((n) => code.includes(`/world/${n}`))) return null
+      const warn = (m: string) => this.warn(m)
+      let out = code.replace(fromRe, (all, typeOnly: string | undefined, list: string, q: string, path: string, barrel: string) => {
         if (typeOnly) return all
-        const specs = list.split(',').map((s) => s.trim()).filter(Boolean)
+        const specs = list.split(',').map((x) => x.trim()).filter(Boolean)
         const by = new Map<string, string[]>()
-        for (const s of specs) {
-          const mod = owner.get(nameOf(s))
-          if (!mod) return all
-          by.set(mod, [...(by.get(mod) ?? []), s])
+        for (const sp of specs) {
+          const mod = resolve(barrel, nameOf(sp))
+          if (!mod) {
+            warn(`barrel name not resolved: ${nameOf(sp)} (${barrel}) — keeps the barrel import`)
+            return all
+          }
+          by.set(mod, [...(by.get(mod) ?? []), sp])
         }
-        const base = path.replace(/satu-daerah$/, 'sd/')
+        const base = path.slice(0, -barrel.length)
         return [...by].map(([mod, ss]) => `import { ${ss.join(', ')} } from ${q}${base}${mod}${q};`).join('\n')
       })
-      out = out.replace(dynRe, (all, q: string, path: string, list: string) => {
-        const mods = new Set(list.split(',').map((s) => s.trim()).filter(Boolean).map((s) => owner.get(s.split(':')[0]!.trim())))
-        if (mods.size !== 1 || mods.has(undefined)) return all
-        return `import(${q}${path.replace(/satu-daerah$/, 'sd/')}${[...mods][0]}${q}).then(({${list}})`
+      out = out.replace(dynRe, (all, q: string, path: string, barrel: string, list: string) => {
+        const mods = new Set(list.split(',').map((x) => x.trim()).filter(Boolean).map((x) => resolve(barrel, x.split(':')[0]!.trim())))
+        if (mods.size !== 1 || mods.has(null)) return all
+        return `import(${q}${path.slice(0, -barrel.length)}${[...mods][0]}${q}).then(({${list}})`
       })
       return out === code ? null : { code: out, map: null }
     },
@@ -89,7 +159,7 @@ function satuDaerahImports(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), preloadHero(), satuDaerahImports()],
+  plugins: [react(), tailwindcss(), preloadHero(), barrelImports({ 'world/satu-daerah': 'world/sd', 'world/usaha-pintar': 'world/up', 'world/pasar-daerah': 'world/pd' })],
   // client-side routes (/karya, /faq …): dev + preview serve index.html for unknown paths.
   // Static hosts need the same rewrite (e.g. Netlify `/* /index.html 200`, Vercel rewrites).
   appType: 'spa',
@@ -122,6 +192,17 @@ export default defineConfig({
             // come as ~30 small chunks, each with its own import/export wrapper and its own gzip window; two groups keep
             // them in two files. Only modules no site page imports (site pages use ui/icons and i18n/roles: not here).
             { name: 'demo-gen', test: /src[\\/]demo-kit[\\/](world[\\/](seed|catalog|texts|names|rng|prng|score|labels)\.ts|docs[\\/]nik\.ts)$/, priority: 8, includeDependenciesRecursively: false },
+            // tahap 4: the Usaha Pintar world modules (world/eco.ts) as two chunks instead of ~15 small shared ones —
+            // 'usaha-pintar/data' (seed extension + the modules it needs; every UP, KL, RU, Inti page loads it) and the
+            // live module (natural events + boot handlers). Only these modules (no dependencies pulled in).
+            {
+              name: 'up-data',
+              // (not pd/shock-commodities / pd/loan-math: the PD boot module imports them and must stay UP-free)
+              test: /src[\\/]demo-kit[\\/](world[\\/]up[\\/](data|seed-up|reputation|win-score|config|omzet|tax-constants|texts|criteria|base|call-score)|docs[\\/]samples[\\/]cv-data)\.ts$/,
+              priority: 8,
+              includeDependenciesRecursively: false,
+            },
+            { name: 'up-live', test: /src[\\/]demo-kit[\\/]world[\\/]up[\\/](boot|natural-up|audit-boot|labels|reactions-boot|reducers-boot)\.ts$/, priority: 8, includeDependenciesRecursively: false },
             {
               name: 'demo-core',
               test: /src[\\/](demo-kit[\\/](shell[\\/](DemoShell|controls|TopBar|effects|Picker|EventToasts|lazy|hooks|url|missions|hotspot-store|constants|context|index|GuidePanel|Hotspot|intent)|world[\\/](util|store|selectors|clock|events|natural|ids|persist|session|index|engine-scope|eco|ext)|ui[\\/](Atoms|Popover|Overlay|Toast|Feedback|Form|Button|motion|strings|sla)|i18n[\\/](index|id)|region[\\/](loader|topo|wire)|frames[\\/]frames|ai[\\/]live-base)\.tsx?|demos[\\/]registry\.ts)$/,

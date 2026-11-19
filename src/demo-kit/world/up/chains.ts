@@ -22,4 +22,7 @@ export const UP_CHAINS_EXTENSION: WorldExtension = {
 
 export function boot(): void {
   registerExtension(UP_CHAINS_EXTENSION)
+  // the Pasar Daerah toast landings (state links L9–L11, Sinyal Pasar → Meja / Indeks Ekonomi): they only follow the
+  // visitor's own actions, i.e. after the chains loaded (browser only; the self-tests run without the shell)
+  if (typeof window !== 'undefined') void import('../../shell/effects-pd').then((m) => m.register())
 }

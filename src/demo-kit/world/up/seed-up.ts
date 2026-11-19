@@ -8,7 +8,7 @@
  */
 import type { RegionPack } from '../../region/types'
 import type {
-  Bi, Bid, Bidder, BizScore, BrandMention, Business, Call, Candidate, Chat, Coaching, Criteria, DocumentRec, Industry, LedgerEntry, LedgerLine,
+  Bi, Bid, Bidder, BizScore, BrandMention, Business, Call, Candidate, Chat, Coaching, Consent, ConsentScope, Criteria, DocumentRec, Industry, LedgerEntry, LedgerLine, LoanApp, PriceSub,
   Product, Roleplay, SalesAgent, Shift, Staff, StaffJob, TableKey, TaxItem, Tender, UpFacts, VerificationRequest, WorldState,
 } from '../types'
 import { streamRng } from '../prng'
@@ -27,6 +27,8 @@ import { pphFinalMonth } from './tax-constants'
 import { omzetByMonthRaw } from './omzet'
 import { winScoreOf } from './win-score'
 import { reputationAt } from './reputation'
+import { installment } from '../pd/loan-math'
+import { shockCommodities } from '../pd/shock-commodities'
 
 const roundTo = (n: number, step: number): number => Math.round(n / step) * step
 const LENDER = 'Koperasi Mitra Usaha Sejahtera'
@@ -494,6 +496,37 @@ export function extendUsahaPintar(s0: WorldState, pack: RegionPack | null): Worl
     }
   })
 
+  /* ---------------------------------------------------------------- tahap 4 · seedPdLinks (Rapor Usaha queue + consents, the shop's price alerts) */
+  // own stream, appended last: every other UP table is identical by key
+  const rpd = S('pd')
+  const warungBiz = rows(s0.businesses).find((b) => b.kind === 'warung-makan' && b.id !== shopId)
+  const decidedPool = rows(s0.businesses).filter((b) => b.verified && b.id !== shopId && b.id !== warungBiz?.id && (b.kind === 'kelontong' || b.kind === 'konveksi' || b.kind === 'katering'))
+  const pdLoans: LoanApp[] = []
+  const consents: Consent[] = []
+  const loanDraft = (b: Business | undefined, amount: number, tenor: number, at: number, scopes: ConsentScope[], status: LoanApp['status'], purpose: Bi, reason?: Bi) => {
+    if (!b) return
+    const cid = nid('consents')
+    consents.push({ id: cid, businessId: b.id, lender: LENDER, scopes, days: 90, at: at - 20, until: at - 20 + 90 * DAY_MIN, revokedAt: null })
+    const rate = status === 'disetujui' ? 0.85 : 1.0
+    pdLoans.push({
+      id: nid('loanApps'), businessId: b.id, lender: LENDER, amount, tenorMonths: tenor, score: 0, status, at, decidedAt: status === 'diajukan' ? null : at + rpd.int(1, 3) * DAY_MIN,
+      consentId: cid, purpose, ratePct: rate, installment: installment(amount, rate, tenor), ...(status === 'disetujui' ? { decidedAmount: amount } : {}), ...(reason ? { reason } : {}),
+    })
+  }
+  const stock: Bi = { id: 'Tambah stok barang dagangan', en: 'More trading stock' }
+  const tools: Bi = { id: 'Peralatan usaha', en: 'Business equipment' }
+  const cash: Bi = { id: 'Modal kerja harian', en: 'Daily working capital' }
+  loanDraft(decidedPool[0], 50_000_000, 12, today - 20 * DAY_MIN - rpd.int(60, 300), ['omzet', 'laporan', 'pajak', 'kyb', 'mutasi'], 'disetujui', stock)
+  loanDraft(decidedPool[1], 40_000_000, 18, today - 12 * DAY_MIN - rpd.int(60, 300), ['omzet', 'laporan', 'kyb'], 'ditolak', tools, { id: 'Arus kas belum cukup untuk cicilan', en: 'Cash flow too thin for the instalment' })
+  loanDraft(warungBiz, 25_000_000, 6, today - 3 * DAY_MIN - rpd.int(60, 300), ['omzet', 'laporan', 'kyb', 'pajak'], 'diajukan', cash)
+  loanDraft(mismatch, 75_000_000, 12, today - 2 * DAY_MIN - rpd.int(60, 300), ['omzet', 'laporan', 'kyb', 'mutasi'], 'diajukan', stock)
+  loanDraft(hero, 120_000_000, 12, today - 1 * DAY_MIN - rpd.int(60, 300), ['omzet', 'laporan', 'kyb'], 'diajukan', stock)
+  // the shop subscribes to price alerts of its market ingredients (the flood commodities first)
+  const cmIds = [...new Set(Object.values(products).filter((p) => p.businessId === shopId).flatMap((p) => p.tags.filter((t) => t.startsWith('cm:')).map((t) => t.slice(3))))]
+  const first = shockCommodities(s0.region)
+  const subIds = [...[...first].reverse(), ...cmIds.filter((c) => !first.includes(c))].filter((c, i, a) => a.indexOf(c) === i)
+  const priceSubs: PriceSub[] = subIds.length ? [{ id: nid('priceSubs'), businessId: shopId, commodityIds: subIds, channel: 'wa', thresholdPct: 10, at: today - 6 * DAY_MIN }] : []
+
   /* ---------------------------------------------------------------- assemble */
   const byAt = <T extends { at: number }>(r: T) => r.at
   const facts: UpFacts = {
@@ -530,12 +563,19 @@ export function extendUsahaPintar(s0: WorldState, pack: RegionPack | null): Worl
     tenders: tableFrom(tenders, (t) => t.publishedAt),
     bids: tableFrom(bids, byAt),
     shifts: tableFrom([...shifts].reverse()),
+    loanApps: tableFrom([...rows(s0.loanApps), ...pdLoans], byAt),
+    consents: tableFrom(consents, byAt),
+    priceSubs: tableFrom(priceSubs, byAt),
   }
   // derived numbers that need the assembled world: biz scores of the new businesses, win probabilities, brand baseline
   for (const sc of newScores) {
     const c = computeScore(next, sc.id)
     if (c) next.bizScores.byId[sc.id] = { ...sc, score: c.score, factors: c.factors, history: [...sc.history.slice(0, 11), c.score] }
   }
+  for (const l of pdLoans) next.loanApps.byId[l.id] = { ...l, score: next.bizScores.byId[l.businessId]?.score ?? 0 }
+  // the scenario shop's October score is 40 above today's (Rapor Usaha "−40 vs Okt" on every seed)
+  const shopScore = next.bizScores.byId[shopId]
+  if (shopScore && shopScore.history.length >= 2) next.bizScores.byId[shopId] = { ...shopScore, history: [...shopScore.history.slice(0, -2), shopScore.score + 40, shopScore.history[shopScore.history.length - 1]!] }
   for (const t of tenders) if (t.kbli === SHOP_KBLI[0]) next.tenders.byId[t.id] = { ...t, matches: { [shopId]: winScoreOf(next, t.id, shopId).probability } }
   const weekNeg = brandMentions.filter((m) => m.brand === shopId && m.topic === 'pengiriman' && m.sentiment === 'negatif' && m.at >= -7 * DAY_MIN && m.at < 0).length
   facts.brand.baselinePer2h = Math.max(0.5, round(weekNeg / (7 * 12), 1))

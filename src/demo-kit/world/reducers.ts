@@ -6,6 +6,7 @@
 import type { Alert, EventType, Instruction, LngLat, MarketOperation, Program, WorldEvent, WorldState } from './types'
 import { DAY_MIN, WORLD, centroid, get, monthOf, patch, patchMany, upsert } from './util'
 import { CORE_REDUCERS, must } from './reducers-core'
+import { reduceMatch, reduceNeed } from './reducers-katalog'
 
 export type Reducer<K extends EventType> = (s: WorldState, e: WorldEvent<K>) => WorldState
 export type ReducerMap = { [K in EventType]?: Reducer<K> }
@@ -308,19 +309,9 @@ export const REDUCERS: ReducerMap = {
       ...(s.tenders.byId[e.payload.tenderId]?.hps ? { hps: s.tenders.byId[e.payload.tenderId]!.hps } : {}),
     }),
   }),
-  'need.created': (s, e) => {
-    const p = e.payload
-    const id = must(p.id, 'need id')
-    return {
-      ...s,
-      catalogNeeds: upsert(s.catalogNeeds, { id, code: p.code ?? id, at: e.at, title: p.title, items: p.items, kecamatanId: p.kecamatanId, deadlineDays: p.deadlineDays, emergency: p.emergency ?? false, status: 'baru', cause: p.cause ?? null }),
-    }
-  },
-  'match.made': (s, e) => ({
-    ...s,
-    matches: upsert(s.matches, { id: must(e.payload.id, 'match id'), needId: e.payload.needId, businessId: e.payload.businessId, score: e.payload.score, at: e.at, status: 'kandidat' }),
-    catalogNeeds: patch(s.catalogNeeds, e.payload.needId, (n) => (n.status === 'baru' ? { ...n, status: 'dicocokkan' } : n)),
-  }),
+  // shared with the Pasar Daerah boot module (world/reducers-katalog.ts): the same functions in both pipelines
+  'need.created': reduceNeed,
+  'match.made': reduceMatch,
   'order.created': (s, e) => {
     const p = e.payload
     const id = must(p.id, 'order id')
@@ -331,6 +322,14 @@ export const REDUCERS: ReducerMap = {
       next = { ...next, catalogNeeds: patch(next.catalogNeeds, needId, (n) => ({ ...n, status: 'dipesan' })) }
       const picked = next.matches.ids.filter((m) => next.matches.byId[m]?.needId === needId && next.matches.byId[m]?.businessId === p.businessId)
       next = { ...next, matches: patchMany(next.matches, picked, (m) => ({ ...m, status: 'dipilih' })) }
+      // tahap 4: an order on a need with a tender closes the tender (TenderPilot Riwayat): the ordered business's bid wins
+      const tenderIds = next.tenders.ids.filter((t) => next.tenders.byId[t]?.needId === needId && next.tenders.byId[t]?.status !== 'selesai')
+      if (tenderIds.length) {
+        const tset = new Set(tenderIds)
+        next = { ...next, tenders: patchMany(next.tenders, tenderIds, (t) => ({ ...t, status: 'selesai' })) }
+        const bidIds = next.bids.ids.filter((b) => tset.has(next.bids.byId[b]?.tenderId ?? ''))
+        next = { ...next, bids: patchMany(next.bids, bidIds, (b) => (b.status === 'draf' ? b : { ...b, status: b.businessId === p.businessId ? 'menang' : 'kalah' })) }
+      }
     }
     return next
   },
@@ -340,16 +339,25 @@ export const REDUCERS: ReducerMap = {
     const p = e.payload
     return {
       ...s,
-      loanApps: upsert(s.loanApps, { id: must(p.id, 'loan id'), businessId: p.businessId, lender: p.lender, amount: p.amount, tenorMonths: p.tenorMonths, score: get(s.bizScores, p.businessId)?.score ?? 0, status: 'diajukan', at: e.at, decidedAt: null }),
+      loanApps: upsert(s.loanApps, {
+        id: must(p.id, 'loan id'), businessId: p.businessId, lender: p.lender, amount: p.amount, tenorMonths: p.tenorMonths, score: get(s.bizScores, p.businessId)?.score ?? 0, status: 'diajukan', at: e.at,
+        decidedAt: null, ...(p.consentId ? { consentId: p.consentId } : {}), ...(p.purpose ? { purpose: p.purpose } : {}), ...(p.ratePct != null ? { ratePct: p.ratePct } : {}),
+        ...(p.installment != null ? { installment: p.installment } : {}),
+      }),
     }
   },
-  'loan.approved': (s, e) => ({ ...s, loanApps: patch(s.loanApps, e.payload.loanId, (l) => ({ ...l, status: 'disetujui', decidedAt: e.at })) }),
+  'loan.approved': (s, e) => ({
+    ...s,
+    loanApps: patch(s.loanApps, e.payload.loanId, (l) => ({ ...l, status: 'disetujui', decidedAt: e.at, decidedAmount: Math.min(l.amount, e.payload.amount ?? l.amount), ...(e.payload.note ? { reason: e.payload.note } : {}) })),
+  }),
 
   /* ---------------------------------------------------------------- Indeks Ekonomi · Sinyal Pasar */
   'econ.updated': (s, e) => {
     const p = e.payload
     const id = `${p.kecamatanId}:${p.month || monthOf(s.day)}`
-    return { ...s, econIndex: patch(s.econIndex, id, (x) => ({ ...x, index: p.index, omzet: Math.round((x.omzet * p.index) / Math.max(1, x.index)) })) }
+    // every update is kept on the cell (Indeks Ekonomi "Kejadian ekonomi" + series markers)
+    const ev = { at: e.at, delta: p.delta, index: p.index, reason: p.reason, kind: p.kind ?? null, cause: p.cause ?? null }
+    return { ...s, econIndex: patch(s.econIndex, id, (x) => ({ ...x, index: p.index, omzet: Math.round((x.omzet * p.index) / Math.max(1, x.index)), events: [...(x.events ?? []), ev] })) }
   },
   'price.anomaly': (s, e) => ({ ...s, prices: patch(s.prices, `${e.payload.marketId}:${e.payload.commodityId}`, (x) => ({ ...x, price: e.payload.price, anomaly: true, updatedAt: e.at })) }),
   'supply.signal': (s, e) => {
@@ -365,11 +373,25 @@ export const REDUCERS: ReducerMap = {
     const prev = s.marketOps.byId[id]
     const clearAnomaly = (st: WorldState, marketIds: string[], commodityId: string): WorldState =>
       p.stage === 'done' ? { ...st, prices: patchMany(st.prices, marketIds.map((m) => `${m}:${commodityId}`), (x) => (x.anomaly ? { ...x, anomaly: false } : x)) } : st
-    if (prev) return clearAnomaly({ ...s, marketOps: patch(s.marketOps, id, (m) => ({ ...m, stage: p.stage, effectPct: p.effectPct ?? m.effectPct })) }, prev.marketIds, prev.commodityId)
+    if (prev) {
+      // a patch may also (re)set the markets, volume, days and sender (Sinyal Pasar "Kirim ke Meja Pimpinan"); stage times are stamped
+      const marketIds = p.marketIds.length ? p.marketIds : prev.marketIds
+      return clearAnomaly({
+        ...s,
+        marketOps: patch(s.marketOps, id, (m) => ({
+          ...m, stage: p.stage, effectPct: p.effectPct ?? m.effectPct, marketIds, ...(p.reason ? { reason: p.reason } : {}),
+          ...(p.volumeTon != null ? { volumeTon: p.volumeTon } : {}), ...(p.days != null ? { days: p.days } : {}),
+          ...(p.sentBy && !m.sentBy ? { sentBy: p.sentBy, sentAt: e.at } : {}),
+          ...(p.stage === 'running' && m.startedAt == null ? { startedAt: p.startedAt ?? e.at } : {}), ...(p.stage === 'done' && m.doneAt == null ? { doneAt: e.at } : {}),
+        })),
+      }, marketIds, prev.commodityId)
+    }
     const name = s.region.commodities.find((c) => c.id === p.commodityId)?.name ?? { id: p.commodityId, en: p.commodityId }
     const op: MarketOperation = {
       id, at: e.at, stage: p.stage, commodityId: p.commodityId, marketIds: p.marketIds, effectPct: p.effectPct ?? -8, forRole: p.forRole ?? 'kepala-daerah', cause: p.cause ?? null,
       reason: p.reason ?? { id: `Operasi pasar ${name.id}`, en: `Market operation: ${name.en}` },
+      ...(p.volumeTon != null ? { volumeTon: p.volumeTon } : {}), ...(p.days != null ? { days: p.days } : {}), ...(p.sentBy ? { sentBy: p.sentBy, sentAt: e.at } : {}),
+      ...(p.stage === 'running' ? { startedAt: p.startedAt ?? e.at } : {}),
     }
     return clearAnomaly({ ...s, marketOps: upsert(s.marketOps, op) }, p.marketIds, p.commodityId)
   },

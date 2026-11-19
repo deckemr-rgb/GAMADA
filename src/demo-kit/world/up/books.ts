@@ -248,3 +248,24 @@ const mutasiSel = createParamSelector((s) => [s.ledger, s.suppliers, s.seed, s.r
   })
 })
 export const mutasiRows = (s: WorldState, bizId: string, period: string): MutasiRowW[] => mutasiSel(s, `${bizId}|${period}`)
+
+/* ------------------------------------------------------------------ review suggestions (Pajak Beres + Rapor Usaha) */
+
+export type ReviewWhy = 'tarik' | 'online' | 'masuk' | 'nota' | 'other'
+const isCash = (a: string) => a === 'Kas' || a === 'Bank'
+/** the line a review is about: the first non-cash line (the cash line stays) */
+const targetIdx = (j: LedgerEntry) => Math.max(0, j.lines.findIndex((l) => !isCash(l.account)))
+/** the AI's suggested account for a review row (same rule as Pajak Beres "Saran AI") */
+export function reviewSuggestion(j: LedgerEntry): { account: string; why: ReviewWhy } {
+  const m = j.memo.id.toLowerCase()
+  if (m.includes('tarik tunai')) return { account: 'Kas', why: 'tarik' }
+  if (m.includes('toko online')) return { account: 'Persediaan', why: 'online' }
+  if (m.includes('transfer masuk')) return { account: 'Pendapatan Penjualan', why: 'masuk' }
+  if (j.source === 'nota') return { account: j.lines[targetIdx(j)]?.account ?? 'Persediaan', why: 'nota' }
+  return { account: j.lines[targetIdx(j)]?.account ?? 'Beban Lain-lain', why: 'other' }
+}
+/** the reviewed lines (`ledger.reviewed` payload): the target line moved to `account` */
+export const reviewedLines = (j: LedgerEntry, account: string): LedgerLine[] => {
+  const i = targetIdx(j)
+  return j.lines.map((l, k) => (k === i ? { ...l, account } : l))
+}

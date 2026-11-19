@@ -35,13 +35,13 @@ export function registerNaturalSource(id: string, fn: NaturalSource): void {
 }
 /** multiplier on a natural rhythm while a page wants more of it (e.g. sales ×3 on a shop demo); 1 = normal */
 const boosts: Record<string, number> = {}
-export function setNaturalBoost(kind: 'sale', factor: number): () => void {
+export function setNaturalBoost(kind: 'sale' | 'price', factor: number): () => void {
   boosts[kind] = factor
   return () => {
     if (boosts[kind] === factor) delete boosts[kind]
   }
 }
-export const naturalBoost = (kind: 'sale'): number => boosts[kind] ?? 1
+export const naturalBoost = (kind: 'sale' | 'price'): number => boosts[kind] ?? 1
 
 /* ------------------------------------------------------------------ runtime switch */
 

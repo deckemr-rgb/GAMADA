@@ -6,6 +6,7 @@
 import type { Bi, Business, CatalogNeed, LngLat, Verification, VerificationRequest, WorldState } from '../types'
 import type { CvRecord } from '../../docs/types'
 import { createParamSelector, verifiedBusinesses } from '../selectors'
+import { rankVerified } from '../pd/match'
 import { distanceKm, offsetKm, rows } from '../util'
 import { cvFit, type CvCriteria } from '../../docs/samples/cv-data'
 import { desaName, kecName } from './base'
@@ -130,7 +131,7 @@ export function kycInputOf(s: WorldState, documentId: string): KycInput {
 
 export interface CatalogCard { business: Business; distanceKm: number; badges: { verified: boolean; taxTidy: boolean; score: number | null } }
 /** open needs + the suppliers Katalog Lokal will rank (verified first, then distance): the "Pratinjau etalase" card */
-const catalogSel = createParamSelector((s) => [s.catalogNeeds, s.businesses, s.bizScores, s.region], (_key: string, needs, businesses, scores, region): { needs: CatalogNeed[]; suppliers: CatalogCard[] } => {
+const catalogSel = createParamSelector((s) => [s.catalogNeeds, s.businesses, s.bizScores, s.region, s.stock, s], (_key: string, needs, businesses, scores, region, _stock, st): { needs: CatalogNeed[]; suppliers: CatalogCard[] } => {
   const open = rows(needs).filter((n) => n.status === 'baru' || n.status === 'dicocokkan').sort((a, b) => b.at - a.at)
   const n0 = open[0]
   const cats = new Set(n0 ? n0.items.map((i) => i.category) : ['karung-pasir', 'terpal'])
@@ -139,6 +140,11 @@ const catalogSel = createParamSelector((s) => [s.catalogNeeds, s.businesses, s.b
     .filter((b) => b.supplies.some((x) => cats.has(x)))
     .map((b) => ({ business: b, distanceKm: kec ? Math.round(distanceKm(b.coord, kec.centroid) * 10) / 10 : 0, badges: { verified: b.verified, taxTidy: b.taxTidy, score: scores.byId[b.id]?.score ?? null } }))
     .sort((a, b) => Number(b.badges.verified) - Number(a.badges.verified) || a.distanceKm - b.distanceKm || a.business.id.localeCompare(b.business.id))
+  // tahap 4: the verified ones in Katalog Lokal's order (matchScore desc, id asc = catalogShortlist().top) for the newest open need
+  if (n0) {
+    const rank = new Map(rankVerified(st as WorldState, n0.id).map((r, i) => [r.business.id, i]))
+    cards.sort((a, b) => Number(b.badges.verified) - Number(a.badges.verified) || (a.badges.verified ? (rank.get(a.business.id) ?? 999) - (rank.get(b.business.id) ?? 999) : 0) || a.distanceKm - b.distanceKm || a.business.id.localeCompare(b.business.id))
+  }
   return { needs: open, suppliers: cards }
 })
 /** `bizId` (optional) is the business the caller highlights; the ranking is the same for everyone */

@@ -12,7 +12,7 @@ const row = (code: string, account: string, group: AccountGroup): CoaRow => ({ c
 
 export const COA: readonly CoaRow[] = [
   row('1101', 'Kas', 'aset'), row('1102', 'Bank', 'aset'), row('1301', 'Persediaan', 'aset'),
-  row('2101', 'Utang Usaha', 'kewajiban'), row('2201', 'Utang PPh 21', 'kewajiban'), row('2202', 'Utang PPh Final', 'kewajiban'),
+  row('2101', 'Utang Usaha', 'kewajiban'), row('2201', 'Utang PPh 21', 'kewajiban'), row('2202', 'Utang PPh Final', 'kewajiban'), row('2301', 'Utang Pinjaman', 'kewajiban'),
   row('3101', 'Modal Pemilik', 'modal'), row('3201', 'Prive', 'modal'),
   row('4101', 'Pendapatan Penjualan', 'pendapatan'), row('4201', 'Pendapatan Lain-lain', 'pendapatan'), row('4202', 'Pendapatan Bunga', 'pendapatan'),
   row('5101', 'HPP', 'beban'), row('6101', 'Beban Gaji', 'beban'), row('6102', 'Beban Listrik & Air', 'beban'), row('6103', 'Beban Sewa', 'beban'),

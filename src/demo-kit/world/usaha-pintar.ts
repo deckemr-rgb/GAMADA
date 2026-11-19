@@ -16,7 +16,7 @@ export {
 } from './up/toko'
 export { poLines, supplierReply } from './up/po'
 export {
-  COA, coaOf, omzetByMonth, pphFinalOf, pendingNotas, notaLines, ledgerRows, trialBalance, pnlMonthly, balanceSheet, cashFlow, taxCalendar, pendingReviews, mutasiRows,
+  COA, coaOf, omzetByMonth, pphFinalOf, pendingNotas, notaLines, ledgerRows, trialBalance, pnlMonthly, balanceSheet, cashFlow, taxCalendar, pendingReviews, mutasiRows, reviewSuggestion, reviewedLines,
   type CoaRow, type AccountGroup, type PendingNota, type TbRow, type PnlMonth, type TaxEvent, type MutasiRowW,
 } from './up/books'
 export {

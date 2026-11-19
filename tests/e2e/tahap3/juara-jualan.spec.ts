@@ -420,7 +420,11 @@ test('Juara Jualan · no dead controls (tabs × roles)', async ({ page, errors }
         dead.push(`${role ?? 'supervisor'} · ${tab} · ${label}`)
         console.log('dead?', dead[dead.length - 1])
       }
-      if (await page.locator('[role="dialog"]').count()) await page.keyboard.press('Escape')
+      if (await page.locator('[role="dialog"]').count()) {
+        await page.keyboard.press('Escape')
+        // a closing dialog must be gone before the next click (on a busy machine its form still covers the panel)
+        await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 5_000 }).catch(() => undefined)
+      }
     }
   }
   expect(dead).toEqual([])

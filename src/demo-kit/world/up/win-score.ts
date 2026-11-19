@@ -86,3 +86,18 @@ export function winScoreOf(s: WorldState, tenderId: string, bizId: string): WinS
   ]
   return { probability, factors }
 }
+
+/** the suggested bid of a business for a tender (TenderPilot "Saran harga", Katalog Lokal shop offer before a bid) */
+export function priceAdvice(s: WorldState, tenderId: string, bizId: string): { hps: number; cost: number | null; range: [number, number]; suggested: number; margin: number | null; ratio: number; history: number[] } | null {
+  const t = s.tenders.byId[tenderId]
+  if (!t) return null
+  const hps = t.hps ?? t.value
+  const hist = rows(s.bids).filter((b) => b.businessId === bizId && b.hps).map((b) => b.price / b.hps!).sort((a, b) => a - b)
+  const lo = hist[0] ?? 0.9
+  const hi = hist[hist.length - 1] ?? 0.97
+  const med = hist.length ? hist[Math.floor(hist.length / 2)]! : 0.93
+  const cost = itemCost(s, t, bizId)
+  const round = (v: number) => Math.round(v / 10_000) * 10_000
+  const suggested = round(Math.max(hps * med, cost !== null ? cost * 1.05 : 0))
+  return { hps, cost, range: [round(hps * lo), round(hps * hi)], suggested, margin: cost !== null ? Math.round(((suggested - cost) / suggested) * 1000) / 1000 : null, ratio: Math.round((suggested / hps) * 1000) / 1000, history: hist }
+}

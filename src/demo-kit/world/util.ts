@@ -7,7 +7,7 @@ import type { LngLat, Minutes, Table, TableKey } from './types'
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
   /** bump when the generated shape changes → persisted worlds are regenerated */
-  version: 5,
+  version: 6,
   /** max entities per table (oldest dropped) */
   maxPerTable: 5000,
   /** max reaction chain depth (0 = emitted directly) */
@@ -38,6 +38,7 @@ export const WORLD = {
 } as const
 
 export const DAY_MIN = 1440
+
 
 /* ------------------------------------------------------------------ tables */
 export const emptyTable = <T extends { id: string }>(): Table<T> => ({ byId: {}, ids: [] })
@@ -120,7 +121,8 @@ export const TABLE_KEYS: TableKey[] = [
   'calls', 'chats', 'agentsSales', 'coachings', 'candidates', 'brandMentions', 'tenders', 'bids',
   'staff', 'shifts', 'promos', 'cashShifts', 'posNotices', 'bankImports', 'roleplays', 'verificationRequests', 'brandAlerts', 'brandAnnouncements',
   'catalogNeeds', 'matches',
-  'orders', 'bizScores', 'loanApps', 'econIndex', 'prices', 'markets', 'marketOps', 'auditLog',
+  'orders', 'bizScores', 'loanApps', 'econIndex', 'prices', 'markets', 'marketOps',
+  'consents', 'priceSubs', 'priceAlerts', 'priceShocks', 'priceWarnings', 'distributorWatches', 'auditLog',
 ]
 
 export const ref = (table: TableKey, id: string): string => `${table}:${id}`

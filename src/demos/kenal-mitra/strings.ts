@@ -45,7 +45,7 @@ const id = {
   notFoundBody: 'Tautan menunjuk data yang tidak ada di dunia demo ini. Antrian dibuka.',
   // catalog preview
   previewTitle: 'Pratinjau etalase Katalog Lokal',
-  previewSub: 'Urutan yang dipakai Katalog Lokal: terverifikasi dulu, lalu jarak (demo tahap 4).',
+  previewSub: 'Urutan yang dipakai Katalog Lokal: terverifikasi dulu, lalu jarak.',
   previewToggle: 'Pratinjau etalase Katalog Lokal',
   needsOpen: 'Kebutuhan terbuka',
   noNeeds: 'Belum ada kebutuhan pemda yang terbuka.',
@@ -126,7 +126,7 @@ const en: Str = {
   notFound: 'Item not found',
   notFoundBody: 'The link points to data that does not exist in this demo world. The queue is open.',
   previewTitle: 'Katalog Lokal storefront preview',
-  previewSub: 'The order Katalog Lokal uses: verified first, then distance (stage 4 demo).',
+  previewSub: 'The order Katalog Lokal uses: verified first, then distance.',
   previewToggle: 'Katalog Lokal storefront preview',
   needsOpen: 'Open needs',
   noNeeds: 'No open government needs yet.',

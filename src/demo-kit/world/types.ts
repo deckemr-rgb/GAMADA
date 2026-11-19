@@ -68,6 +68,8 @@ export interface Complaint {
   clusterId: string | null
   templateId?: string
   photo?: boolean
+  /** read in GAMADA Inti Kanal (chat.read) */
+  readAt?: Minutes
 }
 
 export type TicketStatus = 'baru' | 'diverifikasi' | 'diteruskan' | 'diproses' | 'selesai'
@@ -569,7 +571,8 @@ export interface LedgerEntry {
   at: Minutes
   memo: Bi
   lines: LedgerLine[]
-  source: 'sale' | 'purchase' | 'bank' | 'manual' | 'nota'
+  /** 'katalog' = a Katalog Lokal order paid by the Pemda (C37), 'pinjaman' = a loan disbursal (C38) */
+  source: 'sale' | 'purchase' | 'bank' | 'manual' | 'nota' | 'katalog' | 'pinjaman'
   refId: string | null
   needsReview: boolean
   confidence: number
@@ -612,6 +615,8 @@ export interface Call {
   transcript: ClipKey
   topic?: 'banjir' | null
   scoredBy?: 'ai' | 'supervisor'
+  /** read in GAMADA Inti Kanal (chat.read) */
+  readAt?: Minutes
 }
 
 export interface Chat {
@@ -858,7 +863,7 @@ export interface UpFacts {
 
 /* ================================================================== Pasar Daerah */
 
-export interface NeedItem { name: Bi; category: string; qty: number; unit: string }
+export interface NeedItem { name: Bi; category: string; qty: number; unit: string; /** short technical spec (Katalog Lokal AI) */ spec?: Bi }
 export interface CatalogNeed {
   id: string
   code: string
@@ -870,6 +875,10 @@ export interface CatalogNeed {
   emergency: boolean
   status: 'baru' | 'dicocokkan' | 'dipesan' | 'selesai'
   cause: EntityRef | null
+  /** who wrote it: the AI composer, a person, the clock (natural need) or a reaction (C5 / C11) */
+  by?: 'ai' | 'manual' | 'natural' | 'reaction'
+  /** budget ceiling (pagu, Rp, simulasi) */
+  budget?: number
 }
 
 export interface Match {
@@ -887,10 +896,18 @@ export interface Order {
   code: string
   needId: string | null
   businessId: string
-  items: { name: Bi; qty: number; unit: string; price: number }[]
+  /** `price` = unit price; `category` = the catalog category (maps a shop order onto its SKUs on order.shipped) */
+  items: { name: Bi; qty: number; unit: string; price: number; category?: string }[]
   total: number
   status: 'dipesan' | 'dikonfirmasi' | 'dikirim' | 'dibayar'
   at: Minutes
+  /** per item, set by order.confirmed (partial confirmation) */
+  confirmedQty?: number[]
+  etaDays?: number
+  confirmedAt?: Minutes
+  shipAt?: Minutes
+  paidAt?: Minutes
+  note?: Bi
 }
 
 export type ScoreFactor = 'omzet' | 'margin' | 'pajak' | 'supplier' | 'kyb' | 'pertumbuhan'
@@ -918,6 +935,17 @@ export interface LoanApp {
   status: 'diajukan' | 'disetujui' | 'ditolak'
   at: Minutes
   decidedAt: Minutes | null
+  /** the consent row the owner granted for this application (Rapor Usaha) */
+  consentId?: string
+  purpose?: Bi
+  /** flat rate per month in % (0.85 = 0,85 %/bulan), simulasi */
+  ratePct?: number
+  /** Rp per month (installment()), simulasi */
+  installment?: number
+  /** the amount the lender approved (≤ amount) */
+  decidedAmount?: number
+  /** rejection reason / approval note */
+  reason?: Bi
 }
 
 /** id = `${kecamatanId}:${month}` */
@@ -933,7 +961,10 @@ export interface EconIndex {
   /** number of businesses in the aggregate (< 10 ⇒ hidden for anonymity) */
   businesses: number
   topSector: string
+  /** econ.updated rows on this cell, oldest first (Indeks Ekonomi "Kejadian ekonomi", series markers) */
+  events?: EconEvent[]
 }
+export interface EconEvent { at: Minutes; delta: number; index: number; reason: Bi; kind: 'banjir' | 'program' | 'panen' | null; cause: EntityRef | null }
 
 /** id = `${marketId}:${commodityId}` — one row per real market × commodity, with history. */
 export interface PricePoint {
@@ -967,6 +998,46 @@ export interface MarketOperation {
   /** shown to this role as an instruction suggestion */
   forRole: RoleId
   cause: EntityRef | null
+  /** who sent it to Meja Pimpinan (Sinyal Pasar 'disperindag'); C13 suggestions have none */
+  sentBy?: RoleId
+  /** when it was sent (sentBy set) — the 4-minute auto-approval counts from here */
+  sentAt?: Minutes
+  volumeTon?: number
+  days?: number
+  /** when it started running (stage 'running') */
+  startedAt?: Minutes
+  /** when it finished (stage 'done') */
+  doneAt?: Minutes
+}
+
+/* ------------------------------------------------------------------ Pasar Daerah · tahap 4 tables */
+
+export type ConsentScope = 'omzet' | 'laporan' | 'pajak' | 'kyb' | 'mutasi' | 'supplier'
+/** a business owner's data-sharing consent to a lender (Rapor Usaha) */
+export interface Consent { id: string; businessId: string; lender: string; scopes: ConsentScope[]; days: 30 | 90 | 180; at: Minutes; until: Minutes; revokedAt: Minutes | null }
+/** a business's price-alert subscription (Sinyal Pasar UMKM side) */
+export interface PriceSub { id: string; businessId: string; commodityIds: string[]; channel: 'wa' | 'aplikasi'; thresholdPct: 5 | 10 | 15; at: Minutes }
+/** an early price alert sent to a subscribed business (C32) */
+export interface PriceAlert {
+  id: string; subId: string; businessId: string; warningId: string; commodityId: string; marketId: string; peakInDays: number; peakPct: number; text: Bi; advice: Bi; at: Minutes
+}
+/** a supply shock on a commodity in some markets (C30; `damp` lowered by a running market operation, C34) */
+export interface PriceShock { id: string; commodityId: string; marketIds: string[]; startAt: Minutes; peakDay: number; pct: number; damp: number; cause: EntityRef | null; at: Minutes }
+/** the early warning of a shock: peak expected in `peakInDays` (C31) */
+export interface PriceWarning { id: string; shockId: string; commodityId: string; marketIds: string[]; peakInDays: number; peakPct: number; expected: number; at: Minutes; cause: EntityRef }
+/** Disperindag watches (fictional) distributors of a commodity */
+export interface DistributorWatch { id: string; commodityId: string; distributorIds: string[]; by: RoleId; at: Minutes }
+
+/** Pasar Daerah facts (core seed) */
+export interface PdFacts {
+  /** the commodities a flood shocks (C30): cabai rawit first, then beras */
+  shockCommodityIds: string[]
+  /** the market of the 07:01 natural price tick (nearest the kabupaten centroid) */
+  tickMarketId: string
+  /** fictional number of UMKM subscribed to price alerts (Disperindag sees the count only) */
+  subscriberCount: number
+  /** the seeded past market operation (done, measured) */
+  pastOpId: string
 }
 
 export interface AuditEntry {
@@ -1036,6 +1107,8 @@ export interface SeedFacts {
   pumpRingBidderIds: string[]
   /** Usaha Pintar facts (present once the ecosystem extension ran) */
   up?: UpFacts
+  /** Pasar Daerah facts (core seed, WORLD.version ≥ 6) */
+  pd?: PdFacts
 }
 
 export interface WorldState {
@@ -1106,6 +1179,12 @@ export interface WorldState {
   prices: Table<PricePoint>
   markets: Table<Market>
   marketOps: Table<MarketOperation>
+  consents: Table<Consent>
+  priceSubs: Table<PriceSub>
+  priceAlerts: Table<PriceAlert>
+  priceShocks: Table<PriceShock>
+  priceWarnings: Table<PriceWarning>
+  distributorWatches: Table<DistributorWatch>
   auditLog: Table<AuditEntry>
 }
 
@@ -1227,19 +1306,42 @@ export interface EventMap {
   'bid.submitted': { id?: string; tenderId: string; businessId: string; price: number; pages?: number; docSections?: string[] }
   'procurement.bidReceived': { procurementId: string; bidderId: string; businessId: string; price: number; bidId: string }
   /* Katalog Lokal */
-  'need.created': { id?: string; code?: string; title: Bi; items: NeedItem[]; kecamatanId: string; deadlineDays: number; emergency?: boolean; cause?: EntityRef | null }
+  'need.created': {
+    id?: string; code?: string; title: Bi; items: NeedItem[]; kecamatanId: string; deadlineDays: number; emergency?: boolean; cause?: EntityRef | null
+    by?: CatalogNeed['by']; budget?: number
+  }
   'match.made': { id?: string; needId: string; businessId: string; score: number }
   'order.created': { id?: string; code?: string; needId?: string | null; businessId: string; items: Order['items'] }
+  /** the UMKM confirms (fully or partly): total = Σ qtyConfirmed × unit price */
+  'order.confirmed': { orderId: string; qtyConfirmed: number[]; etaDays: number; note?: Bi }
+  'order.shipped': { orderId: string }
+  'order.paid': { orderId: string; amount: number; method: 'transfer-kasda' }
   /* Rapor Usaha */
   'score.updated': { businessId: string; score: number; delta: number; reason: Bi; factors?: Record<ScoreFactor, number> }
-  'loan.applied': { id?: string; businessId: string; lender: string; amount: number; tenorMonths: number }
-  'loan.approved': { loanId: string }
+  'loan.applied': { id?: string; businessId: string; lender: string; amount: number; tenorMonths: number; consentId?: string; purpose?: Bi; ratePct?: number; installment?: number }
+  'loan.approved': { loanId: string; amount?: number; note?: Bi }
+  'loan.rejected': { loanId: string; reason: Bi }
+  'consent.granted': { id?: string; businessId: string; lender: string; scopes: ConsentScope[]; days: Consent['days'] }
+  'consent.revoked': { consentId: string }
   /* Indeks Ekonomi · Sinyal Pasar */
-  'econ.updated': { kecamatanId: string; month: string; index: number; delta: number; reason: Bi }
+  'econ.updated': { kecamatanId: string; month: string; index: number; delta: number; reason: Bi; kind?: 'banjir' | 'program' | 'panen'; cause?: EntityRef | null }
+  /** a policy briefing exported (audit only) */
+  'econ.briefed': { id?: string; month: string; kecamatanIds: string[]; programIds: string[]; sections: ('peta' | 'sektor' | 'harga' | 'dampak')[]; by: RoleId }
+  /** new shock, or a patch of `damp` by id (C34) */
+  'price.shock': { id?: string; commodityId: string; marketIds: string[]; startAt: Minutes; peakDay: number; pct: number; damp?: number; cause: EntityRef | null }
+  'price.warning': { id?: string; shockId: string; commodityId: string; marketIds: string[]; peakInDays: number; peakPct: number; expected: number; cause: EntityRef }
+  'price.subscribed': { id?: string; businessId: string; commodityIds: string[]; channel: PriceSub['channel']; thresholdPct: PriceSub['thresholdPct'] }
+  'price.alertSent': { id?: string; subId: string; businessId: string; warningId: string; commodityId: string; marketId: string; peakInDays: number; peakPct: number; text: Bi; advice: Bi }
+  'distributor.watched': { id?: string; commodityId: string; distributorIds: string[]; by: RoleId }
+  /* GAMADA Inti */
+  'chat.read': { refs: EntityRef[] }
   'price.updated': { marketId: string; commodityId: string; price: number }
   'price.anomaly': { marketId: string; commodityId: string; price: number; expected: number; deltaPct: number }
   'supply.signal': { id?: string; commodityId: string; kecamatanIds: string[]; direction: SupplySignal['direction']; pct: number; horizonDays: number; reason: Bi; cause?: EntityRef | null }
-  'market.operation': { id?: string; stage: MarketOperation['stage']; commodityId: string; marketIds: string[]; reason?: Bi; effectPct?: number; forRole?: RoleId; cause?: EntityRef | null }
+  'market.operation': {
+    id?: string; stage: MarketOperation['stage']; commodityId: string; marketIds: string[]; reason?: Bi; effectPct?: number; forRole?: RoleId; cause?: EntityRef | null
+    volumeTon?: number; days?: number; sentBy?: RoleId; startedAt?: Minutes
+  }
 }
 
 export type EventType = keyof EventMap

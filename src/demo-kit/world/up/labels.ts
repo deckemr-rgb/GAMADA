@@ -23,6 +23,7 @@ export const ACCOUNT: Record<string, Bi> = {
   'Beban Pajak': { id: 'Beban Pajak', en: 'Tax expense' },
   'Utang PPh 21': { id: 'Utang PPh 21', en: 'PPh 21 payable' },
   'Utang PPh Final': { id: 'Utang PPh Final', en: 'Final income tax payable' },
+  'Utang Pinjaman': { id: 'Utang Pinjaman', en: 'Loan payable' },
 }
 export const PAYMENT: Record<PayMethod, Bi> = { tunai: { id: 'Tunai', en: 'Cash' }, qris: { id: 'QRIS', en: 'QRIS' }, transfer: { id: 'Transfer', en: 'Transfer' } }
 export const PO_STATUS: Record<PurchaseOrder['status'], Bi> = {

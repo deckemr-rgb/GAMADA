@@ -7,13 +7,15 @@ import type { ProductSlug } from '../../../content/products'
 import { DAY_MIN, rows } from '../util'
 import { SHOP_KBLI } from './config'
 import { REQ } from './labels'
-import { itemCost, winScoreOf, type WinScore } from './win-score'
+import { winScoreOf, type WinScore } from './win-score'
 import { procurementOfTender } from './base'
 import { shopStockFor, vendorProfile } from './shop'
 
 export { EMERGENCY_TENDER, SHOP_KBLI } from './config'
 export { WIN_MODEL, itemCost, kbliOf, type WinScore, type WinFactor, type WinFactorKey } from './win-score'
 export { procurementOfTender } from './base'
+// priceAdvice lives in win-score.ts since tahap 4 (Katalog Lokal prices the shop's offer with it without this module)
+export { priceAdvice } from './win-score'
 
 /** factors + probability of a tender for a business (the same model C22 used) */
 export const winScore = (s: WorldState, tenderId: string, bizId: string): WinScore => winScoreOf(s, tenderId, bizId)
@@ -122,20 +124,6 @@ export function requirementsFor(s: WorldState, tenderId: string, bizId: string):
   return out
 }
 
-/** price advice: HPS, own cost, a range from the bid/HPS history, a suggested price (≥ cost + 5 %) and its margin */
-export function priceAdvice(s: WorldState, tenderId: string, bizId: string): { hps: number; cost: number | null; range: [number, number]; suggested: number; margin: number | null; ratio: number; history: number[] } | null {
-  const t = s.tenders.byId[tenderId]
-  if (!t) return null
-  const hps = t.hps ?? t.value
-  const hist = rows(s.bids).filter((b) => b.businessId === bizId && b.hps).map((b) => b.price / b.hps!).sort((a, b) => a - b)
-  const lo = hist[0] ?? 0.9
-  const hi = hist[hist.length - 1] ?? 0.97
-  const med = hist.length ? hist[Math.floor(hist.length / 2)]! : 0.93
-  const cost = itemCost(s, t, bizId)
-  const round = (v: number) => Math.round(v / 10_000) * 10_000
-  const suggested = round(Math.max(hps * med, cost !== null ? cost * 1.05 : 0))
-  return { hps, cost, range: [round(hps * lo), round(hps * hi)], suggested, margin: cost !== null ? Math.round(((suggested - cost) / suggested) * 1000) / 1000 : null, ratio: Math.round((suggested / hps) * 1000) / 1000, history: hist }
-}
 
 /** the business's bids with their tender, bid/HPS ratio; win rate and value won */
 export function bidHistory(s: WorldState, bizId: string): { rows: (Bid & { tender: Tender | undefined; ratio: number | null })[]; winRate: number; valueWon: number } {

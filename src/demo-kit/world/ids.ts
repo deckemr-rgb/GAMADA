@@ -5,7 +5,7 @@
 import type { TableKey } from './types'
 import { pad } from './util'
 
-export const ID_PREFIX: Record<TableKey, string> = {
+export const ID_PREFIX = {
   citizens: 'WG', complaints: 'SW', tickets: 'TK', clusters: 'KL', bookings: 'AN', briefings: 'BR', instructions: 'IN',
   letters: 'SR', meetings: 'RP', actionItems: 'TL', mentions: 'MN', hoaxAlerts: 'HX', alerts: 'PW', rainCells: 'HJ',
   programs: 'PG', messages: 'PSN', facilities: 'FS', harvests: 'PN', supplySignals: 'SPS', gauges: 'TMA', procurements: 'PK', bidders: 'PS', documents: 'DK', verifications: 'VF', businesses: 'UM', outlets: 'OT',
@@ -14,7 +14,10 @@ export const ID_PREFIX: Record<TableKey, string> = {
   tenders: 'TD', bids: 'BD', staff: 'KR', shifts: 'SF', promos: 'PR', cashShifts: 'KS', posNotices: 'NP', bankImports: 'MB', roleplays: 'RL',
   verificationRequests: 'KM', brandAlerts: 'BA', brandAnnouncements: 'BN', catalogNeeds: 'KB', matches: 'MC', orders: 'OR', bizScores: 'RU', loanApps: 'LN',
   econIndex: 'EI', prices: 'HG', markets: 'PSR', marketOps: 'OP', auditLog: 'AU',
-}
+  // seeded by the Usaha Pintar data patch (seedPdLinks), which can load before the Pasar Daerah module
+  consents: 'IZ', priceSubs: 'LG',
+  // the other Pasar Daerah tables (PA, GJ, PDN, DW) are added by world/pd/boot.ts: only PD code creates them
+} as Record<TableKey, string>
 
 export type Seq = Record<string, number>
 

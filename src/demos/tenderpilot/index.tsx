@@ -159,7 +159,12 @@ function Product() {
   useEffect(() => {
     if (!focus) return
     const id = tenderForFocus(world.get(), focus)
-    if (id) {
+    // tahap 4 L10: a Katalog Lokal order closed the tender ⇒ the toast carries the shop's bid id: its tender + Riwayat
+    const bid = world.get().bids.byId[focus.includes(':') ? focus.slice(focus.lastIndexOf(':') + 1) : focus]
+    if (bid && world.get().tenders.byId[bid.tenderId]) {
+      open(bid.tenderId)
+      setTab('riwayat')
+    } else if (id) {
       open(id)
       setTab('detail')
     } else {

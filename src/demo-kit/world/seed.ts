@@ -951,6 +951,8 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     }
   }
 
+  // Pasar Daerah facts + the past market operation: world/pd/seed-pd.ts (the PD module patches the world)
+
   /* ---------------------------------------------------------------- biz scores */
   const rsc = S('scores')
   const bizFactors = (b: Business): Record<ScoreFactor, number> => {
@@ -1149,6 +1151,12 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     prices: tableFrom(rev(prices)),
     markets: tableFrom(rev(markets)),
     marketOps: emptyTable(),
+    consents: emptyTable(),
+    priceSubs: emptyTable(),
+    priceAlerts: emptyTable(),
+    priceShocks: emptyTable(),
+    priceWarnings: emptyTable(),
+    distributorWatches: emptyTable(),
     auditLog: tableFrom(auditLog, byAt),
   }
   // final scores derived from live state (pajak / kyb) so a recompute after load gives the same number

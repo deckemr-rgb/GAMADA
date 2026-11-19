@@ -187,6 +187,8 @@ export function useAiChat(product: ProductSlug, opts: UseAiChatOptions = {}): Us
                 return n
               })
               if (x?.emits.length) optsRef.current.onEmits?.(x.emits, final)
+              // GAMADA Inti "Agen": every finished answer of any product is one trace (ring of 10, this session)
+              void import('./trace').then((m) => m.traceOf(product, role, text, final)).catch(() => {})
               optsRef.current.onDone?.(final)
               break
             }

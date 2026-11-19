@@ -15,7 +15,7 @@ import { preloadLang, useI18n } from '../../lib/i18n'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
-import { WORLD, clock, emit, ensureEcosystem, getSession, loadWorld, naturalEventsOn, onEvent, preloadEcosystem, preloadEcosystemChains, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalBoost, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
+import { WORLD, clock, emit, ensureEcosystem, getSession, loadWorld, naturalEventsOn, onEvent, preloadWorldFor, preloadEcosystemChains, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalBoost, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
 import { switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
 import { ShellContext, type ShellApi, type ToastPlacementSpec } from './context'
@@ -199,8 +199,8 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
       // a first visit generates the world: start that chunk now instead of after pack.min.json arrives
       preloadWorldGenerator()
     }
-    // the ecosystem's world module (Usaha Pintar: seed extension + chains) loads in parallel with the region
-    preloadEcosystem(product.eco)
+    // the landing's world modules (UP data / live, Pasar Daerah: WORLD_MODULES) load in parallel with the region
+    preloadWorldFor(slug, query.role ?? getSession().role, product.eco)
     ;(async () => {
       try {
         const p = await loadRegion(regionId)
@@ -266,7 +266,11 @@ function DemoShellFrame({ product: slug, canvas, children, missions, hotspot, to
   }, [interim])
 
   // shop demos: the natural sales rhythm ×3 during opening hours (Toko Autopilot / Pajak Beres feel busy)
-  useEffect(() => (interim || (slug !== 'toko-autopilot' && slug !== 'pajak-beres') ? undefined : setNaturalBoost('sale', 3)), [slug, interim])
+  // price pages: a natural price tick every world minute (Sinyal Pasar ticker, Indeks Ekonomi Harga)
+  useEffect(
+    () => (interim ? undefined : slug === 'toko-autopilot' || slug === 'pajak-beres' ? setNaturalBoost('sale', 3) : slug === 'sinyal-pasar' || slug === 'indeks-ekonomi' ? setNaturalBoost('price', 5) : undefined),
+    [slug, interim],
+  )
 
   /* ---------------------------------------------------------------- presenter */
   useIdleCursor(session.present)
