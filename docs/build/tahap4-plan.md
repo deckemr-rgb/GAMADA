@@ -854,7 +854,7 @@ paint (`preloadOnIntent` on the list). Fallback if RU > 170: waterfall as a list
 
 ---
 
-## 6 · Owner questions (few; each has a default that the build uses unless the owner objects)
+## 6 · Owner questions: ALL APPROVED by the owner on 2026-11-19 ("oke semua"); use the defaults exactly as written below
 
 **P1 · Katalog Lokal: posisi dan pembayaran.** Katalog Lokal ditampilkan sebagai etalase daerah generik yang
 melengkapi, bukan menggantikan, katalog elektronik nasional; tidak ada nama atau merek portal nyata di mana pun.
