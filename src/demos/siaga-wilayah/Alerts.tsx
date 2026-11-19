@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ROLES } from '../../content/products'
 import { Button, EmptyState, Icon, flashNewRow } from '../../demo-kit/ui'
-import { emit, naturalEventsOn, onEvent, rows, useClock, useSession, useWorld, world, type Alert, type Complaint, type WorldState } from '../../demo-kit/world'
+import { currentRegion, emit, naturalEventsOn, onEvent, rows, useClock, useSession, useWorld, world, type Alert, type Complaint, type RegionalLang, type WorldState } from '../../demo-kit/world'
 import AppLink from '../../components/AppLink'
 import { FC_T0, RIVER_CREST_AT, SHELTER_SHARE, allGauges, canSend, clockText, confirmedIds, dayPart, floodAlerts, floodClusterSize, floodReports, gaugeName, gaugeNow, levelState, phonesReached, productHref, riverLevelAt, shelterOcc, shelters, swRole } from './data'
 import { S, levelKey, nf, useT, type Bi } from './strings'
@@ -403,18 +403,25 @@ function simulateReports() {
   const base = seeds[0] ?? floodReports(s)[0]
   if (!base) return
   const zone = rows(s.citizens).filter((c) => c.desaId === base.desaId && c.id !== s.meta.personas.siti)
-  const TEXT = [
-    { text: 'Banyu kali wis mlebu omah, dhuwure sak dengkul. Nyuwun tulung.', summary: { id: 'Air sungai masuk rumah setinggi lutut, warga minta bantuan.', en: 'River water entered homes knee-deep; residents ask for help.' } },
-    { text: 'Dalan desa kebanjiran, bocah-bocah ora iso sekolah.', summary: { id: 'Jalan desa tergenang, anak-anak tidak bisa ke sekolah.', en: 'Village road flooded; children cannot get to school.' } },
+  const TEXT: { text: RegText; summary: Bi }[] = [
+    {
+      text: { jv: 'Banyu kali wis mlebu omah, dhuwure sak dengkul. Nyuwun tulung.', su: 'Cai walungan geus asup ka imah, jerona satuur. Nyuhunkeun tulung.', min: 'Aia batang alah masuak rumah, tingginyo salutuik. Tolong bantu kami.' },
+      summary: { id: 'Air sungai masuk rumah setinggi lutut, warga minta bantuan.', en: 'River water entered homes knee-deep; residents ask for help.' },
+    },
+    {
+      text: { jv: 'Dalan desa kebanjiran, bocah-bocah ora iso sekolah.', su: 'Jalan lembur kabanjiran, barudak teu bisa sakola.', min: 'Jalan kampuang kabanjiran, anak-anak indak bisa pai ka sakola.' },
+      summary: { id: 'Jalan desa tergenang, anak-anak tidak bisa ke sekolah.', en: 'Village road flooded; children cannot get to school.' },
+    },
   ]
-  TEXT.forEach((x, i) => {
+  TEXT.forEach((x0, i) => {
+    const x = { ...x0, ...regional(x0.text, x0.summary.id) }
     const k = ++simSeq
     const dx = (i ? -1 : 1) * 0.0018 * (1 + (k % 3) * 0.2)
     const dy = (i ? 1 : -1) * 0.0012
     emit(
       'complaint.created',
       {
-        citizenId: zone[(k * 3) % Math.max(1, zone.length)]?.id ?? null, category: 'banjir', channel: 'wa', text: x.text, lang: 'jv', summary: x.summary,
+        citizenId: zone[(k * 3) % Math.max(1, zone.length)]?.id ?? null, category: 'banjir', channel: 'wa', text: x.text, lang: x.lang, summary: x.summary,
         kecamatanId: base.kecamatanId, desaId: base.desaId, coord: [base.coord[0] + dx, base.coord[1] + dy], urgency: 'tinggi',
       },
       'siaga-wilayah',
@@ -428,23 +435,40 @@ function simulateReports() {
  * Sapa Warga. Fires only for minutes the running clock crosses (never for jumps), off in tour / presenter mode, and
  * never twice (the text is unique per slot). Simulated citizen reports.
  */
-const SCRIPT: { at: number; lang: 'jv' | 'id'; text: string; summary: Bi; urgency: 'tinggi' | 'sedang' }[] = [
-  { at: 7 * 60 + 6, lang: 'jv', urgency: 'sedang', text: 'Banyu Bengawan wis munggah tekan dalan desa, durung mlebu omah. Warga wis ngangkati barang.', summary: { id: 'Air Bengawan Solo naik sampai jalan desa, belum masuk rumah; warga mulai mengangkat barang.', en: 'Bengawan Solo water has reached the village road, not yet inside homes; residents are moving belongings up.' } },
-  { at: 7 * 60 + 19, lang: 'id', urgency: 'sedang', text: 'Sawah di pinggir sungai sudah terendam semua, padi yang mau panen tenggelam.', summary: { id: 'Sawah di tepi sungai terendam seluruhnya, padi siap panen tenggelam.', en: 'Riverside paddies fully submerged, rice ready for harvest under water.' } },
-  { at: 7 * 60 + 33, lang: 'id', urgency: 'tinggi', text: 'Mohon perahu karet, ada lansia di RT 03 yang belum bisa keluar rumah.', summary: { id: 'Minta perahu karet: lansia di RT 03 belum bisa keluar rumah.', en: 'Rubber boat requested: an elderly resident in RT 03 cannot leave the house.' } },
-  { at: 7 * 60 + 52, lang: 'id', urgency: 'sedang', text: 'Air masuk halaman SD, murid dipulangkan lebih awal oleh guru.', summary: { id: 'Air masuk halaman SD, murid dipulangkan lebih awal.', en: 'Water in the primary school yard; pupils sent home early.' } },
-  { at: 8 * 60 + 14, lang: 'jv', urgency: 'tinggi', text: 'Kreteg desa wis kelem, montor ora iso liwat. Dalan alternatif lewat tanggul.', summary: { id: 'Jembatan desa terendam, motor tidak bisa lewat; jalur alternatif lewat tanggul.', en: 'Village bridge submerged, motorbikes cannot pass; detour along the embankment.' } },
-  { at: 8 * 60 + 41, lang: 'jv', urgency: 'tinggi', text: 'Banyu wis sak dengkul neng njero omah, listrik dipateni dhewe.', summary: { id: 'Air selutut di dalam rumah, warga mematikan listrik sendiri.', en: 'Knee-deep water inside homes; residents switched off the power themselves.' } },
-  { at: 9 * 60 + 20, lang: 'id', urgency: 'sedang', text: 'Posko balai desa mulai penuh, butuh tikar, selimut dan air bersih.', summary: { id: 'Posko balai desa mulai penuh, butuh tikar, selimut, dan air bersih.', en: 'The village-hall shelter is filling up; mats, blankets and clean water needed.' } },
-  { at: 10 * 60 + 5, lang: 'id', urgency: 'tinggi', text: 'Air sudah sepinggang di jalan utama, warga mengungsi ke tanggul.', summary: { id: 'Air sepinggang di jalan utama, warga mengungsi ke tanggul.', en: 'Waist-deep water on the main road; residents moving to the embankment.' } },
-  { at: 11 * 60 + 30, lang: 'jv', urgency: 'tinggi', text: 'Pak RT njaluk bantuan sega bungkus kanggo warga sing ngungsi neng langgar.', summary: { id: 'Ketua RT minta nasi bungkus untuk warga yang mengungsi di musala.', en: 'The RT head asks for meal packs for residents sheltering at the prayer house.' } },
-  { at: 15 * 60 + 30, lang: 'id', urgency: 'sedang', text: 'Air mulai surut dari halaman, di jalan masih selutut.', summary: { id: 'Air mulai surut dari halaman, di jalan masih selutut.', en: 'Water receding from yards, still knee-deep on the road.' } },
-  { at: 16 * 60 + 40, lang: 'id', urgency: 'sedang', text: 'Air sudah keluar dari rumah, warga mulai membersihkan lumpur. Butuh kaporit.', summary: { id: 'Air sudah keluar dari rumah, warga membersihkan lumpur; butuh kaporit.', en: 'Water has left the houses; residents clearing mud, chlorine needed.' } },
+/** a report line in the region's own language (Basa Jawa / Sunda / Minang samples, marked "contoh" in the pack sense) */
+type RegText = Partial<Record<'jv' | 'su' | 'min', string>>
+/** the line in the running region's first regional language; a region without one gets the Indonesian line */
+function regional(t: RegText | string, idText: string): { text: string; lang: RegionalLang | 'id' } {
+  if (typeof t === 'string') return { text: t, lang: 'id' }
+  const p = currentRegion()
+  const code = p?.languages.regional[0]
+  const river = p?.rivers.find((r) => r.id === p.scenario.floodRiverId)?.name ?? 'kali'
+  const x = code && code in t ? t[code as keyof RegText] : undefined
+  return x ? { text: x.replace('{river}', river), lang: code as RegionalLang } : { text: idText.replace('{river}', river), lang: 'id' }
+}
+const SCRIPT: { at: number; text: RegText | string; summary: Bi; urgency: 'tinggi' | 'sedang' }[] = [
+  {
+    at: 7 * 60 + 6, urgency: 'sedang',
+    text: { jv: 'Banyu {river} wis munggah tekan dalan desa, durung mlebu omah. Warga wis ngangkati barang.', su: 'Cai {river} geus naek nepi ka jalan lembur, can asup ka imah. Warga geus ngangkatan barang.', min: 'Aia {river} alah naiak sampai ka jalan kampuang, alun masuak rumah. Warga alah mangangkek barang.' },
+    summary: { id: 'Air {river} naik sampai jalan desa, belum masuk rumah; warga mulai mengangkat barang.', en: '{river} water has reached the village road, not yet inside homes; residents are moving belongings up.' },
+  },
+  { at: 7 * 60 + 19, urgency: 'sedang', text: 'Sawah di pinggir sungai sudah terendam semua, padi yang mau panen tenggelam.', summary: { id: 'Sawah di tepi sungai terendam seluruhnya, padi siap panen tenggelam.', en: 'Riverside paddies fully submerged, rice ready for harvest under water.' } },
+  { at: 7 * 60 + 33, urgency: 'tinggi', text: 'Mohon perahu karet, ada lansia di RT 03 yang belum bisa keluar rumah.', summary: { id: 'Minta perahu karet: lansia di RT 03 belum bisa keluar rumah.', en: 'Rubber boat requested: an elderly resident in RT 03 cannot leave the house.' } },
+  { at: 7 * 60 + 52, urgency: 'sedang', text: 'Air masuk halaman SD, murid dipulangkan lebih awal oleh guru.', summary: { id: 'Air masuk halaman SD, murid dipulangkan lebih awal.', en: 'Water in the primary school yard; pupils sent home early.' } },
+  { at: 8 * 60 + 14, urgency: 'tinggi', text: { jv: 'Kreteg desa wis kelem, montor ora iso liwat. Dalan alternatif lewat tanggul.', su: 'Sasak lembur geus kakeueum, motor teu bisa liwat. Jalan alternatif ngaliwatan tanggul.', min: 'Jambatan kampuang alah tabanam, onda indak bisa lewat. Jalan lain lewat tanggua.' }, summary: { id: 'Jembatan desa terendam, motor tidak bisa lewat; jalur alternatif lewat tanggul.', en: 'Village bridge submerged, motorbikes cannot pass; detour along the embankment.' } },
+  { at: 8 * 60 + 41, urgency: 'tinggi', text: { jv: 'Banyu wis sak dengkul neng njero omah, listrik dipateni dhewe.', su: 'Cai geus satuur di jero imah, listrik dipareuman ku sorangan.', min: 'Aia alah salutuik di dalam rumah, listrik dimatian surang.' }, summary: { id: 'Air selutut di dalam rumah, warga mematikan listrik sendiri.', en: 'Knee-deep water inside homes; residents switched off the power themselves.' } },
+  { at: 9 * 60 + 20, urgency: 'sedang', text: 'Posko balai desa mulai penuh, butuh tikar, selimut dan air bersih.', summary: { id: 'Posko balai desa mulai penuh, butuh tikar, selimut, dan air bersih.', en: 'The village-hall shelter is filling up; mats, blankets and clean water needed.' } },
+  { at: 10 * 60 + 5, urgency: 'tinggi', text: 'Air sudah sepinggang di jalan utama, warga mengungsi ke tanggul.', summary: { id: 'Air sepinggang di jalan utama, warga mengungsi ke tanggul.', en: 'Waist-deep water on the main road; residents moving to the embankment.' } },
+  { at: 11 * 60 + 30, urgency: 'tinggi', text: { jv: 'Pak RT njaluk bantuan sega bungkus kanggo warga sing ngungsi neng langgar.', su: 'Pa RT menta bantuan sangu bungkus keur warga nu ngungsi di tajug.', min: 'Pak RT mintak bantuan nasi bungkuih untuak warga nan mangungsi di surau.' }, summary: { id: 'Ketua RT minta nasi bungkus untuk warga yang mengungsi di musala.', en: 'The RT head asks for meal packs for residents sheltering at the prayer house.' } },
+  { at: 15 * 60 + 30, urgency: 'sedang', text: 'Air mulai surut dari halaman, di jalan masih selutut.', summary: { id: 'Air mulai surut dari halaman, di jalan masih selutut.', en: 'Water receding from yards, still knee-deep on the road.' } },
+  { at: 16 * 60 + 40, urgency: 'sedang', text: 'Air sudah keluar dari rumah, warga mulai membersihkan lumpur. Butuh kaporit.', summary: { id: 'Air sudah keluar dari rumah, warga membersihkan lumpur; butuh kaporit.', en: 'Water has left the houses; residents clearing mud, chlorine needed.' } },
 ]
 export function scriptedReport(minute: number): void {
   const i = SCRIPT.findIndex((x) => x.at === minute)
   if (i < 0 || !naturalEventsOn() || world.status() !== 'ready') return
-  const x = SCRIPT[i]!
+  const x0 = SCRIPT[i]!
+  const river = currentRegion()?.rivers.find((r) => r.id === currentRegion()?.scenario.floodRiverId)?.name ?? ''
+  const x = { ...x0, ...regional(x0.text, x0.summary.id), summary: { id: x0.summary.id.replace('{river}', river || 'sungai'), en: x0.summary.en.replace('{river}', river || 'River') } }
   const s = world.get()
   if (rows(s.complaints).some((c) => c.text === x.text)) return
   const kecIds = s.region.floodKecamatanIds.length ? s.region.floodKecamatanIds : s.region.kecamatan.slice(0, 2).map((k) => k.id)

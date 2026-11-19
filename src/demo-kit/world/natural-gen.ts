@@ -5,7 +5,7 @@
 import type { ProductSlug } from '../../content/products'
 import type { AnyFollowUp, ComplaintCategory, EventType, FollowUp, Product, WorldState } from './types'
 import { COMPLAINT_TEXT, COMPLAINT_WEIGHTS, MEDIA_OUTLETS, MENTION_TEXT, SOCIAL_HANDLES, fillComplaint, fromComplaintTemplate, mentionText } from './texts'
-import { HOAX_OFFSETS, hoaxPost } from './scenario-texts'
+import { HOAX_OFFSETS, hoaxDam, hoaxPost } from './scenario-texts'
 import { hashString, makeRng, type Rng } from './prng'
 import { NATURAL, naturalBoost } from './natural'
 import { DAY_MIN, HOUR_RHYTHM, WORLD, clamp, offsetKm, round, rows } from './util'
@@ -116,7 +116,7 @@ export function naturalEventsAt(s: WorldState, minute: number): AnyFollowUp[] {
     const i = ours
     if (posts.length === ours && ours < due && !rows(s.hoaxAlerts).some((h) => h.rumor === rumor && h.status === 'diklarifikasi')) {
       const k = s.region.kecamatan.find((x) => x.id === s.region.floodKecamatanIds[0])?.name ?? s.region.shortName
-      out.push(fu('mention.created', hoaxPost(i, WORLD.hoaxAt, s.meta.facts.hoax.damName || 'Bendungan', k, rumor), 'radar-isu'))
+      out.push(fu('mention.created', hoaxPost(i, WORLD.hoaxAt, hoaxDam(s.meta.facts.hoax), k, rumor), 'radar-isu'))
     }
   }
 

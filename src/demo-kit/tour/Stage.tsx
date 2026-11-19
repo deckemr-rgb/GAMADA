@@ -5,7 +5,7 @@
  * stage that lead to a sandbox (toasts, "Buka di …") become "Ambil alih" (they keep world=tour and get from=tur-<n>).
  * A visitor's pointerdown / keydown in the stage pauses the tour.
  */
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { PRODUCT_BY_SLUG, type ProductSlug, type RoleId } from '../../content/products'
 import { demoComponent } from '../../demos/registry'
@@ -144,9 +144,11 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
   }, [go])
 
   const Canvas = active ? demoComponent(active.slug) : null
-  return (
-    <div ref={root} className="dk-tour-stage" aria-label={TOUR_STRINGS[lang].stage} role="region" data-stage={active?.slug ?? ''}>
-      {active && Canvas ? (
+  // INP (Tahap 7): the product subtree is memoised on the stage spec, so the tour's own store updates (curtain, step,
+  // caption, fills) re-render the frame only, never the whole product
+  const shell = useMemo(
+    () =>
+      active && Canvas ? (
         <DemoShell
           key={active.key}
           product={active.slug}
@@ -161,9 +163,12 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
             </Suspense>
           }
         />
-      ) : (
-        <Poster lang={lang} />
-      )}
+      ) : null,
+    [active, Canvas, phone, lang],
+  )
+  return (
+    <div ref={root} className="dk-tour-stage" aria-label={TOUR_STRINGS[lang].stage} role="region" data-stage={active?.slug ?? ''}>
+      {shell ?? <Poster lang={lang} />}
       <Spotlight />
     </div>
   )

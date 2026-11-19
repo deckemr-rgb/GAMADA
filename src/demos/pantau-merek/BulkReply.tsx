@@ -9,7 +9,7 @@ import { Button, Drawer, motionMode } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import { emit, useSession, world, type Bi } from '../../demo-kit/world'
 import { mentionPlace, replyInputs, repliesPayload } from '../../demo-kit/world/usaha-pintar'
-import { SLUG, reviewSelection, shopOf } from './model'
+import { SLUG, afterPaint, reviewSelection, shopOf } from './model'
 import { draftReply, signature, type ReplyIn, type Tone } from './replies'
 import { fill, useStr } from './strings'
 
@@ -124,10 +124,14 @@ export default function BulkReply({ open, ids, alertId, onClose }: { open: boole
     if (sent.current || !ready) return
     sent.current = true
     const mentionIds = ms.map((m) => m!.id)
-    emit('brand.replied', repliesPayload(mentionIds, tone, drafts, role, alertId ?? undefined), SLUG)
-    reviewSelection.set([])
+    const payload = repliesPayload(mentionIds, tone, drafts, role, alertId ?? undefined)
     onClose()
-    shell.toast({ title: fill(L.sent, { n: mentionIds.length }), body: L.sentBody, tone: 'accent', icon: 'check' })
+    // the sheet closes in this frame; the one heavy emit (stream, reputation chart, KPIs) follows the paint (INP)
+    afterPaint(() => {
+      emit('brand.replied', payload, SLUG)
+      reviewSelection.set([])
+      shell.toast({ title: fill(L.sent, { n: mentionIds.length }), body: L.sentBody, tone: 'accent', icon: 'check' })
+    })
   }
 
   return (

@@ -535,13 +535,21 @@ export function prefetchBurst(): void {
   void loadTexts().catch(() => undefined)
 }
 export async function burstPosts(s: WorldState, start: number): Promise<EventMap['mention.created'][]> {
-  const { HOAX_OFFSETS, HOAX_SCENARIO, hoaxPost } = await loadTexts()
+  const { HOAX_OFFSETS, HOAX_SCENARIO, hoaxDam, hoaxPost } = await loadTexts()
   const rumor = s.meta.facts.hoax.rumor || HOAX_SCENARIO.rumor
   if (rows(s.mentions).some((m) => m.rumor === rumor)) return []
-  const dam = s.meta.facts.hoax.damName || 'Bendungan'
+  // ID + EN dam name (a pack without a dam: the simulated sluice gate "Pintu air <river>" / "<river> sluice gate")
+  const dam = hoaxDam(s.meta.facts.hoax)
   const kid = s.region.floodKecamatanIds[0] ?? s.region.kecamatan[0]?.id ?? ''
   const k = s.region.kecamatan.find((x) => x.id === kid)?.name ?? kid
   return HOAX_OFFSETS.map((_, i) => hoaxPost(i, start, dam, k, rumor))
+}
+
+/** the hoax's dam name in the UI language: same rule as world/scenario-texts hoaxDam (kept here so the page does not
+ *  load that chunk): EN uses `damNameEn` ("Cikapundung sluice gate"), else the Indonesian name */
+export function damNameOf(h: { damName: string; damNameEn?: string }, lang: 'id' | 'en', fallback = ''): string {
+  if (lang === 'en') return h.damNameEn || h.damName || fallback || 'the dam'
+  return h.damName || fallback || 'Bendungan'
 }
 
 /* ------------------------------------------------------------------ INP helpers */

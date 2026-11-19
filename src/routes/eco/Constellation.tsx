@@ -11,7 +11,7 @@
  *  - text equivalent: a visually hidden list of the products per ecosystem.
  * ConstellationGlyph: the same sky as a small static picture with one cluster highlighted (/ekosistem/:eco hero).
  */
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react'
+import { startTransition, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { gsap } from 'gsap'
 import { ECOSYSTEMS, PRODUCTS, PRODUCT_BY_SLUG, type EcoOrInti, type ProductSlug } from '../../content/products'
@@ -200,6 +200,8 @@ export default function Constellation({ P }: { P: EcoPagesCopy['constellation'] 
   const svgRef = useRef<SVGSVGElement>(null)
   const pointerType = useRef('')
   const leaving = useRef(false)
+  /** was the star already showing its card when this press began (a transition may still be pending at click) */
+  const wasActive = useRef(false)
   const [active, setActive] = useState<ProductSlug | null>(null)
 
   const hot = useMemo(() => {
@@ -267,21 +269,28 @@ export default function Constellation({ P }: { P: EcoPagesCopy['constellation'] 
     const [x, y] = L.stars[slug]
     const star = root.querySelector(`.cst-star[data-slug="${slug}"]`)
     const d = C.zoomMs / 1000
-    gsap.to(star, { scale: C.zoomScale, svgOrigin: `${x} ${y}`, duration: d, ease: 'power2.in' })
-    gsap.to(root.querySelectorAll('.cst-lines, .cst-hull, .cst-star:not([data-slug="' + slug + '"]), .cst-card, .cst-label'), {
-      opacity: 0,
-      duration: d,
-      ease: 'power1.in',
-      onComplete: () => {
-        void goTo(to, navigate, location.pathname)
-      },
-    })
+    // INP (Tahap 7): the zoom tweens start after the click's own paint (their first frame is the costly one)
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        gsap.to(star, { scale: C.zoomScale, svgOrigin: `${x} ${y}`, duration: d, ease: 'power2.in' })
+        gsap.to(root.querySelectorAll('.cst-lines, .cst-hull, .cst-star:not([data-slug="' + slug + '"]), .cst-card, .cst-label'), {
+          opacity: 0,
+          duration: d,
+          ease: 'power1.in',
+          onComplete: () => {
+            void goTo(to, navigate, location.pathname)
+          },
+        })
+      }, 0),
+    )
   }
+  /** the card + highlighted links render as a transition, so a tap or focus paints at once */
+  const show = (slug: ProductSlug | null) => startTransition(() => setActive(slug))
 
   const onStar = (slug: ProductSlug) => {
     // touch: the first tap only shows the card
-    if (pointerType.current === 'touch' && active !== slug) {
-      setActive(slug)
+    if (pointerType.current === 'touch' && !wasActive.current) {
+      show(slug)
       return
     }
     open(slug)
@@ -331,15 +340,18 @@ export default function Constellation({ P }: { P: EcoPagesCopy['constellation'] 
               aria-pressed={active === s}
               aria-label={fill(P.starLabel, { name: p.name, eco: ECOSYSTEMS[p.eco].name })}
               style={{ left: pct(x, L.w), top: pct(y, L.h) }}
-              onPointerDown={(e) => (pointerType.current = e.pointerType)}
+              onPointerDown={(e) => {
+                pointerType.current = e.pointerType
+                wasActive.current = active === s
+              }}
               onPointerEnter={(e) => {
                 if (e.pointerType === 'mouse') {
-                  setActive(s)
+                  show(s)
                   warmProduct(s)
                 }
               }}
               onFocus={() => {
-                setActive(s)
+                show(s)
                 warmProduct(s)
                 pointerType.current = ''
               }}

@@ -16,7 +16,7 @@ import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
 import { WORLD, clock, emit, ensureEcosystem, getSession, loadWorld, naturalEventsOn, onEvent, preloadWorldFor, preloadEcosystemChains, preloadWorldEngine, preloadWorldGenerator, resetWorld, setNaturalBoost, setNaturalEvents, setSession, settled, subscribeSession, useSession, world } from '../world'
-import { switchLang, useDemoStrings } from '../i18n'
+import { regionLabel, switchLang, useDemoStrings } from '../i18n'
 import { SHELL } from './constants'
 import { ShellContext, type ShellApi, type ToastPlacementSpec } from './context'
 import { useAiHealth } from './controls'
@@ -190,10 +190,26 @@ function DemoShellFrame({ product: slug, canvas, children, missions: missionsPro
   const [pack, setPack] = useState<RegionPack | null>(() => (sameWorld() ? world.pack() : null))
   const [attempt, setAttempt] = useState(0)
   const appliedT = useRef(false)
+  /** the region the stage last booted with: a different one later is a switch from the picker (spec §7) */
+  const bootedRegion = useRef<string | null>(null)
 
   useEffect(() => {
     let alive = true
     const { regionId, seed, scope } = session
+    // Tahap 7 (boot race): the first run still sees the render-time session (default region) while the layout effect
+    // above already set ?region / ?seed / ?world; that render re-runs this effect with the right values. Loading the
+    // stale region here fetched two packs and could install the wrong world after the right one.
+    const live = getSession()
+    if (!interim && (live.regionId !== regionId || live.seed !== seed || live.scope !== scope)) return
+    // Tahap 7: a region switch (picker, no reload) starts the new region fresh from its seed at the morning clock;
+    // a focus entity of the old region means nothing there
+    const switched = bootedRegion.current !== null && bootedRegion.current !== regionId
+    bootedRegion.current = regionId
+    if (switched) {
+      appliedT.current = true
+      setFocus(null)
+      replaceQuery({ focus: null })
+    }
     const applyT = () => {
       if (appliedT.current) return
       appliedT.current = true
@@ -209,7 +225,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions: missionsPro
       setBoot('ready')
       return
     }
-    const reuse = sameWorld()
+    const reuse = sameWorld() && !switched
     if (!reuse) {
       setBoot('loading')
       // a first visit generates the world: start that chunk now instead of after pack.min.json arrives
@@ -220,11 +236,13 @@ function DemoShellFrame({ product: slug, canvas, children, missions: missionsPro
     ;(async () => {
       try {
         const p = await loadRegion(regionId)
-        if (!reuse) await loadWorld(p, seed, { scope })
+        if (!alive) return
+        if (!reuse || switched) await loadWorld(p, seed, { scope, fresh: switched })
         if (!alive) return
         applyT()
         setPack(p)
         setBoot('ready')
+        if (switched) push({ id: 'region', tone: 'accent', icon: 'flag', title: `${t.region}: ${regionLabel(p, getSession().lang).name}` })
       } catch {
         if (alive) setBoot('error')
       }

@@ -10,7 +10,7 @@
  * pumps arrive (13.30) every open PUPR pump task of the day closes (meeting follow-up, the memo's task, a letter task).
  */
 import { DAY_MIN, emit, world, type ActionItem, type Bi, type WorldState } from '../../demo-kit/world'
-import { SCRIPT, existingAction, sampleMeeting } from './model'
+import { SCRIPT, existingAction, headTitle, sampleMeeting } from './model'
 import { getTrail, setTrail } from './trail'
 
 type Status = ActionItem['status']
@@ -142,7 +142,7 @@ function settlePumpMemo(at: number): void {
             id: 'Ditindaklanjuti lewat instruksi Kepala Daerah pukul 09.15: pastikan 4 pompa pinjam pakai tiba di lokasi genangan sebelum pukul 14.00.',
             en: 'Handled through the Regional Head’s 09:15 instruction: make sure the 4 loaned pumps reach the flooded area before 14:00.',
           },
-          by: 'Bupati',
+          by: headTitle().id,
         },
         'naskah-pintar',
         { at },

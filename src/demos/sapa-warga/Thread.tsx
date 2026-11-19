@@ -10,6 +10,7 @@ import type { ChatMessage, Structured } from '../../demo-kit/ai/chat'
 import { CATEGORY_LABEL, emit, hhmm, shallowEqual, useWorld, type Bi, type CitizenMessage, type ComplaintCategory, type TicketStatus } from '../../demo-kit/world'
 import { Icon } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
+import { languageLabel } from '../../demo-kit/i18n'
 import { preloadDemo } from '../registry'
 import { FakeQr, LocationTile, Photo, StaticWave } from './photos'
 import { SLUG, looksEnglish, slaText, slashBreak, type Created, type PhotoId } from './model'
@@ -289,7 +290,8 @@ function AssistantBubble({ m, isLast, created, actions, skipChips }: { m: ChatMe
 function voiceLabel(v: NonNullable<MsgMeta['voice']>, lang: Lang, tpl: string): string {
   const id = /^id\b|^id-/i.test(v.lang)
   if (id) return lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian'
-  const from = /^jv/i.test(v.lang) || /jawa|javanese/i.test(v.label) ? (lang === 'id' ? 'Basa Jawa' : 'Javanese') : lang === 'id' ? 'Bahasa daerah' : 'Regional language'
+  // the BCP-47 prefix names the language (jv-ID, su-ID, min-ID); an unknown one reads "Bahasa daerah"
+  const from = languageLabel(v.lang.split('-')[0]?.toLowerCase() ?? '', lang)
   return fill(tpl, { from })
 }
 

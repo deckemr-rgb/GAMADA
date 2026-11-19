@@ -640,6 +640,9 @@ const pack = {
     floodRiverId: 'bengawan-solo',
     damLandmarkId: landmarks.some((l) => l.id === 'bendungan-pacal') ? 'bendungan-pacal' : undefined,
     floodKecamatanIds,
+    // Tahap 7 (region/anchor.ts): the flood meeting + seeping embankment of the Bojonegoro story (Kalitidu, Ngujo)
+    meetingKecamatanId: kecPack.some((k) => k.id === 'kalitidu') ? 'kalitidu' : undefined,
+    embankmentDesaId: (desaByKec.kalitidu ?? []).some((d) => d.id === 'kalitidu-ngujo') ? 'kalitidu-ngujo' : undefined,
     shopMarketId: markets.find((m) => m.id === 'pasar-kota-bojonegoro')?.id ?? markets.find((m) => m.kecamatanId === 'bojonegoro')?.id ?? markets[0].id,
   },
   sources: [

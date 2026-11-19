@@ -48,27 +48,31 @@ function useRoleChipPreload() {
 function useFocusRoute(ready: boolean) {
   const { focus, clearFocus, toast } = useShell()
   const { lang } = useI18n()
-  const done = useRef<string | null>(null)
+  const done = useRef<{ focus: string; role: 'pemilik-toko' | 'disperindag' | null } | null>(null)
   useEffect(() => {
     if (!focus || !ready) return
-    // once per arrival (StrictMode re-runs effects; clearFocus lands on the next render)
-    if (done.current === focus) return
-    done.current = focus
+    // once per arrival (StrictMode re-runs effects; clearFocus lands on the next render). The re-run comes after the
+    // shell's [slug] layout effect has re-applied the default role, so the routed role is applied again (C30 on dev).
+    if (done.current?.focus === focus) {
+      if (done.current.role) setSession({ role: done.current.role })
+      return
+    }
     const r = routeFocus(world.get(), focus)
     const n = ui.get().n + 1
+    const role = !r ? null : r.kind === 'alert' ? 'pemilik-toko' : 'disperindag'
+    done.current = { focus, role }
     if (!r) {
       toast({ title: NF[lang].t, body: NF[lang].b, tone: 'warn', icon: 'alert' })
       ui.set({ tab: 'ringkasan', detail: null, n })
     } else if (r.kind === 'alert') {
       ui.set({ alert: r.id, n })
-      setSession({ role: 'pemilik-toko' })
     } else {
       if (r.kind === 'price') ui.set({ tab: 'ringkasan', detail: r.id, panel: 'none', n })
       else if (r.kind === 'watch') ui.set({ tab: 'ringkasan', detail: r.priceId, panel: 'dist', n })
       else if (r.kind === 'op') ui.set({ tab: 'operasi', op: r.id, detail: null, n })
       else ui.set({ tab: 'ringkasan', warn: r.id, detail: null, n })
-      setSession({ role: 'disperindag' })
     }
+    if (role) setSession({ role })
     clearFocus()
   }, [focus, ready, clearFocus, toast, lang])
 }

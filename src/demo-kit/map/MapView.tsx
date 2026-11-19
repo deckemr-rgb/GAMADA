@@ -107,6 +107,14 @@ const RegionSilhouette = memo(function RegionSilhouette({ geo, choro }: { geo: R
   )
 })
 
+/**
+ * Tahap 7 (spec §7): the camera of the map that was just unmounted. A region switch remounts the stage (DemoShell),
+ * so the next MapView of ANOTHER region mounted within HANDOFF_MS starts at this camera and flies to its own bbox
+ * (ENGINE.flyDur 1.2 s; a jump under reduced motion). Same region or later: no fly.
+ */
+let handoff: { regionId: string; center: LngLat; zoom: number; at: number } | null = null
+const HANDOFF_MS = 8000
+
 interface FpsWindow {
   samples: number[]
   avg: number
@@ -123,6 +131,8 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
   const spriteRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<MapEngine | null>(null)
   const pendingHour = useRef<number | null>(null)
+  /** this map's first region flies in from the previous map's camera (region switch) */
+  const flyIn = useRef(false)
   const [status, setStatus] = useState<Status>('loading')
   const [notice, setNotice] = useState<'noTiles' | null>(null)
   // basemap / imagery tiles still arriving after a pan, zoom or layer switch (shown after a short delay, so a fast
@@ -239,9 +249,14 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
     let alive = true
     let engine: MapEngine | null = null
     const coarse = window.matchMedia('(pointer: coarse)').matches
-    void Promise.all([import('./engine'), import('maplibre-gl/dist/maplibre-gl.css')])
-      .then(async ([mod]) => {
+    // the pack is already cached by the shell: its centre is the first camera (no tiles fetched for another place)
+    void Promise.all([import('./engine'), import('maplibre-gl/dist/maplibre-gl.css'), loadRegion(regionIdRef.current).catch(() => null)])
+      .then(async ([mod, , p]) => {
         if (!alive || !canvasRef.current || !labelsRef.current || !tipRef.current) return
+        const h = handoff && handoff.regionId !== regionIdRef.current && Date.now() - handoff.at < HANDOFF_MS ? handoff : null
+        handoff = null
+        flyIn.current = !!h
+        const start = h ? { center: h.center, zoom: h.zoom } : p ? { center: p.center as LngLat, zoom: p.zoom } : undefined
         const iconSvgs: Record<string, string> = {}
         spriteRef.current?.querySelectorAll<SVGSVGElement>('svg[data-icon]').forEach((s) => (iconSvgs[s.dataset.icon!] = s.outerHTML.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')))
         engine = await mod.MapEngine.create({
@@ -254,6 +269,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
           forceFallback,
           debugFps,
           iconSvgs,
+          start,
           callbacks: {
             onSelect: (id) => cb.current.onSelect?.(id),
             onMarker: (l, id) => cb.current.onMarker?.(l, id),
@@ -286,6 +302,12 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
       })
     return () => {
       alive = false
+      // hand the camera to the next map (a region switch remounts the stage, see `handoff`)
+      const from = regionLoaded.current
+      if (engine && from) {
+        const c = engine.map.getCenter()
+        handoff = { regionId: from, center: [c.lng, c.lat], zoom: engine.map.getZoom(), at: Date.now() }
+      }
       engine?.destroy()
       engineRef.current = null
     }
@@ -305,7 +327,7 @@ export function MapView(props: MapViewProps & { ref?: Ref<MapViewHandle> }) {
         if (!alive) return
         setPack(p)
         const first = regionLoaded.current === null
-        await engine.setRegion(p, g, !first)
+        await engine.setRegion(p, g, !first, first && flyIn.current)
         if (!alive) return
         if (first && initialView) engine.flyTo(initialView.center, initialView.zoom)
         regionLoaded.current = regionId

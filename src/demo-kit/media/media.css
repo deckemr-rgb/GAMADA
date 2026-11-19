@@ -40,7 +40,12 @@
   border-radius: 6px;
   touch-action: none;
 }
-.dk-wave.is-seek:focus-visible {
+.dk-wave-seek {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+}
+.dk-wave-seek:focus-visible {
   outline: 2px solid var(--dk-focus-c);
   outline-offset: 3px;
 }
@@ -345,4 +350,12 @@
 .dk-vr-text small {
   font: var(--dk-t12) var(--dk-font);
   color: var(--dk-muted);
+}
+
+/* Tahap 7 (item 16): markers at (almost) the same moment stack upwards in lanes instead of covering each other */
+.dk-wave-mk[data-lane='1'] {
+  top: -22px;
+}
+.dk-wave-mk[data-lane='2'] {
+  top: -34px;
 }

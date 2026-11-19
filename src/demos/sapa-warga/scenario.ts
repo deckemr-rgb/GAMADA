@@ -1,18 +1,25 @@
 /**
  * demos/sapa-warga/scenario.ts — the Simulasi scenario of Sapa Warga (spec §9.2, §11 P1): 32 intents with examples
- * in Bahasa Indonesia, English and Basa Jawa, answers built from the live world summary (`ctx.world` = SwContext from
+ * in Bahasa Indonesia, English and the regional languages (Basa Jawa, Basa Sunda, Baso Minang), answers built from the live world summary (`ctx.world` = SwContext from
  * model.buildContext): service requirements from the region pack, today's complaint counts, the citizen's own tickets,
  * MPP queue load, active warnings. A report intent returns a `ticket` structured result (the phone creates the
- * ticket when that card arrives); a citizen writing Basa Jawa gets a Basa Jawa answer with a translation.
+ * ticket when that card arrives); a citizen writing Basa Jawa / Sunda / Minang gets an answer in that language with a
+ * translation (regional lines are samples, "contoh").
  *
  * Loaded lazily (input focus / first send) and registered once: registerScenario(sapaWargaScenario).
  */
 import type { Intent, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import { CATEGORY_LABEL, type Bi, type ComplaintCategory } from '../../demo-kit/world'
-import { SW, isEmergency, replyLang, slaText, type SwContext, type SwService } from './model'
+import { SW, classifyReport, isEmergency, replyLang, slaText, type SwContext, type SwService } from './model'
 
 type Ctx = SimContext<SwContext>
-type RL = 'id' | 'en' | 'jv'
+type Reg = 'jv' | 'su' | 'min'
+type RL = 'id' | 'en' | Reg
+/** a reply line per regional language (a plain string = Basa Jawa only) */
+type RegText = string | Partial<Record<Reg, string>>
+const isReg = (rl: RL): rl is Reg => rl === 'jv' || rl === 'su' || rl === 'min'
+/** the UI-language half of a reply language (a regional reply carries its translation in the UI language) */
+const uiOf = (ctx: Ctx, rl: RL): 'id' | 'en' => (isReg(rl) ? ctx.lang : rl)
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -36,21 +43,24 @@ function w(ctx: Ctx): SwContext {
   }
 }
 const rlOf = (ctx: Ctx): RL => replyLang(ctx.text, ctx.lang)
-/** answer object: Basa Jawa text with a translation in the UI language, or the plain answer */
-function say(ctx: Ctx, ans: Bi, jv?: string): Pick<SimResponse, 'text' | 'translation'> {
+/** answer object: the regional line with a translation in the UI language, or the plain answer */
+function say(ctx: Ctx, ans: Bi, reg?: RegText): Pick<SimResponse, 'text' | 'translation'> {
   const rl = rlOf(ctx)
-  if (rl === 'jv' && jv) return { text: jv, translation: ans[ctx.lang] }
-  return { text: rl === 'jv' ? ans[ctx.lang] : ans[rl] }
+  const line = !isReg(rl) || reg === undefined ? undefined : typeof reg === 'string' ? (rl === 'jv' ? reg : undefined) : reg[rl]
+  if (line) return { text: line, translation: ans[ctx.lang] }
+  return { text: ans[uiOf(ctx, rl)] }
 }
 const T = (ctx: Ctx, v: Bi): string => {
   const rl = rlOf(ctx)
-  return rl === 'jv' ? v[ctx.lang] : v[rl]
+  return v[uiOf(ctx, rl)]
 }
 const honor = (x: SwContext, lang: RL): string => {
   const p = x.persona
   if (!p) return ''
   const first = p.name.split(' ')[0] ?? p.name
   if (lang === 'jv') return p.gender === 'P' ? ` Bu ${first}` : p.age >= 50 ? ` Pak ${first}` : ` Mas ${first}`
+  if (lang === 'su') return p.gender === 'P' ? ` Bu ${first}` : p.age >= 50 ? ` Pak ${first}` : ` Kang ${first}`
+  if (lang === 'min') return p.gender === 'P' ? ` Bu ${first}` : p.age >= 50 ? ` Pak ${first}` : ` Uda ${first}`
   if (lang === 'en') return ` ${first}`
   return p.gender === 'P' ? ` Bu ${first}` : p.age >= 50 ? ` Pak ${first}` : ` Kak ${first}`
 }
@@ -91,7 +101,7 @@ function service(ctx: Ctx, serviceId: string, extra?: Bi): SimResponse {
   const x = w(ctx)
   const sv = x.services.find((s) => s.id === serviceId)
   const rl = rlOf(ctx)
-  const l: 'id' | 'en' = rl === 'jv' ? ctx.lang : rl
+  const l: 'id' | 'en' = uiOf(ctx, rl)
   if (!sv) {
     return { ...say(ctx, { id: 'Untuk layanan itu, syaratnya bisa berbeda per daerah. Saya teruskan ke petugas agar dijawab pasti.', en: 'Requirements for that service differ by region. I will forward it to an officer for an exact answer.' }), followUps: chips(ctx, [CHIP.officer]) }
   }
@@ -101,7 +111,11 @@ function service(ctx: Ctx, serviceId: string, extra?: Bi): SimResponse {
     id: `Syarat ${sv.name.id}: ${sv.requirements.length} hal, saya rangkum di kartu di bawah. Waktu proses sekitar ${days(sv.slaDays, 'id')}, biaya: ${feeShort(sv.fee.id)}. Diurus ${where.id}.${extra ? ` ${extra.id}` : ''}`,
     en: `${sv.name.en} needs ${sv.requirements.length} things, summarised in the card below. Processing takes about ${days(sv.slaDays, 'en')}, fee: ${feeShort(sv.fee.en)}. Handled ${where.en}.${extra ? ` ${extra.en}` : ''}`,
   }
-  const jv = `Sugeng${honor(x, 'jv')}. Syarat ${sv.name.id} sampun kula serat ing kertu ngandhap menika, nggih. Prosesipun kinten-kinten ${sv.slaDays} dinten.`
+  const jv: RegText = {
+    jv: `Sugeng${honor(x, 'jv')}. Syarat ${sv.name.id} sampun kula serat ing kertu ngandhap menika, nggih. Prosesipun kinten-kinten ${sv.slaDays} dinten.`,
+    su: `Wilujeng${honor(x, 'su')}. Sarat ${sv.name.id} parantos abdi serat dina kartu di handap, nya. Prosesna kinten-kinten ${sv.slaDays} dinten.`,
+    min: `Salamaik${honor(x, 'min')}. Syarat ${sv.name.id} alah ambo tulih di kartu di bawah ko, yo. Prosesnyo kiro-kiro ${sv.slaDays} hari.`,
+  }
   return {
     ...say(ctx, ans, jv),
     structured: {
@@ -136,6 +150,12 @@ const TIPS: Partial<Record<ComplaintCategory, Bi>> = {
   sampah: { id: 'Jadwal angkut di titik itu akan disesuaikan.', en: 'The pick-up schedule at that spot will be adjusted.' },
   sekolah: { id: 'Dinas akan meninjau bangunan dan memberi tahu sekolah.', en: 'The office will inspect the building and inform the school.' },
 }
+const SU_CAT: Partial<Record<ComplaintCategory, string>> = {
+  banjir: 'banjir', 'jalan-rusak': 'jalan ruksak', sampah: 'runtah', pju: 'lampu jalan pareum', 'air-bersih': 'cai beresih', 'pohon-tumbang': 'tangkal rubuh', pungli: 'pungli', kesehatan: 'layanan kasehatan', sekolah: 'sakola ruksak',
+}
+const MIN_CAT: Partial<Record<ComplaintCategory, string>> = {
+  banjir: 'banjia', 'jalan-rusak': 'jalan rusak', sampah: 'sampah', pju: 'lampu jalan mati', 'air-bersih': 'aia barasiah', 'pohon-tumbang': 'batang kayu tumbang', pungli: 'pungli', kesehatan: 'layanan kasehatan', sekolah: 'sakolah rusak',
+}
 const JV_CAT: Partial<Record<ComplaintCategory, string>> = {
   banjir: 'banjir', 'jalan-rusak': 'dalan rusak', sampah: 'uwuh', pju: 'lampu dalan mati', 'air-bersih': 'toya resik', 'pohon-tumbang': 'wit ambruk', pungli: 'pungli', kesehatan: 'layanan kesehatan', sekolah: 'sekolah rusak',
 }
@@ -143,7 +163,7 @@ const JV_CAT: Partial<Record<ComplaintCategory, string>> = {
 function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
   const x = w(ctx)
   const rl = rlOf(ctx)
-  const l: 'id' | 'en' = rl === 'jv' ? ctx.lang : rl
+  const l: 'id' | 'en' = uiOf(ctx, rl)
   const jc = x.justCreated
   // a ticket the phone already created (photo / voice note) keeps its own category, whatever the caption matched
   const cat: ComplaintCategory = jc?.category ?? matched
@@ -168,8 +188,12 @@ function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
       en: `Thank you${honor(x, 'en')}. We have marked this as an EMERGENCY: ticket ${code} in ${place} goes straight to BPBD (emergency triage), copied to ${opd}. Response target 1 hour. If a life is in danger right now, call 112. Put the elderly and children first and move to higher ground.`,
     }
     return {
-      ...say(ctx, sos, `Matur nuwun${honor(x, 'jv')}. Punika kula tandhani DARURAT: tiket ${code} langsung dipunaturaken dhateng BPBD. Menawi nyawa kaancam, enggal telpon 112.`),
-      structured: { kind: 'ticket', data: { category: label[l], categoryId: cat, summary: (jc?.translation ?? { id: ctx.text, en: ctx.text })[l], urgency: 'tinggi', opd: 'BPBD', location: { kecamatan: kec, desa, detail: place }, kecamatanId: kecId, desaId, language: rl === 'jv' ? 'jv' : 'id', translationId: rl === 'jv' ? (jc?.translation?.id ?? '') : '', slaHours: 1, code, existing: !!jc } },
+      ...say(ctx, sos, {
+        jv: `Matur nuwun${honor(x, 'jv')}. Punika kula tandhani DARURAT: tiket ${code} langsung dipunaturaken dhateng BPBD. Menawi nyawa kaancam, enggal telpon 112.`,
+        su: `Hatur nuhun${honor(x, 'su')}. Ieu ku abdi ditandaan DARURAT: tiket ${code} langsung diteraskeun ka BPBD. Upami nyawa kaancam, enggal nelepon 112.`,
+        min: `Tarimo kasih${honor(x, 'min')}. Iko ambo tandoi DARURAT: tiket ${code} langsuang diteruskan ka BPBD. Kok nyawo taancam, capek talepon 112.`,
+      }),
+      structured: { kind: 'ticket', data: { category: label[l], categoryId: cat, summary: (jc?.translation ?? { id: ctx.text, en: ctx.text })[l], urgency: 'tinggi', opd: 'BPBD', location: { kecamatan: kec, desa, detail: place }, kecamatanId: kecId, desaId, language: isReg(rl) ? rl : 'id', translationId: isReg(rl) ? (jc?.translation?.id ?? '') : '', slaHours: 1, code, existing: !!jc } },
       toolCalls: [
         { name: 'classify_message', input: { text: ctx.text.slice(0, 60) }, output: { category: cat, emergency: true }, ms: 200 },
         { name: 'create_ticket', input: { category: cat, opd: 'BPBD' }, output: { code }, ms: 260 },
@@ -181,7 +205,14 @@ function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
     id: `Terima kasih${honor(x, 'id')}. Laporan ${label.id.toLowerCase()} di ${place} sudah tercatat sebagai tiket ${code}. Setelah diverifikasi petugas, tiket akan diteruskan ke ${opd} (OPD yang disarankan AI). Estimasi tanggapan ${slaText(hours, 'id')}.${tip ? ` ${tip.id}` : ''} Ini laporan ${label.id.toLowerCase()} ke-${nToday} hari ini${cluster ? `; laporan di ${cluster.desa} sudah menjadi klaster ${cluster.complaints} aduan dan dipantau pimpinan` : ''}.`,
     en: `Thank you${honor(x, 'en')}. Your ${label.en.toLowerCase()} report in ${place} is logged as ticket ${code}. Once an officer verifies it, it will be forwarded to ${opd} (the agency the AI suggests). Expected response within ${slaText(hours, 'en')}.${tip ? ` ${tip.en}` : ''} It is report no. ${nToday} of this kind today${cluster ? `; reports in ${cluster.desa} already form a cluster of ${cluster.complaints} and the leadership is watching it` : ''}.`,
   }
-  const jv = `Matur nuwun${honor(x, 'jv')}. Laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} ing ${place} sampun kula cathet dados tiket ${code}. Sasampunipun dipunpriksa petugas, badhe dipunaturaken dhateng ${opd}. Paling dangu ${hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} dinten`} badhe dipuntindaklanjuti.${cat === 'banjir' ? ' Menawi toya taksih minggah, dokumen penting mangga dipunamanaken, listrik dipunpejahi saking meteran.' : ''} Punika laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} kaping-${nToday} dinten punika${cluster ? `; laporan ing ${cluster.desa} sampun dados klaster ${cluster.complaints} aduan lan dipunpantau pimpinan` : ''}.`
+  const span = (d: string) => (hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} ${d}`)
+  const su = SU_CAT[cat] ?? label.id.toLowerCase()
+  const mi = MIN_CAT[cat] ?? label.id.toLowerCase()
+  const jv: RegText = {
+    jv: `Matur nuwun${honor(x, 'jv')}. Laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} ing ${place} sampun kula cathet dados tiket ${code}. Sasampunipun dipunpriksa petugas, badhe dipunaturaken dhateng ${opd}. Paling dangu ${hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} dinten`} badhe dipuntindaklanjuti.${cat === 'banjir' ? ' Menawi toya taksih minggah, dokumen penting mangga dipunamanaken, listrik dipunpejahi saking meteran.' : ''} Punika laporan ${JV_CAT[cat] ?? label.id.toLowerCase()} kaping-${nToday} dinten punika${cluster ? `; laporan ing ${cluster.desa} sampun dados klaster ${cluster.complaints} aduan lan dipunpantau pimpinan` : ''}.`,
+    su: `Hatur nuhun${honor(x, 'su')}. Laporan ${su} di ${place} parantos abdi catet janten tiket ${code}. Saparantosna dipariksa ku patugas, bade diteraskeun ka ${opd}. Paling lami ${span('dinten')} bade ditindaklanjutan.${cat === 'banjir' ? ' Upami cai masih naek, dokumen penting mangga diamankeun, listrik dipareuman tina meteran.' : ''} Ieu laporan ${su} anu ka-${nToday} dinten ieu${cluster ? `; laporan di ${cluster.desa} parantos janten klaster ${cluster.complaints} aduan sareng dipantau ku pimpinan` : ''}.`,
+    min: `Tarimo kasih${honor(x, 'min')}. Laporan ${mi} di ${place} alah ambo catat jadi tiket ${code}. Sasudah dipareso petugas, ka diteruskan ka ${opd}. Paliang lamo ${span('hari')} ka ditindaklanjuti.${cat === 'banjir' ? ' Kok aia masih naiak, dokumen pantiang tolong diamankan, listrik dimatian dari meteran.' : ''} Iko laporan ${mi} nan ka-${nToday} hari ko${cluster ? `; laporan di ${cluster.desa} alah jadi klaster ${cluster.complaints} aduan jo dipantau pimpinan` : ''}.`,
+  }
   const summary = jc?.translation ?? { id: ctx.text, en: `${label.en} report in ${place}` }
   return {
     ...say(ctx, ans, jv),
@@ -189,12 +220,12 @@ function report(ctx: Ctx, matched: ComplaintCategory): SimResponse {
       kind: 'ticket',
       data: {
         category: label[l], categoryId: cat, summary: summary[l], urgency: cat === 'banjir' || cat === 'pohon-tumbang' ? 'tinggi' : 'sedang', opd,
-        location: { kecamatan: kec, desa, detail: place }, kecamatanId: kecId, desaId, language: rl === 'jv' ? 'jv' : 'id',
-        translationId: rl === 'jv' ? (jc?.translation?.id ?? '') : '', slaHours: hours, code, existing: !!jc,
+        location: { kecamatan: kec, desa, detail: place }, kecamatanId: kecId, desaId, language: isReg(rl) ? rl : 'id',
+        translationId: isReg(rl) ? (jc?.translation?.id ?? '') : '', slaHours: hours, code, existing: !!jc,
       },
     },
     toolCalls: [
-      { name: jc?.channel === 'voice' ? 'transcribe_voice' : 'classify_message', input: { text: ctx.text.slice(0, 60) }, output: { category: cat, language: rl === 'jv' ? 'jv' : rl }, ms: jc?.channel === 'voice' ? 420 : 200 },
+      { name: jc?.channel === 'voice' ? 'transcribe_voice' : 'classify_message', input: { text: ctx.text.slice(0, 60) }, output: { category: cat, language: rl }, ms: jc?.channel === 'voice' ? 420 : 200 },
       { name: 'geocode', input: { desa, kecamatan: kec }, output: { found: !!kec }, ms: 150 },
       { name: 'create_ticket', input: { category: cat, opd }, output: { code }, ms: 260 },
     ],
@@ -215,6 +246,7 @@ const intents: Intent<SwContext>[] = [
     'KTP-el saya rusak, bagaimana cara ganti?', 'Syarat bikin KTP elektronik', 'KTP hilang, mau buat lagi', 'Cara cetak ulang KTP-el yang retak',
     'My e-ID card is damaged, how do I replace it?', 'How to get a new ID card', 'I lost my ID card',
     'KTP-el kula rusak, pripun carane ngurus?', 'KTP kula ical, badhe damel malih', 'KTPku rusak retak, piye carane?',
+    'KTP-el abdi ruksak, kumaha carana ngurus nu enggal?', 'KTP abdi leungit, bade ngadamel deui', 'KTP-el ambo rusak, baa caronyo mangurus nan baru?', 'KTP ambo hilang, nio mambuek baliak',
   ], { id: 'Untuk lansia ada loket prioritas, cukup tunjukkan KTP lama.', en: 'Senior citizens can use the priority counter; just bring the old card.' }),
   svc('syarat-kk', 'kk', [
     'Syarat bikin kartu keluarga baru', 'Mau ubah data KK setelah menikah', 'Cara tambah anggota keluarga di KK',
@@ -240,7 +272,7 @@ const intents: Intent<SwContext>[] = [
   svc('syarat-nib', 'nib-oss', [
     'Syarat bikin NIB apa?', 'Cara daftar NIB lewat OSS', 'Mau urus izin usaha kedai kopi', 'Nomor induk berusaha untuk UMKM', 'Bikin NIB butuh apa saja',
     'What do I need for an NIB?', 'How do I register my business ID number?', 'Business licence for a small coffee shop',
-    'Syarate gawe NIB apa wae?', 'Badhe ngurus NIB kangge warung kopi',
+    'Syarate gawe NIB apa wae?', 'Badhe ngurus NIB kangge warung kopi', 'Sarat ngadamel NIB naon wae?', 'Apo syarat mambuek NIB?',
   ], { id: 'Formulirnya bisa saya isikan otomatis dari percakapan ini, lalu Anda bisa ambil antrean pendampingan di MPP.', en: 'I can pre-fill the form from this chat, then you can book an assisted slot at the service mall.' }),
   svc('izin-usaha-mikro', 'izin-usaha-mikro', [
     'Pendampingan izin usaha mikro', 'Sertifikat standar untuk usaha kecil', 'Izin usaha rumahan bagaimana',
@@ -281,7 +313,7 @@ const intents: Intent<SwContext>[] = [
   svc('cek-bansos', 'cek-bansos', [
     'Cek status penerima bansos', 'Apakah saya terdaftar penerima bantuan sosial?', 'Nama saya hilang dari daftar bansos', 'Bansos belum cair',
     'Am I registered for social aid?', 'Check my social assistance status',
-    'Jeneng kula ical saking daftar bansos', 'Bansos kula dereng cair',
+    'Jeneng kula ical saking daftar bansos', 'Bansos kula dereng cair', 'Nami abdi leungit tina daptar bansos', 'Namo ambo hilang dari daftar bansos',
   ], { id: 'Bila nama hilang dari daftar, ajukan sanggahan lewat desa; petugas Dinsos akan memeriksa.', en: 'If your name disappeared, file an objection through the village; Social Affairs will check it.' }),
   svc('sambungan-air', 'sambungan-air', [
     'Pasang baru sambungan air PDAM', 'Daftar langganan air minum', 'Biaya pasang air PDAM',
@@ -294,7 +326,7 @@ const intents: Intent<SwContext>[] = [
     examples: [
       'MPP buka jam berapa?', 'Jadwal pelayanan mal pelayanan publik', 'Hari Sabtu MPP buka tidak?', 'Antrean MPP hari ini ramai?',
       'When is the service mall open?', 'Opening hours of the public service mall',
-      'MPP bukak jam pinten?', 'Dinten Setu MPP bikak mboten?',
+      'MPP bukak jam pinten?', 'Dinten Setu MPP bikak mboten?', 'MPP buka tabuh sabaraha?', 'MPP bukak pukua bara?',
     ],
     respond: (c) => {
       const ctx = c as Ctx
@@ -303,7 +335,13 @@ const intents: Intent<SwContext>[] = [
         id: `Di demo ini MPP ${x.region} melayani Senin–Jumat pukul 08.00–15.00 (jam layanan contoh, simulasi; pastikan jadwal resmi sebelum datang). Hari ini sudah ada ${x.today.mppBookings} antrean terdaftar; ${x.today.queueAhead} orang terjadwal dalam satu jam ke depan. Ambil antrean dari sini supaya tidak menunggu lama.`,
         en: `In this demo the ${x.region} service mall is open Monday to Friday, 08.00–15.00 (sample hours, simulated; check the official schedule before you go). ${x.today.mppBookings} queue slots are booked today; ${x.today.queueAhead} people are scheduled in the next hour. Book a slot here to avoid waiting.`,
       }
-      return { ...say(ctx, ans, `MPP ${x.region} bikak Senin dumugi Jumat, jam 08.00 dumugi 15.00. Dinten menika sampun wonten ${x.today.mppBookings} antrean.`), followUps: chips(ctx, [CHIP.queue, CHIP.ktp]) }
+      return {
+        ...say(ctx, ans, {
+          jv: `MPP ${x.region} bikak Senin dumugi Jumat, jam 08.00 dumugi 15.00. Dinten menika sampun wonten ${x.today.mppBookings} antrean.`,
+          su: `MPP ${x.region} buka Senen dugi ka Jumaah, tabuh 08.00 dugi ka 15.00. Dinten ieu parantos aya ${x.today.mppBookings} antrean.`,
+          min: `MPP ${x.region} bukak Sanin sampai Jumaik, pukua 08.00 sampai 15.00. Hari ko alah ado ${x.today.mppBookings} antrean.`,
+        }),
+        followUps: chips(ctx, [CHIP.queue, CHIP.ktp]) }
     },
   },
   {
@@ -329,7 +367,7 @@ const intents: Intent<SwContext>[] = [
     examples: [
       'Apakah perlu mengungsi?', 'Ada peringatan banjir di daerah saya?', 'Posko pengungsian di mana?', 'Air sungai naik, aman tidak?',
       'Should we evacuate?', 'Is there a flood warning for my area?',
-      'Kudu ngungsi ora?', 'Wonten peringatan banjir mboten?',
+      'Kudu ngungsi ora?', 'Wonten peringatan banjir mboten?', 'Kedah ngungsi teu?', 'Aya peringatan banjir teu?', 'Paralu mangungsi indak?', 'Ado paringatan banjia indak?',
     ],
     respond: (c) => {
       const ctx = c as Ctx
@@ -338,7 +376,11 @@ const intents: Intent<SwContext>[] = [
       const ans: Bi = a
         ? { id: `Ya, ada peringatan dini banjir level ${a.level} untuk Kec. ${a.kecamatan} (BPBD). Siapkan tas siaga, utamakan lansia dan anak, dan ikuti arahan petugas desa. ${a.posko ? `Menuju posko pengungsian ${a.posko}, sesuai peringatan BPBD.` : 'Posko pengungsian dibuka di balai desa terdekat.'} Darurat: 112.`, en: `Yes, there is a level-${a.level} early flood warning for ${a.kecamatan} (BPBD). Prepare a go-bag, put the elderly and children first and follow the village officials. ${a.posko ? `Go to the shelter at ${a.posko}, as the BPBD warning says.` : 'Shelters are open at the nearest village hall.'} Emergency: 112.` }
         : { id: `Saat ini belum ada peringatan dini resmi untuk wilayah Anda${x.clusterHere ? `, tetapi ${x.clusterHere.complaints} laporan banjir di ${x.clusterHere.desa} sedang dipantau BPBD` : ''}. Bila air masuk rumah dan terus naik, segera ke tempat tinggi dan hubungi 112. Peringatan resmi akan masuk ke HP ini.`, en: `There is no official early warning for your area yet${x.clusterHere ? `, but ${x.clusterHere.complaints} flood reports in ${x.clusterHere.desa} are being watched by BPBD` : ''}. If water enters the house and keeps rising, move to higher ground and call 112. Official warnings will arrive on this phone.` }
-      const jv = a ? `Inggih, wonten peringatan banjir level ${a.level} kangge Kec. ${a.kecamatan}. Mangga siapaken tas siaga lan nderek arahan petugas desa.${a.posko ? ` Posko pengungsian wonten ${a.posko}.` : ''}` : 'Dereng wonten peringatan resmi. Menawi toya mlebet griya lan taksih minggah, enggal pindhah dhateng papan inggil lan telpon 112.'
+      const jv: RegText = {
+        jv: a ? `Inggih, wonten peringatan banjir level ${a.level} kangge Kec. ${a.kecamatan}. Mangga siapaken tas siaga lan nderek arahan petugas desa.${a.posko ? ` Posko pengungsian wonten ${a.posko}.` : ''}` : 'Dereng wonten peringatan resmi. Menawi toya mlebet griya lan taksih minggah, enggal pindhah dhateng papan inggil lan telpon 112.',
+        su: a ? `Leres, aya peringatan banjir level ${a.level} kanggo Kec. ${a.kecamatan}. Mangga siapkeun tas siaga sareng tuturkeun arahan patugas.${a.posko ? ` Posko pangungsian aya di ${a.posko}.` : ''}` : 'Teu acan aya peringatan resmi. Upami cai asup ka imah sareng terus naek, enggal ngalih ka tempat nu luhur sareng nelepon 112.',
+        min: a ? `Yo, ado paringatan banjia level ${a.level} untuak Kec. ${a.kecamatan}. Tolong siapkan tas siaga jo ikuti arahan petugas.${a.posko ? ` Posko pangungsian ado di ${a.posko}.` : ''}` : 'Alun ado paringatan resmi. Kok aia masuak rumah jo taruih naiak, capek pindah ka tampek nan tinggi jo talepon 112.',
+      }
       return { ...say(ctx, ans, jv), followUps: chips(ctx, [CHIP.flood, CHIP.status]) }
     },
   },
@@ -350,27 +392,30 @@ const intents: Intent<SwContext>[] = [
     'Tolong evakuasi, lansia terjebak banjir di rumah', 'Air sudah sepinggang, kami butuh perahu karet', 'Ada lansia yang perlu dievakuasi, air masuk rumah', 'Ibu saya terjebak air, mohon dievakuasi',
     'Please evacuate us, the water is waist-deep', 'My grandmother is trapped by the flood, send a boat',
     'Tulung, banyune wis sepinggang, simbah kudu dievakuasi',
-    'Banyune munggah tekan omah, dalane kebanjiran', 'Tanggule kali bocor, banyune mrembes terus', 'Kampung kula kebanjiran wiwit wingi', 'Toya Bengawan sampun minggah',
+    'Cileuncang geus asup ka imah, jerona sabeuteung, tulung kirim bantuan', 'Kolot jeung barudak kudu diungsikeun ayeuna',
+    'Aia alah masuak rumah, tingginyo alah sapinggang, tolong kirim parahu karet', 'Urang gaek jo anak-anak harus diungsian kini',
+    'Banyune munggah tekan omah, dalane kebanjiran', 'Tanggule kali bocor, banyune mrembes terus', 'Kampung kula kebanjiran wiwit wingi', 'Toya kali sampun minggah',
+    'Cai walungan geus naek, imah abdi kakeueum', 'Lembur abdi kabanjiran ti kamari', 'Aia batang alah naiak, rumah ambo tagenang', 'Kampuang ambo kabanjiran dari kapatang',
   ]),
   rep('lapor-jalan-rusak', 'jalan-rusak', [
     'Jalan di desa kami rusak parah dan berlubang', 'Ada lubang besar di jalan dekat sekolah', 'Aspal jalan kabupaten mengelupas', 'Jalan cor ambles di pinggir kali',
     'There is a big pothole on the main road', 'The road near the market is badly damaged',
-    'Dalane bolong-bolong, akeh sing tiba', 'Margi dhateng desa kula rusak sanget',
+    'Dalane bolong-bolong, akeh sing tiba', 'Margi dhateng desa kula rusak sanget', 'Jalan di lembur abdi ruksak, loba nu labuh', 'Jalan di kampuang ambo rusak baraik',
   ]),
   rep('lapor-sampah', 'sampah', [
     'Sampah menumpuk tidak diangkut seminggu', 'TPS dekat pasar penuh dan bau', 'Ada pembuangan sampah liar di pinggir jalan',
     'Garbage has not been collected for a week', 'Rubbish piling up near the market',
-    'Uwuh numpuk ora diangkut, ambune ora karuan', 'Sampah cedhak pasar dereng dipunangkut',
+    'Uwuh numpuk ora diangkut, ambune ora karuan', 'Sampah cedhak pasar dereng dipunangkut', 'Runtah numpuk teu diangkut saminggu', 'Sampah batumpuak indak diangkuik saminggu',
   ]),
   rep('lapor-pju', 'pju', [
     'Lampu jalan di gang kami mati sudah seminggu', 'PJU depan masjid padam, jalan jadi gelap', 'Lampu penerangan jalan tidak menyala',
     'The streetlights on our road are out', 'A street lamp is broken near the bridge',
-    'Lampu dalan mati, peteng banget yen wengi', 'Lampu margi prapatan pejah',
+    'Lampu dalan mati, peteng banget yen wengi', 'Lampu margi prapatan pejah', 'Lampu jalan pareum, poek pisan upami wengi', 'Lampu jalan mati, kalam bana kok malam',
   ]),
   rep('lapor-air-bersih', 'air-bersih', [
     'Air PDAM tidak mengalir tiga hari', 'Air keran keruh dan bau', 'Tidak ada air bersih di kampung kami',
     'There has been no tap water for three days', 'The water supply is muddy',
-    'Banyu PDAM ora mili wis telung dina', 'Toya ledeng butheg',
+    'Banyu PDAM ora mili wis telung dina', 'Toya ledeng butheg', 'Cai PDAM teu ngocor tilu dinten', 'Aia PDAM indak mangalia tigo hari',
   ]),
   rep('lapor-pohon-tumbang', 'pohon-tumbang', [
     'Pohon tumbang menutup jalan', 'Ada pohon besar roboh kena angin, kabel putus', 'Batang pohon menimpa rumah warga',
@@ -398,7 +443,7 @@ const intents: Intent<SwContext>[] = [
     examples: [
       'Cek status tiket saya', 'Bagaimana kelanjutan laporan saya?', 'Status SW-2026-0141', 'Lacak tiket aduan', 'Laporan saya sudah ditangani belum?',
       'Check my ticket status', 'What happened to my report?', 'Track my complaint',
-      'Laporan kula sampun dipuntindaklanjuti dereng?', 'Tiketku piye kabare?',
+      'Laporan kula sampun dipuntindaklanjuti dereng?', 'Tiketku piye kabare?', 'Laporan abdi tos ditindaklanjutan teu acan?', 'Laporan ambo alah ditindaklanjuti alun?',
     ],
     respond: (c) => {
       const ctx = c as Ctx
@@ -427,7 +472,11 @@ const intents: Intent<SwContext>[] = [
         en: `Ticket ${t.code} (${CATEGORY_LABEL[t.category].en.toLowerCase()}) is ${s.en}.${leftEn ? ` ${leftEn} left on the service target.` : t.status === 'selesai' ? (t.rating ? ` Thanks for the ${t.rating}-star rating.` : ' Please rate 1–5 in the update message.') : ' The target time has passed; I flagged it for priority.'}`,
       }
       return {
-        ...say(ctx, ans, `Tiket ${t.code} ${t.status === 'selesai' ? 'sampun rampung' : t.status === 'baru' ? 'nembe mlebet, ngentosi verifikasi petugas' : `sampun dipunasta ${t.opd}`}.`),
+        ...say(ctx, ans, {
+          jv: `Tiket ${t.code} ${t.status === 'selesai' ? 'sampun rampung' : t.status === 'baru' ? 'nembe mlebet, ngentosi verifikasi petugas' : `sampun dipunasta ${t.opd}`}.`,
+          su: `Tiket ${t.code} ${t.status === 'selesai' ? 'parantos rengse' : t.status === 'baru' ? 'nembe lebet, ngantosan verifikasi patugas' : `parantos dicepeng ku ${t.opd}`}.`,
+          min: `Tiket ${t.code} ${t.status === 'selesai' ? 'alah salasai' : t.status === 'baru' ? 'baru masuak, manunggu verifikasi petugas' : `alah dipacik dek ${t.opd}`}.`,
+        }),
         structured: { kind: 'ticket-status', data: { ticketCode: t.code, ticketId: t.ticketId, status: t.status, opd: t.opd, eta: left || undefined } },
         toolCalls: [{ name: 'ticket_status', input: { ticketCode: t.code }, output: { status: t.status }, ms: 140 }],
         followUps: chips(ctx, [CHIP.officer]),
@@ -439,14 +488,14 @@ const intents: Intent<SwContext>[] = [
     examples: [
       'Ambil antrean MPP', 'Mau booking antrean jam 10', 'Daftar antrean online', 'Saya mau datang ke MPP besok pagi',
       'Book a service-mall slot', 'I want to book a queue number', 'Reserve a time at the service mall',
-      'Badhe mendhet antrean MPP', 'Pesen antrean jam sepuluh',
+      'Badhe mendhet antrean MPP', 'Pesen antrean jam sepuluh', 'Bade nyandak antrean MPP', 'Ambo nio ambiak antrean MPP',
     ],
     respond: (c) => {
       const ctx = c as Ctx
       const x = w(ctx)
       const key = x.persona?.key
       const sv = x.services.find((s) => s.id === (key === 'raka' ? 'nib-oss' : 'ktp-el')) ?? x.services[0]
-      const l: 'id' | 'en' = rlOf(ctx) === 'jv' ? ctx.lang : (rlOf(ctx) as 'id' | 'en')
+      const l: 'id' | 'en' = uiOf(ctx, rlOf(ctx))
       return {
         ...say(ctx, { id: `Baik. Pilih jam datang di bawah untuk ${sv?.name.id ?? 'layanan'} di MPP ${x.region}. Slot 30 menit; ${x.today.queueAhead} orang terjadwal dalam satu jam ke depan.`, en: `Sure. Pick a time below for ${sv?.name.en ?? 'the service'} at the ${x.region} service mall. 30-minute slots; ${x.today.queueAhead} people are scheduled in the next hour.` }, 'Inggih. Mangga pilih jam rawuh ing ngandhap menika.'),
         structured: { kind: 'sapa-warga/slot-pick', data: { serviceId: sv?.id ?? 'ktp-el', service: sv?.name[l] ?? '' } },
@@ -466,7 +515,7 @@ const intents: Intent<SwContext>[] = [
       const ctx = c as Ctx
       const x = w(ctx)
       const rl = rlOf(ctx)
-      const l: 'id' | 'en' = rl === 'jv' ? ctx.lang : rl
+      const l: 'id' | 'en' = uiOf(ctx, rl)
       const opd = 'Dinas Koperasi & UMKM'
       const reqs: Bi[] = [
         { id: 'NIB (dari OSS, langkah sebelumnya)', en: 'NIB (from OSS, the previous step)' },
@@ -481,7 +530,11 @@ const intents: Intent<SwContext>[] = [
             id: `Bisa${honor(x, 'id')}. NIB biasanya diminta saat mengajukan pembiayaan usaha mikro seperti KUR di bank penyalur atau pinjaman koperasi. Saya buatkan rujukan ke ${opd} ${x.region} untuk pendampingan; bunga dan plafon mengikuti ketentuan lembaga pembiayaan. Rujukan ini simulasi demo.`,
             en: `Yes${honor(x, 'en')}. An NIB is usually asked for when applying for micro-business finance such as KUR at a lending bank or a cooperative loan. I have made a referral to the ${x.region} ${opd} for guidance; rates and limits follow the lender's rules. This referral is a demo simulation.`,
           },
-          `Saged${honor(x, 'jv')}. NIB limrahipun dipunsuwun menawi ngajokaken KUR utawi pinjaman koperasi. Kula damelaken rujukan dhateng ${opd}.`,
+          {
+            jv: `Saged${honor(x, 'jv')}. NIB limrahipun dipunsuwun menawi ngajokaken KUR utawi pinjaman koperasi. Kula damelaken rujukan dhateng ${opd}.`,
+            su: `Tiasa${honor(x, 'su')}. NIB biasana dipenta upami ngajukeun KUR atanapi injeuman koperasi. Abdi damelkeun rujukan ka ${opd}.`,
+            min: `Bisa${honor(x, 'min')}. NIB biasonyo diminta kok maajuan KUR atau pinjaman koperasi. Ambo buekan rujukan ka ${opd}.`,
+          },
         ),
         structured: {
           kind: 'checklist',
@@ -541,9 +594,16 @@ export const sapaWargaScenario: Scenario<SwContext> = {
   fallback: (c) => {
     const ctx = c as Ctx
     const x = w(ctx)
-    // a complaint the intents missed: still open a ticket when the text clearly is one
+    // a complaint the intents missed: still open a ticket when the text clearly is one (a voice note / photo the phone
+    // already filed, or a report in words the examples do not cover, e.g. a Sunda / Minang sample)
+    const cat = x.justCreated?.category ?? classifyReport(ctx.text)
+    if (cat) return report(ctx, cat)
     return {
-      ...say(ctx, { id: `Maaf${honor(x, 'id')}, saya belum yakin maksudnya. Coba salah satu pertanyaan di bawah, atau saya teruskan ke petugas layanan.`, en: `Sorry${honor(x, 'en')}, I am not sure what you mean yet. Try one of the questions below, or I can forward it to a service officer.` }, `Nyuwun pangapunten${honor(x, 'jv')}, kula dereng mangertos. Mangga pilih pitakenan ing ngandhap, utawi kula aturaken dhateng petugas.`),
+      ...say(ctx, { id: `Maaf${honor(x, 'id')}, saya belum yakin maksudnya. Coba salah satu pertanyaan di bawah, atau saya teruskan ke petugas layanan.`, en: `Sorry${honor(x, 'en')}, I am not sure what you mean yet. Try one of the questions below, or I can forward it to a service officer.` }, {
+        jv: `Nyuwun pangapunten${honor(x, 'jv')}, kula dereng mangertos. Mangga pilih pitakenan ing ngandhap, utawi kula aturaken dhateng petugas.`,
+        su: `Hapunten${honor(x, 'su')}, abdi teu acan ngartos maksadna. Cobi salah sahiji patarosan di handap, atanapi ku abdi diteraskeun ka patugas.`,
+        min: `Maaf${honor(x, 'min')}, ambo alun mangarati maksuiknyo. Cubo salah ciek patanyaan di bawah, atau ambo taruihkan ka petugas.`,
+      }),
       followUps: chips(ctx, [CHIP.nib, CHIP.status, CHIP.bansos, CHIP.officer]),
     }
   },

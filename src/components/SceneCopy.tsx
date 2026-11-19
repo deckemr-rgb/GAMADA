@@ -123,7 +123,8 @@ export function prepareCopy(root: HTMLElement): void {
   const title = root.querySelector<HTMLElement>('[data-part="title"]')
   if (title) made.push(SplitText.create(title, { type: 'words,chars', mask: 'chars', wordsClass: 'copy-word', charsClass: 'copy-char', aria: 'auto' }))
   root.querySelectorAll<HTMLElement>('[data-split="lines"]').forEach((el) => {
-    made.push(SplitText.create(el, { type: 'lines', mask: 'lines', linesClass: 'copy-line', aria: 'auto' }))
+    // aria 'none': a line split keeps every word in reading order, and aria-label is not allowed on a plain span (axe)
+    made.push(SplitText.create(el, { type: 'lines', mask: 'lines', linesClass: 'copy-line', aria: 'none' }))
   })
   splits.set(root, made)
 }

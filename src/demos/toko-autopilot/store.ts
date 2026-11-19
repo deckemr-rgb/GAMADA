@@ -56,3 +56,8 @@ export function useOutlets(): Record<Exclude<OutKey, 'semua'>, string> {
   return { toko, kopi, warung }
 }
 export const keyOfOutlet = (o: Record<Exclude<OutKey, 'semua'>, string>, id: string): OutKey => (o.kopi === id ? 'kopi' : o.warung === id ? 'warung' : o.toko === id ? 'toko' : 'semua')
+
+/** run `fn` after the next paint: the pressed control answers in this frame, the heavy work follows (INP) */
+export const afterPaint = (fn: () => void): void => {
+  requestAnimationFrame(() => setTimeout(fn, 0))
+}

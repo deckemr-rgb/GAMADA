@@ -22,11 +22,16 @@ import { decodeTopo } from './topo'
 export type { RegionPack, RegionGeo } from './types'
 
 /** Static registry so region pickers render without loading any pack. */
-export const REGIONS = [{ id: 'bojonegoro', name: 'Kabupaten Bojonegoro', shortName: 'Bojonegoro', type: 'kabupaten' }] as const satisfies readonly {
+export const REGIONS = [
+  { id: 'bojonegoro', name: 'Kabupaten Bojonegoro', shortName: 'Bojonegoro', type: 'kabupaten', province: 'Jawa Timur' },
+  { id: 'bandung', name: 'Kota Bandung', shortName: 'Bandung', type: 'kota', province: 'Jawa Barat' },
+  { id: 'padang', name: 'Kota Padang', shortName: 'Padang', type: 'kota', province: 'Sumatera Barat' },
+] as const satisfies readonly {
   id: string
   name: string
   shortName: string
   type: 'kabupaten' | 'kota'
+  province: string
 }[]
 
 export type KnownRegionId = (typeof REGIONS)[number]['id']

@@ -139,7 +139,7 @@ export function Briefing({ briefing, assembling, fresh, onFreshDone, onCompose, 
           <BriefingPlayer items={shown} at={at} leader={leader[lang]} onActive={setActive} onListened={onListened} onEnd={() => { setVoice(false); setActive(-1) }} />
         </Suspense>
       )}
-      <div className="dk-mp-pb">
+      <div className="dk-mp-pb" tabIndex={0}>
         {assembling ? (
           <Assembling sources={assembling} />
         ) : !briefing ? (

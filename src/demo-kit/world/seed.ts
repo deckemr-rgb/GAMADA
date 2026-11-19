@@ -383,8 +383,9 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
   meetingDrafts.sort((a, b) => a.at - b.at)
   // today's flood meeting is the sample recording Naskah Pintar plays: its participants are the clip's speakers
   // (the random draw still runs, so the rest of the seed is unchanged)
-  // the clip (media MEETING_BANJIR) names Camat Kalitidu; other regions fall back to their first flood kecamatan
-  const floodKecName = (region.kecamatan.find((k) => k.id === 'kalitidu') ?? region.kecamatan.find((k) => k.id === region.floodKecamatanIds[0]))?.name
+  // the clip's camat: the meeting anchor (same rule as region/anchor.ts floodAnchor): scenario.meetingKecamatanId, else
+  // the first flood kecamatan
+  const floodKecName = (region.kecamatan.find((k) => k.id === pack.scenario.meetingKecamatanId) ?? region.kecamatan.find((k) => k.id === region.floodKecamatanIds[0]))?.name
   const meetingPeople = (m: { title: Bi; done: boolean }, drawn: string[]): string[] =>
     m.title === MEETING_TPL[0] && !m.done ? ['Sekda', 'Kepala Dinas PUPR', 'Kalaksa BPBD', 'Kepala Dinas Sosial', floodKecName ? `Camat ${floodKecName}` : 'Camat'] : drawn
   const usedTitles = new Map<string, Set<string>>()
@@ -1070,13 +1071,21 @@ export function generateWorld(pack: RegionPack, seed: number, opts: { day?: stri
     const h = hist(11.6, 2.1, 0.05)
     gauges.push({ id: nid('gauges'), name: `${river.name} · pos ${region.shortName}`, kind: 'sungai', coord: at, kecamatanId: floodKec[0] ?? null, level: h[h.length - 1]!, normal: 12, siaga: 14, awas: 15.5, history: h, updatedAt: 6 * 60 })
   }
+  // Tahap 7: a pack without a dam (a city) gets the no-dam hoax variant: the rumour is about a SIMULATED sluice gate on
+  // the flood river ("Pintu air <river> jebol"), and that gate's gauge is the counter-evidence (draws only for such packs)
+  const gate = !dam && river ? { id: `Pintu air ${river.name}`, en: `${river.name} sluice gate` } : null
+  if (gate) {
+    const k2 = kecById.get(floodKec[1] ?? floodKec[0]!) ?? region.kecamatan[0]!
+    const h = hist(2.3, 0.12, 0.02)
+    gauges.push({ id: nid('gauges'), name: gate.id, kind: 'waduk', coord: k2.centroid, kecamatanId: k2.id, level: h[h.length - 1]!, normal: 2.6, siaga: 3.4, awas: 4, history: h, updatedAt: 6 * 60 })
+  }
 
   const facts: SeedFacts = {
     bansosApplicants: registrants.length,
     bansosDuplicatePairs: 3,
     bansosOutsideZone: registrants.filter((c) => !floodSet.has(c.kecamatanId)).length,
     tamperedDocumentId: documents.find((d) => d.tampered)?.id ?? '',
-    hoax: { rumor: WORLD.hoaxRumor, damName: dam?.name ?? '', gaugeId: gauges.find((g) => g.kind === 'waduk')?.id ?? '' },
+    hoax: { rumor: WORLD.hoaxRumor, damName: dam?.name ?? gate?.id ?? '', gaugeId: gauges.find((g) => g.kind === 'waduk')?.id ?? '', ...(gate ? { damNameEn: gate.en } : {}) },
     pumpRingBidderIds: pumpRing.map((b) => b.id),
   }
 

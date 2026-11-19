@@ -10,6 +10,7 @@ import type { Bi } from '../../demo-kit/world'
 import type { CtxItem, NaskahCtx } from './ai'
 import { byText } from './strings'
 import { dueLabel, isoDateText, parseDue } from './due'
+import { placeText } from './model'
 
 type Ctx = SimContext<unknown>
 
@@ -112,15 +113,15 @@ function minutes(ctx: Ctx): SimResponse {
     return {
       text: T(
         lang,
-        `Rapat membahas kenaikan Bengawan Solo dan rembesan tanggul Ngujo. Saya mencatat ${d.length} keputusan dan ${a.length} tindak lanjut; setiap tindak lanjut punya PIC dan tenggat, dan sudah dikirim ke papan OPD.`,
-        `The meeting covered the rising Bengawan Solo and the Ngujo embankment seepage. I recorded ${d.length} decisions and ${a.length} follow-ups; each has an owner and a deadline and is already on the agency board.`,
+        `${placeText('Rapat membahas kenaikan {river} dan rembesan tanggul {desa}', 'id')}. Saya mencatat ${d.length} keputusan dan ${a.length} tindak lanjut; setiap tindak lanjut punya PIC dan tenggat, dan sudah dikirim ke papan OPD.`,
+        `${placeText('The meeting covered the rising {river} and the {desa} embankment seepage', 'en')}. I recorded ${d.length} decisions and ${a.length} follow-ups; each has an owner and a deadline and is already on the agency board.`,
       ),
       structured: { kind: 'minutes', data: { decisions: d, actionItems: a } },
       toolCalls: [
         { name: 'baca_transkrip', input: { segmen: 11, pembicara: 5 }, output: { kata: 214 }, ms: 260 },
         { name: 'extract_minutes', input: { keputusan: d.length, tindak_lanjut: a.length }, ms: 520 },
       ],
-      followUps: lang === 'id' ? ['Tindak lanjut apa yang jatuh tempo hari ini?', 'Siapa PIC tanggul Ngujo?'] : ['What is due today?', 'Who owns the Ngujo embankment?'],
+      followUps: lang === 'id' ? ['Tindak lanjut apa yang jatuh tempo hari ini?', placeText('Siapa PIC tanggul {desa}?', 'id')] : ['What is due today?', placeText('Who owns the {desa} embankment?', 'en')],
     }
   }
   const text = w.meeting?.transcript ?? ''
@@ -541,7 +542,7 @@ const intents: Intent<unknown>[] = [
   },
   {
     id: 'pic.lookup',
-    examples: ['Siapa PIC tanggul Ngujo?', 'siapa penanggung jawab pompa', 'Who owns the Ngujo embankment task?', 'who is in charge of the pumps', 'Sinten PIC bansos'],
+    examples: ['Siapa PIC tanggul?', 'siapa penanggung jawab pompa', 'Who owns the embankment task?', 'who is in charge of the pumps', 'Sinten PIC bansos'],
     slots: { topic: /(?:pic|penanggung jawab|in charge of|owns|owner of)\s+(.+)/i },
     respond: (ctx, slots) => picLookup(ctx, slots),
   },

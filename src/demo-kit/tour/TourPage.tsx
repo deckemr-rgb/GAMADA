@@ -36,7 +36,24 @@ function regionOf(): { regionId: string; seed: number } {
   return { regionId: r && isRegionId(r) ? r : DEFAULT_REGION_ID, seed: seed && /^\d{1,9}$/.test(seed) ? Number(seed) : 2026 }
 }
 
+const Notes = lazy(() => import('./Notes'))
+
 export default function TourPage({ bab }: { bab: number | null }) {
+  // /tur?notes=1: the presenter notes window only (no world, no engine)
+  const [notes] = useState(() => q().get('notes') === '1')
+  const { lang: siteLang } = useI18n()
+  if (notes)
+    return (
+      <div className="dk-tour" lang={siteLang === 'en' ? 'en' : 'id'}>
+        <Suspense fallback={null}>
+          <Notes lang={siteLang === 'en' ? 'en' : 'id'} />
+        </Suspense>
+      </div>
+    )
+  return <TourMain bab={bab} />
+}
+
+function TourMain({ bab }: { bab: number | null }) {
   const { lang: siteLang } = useI18n()
   const lang: Lang = siteLang === 'en' ? 'en' : 'id'
   const t = TOUR_STRINGS[lang]

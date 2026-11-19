@@ -25,11 +25,13 @@ export interface PickerProps<V extends string> {
   heading?: string
   align?: 'start' | 'end'
   className?: string
+  /** the list opened (Tahap 7: the region picker starts fetching the other packs) */
+  onOpen?: () => void
 }
 
 const GAP = 6
 
-export function Picker<V extends string>({ label, value, options, onChange, children, heading, align = 'start', className }: PickerProps<V>) {
+export function Picker<V extends string>({ label, value, options, onChange, children, heading, align = 'start', className, onOpen }: PickerProps<V>) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
@@ -59,6 +61,7 @@ export function Picker<V extends string>({ label, value, options, onChange, chil
 
   useEffect(() => {
     if (!open) return
+    onOpen?.()
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
       if (pop.current?.contains(t) || btn.current?.contains(t)) return
@@ -116,6 +119,7 @@ export function Picker<V extends string>({ label, value, options, onChange, chil
         aria-label={label}
         title={label}
         onClick={() => setOpen((o) => !o)}
+        onPointerEnter={onOpen}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault()

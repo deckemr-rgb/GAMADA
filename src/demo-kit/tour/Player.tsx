@@ -15,6 +15,7 @@ import { Constellation, RING_TOTAL, seenCount } from './Constellation'
 import { bindProgress, engine, setEngineLang } from './engine'
 import { BigClock, NarrationText } from './Narration'
 import { useNarration } from './narration-load'
+import { NOTES_STRINGS, useNotesBridge } from './Notes'
 import Stage, { AmbilAlih } from './Stage'
 import { tourStore, useTour } from './store'
 import { TOUR_STRINGS, fill } from './strings'
@@ -37,6 +38,7 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
   const [snap, setSnap] = useState<Snap>('peek')
   useIdleCursor(st.presenter)
   useEffect(() => setEngineLang(lang), [lang])
+  useNotesBridge(st, lang)
 
   const ch = chapterOf(st.n)
   const entry = narr?.[st.n]
@@ -157,6 +159,11 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
       {!phone ? (
         <button type="button" className="dk-tour-icon" onClick={togglePresenter} aria-label={t.presenter} aria-pressed={st.presenter} data-tour-ctl="presenter">
           <Icon name="fullscreen" size={18} />
+        </button>
+      ) : null}
+      {!phone && st.presenter && typeof BroadcastChannel === 'function' ? (
+        <button type="button" className="dk-tour-icon" onClick={openNotes} aria-label={NOTES_STRINGS[lang].open} title={NOTES_STRINGS[lang].open} data-tour-ctl="notes">
+          <Icon name="doc" size={18} />
         </button>
       ) : null}
       <button type="button" className="dk-tour-icon" onClick={onExit} aria-label={t.exit} data-tour-ctl="exit">
@@ -282,6 +289,15 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
       {st.black ? <div className="dk-tour-black" aria-hidden="true" onClick={() => tourStore.set({ black: false })} /> : null}
     </div>
   )
+}
+
+/** presenter notes: /tur?notes=1 in a second window (follows this one over a BroadcastChannel) */
+function openNotes() {
+  const p = new URLSearchParams(window.location.search)
+  const q = new URLSearchParams({ notes: '1' })
+  const l = p.get('lang')
+  if (l) q.set('lang', l)
+  window.open(`/tur?${q.toString()}`, 'gamada-tour-notes', 'popup,width=560,height=760')
 }
 
 function Curtain({ on }: { on: boolean }) {

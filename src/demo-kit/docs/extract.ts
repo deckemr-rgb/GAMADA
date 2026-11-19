@@ -7,6 +7,7 @@
  */
 import type { ExtractRequest, Extracted, ExtractedField } from '../ai/types'
 import { hashString } from '../world/prng'
+import { currentRegion } from '../world/util'
 import { pct } from './measure'
 import { fieldKind, presenceText } from './values'
 import { dmy, longDate, nikMatchesBirth, nikRegionName, parseNik, SPECIMEN_KEC } from './nik'
@@ -28,11 +29,21 @@ export const EXTRACT = {
   tamperFail: 0.5,
   /** confidence under this is flagged "periksa" in ExtractPanel */
   lowConfidence: 0.85,
-  /** flood-affected kecamatan (region pack scenario.floodKecamatanIds, Bojonegoro) */
+  /** the bundled specimens' own region (the sample photos are geotagged there): its flood kecamatan. Tahap 7: the
+   *  checks also accept the CURRENT region (world/util currentRegion), see inRegion / inFloodZone */
   floodKecamatan: ['trucuk', 'kalitidu', 'bojonegoro', 'kanor'],
-  /** region bbox (pack bojonegoro): west, south, east, north */
+  /** the specimens' region bbox: west, south, east, north */
   bbox: [111.4236, -7.4696, 112.1657, -6.986] as [number, number, number, number],
 } as const
+
+const inBox = (b: readonly number[], lng: number, lat: number) => lng >= b[0]! && lng <= b[2]! && lat >= b[1]! && lat <= b[3]!
+/** inside the current region's bbox (a world is loaded) or the specimens' own region */
+const inRegion = (lng: number, lat: number) => {
+  const p = currentRegion()
+  return (!!p && inBox(p.bbox, lng, lat)) || inBox(EXTRACT.bbox, lng, lat)
+}
+/** a flood kecamatan of the current region's scenario, or of the specimens' region */
+const inFloodZone = (kecId: string) => !!currentRegion()?.scenario.floodKecamatanIds.includes(kecId) || (EXTRACT.floodKecamatan as readonly string[]).includes(kecId)
 
 /** Checks whose failure means "something is missing" (→ Kurang) rather than "something is off" (→ Cek Manual). */
 const MISSING = new Set(['signature', 'stamp', 'validity', 'required', 'kk-attached', 'recent'])
@@ -222,10 +233,9 @@ function checksFor(doc: SampleDoc, lang: Lang): Check[] {
     }
     case 'house': {
       const [lng, lat] = meta.lngLat
-      const [w, s, e, n] = EXTRACT.bbox
-      const inside = lng >= w && lng <= e && lat >= s && lat <= n
+      const inside = inRegion(lng, lat)
       out.push(check('geotag', { id: 'Geotag di wilayah', en: 'Geotag inside the region' }, inside ? 'ok' : 'fail', { id: `${meta.desa}, Kec. ${SPECIMEN_KEC[meta.kecamatanId]?.name ?? ''}`, en: `${meta.desa}, ${SPECIMEN_KEC[meta.kecamatanId]?.name ?? ''} district` }, lang))
-      const zone = (EXTRACT.floodKecamatan as readonly string[]).includes(meta.kecamatanId)
+      const zone = inFloodZone(meta.kecamatanId)
       out.push(check('flood-zone', { id: 'Di zona terdampak banjir', en: 'Inside the flood-affected zone' }, zone ? 'ok' : 'warn', { id: zone ? 'Cocok dengan peta Siaga Wilayah' : 'Di luar zona terdampak', en: zone ? 'Matches the Siaga Wilayah map' : 'Outside the affected zone' }, lang))
       const days = (Date.parse(EXTRACT.today) - Date.parse(meta.takenAt.slice(0, 10))) / 864e5
       const recent = days <= 7

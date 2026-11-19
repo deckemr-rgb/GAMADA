@@ -9,7 +9,8 @@ import type { Bi, EventMap, Minutes } from './types'
 
 /**
  * The false narrative Radar Isu catches (spec P4 step 2). `{dam}` = the real dam landmark of the pack
- * (pack.scenario.damLandmarkId), `{k}` = a flood kecamatan. Accounts and outlets are FICTIONAL.
+ * (pack.scenario.damLandmarkId) or, for a pack without a dam (Tahap 7), the SIMULATED sluice gate on the flood river
+ * ("Pintu air <river>" / "<river> sluice gate", see hoaxDam), `{k}` = a flood kecamatan. Accounts and outlets are FICTIONAL.
  */
 export const HOAX_SCENARIO = {
   /** = WORLD.hoaxRumor */
@@ -28,8 +29,8 @@ export const HOAX_SCENARIO = {
     { id: 'Teruskan! {dam} jebol, pemerintah diam saja', en: 'Pass it on! {dam} burst and the government says nothing' },
   ] as Bi[],
   evidence: {
-    id: 'Tinggi muka air {dam} {level} m, di bawah batas siaga {siaga} m (pos pantau Siaga Wilayah, data simulasi). Tidak ada laporan kerusakan bendungan.',
-    en: '{dam} water level {level} m, below the alert level {siaga} m (Siaga Wilayah gauge, simulated data). No dam damage reported.',
+    id: 'Tinggi muka air {dam} {level} m, di bawah batas siaga {siaga} m (pos pantau Siaga Wilayah, data simulasi). Tidak ada laporan kerusakan.',
+    en: '{dam} water level {level} m, below the alert level {siaga} m (Siaga Wilayah gauge, simulated data). No damage reported.',
   },
   /** positive / neutral mentions after a clarification (sentiment recovery) */
   recovery: [
@@ -60,7 +61,7 @@ export const NOTIFY_TEXT = {
 /** Radar Isu topics raised by Satu Daerah events (fictional outlets; {k} kecamatan, {d} desa, {r} region) */
 export const EVENT_MENTION_TEXT = {
   flood: { s: -0.35, t: { id: 'BPBD {r} keluarkan peringatan banjir untuk Kec. {k}', en: '{r} disaster agency issues a flood warning for {k} district' } },
-  floodSocial: { s: -0.55, t: { id: 'Air Bengawan naik terus, warga {k} mulai angkut barang ke tempat tinggi', en: 'The river keeps rising, residents of {k} move belongings to higher ground' } },
+  floodSocial: { s: -0.55, t: { id: 'Air sungai naik terus, warga {k} mulai angkut barang ke tempat tinggi', en: 'The river keeps rising, residents of {k} move belongings to higher ground' } },
   cluster: { s: -0.6, t: { id: 'Warga {d} ramai-ramai lapor banjir ke kanal aduan pemkab', en: 'Residents of {d} flood the government complaint channel with flood reports' } },
 }
 
@@ -68,12 +69,22 @@ export const EVENT_MENTION_TEXT = {
 export const HOAX_OFFSETS = [0, 6, 11, 15, 18, 21, 23, 25] as const
 
 /** the i-th post of the false-narrative burst as a mention.created payload (burst starting at `start`) */
-export function hoaxPost(i: number, start: Minutes, dam: string, kecamatan: string, rumor: string): EventMap['mention.created'] {
+export function hoaxPost(i: number, start: Minutes, dam: string | Bi, kecamatan: string, rumor: string): EventMap['mention.created'] {
   const t = HOAX_SCENARIO.posts[i % HOAX_SCENARIO.posts.length]!
   const author = HOAX_SCENARIO.accounts[i % HOAX_SCENARIO.accounts.length]!
-  const f = (x: string) => x.replace(/\{dam\}/g, dam).replace(/\{k\}/g, kecamatan)
+  const d = typeof dam === 'string' ? { id: dam, en: dam } : dam
+  const f = (x: string, l: 'id' | 'en') => x.replace(/\{dam\}/g, d[l]).replace(/\{k\}/g, kecamatan)
   return {
-    at: start + (HOAX_OFFSETS[i] ?? 25 + i), outlet: author, kind: i === 3 ? 'forum' : 'sosmed', author, text: { id: f(t.id), en: f(t.en) },
+    at: start + (HOAX_OFFSETS[i] ?? 25 + i), outlet: author, kind: i === 3 ? 'forum' : 'sosmed', author, text: { id: f(t.id, 'id'), en: f(t.en, 'en') },
     sentiment: 'negatif', score: Math.round((-0.7 - (i % 3) * 0.08) * 100) / 100, topic: HOAX_SCENARIO.topic, reach: Math.round(1800 * 1.55 ** i), rumor,
   }
+}
+
+/**
+ * Tahap 7: the hoax object's name in both languages. A real dam keeps its name in both; a pack without a dam gets the
+ * simulated sluice gate (seed: facts.hoax.damNameEn). Pass the result to hoaxPost / fillBi per language.
+ */
+export function hoaxDam(facts: { damName: string; damNameEn?: string }, fallback = ''): Bi {
+  const id = facts.damName || fallback || 'Bendungan'
+  return { id, en: facts.damNameEn || (facts.damName ? facts.damName : fallback || 'the dam') }
 }

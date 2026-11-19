@@ -4,13 +4,13 @@
  * (`pdKpi`), Board (`priceBoard`) and the region / warning / anomaly cards. The clock starts by itself at 07.00 and the
  * scenario flood plays at 07.06 (world/flood-scenario, imported then). Every number comes from world/pasar-daerah.
  */
-import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import AppLink from '../../components/AppLink'
 import { DEMO_READY } from '../registry'
 import { demoHref, intentProps, replaceQuery, usePreloadOnIntent, useShell } from '../../demo-kit/shell'
 import { BrowserFrame } from '../../demo-kit/frames'
 import { Button, IconButton, Kpi, KpiStrip, LoadingText, Select, flashNewRow, motionMode } from '../../demo-kit/ui'
-import { FLOOD_AT, floodOf, playFlood, useAutoplay, useFloodAutoplay } from './live'
+import { FLOOD_AT, floodOf, nextPaint, playFlood, useAutoplay, useFloodAutoplay } from './live'
 import { hhmm, onEvent, rows, useClock, useSession, useWorld, world, DAY_MIN, type WorldState } from '../../demo-kit/world'
 import { pdKpi, priceBoard, priceTicker, weekChangeOf } from '../../demo-kit/world/pasar-daerah'
 import { Ticker, type TickerItem } from './Ticker'
@@ -78,7 +78,8 @@ export default function Desk() {
   useEventToasts(t, lang)
   useEffect(() => void replaceQuery({ tab: u.tab === 'ringkasan' ? null : u.tab, commodity: u.commodity || null, market: u.market || null }), [u.tab, u.commodity, u.market])
 
-  const go = useCallback((k: TabId) => startTransition(() => ui.set({ tab: k })), [])
+  // ui is an external store (sync render even inside startTransition): switch after the pressed tab has painted (INP)
+  const go = useCallback((k: TabId) => void nextPaint().then(() => ui.set({ tab: k })), [])
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const onKey = (e: KeyboardEvent) => {
     const i = SP_TABS.indexOf(u.tab)

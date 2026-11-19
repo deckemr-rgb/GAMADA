@@ -1102,7 +1102,13 @@ export interface SeedFacts {
   /** the specimen document that was digitally edited (tamper demo) */
   tamperedDocumentId: string
   /** the false narrative Radar Isu detects (rumor key, dam landmark name, gauge with the evidence) */
-  hoax: { rumor: string; damName: string; gaugeId: string }
+  hoax: {
+    rumor: string
+    damName: string
+    gaugeId: string
+    /** Tahap 7: EN name of the hoax object when it differs from `damName` (a pack without a dam: "Pintu air X" → "X sluice gate") */
+    damNameEn?: string
+  }
   /** bidders of the affiliated ring that bids on the emergency pump package */
   pumpRingBidderIds: string[]
   /** Usaha Pintar facts (present once the ecosystem extension ran) */

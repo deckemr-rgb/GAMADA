@@ -15,9 +15,10 @@ import { PhoneFrame } from '../../demo-kit/frames'
 import { Avatar, Icon, initialsOf } from '../../demo-kit/ui'
 import { useNavigate } from 'react-router'
 import { demoHref, dismissHotspot, useShell } from '../../demo-kit/shell'
+import { languageLabel, regionalLanguageLabel } from '../../demo-kit/i18n'
 import { clock, getSession, rows, useClock, useSession, useWorld, world, type Bi, type CitizenMessage, type ComplaintCategory, type WorldState } from '../../demo-kit/world'
 import {
-  PERSONA_KEYS, PHOTO_META, SLUG, SW, afterPaint, bookQueue, buildContext, categoryFromLabel, classifyReport, createComplaint, kecName, liveContext, looksJawa, opdForCategory, opdShort,
+  PERSONA_KEYS, PHOTO_META, SLUG, SW, afterPaint, bookQueue, buildContext, categoryFromLabel, classifyReport, createComplaint, kecName, liveContext, looksRegional, opdForCategory, opdShort,
   personaCitizen, placeOf, reportCoord, resolvePlace, slotLabel, summaryOf, urgencyOf, voiceSampleFor, type Created, type PersonaKey, type PhotoId, type SwContext,
 } from './model'
 import { Thread, emptyConv, type Conv, type MsgMeta, type ThreadActions } from './Thread'
@@ -194,7 +195,7 @@ export interface PhoneProps {
 
 /* ------------------------------------------------------------------ quick chips per persona */
 
-type Quick = { label: Bi; text?: Bi | string; act?: 'voice' | 'photo' | 'queue' }
+type Quick = { label: Bi; text?: Bi | string; act?: 'voice' | 'photo' | 'queue' | 'ktp-rl' }
 const QUICK: Record<PersonaKey, Quick[]> = {
   siti: [
     { label: { id: 'Voice note contoh', en: 'Sample voice note' }, act: 'voice' },
@@ -210,10 +211,23 @@ const QUICK: Record<PersonaKey, Quick[]> = {
   ],
   darmo: [
     { label: { id: 'Voice note contoh', en: 'Sample voice note' }, act: 'voice' },
-    { label: { id: 'KTP-el rusak (Basa Jawa)', en: 'Damaged e-ID (Javanese)' }, text: 'KTP-el kula rusak, pripun carane ngurus?' },
+    { label: { id: 'KTP-el rusak', en: 'Damaged e-ID' }, act: 'ktp-rl' },
     { label: { id: 'Ambil antrean MPP', en: 'Book a service-mall slot' }, act: 'queue' },
     { label: { id: 'Cek status bansos', en: 'Check social-aid status' }, text: { id: 'Cek status penerima bansos', en: 'Check my social assistance status' } },
   ],
+}
+/** Pak Darmo's damaged e-ID question in the region's own language (samples, "contoh"); no chip without one */
+const KTP_RL: Record<string, string> = {
+  jv: 'KTP-el kula rusak, pripun carane ngurus?',
+  su: 'KTP-el abdi ruksak, kumaha carana ngurus nu enggal?',
+  min: 'KTP-el ambo rusak, baa caronyo mangurus nan baru?',
+}
+function quickFor(persona: PersonaKey, code: string | undefined): Quick[] {
+  return QUICK[persona].flatMap((q): Quick[] => {
+    if (q.act !== 'ktp-rl') return [q]
+    const text = code ? KTP_RL[code] : undefined
+    return text ? [{ label: { id: `${q.label.id} (${languageLabel(code!, 'id')})`, en: `${q.label.en} (${languageLabel(code!, 'en')})` }, text }] : []
+  })
 }
 const STORY: Record<PersonaKey, 'personaSiti' | 'personaRaka' | 'personaDarmo'> = { siti: 'personaSiti', raka: 'personaRaka', darmo: 'personaDarmo' }
 
@@ -237,6 +251,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   const session = useSession()
   const shell = useShell()
   const pack = shell.pack
+  const rlName = regionalLanguageLabel(pack, lang) ?? (lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian')
   const saved = useRef(convs.get(persona) ?? emptyConv()).current
   const [conv, setConv] = useState<Omit<Conv, 'messages'>>(() => ({ timeline: saved.timeline, meta: saved.meta, created: saved.created, done: saved.done }))
   const citizen = useWorld((s) => personaCitizen(s, persona))
@@ -356,7 +371,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
           const desaId = named ? named.desaId : typeof d.desaId === 'string' && d.desaId ? d.desaId : kecId === c.kecamatanId ? c.desaId : (s.region.kecamatan.find((k) => k.id === kecId)?.desa[0]?.id ?? c.desaId)
           const centre = s.region.kecamatan.find((k) => k.id === kecId)?.desa.find((x) => x.id === desaId)?.centroid
           const said = typeof d.text === 'string' ? d.text : (prevUser?.content ?? String(d.summary ?? ''))
-          const jv = looksJawa(said)
+          const jv = !!looksRegional(said)
           const urg = String(d.urgency ?? '')
           const r = createComplaint(s, {
             citizen: c, category: cat, channel: 'wa', text: said, lang: jv ? c.lang : 'id',
@@ -414,11 +429,11 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
       if (!c) return
       const sample = voiceSampleFor(persona, pack)
       const translation = res.source === 'sample' || res.text === sample.text ? sample.translation : null
-      const jv = looksJawa(res.text)
+      const rc = looksRegional(res.text)
+      const jv = !!rc
       const cat = classifyReport(res.text)
       const words = res.text.split(/\s+/).length
-      const regional = pack?.languages.regional[0]
-      const langLabel = jv ? (regional === 'jv' ? (lang === 'id' ? 'Basa Jawa' : 'Javanese') : lang === 'id' ? 'Bahasa daerah' : 'Regional language') : lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian'
+      const langLabel = rc ? languageLabel(rc, lang) : lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian'
       const meta: MsgMeta = { voice: { lang: jv ? res.lang : 'id-ID', translation, secs: Math.max(3, Math.round(words / 2.3)), label: jv ? fill(t.voiceLang, { from: langLabel }) : langLabel } }
       let j: SwContext['justCreated'] = null
       if (cat) {
@@ -464,7 +479,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
     let j: SwContext['justCreated'] = null
     if (cat) {
       const r = createComplaint(s, {
-        citizen: c, category: cat, channel: 'wa', text: caption, lang: looksJawa(caption) ? c.lang : 'id',
+        citizen: c, category: cat, channel: 'wa', text: caption, lang: looksRegional(caption) ? c.lang : 'id',
         summary: ph && ph.id !== 'own' && !q ? PHOTO_META[ph.id].caption : summaryOf(s, cat, caption, c.kecamatanId, c.desaId), photo: !!ph, urgency: urgencyOf(cat, caption),
       }, 1)
       meta.created = r
@@ -495,7 +510,7 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
 
   const tips = useMemo(() => {
     const icons: Record<PersonaKey, ('mic' | 'camera' | 'bell' | 'checkCircle' | 'calendar' | 'search' | 'share')[]> = { siti: ['mic', 'camera', 'share', 'bell'], raka: ['checkCircle', 'calendar', 'mic'], darmo: ['mic', 'calendar', 'search'] }
-    const txt = persona === 'siti' ? t.tipsSiti : persona === 'raka' ? t.tipsRaka : t.tipsDarmo
+    const txt = fill(persona === 'siti' ? t.tipsSiti : persona === 'raka' ? t.tipsRaka : t.tipsDarmo, { rl: rlName })
     // Ibu Siti's last tip (the BPBD warning) is a way to make it happen: send one from Siaga Wilayah, then come back
     const goSiaga = () => {
       const href = `${demoHref('siaga-wilayah', getSession())}&role=bpbd`
@@ -504,9 +519,10 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
     }
     return txt.split('|').map((text, i, all) => ({ icon: icons[persona][i] ?? 'mic', text, ...(persona === 'siti' && i === all.length - 1 ? { go: goSiaga } : {}) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [persona, t])
-  const quick = QUICK[persona]
-  const quickChips = useMemo(() => QUICK[persona].flatMap((q) => [q.label[lang], ...(q.text ? [typeof q.text === 'string' ? q.text : q.text[lang]] : [])]), [persona, lang])
+  }, [persona, t, rlName])
+  const rlCode = pack?.languages.regional[0]
+  const quick = useMemo(() => quickFor(persona, rlCode), [persona, rlCode])
+  const quickChips = useMemo(() => quick.flatMap((q) => [q.label[lang], ...(q.text ? [typeof q.text === 'string' ? q.text : q.text[lang]] : [])]), [quick, lang])
   const onQuick = (q: Quick) => {
     if (q.act === 'voice') openSheet({ k: 'voice', quick: true })
     else if (q.act === 'photo') {
@@ -608,6 +624,7 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, 
   const { lang } = useI18n()
   const t = useT()
   const shell = useShell()
+  const rlName = regionalLanguageLabel(shell.pack, lang) ?? (lang === 'id' ? 'Bahasa Indonesia' : 'Indonesian')
   const { minutes } = useClock()
   const region = useWorld((s) => s.region.shortName)
   const citizens = useWorld((s) => PERSONA_KEYS.map((k) => personaCitizen(s, k)))
@@ -693,7 +710,7 @@ export function Phone({ persona, setPersona, convs, onCreated, flat, toConsole, 
       </div>
       {cur && (
         <p className="dk-sw-pinfo">
-          <span className="dk-num">{fill(t.years, { n: cur.age })}</span> · {cur.address} · <b>{t[STORY[persona]]}</b>
+          <span className="dk-num">{fill(t.years, { n: cur.age })}</span> · {cur.address} · <b>{fill(t[STORY[persona]], { rl: rlName })}</b>
         </p>
       )}
       <Chat

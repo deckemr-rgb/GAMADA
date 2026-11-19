@@ -52,7 +52,7 @@ export function AskBox(props: AskProps) {
           {tr('ask', lang)}
         </h3>
       </header>
-      <div className="dk-mp-pb dk-mp-ask-body">
+      <div className="dk-mp-pb dk-mp-ask-body" tabIndex={0}>
         <p className="dk-mp-meta">{on ? tr('loadingAsk', lang) : tr('askHint', lang)}</p>
         <div className="dk-mp-chips">
           {[q1[lang], tr('askQ2', lang), tr('askQ3', lang)].map((q) => (

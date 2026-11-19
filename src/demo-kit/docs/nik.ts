@@ -8,7 +8,10 @@
  *   1. the region pack's `kecamatan[].kemendagri` ('35.22.16'),
  *   2. the built-in Bojonegoro table below (packs built before that field existed),
  *   3. the pack's BPS `code` (legacy fallback; ambiguous for codes that do not end in 0).
+ * Tahap 7: parseNik / nikRegionName default to the CURRENT region (world/util currentRegion, set when a world loads) plus the
+ * built-in table, so NIKs seeded for any pack pass and the bundled specimens (Bojonegoro codes) keep passing.
  */
+import { currentRegion } from '../world/util'
 
 export const NIK = {
   province: '35',
@@ -98,9 +101,17 @@ export function nikRegions(kecamatan: readonly NikKecamatan[]): Set<string> {
 /** default for parseNik: every kecamatan of Kabupaten Bojonegoro */
 export const BOJONEGORO_NIK_REGIONS: ReadonlySet<string> = new Set(Object.keys(BOJONEGORO_KEMENDAGRI).map((id) => nikRegion(id)))
 
-/** "35.22.16 (Kalitidu)" style label for a NIK's region digits (Bojonegoro table; null when unknown) */
+/** the current region's NIK prefixes (Kemendagri codes of its kecamatan; packs are validated to carry them) */
+const ownRegions = () => (currentRegion()?.kecamatan ?? []).map((k) => digits(k.kemendagri))
+
+/** parseNik's default: the current region's kecamatan (when a world is loaded) + the built-in specimen table */
+export const defaultNikRegions = (): ReadonlySet<string> => new Set([...ownRegions(), ...BOJONEGORO_NIK_REGIONS])
+
+/** "Kalitidu" style name for a NIK's region digits: the current region first, then the built-in table (null when unknown) */
 export function nikRegionName(nik: string): string | null {
-  const s = digits(nik)
+  const s = digits(nik).slice(0, 6)
+  const own = currentRegion()?.kecamatan.find((k) => digits(k.kemendagri) === s)
+  if (own) return own.name
   if (s.slice(0, 4) !== NIK.province + NIK.regency) return null
   return Object.values(BOJONEGORO_KEMENDAGRI).find((k) => k.code === s.slice(4, 6))?.name ?? null
 }
@@ -138,9 +149,9 @@ export interface NikParts {
 
 /**
  * Format check (16 digits, known region code, plausible date, serial). `regions` = the valid 6-digit prefixes;
- * default: every Bojonegoro kecamatan. For another pack pass `nikRegions(pack.kecamatan)`.
+ * default: the current region's kecamatan + the built-in table (defaultNikRegions). Or pass `nikRegions(pack.kecamatan)`.
  */
-export function parseNik(nik: string, regions: ReadonlySet<string> = BOJONEGORO_NIK_REGIONS): NikParts {
+export function parseNik(nik: string, regions: ReadonlySet<string> = defaultNikRegions()): NikParts {
   const s = nik.replace(/\s/g, '')
   const base: NikParts = { ok: false, region: s.slice(0, 6), gender: null, day: 0, month: 0, yy: 0, serial: 0 }
   if (!/^\d+$/.test(s)) return { ...base, problem: 'digits' }

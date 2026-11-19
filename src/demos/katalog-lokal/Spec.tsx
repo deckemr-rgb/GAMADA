@@ -12,7 +12,7 @@ import { needList } from '../../demo-kit/world/pasar-daerah'
 import { useI18n } from '../../lib/i18n'
 import { parseNeed, type ParsedItem } from './parse'
 import { aiContext } from './scenario'
-import { SLUG, kecName, nf, rp } from './model'
+import { SLUG, afterPaint, kecName, nf, rp } from './model'
 
 const S = {
   id: {
@@ -101,13 +101,13 @@ export default function Spec({ text, onPublished, onOpenNeed, onCancel }: { text
     const k = kecName(world.get(), kec)
     const list = (lg: 'id' | 'en') => items.map((i) => `${i.name[lg]} ${nf(lg, i.qty)} ${i.unit}`).join(' + ')
     const title: Bi = { id: S.id.title1(list('id'), k, emergency), en: S.en.title1(list('en'), k, emergency) }
-    const e = emit(
-      'need.created',
-      { title, items: items.map((i) => ({ name: i.name, category: i.category, qty: i.qty, unit: i.unit, spec: i.spec })), kecamatanId: kec, deadlineDays: days, emergency, cause: null, by: 'ai', ...(p0.budget ? { budget: p0.budget } : {}) },
-      SLUG,
-    )
+    const payload = { title, items: items.map((i) => ({ name: i.name, category: i.category, qty: i.qty, unit: i.unit, spec: i.spec })), kecamatanId: kec, deadlineDays: days, emergency, cause: null, by: 'ai' as const, ...(p0.budget ? { budget: p0.budget } : {}) }
     setDone(true)
-    if (e.payload.id) onPublished(e.payload.id)
+    // the button shows "terkirim" in this frame; the emit and the board/list update follow the paint (INP)
+    afterPaint(() => {
+      const e = emit('need.created', payload, SLUG)
+      if (e.payload.id) onPublished(e.payload.id)
+    })
   }
   const setQty = (i: number, v: number) => setItems((xs) => xs.map((x, k) => (k === i ? { ...x, qty: Math.max(1, Math.min(1_000_000, Math.round(v) || 1)) } : x)))
   const msg = chat.last

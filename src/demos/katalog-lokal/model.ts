@@ -6,6 +6,11 @@ import type { WorldState } from '../../demo-kit/world'
 import { catalogShortlist } from '../../demo-kit/world/pasar-daerah'
 
 export const SLUG = 'katalog-lokal' as const
+
+/** run `fn` after the next paint: the pressed control answers in this frame, the heavy work follows (INP) */
+export const afterPaint = (fn: () => void): void => {
+  requestAnimationFrame(() => setTimeout(fn, 0))
+}
 export type Side = 'pemda' | 'umkm'
 export type Lang = 'id' | 'en'
 

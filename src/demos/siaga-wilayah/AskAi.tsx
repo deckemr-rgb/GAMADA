@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useAiChat, type ChatMessage } from '../../demo-kit/ai/chat'
 import { Button, Drawer, Icon, Textarea } from '../../demo-kit/ui'
-import { rows, useSession, world } from '../../demo-kit/world'
+import { currentRegion, rows, useSession, world } from '../../demo-kit/world'
+import { regionalLanguageLabel } from '../../demo-kit/i18n'
 import { canSend, draftLevel, swRole } from './data'
 import { geoContext } from './scenario'
 import { fill, type Bi } from './strings'
@@ -19,7 +20,7 @@ const T = {
   eyebrow: { id: 'Siaga Wilayah · {m}', en: 'Siaga Wilayah · {m}' },
   sim: { id: 'mode Simulasi', en: 'Simulation mode' },
   live: { id: 'mode Live', en: 'Live mode' },
-  hello: { id: 'Tanyakan situasi banjir, desa terdampak, muka air, posko, dampak panen, atau minta saya menyusun peringatan dini. Bisa juga dalam Basa Jawa.', en: 'Ask about the flood situation, affected villages, water levels, shelters, the harvest impact, or ask me to draft an early warning. Basa Jawa works too.' },
+  hello: { id: 'Tanyakan situasi banjir, desa terdampak, muka air, posko, dampak panen, atau minta saya menyusun peringatan dini.{rl}', en: 'Ask about the flood situation, affected villages, water levels, shelters, the harvest impact, or ask me to draft an early warning.{rl}' },
   placeholder: { id: 'Tulis pertanyaan…', en: 'Type a question…' },
   send: { id: 'Kirim', en: 'Send' },
   stop: { id: 'Hentikan', en: 'Stop' },
@@ -36,6 +37,13 @@ const T = {
   q3: { id: 'Susun peringatan dini untuk {k}', en: 'Draft an early warning for {k}' },
   q4: { id: '{d} jebol ta?', en: 'Is {d} about to burst?' },
 } satisfies Record<string, Bi>
+
+/** " Bisa juga dalam Basa Sunda." for a region whose language the scenario understands (Jawa / Sunda / Minang) */
+function rlHint(lang: 'id' | 'en'): string {
+  const p = currentRegion()
+  const name = ['jv', 'su', 'min'].includes(p?.languages.regional[0] ?? '') ? regionalLanguageLabel(p, lang) : null
+  return name ? (lang === 'id' ? ` Bisa juga dalam ${name}.` : ` ${name} works too.`) : ''
+}
 
 export default function AskAi() {
   const { lang } = useI18n()
@@ -61,7 +69,7 @@ export default function AskAi() {
     <Drawer open onClose={() => ui.set({ aiOpen: false })} title={L('title')} eyebrow={L('eyebrow', { m: session.aiMode === 'live' ? L('live') : L('sim') })} width={440}>
       <div className="dk-sg-ai">
         <div className="dk-sg-ai-log" aria-live="polite">
-          <p className="dk-sg-ai-msg is-ai">{L('hello')}</p>
+          <p className="dk-sg-ai-msg is-ai">{L('hello', { rl: rlHint(lang) })}</p>
           {chat.messages.map((m) => (
             <Msg key={m.id} m={m} L={L} canSend={canSend(role)} />
           ))}

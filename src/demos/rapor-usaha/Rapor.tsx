@@ -15,7 +15,7 @@ import type { ProductSlug } from '../../content/products'
 import { FactorWaterfall } from './FactorWaterfall'
 import { DemoLink } from './DemoLink'
 import { useT } from './strings'
-import { actionsM, feedM, monthShort, pctText, raporM, rp, timeText, uiStore, useUi, type Lang } from './model'
+import { actionsM, afterPaint, feedM, monthShort, pctText, raporM, rp, timeText, uiStore, useUi, type Lang } from './model'
 
 const loadReview = () => import('./Review')
 const loadTrend = () => import('./Trend')
@@ -228,7 +228,7 @@ const FeedCard = memo(function FeedCard({ L, lang, recalcAt }: { L: L; lang: Lan
         {L.feedSales(f.tx, rp(f.revenue, lang))}
       </p>
       {f.rows.length ? (
-        <ul className="dk-ru-feed-chips" aria-label={L.feedTitle}>
+        <ul className="dk-ru-feed-chips" aria-label={L.feedTitle} tabIndex={0}>
           {f.rows.map((x) => (
             <li key={x.id} className="dk-ru-feed-chip">
               <b>{L.kind[x.kind]}</b> {x.kind === 'penjualan' ? x.id : x.text[lang]} · {timeText(x.at, lang)}
@@ -368,7 +368,7 @@ function Actions({ L, lang }: { L: L; lang: Lang }) {
               <strong>{tx.title}</strong>
               <span className="dk-ru-muted">{tx.why}</span>
               {a.target === null ? (
-                <Button size="sm" variant={i === 0 ? 'primary' : 'secondary'} icon="check" onClick={() => uiStore.set({ review: true })} onPointerEnter={() => void loadReview()} onFocus={() => void loadReview()} aria-haspopup="dialog" data-ru="fix">
+                <Button size="sm" variant={i === 0 ? 'primary' : 'secondary'} icon="check" onClick={() => afterPaint(() => uiStore.set({ review: true }))} onPointerEnter={() => void loadReview()} onFocus={() => void loadReview()} aria-haspopup="dialog" data-ru="fix">
                   {L.check}
                 </Button>
               ) : (
@@ -431,7 +431,7 @@ function FactorBody({ L, lang, f }: { L: L; lang: Lang; f: RaporFactor }) {
       </dl>
       <div className="dk-ru-row">
         {f.key === 'pajak' && pending > 0 && (
-          <Button size="sm" variant="primary" icon="check" onClick={() => uiStore.set({ factor: null, review: true })}>
+          <Button size="sm" variant="primary" icon="check" onClick={() => afterPaint(() => uiStore.set({ factor: null, review: true }))}>
             {L.tidy}
           </Button>
         )}

@@ -5,7 +5,7 @@
  */
 import type { AnyFollowUp, Bi, WorldState } from './types'
 import { MEDIA_OUTLETS, PUMP_PACKAGE, SOCIAL_HANDLES } from './texts'
-import { EVENT_MENTION_TEXT, HOAX_SCENARIO, NOTIFY_TEXT } from './scenario-texts'
+import { EVENT_MENTION_TEXT, HOAX_SCENARIO, NOTIFY_TEXT, hoaxDam } from './scenario-texts'
 import { R_FLOOD_CLUSTER, R_LEDGER_SCORE, R_SALE_LEDGER, fu, react, rescore, type Reaction } from './reactions-core'
 import { DAY_MIN, WORLD, hhmm, monthOf, picOf, ref, rows } from './util'
 
@@ -28,10 +28,12 @@ const pickBy = <T>(arr: readonly T[], key: string): T => {
 }
 const sentimentOf = (score: number) => (score < -0.2 ? 'negatif' : score > 0.2 ? 'positif' : 'netral') as 'negatif' | 'netral' | 'positif'
 /** the real dam name of the hoax scenario + the Siaga Wilayah gauge readings (simulated) */
-function damFacts(s: WorldState): { dam: string; level: number; siaga: number } {
+function damFacts(s: WorldState): { dam: Bi; level: number; siaga: number } {
   const g = s.gauges.byId[s.meta.facts.hoax.gaugeId]
-  return { dam: s.meta.facts.hoax.damName || g?.name || 'Bendungan', level: g?.level ?? 0, siaga: g?.siaga ?? 0 }
+  return { dam: hoaxDam(s.meta.facts.hoax, g?.name), level: g?.level ?? 0, siaga: g?.siaga ?? 0 }
 }
+/** a Bi template filled per language (the dam's name differs between ID and EN for the no-dam variant) */
+const fillDam = (t: Bi, dam: Bi, v: Record<string, string | number>): Bi => ({ id: fillBi(t, { ...v, dam: dam.id }).id, en: fillBi(t, { ...v, dam: dam.en }).en })
 
 function opdLike(s: WorldState, hints: string[], fallback: string): string {
   for (const h of hints) {
@@ -220,12 +222,12 @@ export const REACTIONS: Reaction[] = [
     const first = [...burst].sort((a, b) => a.at - b.at)
     const spanH = Math.max(0.25, (at - (first[0]?.at ?? at)) / 60)
     return [fu('hoax.detected', {
-      claim: fillBi(HOAX_SCENARIO.claim, { dam: f.dam }), score: 0.93, spreadPerHour: Math.round(burst.reduce((n, m) => n + m.reach, 0) / spanH),
+      claim: fillDam(HOAX_SCENARIO.claim, f.dam, {}), score: 0.93, spreadPerHour: Math.round(burst.reduce((n, m) => n + m.reach, 0) / spanH),
       accounts: [...new Set(first.map((m) => m.author))].slice(0, 4), topic: HOAX_SCENARIO.topic, rumor,
       // decimals per locale: "8,6 m" in Indonesian, "8.6 m" in English
       evidence: {
-        id: fillBi(HOAX_SCENARIO.evidence, { dam: f.dam, level: f.level.toFixed(1).replace('.', ','), siaga: f.siaga.toFixed(1).replace('.', ',') }).id,
-        en: fillBi(HOAX_SCENARIO.evidence, { dam: f.dam, level: f.level.toFixed(1), siaga: f.siaga.toFixed(1) }).en,
+        id: fillDam(HOAX_SCENARIO.evidence, f.dam, { level: f.level.toFixed(1).replace('.', ','), siaga: f.siaga.toFixed(1).replace('.', ',') }).id,
+        en: fillDam(HOAX_SCENARIO.evidence, f.dam, { level: f.level.toFixed(1), siaga: f.siaga.toFixed(1) }).en,
       },
     }, 'radar-isu')]
   }),
@@ -237,7 +239,7 @@ export const REACTIONS: Reaction[] = [
     const k = kecName(s, s.region.floodKecamatanIds[0] ?? '')
     return HOAX_SCENARIO.recovery.map((r, i) => fu('mention.created', {
       at: e.at + 6 * (i + 1), outlet: i % 2 ? pickBy(SOCIAL_HANDLES, `${e.id}${i}`) : pickBy(MEDIA_OUTLETS, `${e.id}${i}`), kind: i % 2 ? 'sosmed' : 'berita',
-      author: i % 2 ? pickBy(SOCIAL_HANDLES, `${e.id}a${i}`) : 'Redaksi', text: fillBi(r.t, { dam: f.dam, r: s.region.shortName, k }), sentiment: sentimentOf(r.s), score: r.s,
+      author: i % 2 ? pickBy(SOCIAL_HANDLES, `${e.id}a${i}`) : 'Redaksi', text: fillDam(r.t, f.dam, { r: s.region.shortName, k }), sentiment: sentimentOf(r.s), score: r.s,
       topic: h.topic, reach: 3000 + 1800 * (5 - i), hoaxId: h.id,
     }, 'radar-isu'))
   }),

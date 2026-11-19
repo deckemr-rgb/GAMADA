@@ -8,7 +8,7 @@
 import type { Lang } from '../../lib/i18n'
 import type { RegionPack } from '../../demo-kit/region/types'
 import {
-  CATEGORY_LABEL, DAY_MIN, WORLD, clock, distanceKm, emit, formatId, hhmm, rows,
+  CATEGORY_LABEL, DAY_MIN, WORLD, clock, currentRegion, distanceKm, emit, formatId, hhmm, rows,
   type Bi, type Citizen, type ComplaintCategory, type ComplaintChannel, type EventMap, type LngLat, type Urgency, type WorldState,
 } from '../../demo-kit/world'
 
@@ -86,6 +86,20 @@ export interface VoiceSampleLite {
   title: Bi
   translation: Bi
 }
+/** BCP-47 code of a regional language for Web Speech / the voice label: the pack's own code, else "<lang>-ID" */
+function speechFor(pack: RegionPack | null, lang: string): string {
+  if (lang === 'id') return 'id-ID'
+  return pack?.languages.speechCodes.find((c) => c.split('-')[0] === lang) ?? `${lang}-ID`
+}
+/** Pak Darmo's voice note in Basa Sunda / Baso Minang (sample texts, "contoh"; Basa Jawa below keeps its own id) */
+const DARMO_RL: Record<string, string> = {
+  su: 'Punten. KTP-el abdi ruksak, retak di tengah sareng teu tiasa kabaca ku mesin. Abdi tos sepuh, kumaha carana ngurus nu enggal?',
+  min: 'Mohon maaf. KTP-el ambo rusak, retak di tangah jo indak bisa dibaco mesin. Ambo alah gaek, baa caronyo mangurus nan baru?',
+}
+const DARMO_TR: Bi = {
+  id: 'Permisi. KTP-el saya rusak, retak di tengah dan tidak bisa dibaca mesin. Saya sudah tua, bagaimana cara mengurus yang baru?',
+  en: 'Excuse me. My e-ID card is damaged, cracked in the middle and the reader cannot read it. I am elderly, how do I get a new one?',
+}
 export function voiceSampleFor(key: PersonaKey, pack: RegionPack | null): VoiceSampleLite {
   const regional = pack?.languages.regional[0]
   const speech = pack?.languages.speechCodes[0] ?? 'id-ID'
@@ -93,7 +107,11 @@ export function voiceSampleFor(key: PersonaKey, pack: RegionPack | null): VoiceS
   if (key === 'siti') {
     const flood = tpls.filter((t) => t.category === 'banjir')
     const t = flood.find((x) => /tanggul|bocor/i.test(x.id + x.text)) ?? flood[0]
-    if (t) return { id: `vn-${t.id}`, text: t.text, lang: speech, title: { id: 'Voice note Ibu Siti', en: "Ibu Siti's voice note" }, translation: t.translation }
+    if (t) return { id: `vn-${t.id}`, text: t.text, lang: speechFor(pack, t.lang), title: { id: 'Voice note Ibu Siti', en: "Ibu Siti's voice note" }, translation: t.translation }
+  }
+  const darmoRl = regional ? DARMO_RL[regional] : undefined
+  if (key === 'darmo' && darmoRl) {
+    return { id: `vn-darmo-ktp-${regional}`, lang: speechFor(pack, regional!), title: { id: 'Voice note Pak Darmo', en: "Pak Darmo's voice note" }, text: darmoRl, translation: DARMO_TR }
   }
   if (key === 'darmo' && regional === 'jv') {
     return {
@@ -140,7 +158,7 @@ export const PERSONA_PHOTOS: Record<PersonaKey, PhotoId[]> = {
   darmo: ['lubang', 'lampu', 'genangan'],
 }
 
-/* ------------------------------------------------------------------ language detection (ID · EN · Basa Jawa) */
+/* ------------------------------------------------------------------ language detection (ID · EN · Jawa / Sunda / Minang) */
 
 const JAWA = /\b(banyu|banyune|munggah|minggah|omah|omahe|omahku|griya|kelebon|dalan|dalane|margi|akeh|tiba|peteng|wengi|bengi|banget|sanget|sing|ingkang|ngarep|yen|menawi|maneh|kudu|wae|mawon|kalih|kula|kulo|dereng|durung|sampun|wis|uwis|uwuh|nyuwun|tulung|mboten|ora|niki|iki|neng|nang|ning|ing|lan|kaliyan|kebak|wingi|matur|badhe|tekan|ngendi|pripun|piye|kepripun|tanggule|mrembes|bocor|ndang|isa|saged|dipundhut|kapan|sakmenika|kawaos|enggal|sepuh|toya|jawah|sabin|lur|kulanuwun|sugeng|matur|nuwun|carane|ngurus|rusak|retak)\b/gi
 const JAWA_STRONG = /\b(kula|kulo|banyune|munggah|minggah|mboten|ora|nyuwun|tulung|sampun|wis|dereng|durung|pripun|piye|nang|toya|griya|kulanuwun|sugeng|matur|nuwun|ndang|isa|saged|kawaos|tanggule|mrembes|lur)\b/gi
@@ -153,9 +171,22 @@ const ID = /\b(yang|dan|di|ke|dari|saya|kami|mau|apa|bagaimana|gimana|syarat|bik
 export function looksEnglish(text: string): boolean {
   return (text.match(EN) ?? []).length >= 2 && (text.match(EN) ?? []).length > (text.match(ID) ?? []).length
 }
-/** answer language: Basa Jawa when the citizen writes it, English when they write English, else the UI language */
-export function replyLang(text: string, ui: Lang): 'jv' | Lang {
-  if (looksJawa(text)) return 'jv'
+const SUNDA = /\b(cai|imah|geus|naek|teu|henteu|abdi|kuring|punten|nyuhunkeun|tulung|lembur|kumaha|naon|ayeuna|caah|cileuncang|kakeueum|barudak|kolot|jeung|nu|ieu|eta|sareng|parantos|tos|mangga|hatur|nuhun|sabaraha|walungan|runtah|pareum|poek|ruksak|bolong|sakola|ngungsi|diungsikeun|beresih|kiruh|sabeuteung|tiasa|carana|enggal|sepuh|kabaca|gorong|mampet|tangkal|rubuh)\b/gi
+const SUNDA_STRONG = /\b(geus|teu|henteu|abdi|kuring|punten|nyuhunkeun|kumaha|naon|ayeuna|caah|cileuncang|kakeueum|barudak|jeung|parantos|hatur|nuhun|sabaraha|walungan|runtah|pareum|ruksak|diungsikeun|kiruh|imah|sabeuteung|tiasa|mampet|rubuh)\b/gi
+const MINANG = /\b(aia|alah|naiak|indak|ambo|awak|kampuang|baa|apo|banjia|tagenang|gaek|jo|nan|iko|sadonyo|batang|masuak|mangungsi|diungsian|barasiah|karuah|paralu|lutuik|sapinggang|tanggua|alun|suruik|sumua|caronyo|mangurus|tolong|parahu|dibaco|sumbek|banda|labek|tumbang|kayu|sakolah|dima)\b/gi
+const MINANG_STRONG = /\b(aia|alah|naiak|indak|ambo|kampuang|baa|banjia|tagenang|gaek|sadonyo|masuak|mangungsi|diungsian|barasiah|karuah|paralu|lutuik|sapinggang|tanggua|alun|suruik|sumua|caronyo|mangurus|dibaco|sumbek|labek)\b/gi
+const looks = (text: string, all: RegExp, strong: RegExp) => (text.match(all) ?? []).length >= 2 && (text.match(strong) ?? []).length >= 1
+/** a regional language the citizen writes in: Basa Jawa anywhere; Basa Sunda / Baso Minang only where the running
+ *  region speaks it (they share many words with Indonesian). `code` defaults to the region's first language. */
+export function looksRegional(text: string, code: string | undefined = currentRegion()?.languages.regional[0]): 'jv' | 'su' | 'min' | null {
+  if (code === 'su' && looks(text, SUNDA, SUNDA_STRONG)) return 'su'
+  if (code === 'min' && looks(text, MINANG, MINANG_STRONG)) return 'min'
+  return looksJawa(text) ? 'jv' : null
+}
+/** answer language: the regional language when the citizen writes it, English when they write English, else the UI language */
+export function replyLang(text: string, ui: Lang): 'jv' | 'su' | 'min' | Lang {
+  const rl = looksRegional(text)
+  if (rl) return rl
   if (looksEnglish(text)) return 'en'
   if ((text.match(ID) ?? []).length >= 1) return 'id'
   return ui
@@ -164,12 +195,12 @@ export function replyLang(text: string, ui: Lang): 'jv' | Lang {
 /* ------------------------------------------------------------------ classification (reports) */
 
 const REPORT_RULES: [ComplaintCategory, RegExp][] = [
-  ['banjir', /banjir|genang|kebanjiran|banyu(ne)? munggah|toya minggah|tanggul|mrembes|meluap|luap|flood|waterlog|air (sudah )?masuk|sepinggang|selutut/i],
-  ['pohon-tumbang', /pohon tumbang|tumbang|wit .{0,12}ambruk|fallen tree|tree (has )?fallen/i],
-  ['pju', /lampu (jalan|dalan|penerangan)|\bpju\b|penerangan jalan|street ?light|lampu .{0,20}mati|peteng/i],
-  ['jalan-rusak', /jalan (rusak|berlubang)|berlubang|lubang|bolong|aspal|pothole|road (is )?(damaged|broken)|dalan(e)? (rusak|bolong)|margi .{0,10}rusak|ambles/i],
-  ['sampah', /sampah|uwuh|garbage|rubbish|trash|\btps\b/i],
-  ['air-bersih', /air bersih|pdam|air (mati|keruh|tidak mengalir)|banyu (pdam|resik)|water (supply|is off)|clean water|no water|sumur/i],
+  ['banjir', /banjir|banjia|caah|cileuncang|kakeueum|tagenang|tanggua|marembeh|kabanjiran|genang|kebanjiran|banyu(ne)? munggah|toya minggah|tanggul|mrembes|meluap|luap|flood|waterlog|air (sudah )?masuk|sepinggang|selutut/i],
+  ['pohon-tumbang', /pohon tumbang|tumbang|tangkal .{0,12}rubuh|wit .{0,12}ambruk|fallen tree|tree (has )?fallen/i],
+  ['pju', /lampu (jalan|dalan|penerangan)|\bpju\b|penerangan jalan|street ?light|lampu .{0,20}(mati|pareum)|peteng|poek/i],
+  ['jalan-rusak', /jalan (rusak|ruksak|berlubang)|berlubang|lubang|bolong|aspal|pothole|road (is )?(damaged|broken)|dalan(e)? (rusak|bolong)|margi .{0,10}rusak|ambles/i],
+  ['sampah', /sampah|uwuh|runtah|garbage|rubbish|trash|\btps\b/i],
+  ['air-bersih', /air bersih|cai beresih|aia barasiah|pdam|air (mati|keruh|tidak mengalir)|banyu (pdam|resik)|water (supply|is off)|clean water|no water|sumur/i],
   ['pungli', /pungli|pungutan liar|dimintai uang|dipunsuwuni arta|suap|bribe|illegal (fee|levy)/i],
   ['kesehatan', /puskesmas|demam berdarah|\bdbd\b|fogging|jentik|health (centre|center)|dengue/i],
   ['sekolah', /atap (kelas|sekolah)|sekolah .{0,20}(rusak|bocor)|classroom|school roof/i],
@@ -186,7 +217,7 @@ export function classifyReport(text: string): ComplaintCategory | null {
  * job with a 24-hour SLA: the AI triage labels it Darurat and routes it straight to BPBD (Pusdalops), with the category's
  * own agency copied in (see triage.ts).
  */
-const EMERGENCY = /evakuasi|dievakuasi|perahu karet|kirim perahu|terjebak|terperangkap|sepinggang|sedada|terseret arus|tulung .{0,20}(ngungsi|dievakuasi)|evacuat|trapped|rescue|rubber boat|waist-deep|chest-deep/i
+const EMERGENCY = /evakuasi|dievakuasi|diungsikeun|diungsian|parahu karet|sabeuteung|sapinggang|perahu karet|kirim perahu|terjebak|terperangkap|sepinggang|sedada|terseret arus|tulung .{0,20}(ngungsi|dievakuasi)|evacuat|trapped|rescue|rubber boat|waist-deep|chest-deep/i
 /** response target for a life-safety complaint (world minutes) */
 export const EMERGENCY_RESPONSE_MIN = 60
 export function isEmergency(c: { text: string; summary?: Bi; category: ComplaintCategory }): boolean {

@@ -34,13 +34,17 @@ export function useAutoplay(present: boolean): void {
 
 export const floodOf = (s: WorldState) => rows(s.alerts).find((a) => a.kind === 'banjir' && a.status === 'aktif') ?? null
 
+/** resolves after the next paint: the control answers in this frame, the heavy work follows (INP) */
+export const nextPaint = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)))
+
 let busy = false
 /** play the scenario flood (clock event, origin Siaga Wilayah); idempotent */
 export function playFlood(): Promise<void> {
   if (busy) return Promise.resolve()
   busy = true
-  return import('../../demo-kit/world/flood-scenario')
-    .then((m) => {
+  // the pressed button paints first; the flood (one heavy emit) runs after that frame (INP)
+  return Promise.all([import('../../demo-kit/world/flood-scenario'), nextPaint()])
+    .then(([m]) => {
       m.ensureFloodScenario(world.get(), clock.get().minutes)
     })
     .finally(() => {

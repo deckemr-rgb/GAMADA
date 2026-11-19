@@ -33,6 +33,7 @@ import { isProductSlug } from '../../../content/products'
 import { runUpSelftest } from './up.selftest'
 import { runPdSelftest } from './pd.selftest'
 import { runTourSelftest } from './tour.selftest'
+import { runRegionSwitchSelftest } from './region.selftest'
 
 let failures = 0
 let passes = 0
@@ -49,13 +50,19 @@ function section(name: string) {
 
 // node:fs through a computed specifier so the app tsconfig (no @types/node globals) stays untouched
 const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as { existsSync(p: URL): boolean; readFileSync(p: URL, enc: 'utf8'): string }
-const exit = (code: number) => (globalThis as unknown as { process: { exit(c: number): never } }).process.exit(code)
-const realPackPath = new URL('../../region/packs/bojonegoro/pack.json', import.meta.url)
+const proc = (globalThis as unknown as { process: { exit(c: number): never; env: Record<string, string | undefined> } }).process
+const exit = (code: number) => proc.exit(code)
+// Tahap 7: REGION=bandung|padang runs every section on that pack instead of Bojonegoro (plan §6: once per pack)
+const REGION_ID = proc.env.REGION || 'bojonegoro'
+const realPackPath = new URL(`../../region/packs/${REGION_ID}/pack.json`, import.meta.url)
 const packs: { label: string; pack: RegionPack }[] = [{ label: 'mini fixture', pack: MINI_PACK }]
 if (fs.existsSync(realPackPath)) {
   const parsed = RegionPack.safeParse(JSON.parse(fs.readFileSync(realPackPath, 'utf8')))
-  if (parsed.success) packs.push({ label: 'bojonegoro pack.json', pack: parsed.data })
+  if (parsed.success) packs.push({ label: `${REGION_ID} pack.json`, pack: parsed.data })
   else console.warn('real pack exists but does not pass the RegionPack schema yet:', parsed.error.issues.slice(0, 3))
+} else if (proc.env.REGION) {
+  console.error(`REGION=${REGION_ID}: no pack at ${realPackPath.pathname}`)
+  exit(1)
 }
 
 /* ------------------------------------------------------------------ helpers */
@@ -122,7 +129,8 @@ for (const { label, pack } of packs) {
   const docs = rows(a.documents).filter((d) => d.nik)
   const badNik = docs.filter((d) => !parseNik(d.nik!, regions).ok)
   ok(docs.length > 0 && badNik.length === 0, `every seeded document passes parseNik (${docs.length - badNik.length}/${docs.length}${badNik.length ? `; e.g. ${badNik[0]!.nik} ${parseNik(badNik[0]!.nik!, regions).problem}` : ''})`)
-  ok(docs.every((d) => parseNik(d.nik!).ok), 'every seeded NIK also passes the default (all-Bojonegoro) parseNik')
+  // Tahap 7: the default regions follow the CURRENT region (+ the built-in table); load-free runs keep the table only
+  if (pack.id === 'bojonegoro') ok(docs.every((d) => parseNik(d.nik!).ok), 'every seeded NIK also passes the default (built-in table) parseNik')
   const byNik = new Map<string, typeof docs>()
   for (const d of docs) byNik.set(d.nik!, [...(byNik.get(d.nik!) ?? []), d])
   const dupes = [...byNik.values()].filter((g) => g.length > 1)
@@ -704,6 +712,9 @@ await runPdSelftest(ok, section, packs)
 
 /* ------------------------------------------------------------------ 8. tahap 5: tour world scope + K6 determinism probe */
 await runTourSelftest(ok, section, packs)
+
+/* ------------------------------------------------------------------ 9. tahap 7: region switch, anchors, no-dam hoax, NIK defaults */
+await runRegionSwitchSelftest(ok, section, packs)
 
 console.log(`\n${failures ? '✗' : '✓'} ${passes} passed, ${failures} failed`)
 exit(failures ? 1 : 0)

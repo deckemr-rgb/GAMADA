@@ -10,7 +10,7 @@ import { world, type BrandMention } from '../../demo-kit/world'
 import { BRAND_CHANNEL, BRAND_TOPIC, brandStream, replyCandidates } from '../../demo-kit/world/usaha-pintar'
 import { ReplyChip } from './ReplyChip'
 import { Stars } from './Stream'
-import { cardAlert, reviewSelection, useBrand, useSelection } from './model'
+import { afterPaint, cardAlert, reviewSelection, useBrand, useSelection } from './model'
 import { loadBulk } from './loaders'
 import type { Arrival } from './index'
 import { STR, fill, tm, useStr, type Lang } from './strings'
@@ -203,7 +203,7 @@ export default function Reviews({ now, arrive }: { now: number; arrive: Arrival 
             {L.clear}
           </Button>
         )}
-        <Button variant="primary" icon="send" disabled={!n} aria-describedby={n ? undefined : 'dk-pm-bulknone'} onClick={() => setBulk(true)} data-pm="bulk-open" {...intentProps(loadBulk)}>
+        <Button variant="primary" icon="send" disabled={!n} aria-describedby={n ? undefined : 'dk-pm-bulknone'} onClick={() => afterPaint(() => setBulk(true))} data-pm="bulk-open" {...intentProps(loadBulk)}>
           {fill(L.bulk, { n })}
         </Button>
         {!n && (

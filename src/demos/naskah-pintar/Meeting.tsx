@@ -229,7 +229,8 @@ export function Meeting({ nav }: { nav: NpNav }) {
   const onPlay = () => {
     setRecorder(false)
     if (run === 'playing') pb.toggle()
-    else start()
+    // INP: the press paints first; the playback reset (transcript, minutes, AI panel) renders in the next task
+    else requestAnimationFrame(() => window.setTimeout(start, 0))
   }
   /* skip: the button row and the full transcript answer at once; the world writes (six follow-ups, the minutes,
      the toast, the AI summary) run right after that paint, so the click itself stays cheap (INP) */

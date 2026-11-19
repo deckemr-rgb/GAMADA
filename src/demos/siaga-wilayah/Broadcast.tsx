@@ -12,6 +12,7 @@ import { useI18n } from '../../lib/i18n'
 import { useAiChat } from '../../demo-kit/ai/chat'
 import { Button, Chip, Icon, Modal, Segmented, Select, Textarea, useCountUp } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
+import { regionalLanguageLabel } from '../../demo-kit/i18n'
 import { PRODUCT_BY_SLUG, type ProductSlug } from '../../content/products'
 import AppLink from '../../components/AppLink'
 import { clock, emit, rows, settled, useSession, world, type AuditEntry } from '../../demo-kit/world'
@@ -80,7 +81,7 @@ const T = {
   stNormal: { id: 'normal', en: 'normal' },
   stSiaga: { id: 'SIAGA', en: 'WATCH' },
   stAwas: { id: 'AWAS', en: 'WARNING' },
-  aiAdded: { id: 'AI menambahkan dari model: jam tiba air per desa, posko terdekat dengan sisa kapasitas, dan satu kalimat Basa Jawa untuk WA.', en: 'AI added from the model: water arrival time per village, the nearest shelter with places left, and one Javanese line for WA.' },
+  aiAdded: { id: 'AI menambahkan dari model: jam tiba air per desa, posko terdekat dengan sisa kapasitas{rl}.', en: 'AI added from the model: water arrival time per village, the nearest shelter with places left{rl}.' },
   meja: { id: 'Peringatan aktif tampil di peta & ringkasan pimpinan', en: 'The active warning shows on the leader’s map & summary' },
   modelWait: { id: 'Menghitung model desa +6 j… Level, wilayah dan jam tiba air diisi begitu model siap; tombol Kirim aktif setelahnya.', en: 'Computing the +6 h village model… Level, area and arrival times fill in once it is ready; Send unlocks then.' },
   waitBtn: { id: 'Menunggu model…', en: 'Waiting for the model…' },
@@ -97,6 +98,9 @@ export default function Broadcast() {
   const { lang } = useI18n()
   const L = (k: keyof typeof T, v?: Record<string, string | number>) => (v ? fill(T[k][lang], v) : T[k][lang])
   const { pack, size } = useShell()
+  // the AI draft adds one line in the region's language (scenario draftAlert: Jawa / Sunda / Minang)
+  const rlName = ['jv', 'su', 'min'].includes(pack?.languages.regional[0] ?? '') ? regionalLanguageLabel(pack, lang) : null
+  const rlLine = rlName ? (lang === 'id' ? `, dan satu kalimat ${rlName} untuk WA` : `, and one ${rlName} line for WA`) : ''
   const session = useSession()
   const impact6 = useUi((s) => s.impact6)
   const s0 = useMemo(() => world.get(), [])
@@ -241,15 +245,17 @@ export default function Broadcast() {
     const done = stage === 'done'
     ui.set({ broadcastOpen: false })
     if (!done) return
-    // the dialog already listed every chain effect: on a phone the same notifications would cover the result, so
-    // they go; then the map with the new warning zone comes into view
-    if (size === 'sm')
-      requestAnimationFrame(() => {
+    // INP: the dialog closes in this frame; the map work follows after that paint
+    void afterPaint().then(() => {
+      // the dialog already listed every chain effect: on a phone the same notifications would cover the result, so
+      // they go; then the map with the new warning zone comes into view
+      if (size === 'sm') {
         document.querySelectorAll<HTMLButtonElement>('.dk-toasts .dk-toast-x').forEach((b) => b.click())
         revealMap()
-      })
-    // the whole new warning zone in view (the flood stretch the model framed), not one district close up
-    focusFloodArea()
+      }
+      // the whole new warning zone in view (the flood stretch the model framed), not one district close up
+      focusFloodArea()
+    })
   }
   const footer =
     stage === 'done' ? (
@@ -389,7 +395,7 @@ export default function Broadcast() {
                 {aiState === 'done' && ` · ${L('aiDone', { m: aiMsg?.mode === 'live' ? L('live') : L('sim') })}`}
                 {aiMsg?.fellBack && ` · ${L('aiFell')}`}
               </p>
-              {aiState === 'done' && edited && aiMsg?.mode !== 'live' && <p className="dk-sg-fine dk-sg-aiadd">{L('aiAdded')}</p>}
+              {aiState === 'done' && edited && aiMsg?.mode !== 'live' && <p className="dk-sg-fine dk-sg-aiadd">{L('aiAdded', { rl: rlLine })}</p>}
             </div>
           </div>
           <div className="dk-sg-bc-side">

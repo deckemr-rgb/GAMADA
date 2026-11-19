@@ -10,7 +10,7 @@ import { Button, Drawer, Icon, IconButton, Input, MoneyInput, Segmented, flashNe
 import { rows, useClock, useWorld, world } from '../../demo-kit/world'
 import { findByBarcode, posCatalog, type PosItem } from '../../demo-kit/world/usaha-pintar'
 import { STRINGS, rp, tm, useT, type Lang } from './strings'
-import { EMPTY_CART, addToCart, grossOf, reprice, setCart, useUi, type Cart } from './store'
+import { EMPTY_CART, addToCart, afterPaint, grossOf, reprice, setCart, useUi, type Cart } from './store'
 import type { TabProps } from './types'
 
 const loadPay = () => import('./Payment')
@@ -161,7 +161,7 @@ export default function Kasir({ outletId, role, sel }: TabProps) {
       </div>
       {sm && (
         <div className="dk-ta-sticky">
-          <Button variant="primary" icon="cart" onClick={() => setCartOpen(true)} data-ta="cart-bar">
+          <Button variant="primary" icon="cart" onClick={() => afterPaint(() => setCartOpen(true))} data-ta="cart-bar">
             {t.bar(n, rp(total))} · {t.pay}
           </Button>
         </div>

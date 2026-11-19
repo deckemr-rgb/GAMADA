@@ -5,6 +5,7 @@
  */
 import type { RegionGeo, RegionPack } from '../../demo-kit/region/types'
 import type { Bi } from './strings'
+import { floodAnchor } from '../../demo-kit/region/anchor'
 
 export type LngLat = [number, number]
 export type ChangeKind = 'tambang' | 'hutan' | 'permukiman' | 'industri'
@@ -25,7 +26,8 @@ export interface ChangeSite {
 
 const KIND: Record<ChangeKind, { prefer: string; areaHa: number; confidence: number; from: Bi; to: Bi }> = {
   tambang: {
-    prefer: 'kalitidu', areaHa: 38, confidence: 0.91,
+    // prefer '' = the flood story's kecamatan (region/anchor), so the mining sits on the flooding river
+    prefer: '', areaHa: 38, confidence: 0.91,
     from: { id: 'Bantaran sungai bervegetasi', en: 'Vegetated riverbank' }, to: { id: 'Galian pasir & kolam bekas tambang', en: 'Sand pits & mining ponds' },
   },
   hutan: {
@@ -81,7 +83,8 @@ export function changeSites(pack: RegionPack, geo: RegionGeo, centroids: Record<
   const out: ChangeSite[] = []
   for (const kind of ORDER) {
     const def = KIND[kind]
-    let k = pack.kecamatan.find((x) => x.id === def.prefer && !used.has(x.id))
+    const prefer = def.prefer || floodAnchor(pack).kecamatanId
+    let k = pack.kecamatan.find((x) => x.id === prefer && !used.has(x.id))
     if (!k) k = (kind === 'hutan' ? byRisk('riskLandslide') : kind === 'tambang' ? byRisk('riskFlood') : [...pack.kecamatan].reverse()).find((x) => !used.has(x.id))
     if (!k) continue
     used.add(k.id)

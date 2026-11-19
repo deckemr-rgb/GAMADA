@@ -327,6 +327,20 @@ async function showSummary(my: number): Promise<void> {
   chapterMs = SUMMARY_SECONDS * 1000
 }
 
+/** resolves after the next paint (rAF → task); a hidden tab (no rAF) falls back to a short timer */
+const afterPaint = (): Promise<void> =>
+  new Promise((res) => {
+    let done = false
+    const fin = () => {
+      if (!done) {
+        done = true
+        res()
+      }
+    }
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(fin, 0))
+    setTimeout(fin, 100)
+  })
+
 /** keep the address bar on /tur/<n> (+ the tour's own params); products' own params (?tab …) are dropped */
 export function syncUrl(n: number | null, extra: Record<string, string> = {}): void {
   if (typeof window === 'undefined') return
@@ -357,10 +371,14 @@ export const engine = {
   go(n: number): void {
     const my = ++token
     waiters = []
-    tourStore.set({ playing: true, interrupted: false, drawer: false })
+    // INP (Tahap 7): paint the curtain first; the old product's unmount + world preparation run after that frame
+    tourStore.set({ playing: true, interrupted: false, drawer: false, curtain: true })
     sync()
-    if (n >= SUMMARY_N) void showSummary(my)
-    else void playChapter(Math.max(1, n), my)
+    void afterPaint().then(() => {
+      if (my !== token) return
+      if (n >= SUMMARY_N) void showSummary(my)
+      else void playChapter(Math.max(1, n), my)
+    })
   },
   play(): void {
     tourStore.set({ playing: true, interrupted: false })

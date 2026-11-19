@@ -12,7 +12,7 @@ import { emit, useClock, useSession, useWorld, world } from '../../demo-kit/worl
 import { confirmStep } from './Alerts'
 import { FC_T0, RIVER_CREST_AT, canSend, clockText, confirmedIds, floodAlerts, floodHourAt, forecastRain, gaugeNow, harvestPasca, riverGauge, setHarvestScenario, swRole } from './data'
 import { nf, useT, type SKey } from './strings'
-import { ensureDesa, impactAt, mapRef, revealMap, ui, useUi } from './ui'
+import { afterPaintDo, ensureDesa, impactAt, mapRef, revealMap, ui, useUi } from './ui'
 
 /** the scrubber is playing its own animation (its button reads "Jeda"/"Pause" then) */
 const scrubPlaying = (root: HTMLElement | null) => !/^(Putar|Play)$/.test(root?.querySelector('.dk-mts-play')?.getAttribute('aria-label') ?? 'Putar')
@@ -201,7 +201,7 @@ export function Timeline() {
         {/* the hotspot rings this wrapper; it folds to display:contents (no box ⇒ the ring hides) once the forecast ran,
             however it was started (button, scrubber drag or keys) */}
         <span className="dk-sg-hot" data-hotspot="sw-run" data-on={ran ? undefined : ''}>
-          <Button variant={awasNoAlert && cta.icon === 'send' ? 'danger' : 'primary'} size={sm ? 'lg' : 'md'} icon={cta.icon} onClick={cta.act} onPointerDown={() => void ensureDesa()} busy={cta.wait} disabled={cta.wait} data-sw="cta">
+          <Button variant={awasNoAlert && cta.icon === 'send' ? 'danger' : 'primary'} size={sm ? 'lg' : 'md'} icon={cta.icon} onClick={() => afterPaintDo(cta.act)} onPointerDown={() => void ensureDesa()} busy={cta.wait} disabled={cta.wait} data-sw="cta">
             {t(cta.key)}
           </Button>
         </span>

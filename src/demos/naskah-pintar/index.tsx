@@ -20,7 +20,7 @@ import { useI18n } from '../../lib/i18n'
 import { Meeting as MeetingTab } from './Meeting'
 import { isAutoDisposition, runDay } from './day'
 import { approveDue } from './approvals'
-import { NP, clockText, npRole, opdName, type NpRole } from './model'
+import { NP, clockText, npRole, opdName, placeText, setMeetingRegion, type NpRole } from './model'
 import { opdLabel, useStr } from './strings'
 import './naskah-pintar.css'
 
@@ -80,6 +80,8 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
   const S = useStr()
   const { lang } = useI18n()
   const shell = useShell()
+  // the sample meeting names this region's river, kecamatan and embankment (idempotent; before any tab renders)
+  setMeetingRegion(shell.pack)
   const { role: sessionRole } = useSession()
   const role = npRole(sessionRole)
   const now = useClock().minutes
@@ -135,7 +137,7 @@ export default function NaskahPintar({ product }: DemoCanvasProps) {
       const L = lang
       const Sx = S
       const s = world.get()
-      const lines = notes.map((n) => (n.seed ? (n.seed.start ? Sx.daySeedStart : Sx.daySeed)(n.seed.title[L], opdName(s, n.seed.opdId, L)) : (Sx.dayNotes[n.key] ?? '')))
+      const lines = notes.map((n) => (n.seed ? (n.seed.start ? Sx.daySeedStart : Sx.daySeed)(n.seed.title[L], opdName(s, n.seed.opdId, L)) : placeText(Sx.dayNotes[n.key] ?? '', L)))
       /* the latest updates (phones: one line, the toast covers less of the screen); one toast id, so a jump replaces
          the previous toast instead of stacking a stale one */
       const shown = lines.slice(-(window.matchMedia('(max-width: 640px)').matches ? 1 : 2)) // the latest news first

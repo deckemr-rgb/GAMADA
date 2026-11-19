@@ -102,7 +102,7 @@ export const missions: readonly Mission[] = [
   {
     id: 'ask',
     label: { id: 'Ajukan 1 pertanyaan data', en: 'Ask 1 data question' },
-    hint: { id: 'Di "Tanya data" tekan contoh pertanyaan pertama (kategori aduan yang memang naik pekan ini), atau ketik misalnya "Berapa aduan jalan rusak di Dander bulan ini?" Jawaban datang dengan grafik dan peta.', en: 'In "Ask the data" press the first example (the complaint category that really rose this week), or type e.g. "How many road complaints in Dander this month?" The answer comes with a chart and the map.' },
+    hint: { id: 'Di "Tanya data" tekan contoh pertanyaan pertama (kategori aduan yang memang naik pekan ini), atau ketik misalnya "Berapa aduan jalan rusak bulan ini?" (boleh dengan nama kecamatan) Jawaban datang dengan grafik dan peta.', en: 'In "Ask the data" press the first example (the complaint category that really rose this week), or type e.g. "How many road complaints this month?" (a district name works too) The answer comes with a chart and the map.' },
   },
   {
     id: 'instruct',
@@ -301,8 +301,18 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
   /* "Susun briefing": a short assembling moment, then the world event (the panel reads the briefing back from the world) */
   const timer = useRef<number | null>(null)
   useEffect(() => () => void (timer.current && window.clearTimeout(timer.current)), [])
+  const composing = useRef(false)
   const compose = useCallback(() => {
-    if (assembling) return
+    if (assembling || composing.current) return
+    // INP: the click paints first; the briefing items (a pass over the whole world) and the phone tab switch follow
+    composing.current = true
+    window.requestAnimationFrame(() => window.setTimeout(() => {
+      composing.current = false
+      composeNow()
+    }, 0))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assembling])
+  const composeNow = () => {
     const items = mpBriefingItems(world.get(), clock.get().minutes)
     const sources = [...new Set(items.map((i) => i.source))]
     const finish = () => {
@@ -321,7 +331,7 @@ export default function MejaPimpinan({ product }: DemoCanvasProps) {
     if (motionMode() === 'static') return finish()
     setAssembling(sources)
     timer.current = window.setTimeout(finish, Math.round(sources.length * MP.assembleTick * 1000) + 240)
-  }, [assembling, reveal])
+  }
 
   /* Kepala OPD: the leader's actions (briefing, instruction, meeting mode) are one click away in the leader's role */
   /* the role switch re-renders the whole canvas and the shell: paint the pressed state first, then switch (INP) */

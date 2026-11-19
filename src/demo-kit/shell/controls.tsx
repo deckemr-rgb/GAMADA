@@ -9,25 +9,29 @@ import { useI18n, type Lang } from '../../lib/i18n'
 import { sfx } from '../../lib/audio'
 import AppLink from '../../components/AppLink'
 import { Avatar, Icon, IconButton, Menu, Segmented, Tooltip } from '../ui'
-import { REGIONS } from '../region/loader'
+import { REGIONS, preloadRegion } from '../region/loader'
 import { CLOCK, clock, formatTime, getSession, setSession, useClock, useSession, type ClockSpeed } from '../world'
 // live-base directly, not the ai/ barrel: the barrel drags the scripted engine, intents and useAiChat (~9 KB gzip)
 // into every demo, also the ones without AI. live-base is dependency-free (the ai/ barrel re-exports it).
 import { checkHealth, peekHealth } from '../ai/live-base'
-import { roleInitials, switchLang, useDemoStrings } from '../i18n'
+import { regionLabel, roleInitials, switchLang, useDemoStrings } from '../i18n'
 import { Picker } from './Picker'
 
 /* ------------------------------------------------------------------ region */
 
+type RegionEntry = { id: string; name: string; shortName: string; type: 'kabupaten' | 'kota'; province?: string }
+
+/**
+ * Tahap 7: the region picker (spec §2.3, §7). With ≥ 2 packs in REGIONS it lists every region with its type (+ province
+ * when the REGIONS entry carries one); picking one writes the session (→ ?region=) and DemoShell resets the world to that
+ * region's seed without a reload (map demos fly to the new bbox). Opening it starts fetching the packs. One pack: a label.
+ */
 export function RegionSwitcher({ inline }: { inline?: boolean }) {
   const t = useDemoStrings()
+  const { lang } = useI18n()
   const { regionId } = useSession()
-  const current = REGIONS.find((r) => r.id === regionId) ?? REGIONS[0]
-  const list = REGIONS as readonly {
-    id: string
-    name: string
-    shortName: string
-  }[]
+  const list = REGIONS as readonly RegionEntry[]
+  const current = list.find((r) => r.id === regionId) ?? list[0]!
   // one region only (tahap 1): a label, not a control (no dead dropdowns)
   if (list.length < 2) {
     return (
@@ -38,23 +42,18 @@ export function RegionSwitcher({ inline }: { inline?: boolean }) {
       </span>
     )
   }
+  const warm = () => list.forEach((r) => preloadRegion(r.id))
   const pick = (id: string) => {
     sfx.click()
     setSession({ regionId: id })
   }
-  if (inline) return <OptionList label={t.region} value={regionId} options={list.map((r) => ({ value: r.id, label: r.name }))} onChange={pick} />
+  const options = list.map((r) => {
+    const l = regionLabel(r, lang)
+    return { value: r.id, label: l.name, sub: l.sub }
+  })
+  if (inline) return <OptionList label={t.region} value={regionId} options={options} onChange={pick} onFocusIn={warm} />
   return (
-    <Picker
-      label={t.regionPick}
-      heading={t.region}
-      value={regionId}
-      onChange={pick}
-      options={list.map((r) => ({
-        value: r.id,
-        label: r.name,
-        lead: <Icon name="flag" size={16} />,
-      }))}
-    >
+    <Picker label={t.regionPick} heading={t.region} value={regionId} onChange={pick} onOpen={warm} options={options.map((o) => ({ ...o, lead: <Icon name="flag" size={16} /> }))}>
       <Icon name="flag" size={16} />
       <span className="dk-pick-label dk-region-label">{current.shortName}</span>
     </Picker>
@@ -332,7 +331,7 @@ export function BackToProduct({ product, compact }: { product: ProductSlug; comp
 
 /* ------------------------------------------------------------------ inline radio list (inside the "⋯" sheet) */
 
-export function OptionList<V extends string>({ label, value, options, onChange }: { label: string; value: V; options: { value: V; label: string }[]; onChange: (v: V) => void }) {
+export function OptionList<V extends string>({ label, value, options, onChange, onFocusIn }: { label: string; value: V; options: { value: V; label: string; sub?: string }[]; onChange: (v: V) => void; onFocusIn?: () => void }) {
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const i = options.findIndex((o) => o.value === value)
     let n = -1
@@ -347,7 +346,7 @@ export function OptionList<V extends string>({ label, value, options, onChange }
     el?.focus()
   }
   return (
-    <div className="dk-optlist" role="radiogroup" aria-label={label} onKeyDown={onKey}>
+    <div className="dk-optlist" role="radiogroup" aria-label={label} onKeyDown={onKey} onFocus={onFocusIn} onPointerEnter={onFocusIn}>
       {options.map((o) => {
         const on = o.value === value
         return (
@@ -361,7 +360,10 @@ export function OptionList<V extends string>({ label, value, options, onChange }
             onClick={() => onChange(o.value)}
           >
             <span className="dk-optlist-radio" aria-hidden="true" />
-            {o.label}
+            <span className="dk-pick-text">
+              <span>{o.label}</span>
+              {o.sub && <span className="dk-pick-sub">{o.sub}</span>}
+            </span>
           </button>
         )
       })}

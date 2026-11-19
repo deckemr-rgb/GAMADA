@@ -14,7 +14,7 @@ import type { ProductSlug } from '../../content/products'
 import { createEvent } from './events'
 import { clock } from './clock'
 import { clearPersisted, flushPersist, loadPersisted, schedulePersist, cancelPersist, PERSIST_USER_MS, type Persisted, type WorldScope } from './persist'
-import { TABLE_KEYS, WORLD, emptyTable } from './util'
+import { TABLE_KEYS, WORLD, emptyTable, setCurrentRegion } from './util'
 import { coreCovers } from './engine-scope'
 import { applyExtensions } from './ext'
 import type { Seq } from './ids'
@@ -260,13 +260,17 @@ function install(state: WorldState, clockMinutes: number) {
  * load the world for a region + seed (+ scope, default 'default'): from IndexedDB when present, else generated
  * (deterministic). The outgoing world is saved first (a scope switch must not lose the last changes of the other one).
  */
-export async function loadWorld(p: RegionPack, seed: number, opts: { scope?: WorldScope } = {}): Promise<void> {
+export async function loadWorld(p: RegionPack, seed: number, opts: { scope?: WorldScope; fresh?: boolean } = {}): Promise<void> {
   const token = ++loadToken
   flushPersist()
   pack = p
+  setCurrentRegion(p)
   scope = opts.scope ?? 'default'
   setStatus('loading')
-  const saved = await loadPersisted(p.id, seed, scope)
+  // Tahap 7: `fresh` (a region switch from the picker, spec §7): the new region starts from its seed at the morning
+  // clock, never from a copy saved on an earlier visit (which is forgotten)
+  if (opts.fresh) await clearPersisted(p.id, seed, scope).catch(() => undefined)
+  const saved = opts.fresh ? null : await loadPersisted(p.id, seed, scope)
   if (token !== loadToken) return
   if (saved) return install(saved.state, saved.clock)
   const { generateWorld } = await loadGenerator()

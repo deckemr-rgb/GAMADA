@@ -919,4 +919,20 @@ a.dk-ta-chip {
   .dk-ta-why {
     min-height: 44px;
   }
+  /* phones: every tab in view (two rows) instead of a hidden "Jadwal Shift" past the edge */
+  .dk-ta-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .dk-ta-tab {
+    padding: 0 10px;
+  }
+  /* the "vs kemarin jam ini" delta wraps under the number instead of being clipped */
+  .dk-ta-kpis .dk-kpi-delta {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+  .dk-ta-kpis .dk-kpi-vs {
+    overflow: visible;
+  }
 }

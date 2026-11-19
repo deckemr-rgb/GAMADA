@@ -6,7 +6,7 @@
 import type { Intent, Lang, Scenario, SimContext, SimResponse, Structured } from '../../demo-kit/ai/types'
 import { registerScenario } from '../../demo-kit/ai/chat'
 import type { Bi } from '../../demo-kit/world'
-import { DETECTOR_BY_ID, ROUNDING_NOTE, noteText, pct, rpFull, rpShort, type AbContext, type Detector, type Level } from './model'
+import { DETECTOR_BY_ID, ROUNDING_NOTE, headWord, noteText, pct, rpFull, rpShort, type AbContext, type Detector, type Level } from './model'
 import { STRINGS } from './strings'
 
 type Ctx = SimContext<AbContext>
@@ -71,7 +71,7 @@ export function memoSummary(w: AbContext, lang: Lang): string {
   const sched = w.analisis?.temuan.find((f) => f.detektor === 'jadwal-singkat' && f.tingkat !== 'lolos')
   const score = w.analisis?.skor
   if (lang === 'id')
-    return [
+    return headWord([
       `Paket ${p.nama.id} (${p.kode}) dengan HPS ${rpFull(h.hps, 'id')}${score != null ? ` mendapat skor risiko ${score} dari 100` : ''}.`,
       h.selisih > 0 ? `HPS ${pct(h.deviasiPct, 'id')} di atas median harga pasar, dengan selisih ${rpFull(h.selisih, 'id')}.` : 'HPS sejalan dengan median harga pasar.',
       ring.length ? `${ring.length} dari ${p.jumlahPeserta} peserta terhubung lewat alamat, direktur, atau IP pendaftaran yang sama.` : '',
@@ -81,8 +81,8 @@ export function memoSummary(w: AbContext, lang: Lang): string {
         ? `Kami merekomendasikan Bupati memerintahkan PPK/UKPBJ meninjau HPS sebelum pemenang ditetapkan; sebagai acuan, median pasar + margin wajar ${h.marginPct}% = ${rpFull(h.hpsUsulan, 'id')} (${ROUNDING_NOTE.id}).`
         : `Kami mengusulkan kepada PPK koreksi HPS menjadi ${rpFull(h.hpsUsulan, 'id')} (median pasar + margin wajar ${h.marginPct}%, ${ROUNDING_NOTE.id}) dan mengundang UMKM lokal lewat Katalog Lokal sebelum pemenang ditetapkan.`,
       above(w) ? `Seluruh ${above(w)} penawaran berada di atas HPS usulan, sehingga perlu negosiasi harga atau tender ulang.` : '',
-    ].filter(Boolean).join(' ')
-  return [
+    ].filter(Boolean).join(' '))
+  return headWord([
     `Package ${p.nama.en} (${p.kode}), HPS ${rpFull(h.hps, 'en')}${score != null ? `, scores ${score} out of 100 for risk` : ''}.`,
     h.selisih > 0 ? `The HPS is ${pct(h.deviasiPct, 'en')} above the market median, a difference of ${rpFull(h.selisih, 'en')}.` : 'The HPS is in line with the market median.',
     ring.length ? `${ring.length} of the ${p.jumlahPeserta} bidders are linked by a shared address, director or registration IP.` : '',
@@ -92,7 +92,7 @@ export function memoSummary(w: AbContext, lang: Lang): string {
       ? `We recommend that the Regent instruct the PPK/UKPBJ to review the HPS before a winner is named; as a reference, the market median + a fair ${h.marginPct}% margin = ${rpFull(h.hpsUsulan, 'en')} (${ROUNDING_NOTE.en}).`
       : `We propose to the PPK an HPS of ${rpFull(h.hpsUsulan, 'en')} (market median + a fair ${h.marginPct}% margin, ${ROUNDING_NOTE.en}) and inviting local SMEs through Katalog Lokal before a winner is named.`,
     above(w) ? `All ${above(w)} bids are above the proposed HPS, so the price needs negotiating or the tender re-run.` : '',
-  ].filter(Boolean).join(' ')
+  ].filter(Boolean).join(' '))
 }
 
 const chips = (lang: Lang, ...ids: string[]): string[] => ids.map((i) => (lang === 'id' ? CHIP[i]![0] : CHIP[i]![1]))
@@ -406,7 +406,7 @@ const INTENTS: Intent<AbContext>[] = [
       const steps = !w.analisis
         ? [T(ctx.lang, 'Jalankan analisis 7 detektor.', 'Run the 7-detector analysis.'), T(ctx.lang, 'Periksa graf peserta di tab Peserta.', 'Check the bidder graph in the Bidders tab.'), T(ctx.lang, 'Susun rekomendasi dari tab Laporan.', 'Draft the recommendation from the Report tab.')]
         : insp
-          ? [T(ctx.lang, 'Terbitkan memo audit ke Bupati dengan tembusan UKPBJ.', 'Issue the audit memo to the Regent, copying UKPBJ.'), T(ctx.lang, 'Minta klarifikasi tertulis dari peserta yang terhubung.', 'Request a written clarification from the linked bidders.'), T(ctx.lang, 'Jadwalkan reviu ulang setelah HPS dikoreksi.', 'Schedule a re-review after the HPS is corrected.')]
+          ? [headWord(T(ctx.lang, 'Terbitkan memo audit ke Bupati dengan tembusan UKPBJ.', 'Issue the audit memo to the Regent, copying UKPBJ.')), T(ctx.lang, 'Minta klarifikasi tertulis dari peserta yang terhubung.', 'Request a written clarification from the linked bidders.'), T(ctx.lang, 'Jadwalkan reviu ulang setelah HPS dikoreksi.', 'Schedule a re-review after the HPS is corrected.')]
           : [T(ctx.lang, 'Kirim nota reviu HPS ke PPK sebelum penetapan pemenang.', 'Send the HPS review memo to the PPK before a winner is named.'), T(ctx.lang, 'Tunda evaluasi sampai spesifikasi direvisi.', 'Hold the evaluation until the spec is revised.'), T(ctx.lang, 'Undang UMKM lokal lewat Katalog Lokal sebagai pembanding.', 'Invite local SMEs through Katalog Lokal as a benchmark.')]
       return { text: steps.map((s, i) => `${i + 1}. ${s}`).join('\n'), followUps: chips(ctx.lang, 'memo', 'local') }
     },

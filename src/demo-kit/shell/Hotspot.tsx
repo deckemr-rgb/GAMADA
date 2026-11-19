@@ -1,6 +1,7 @@
 /**
  * shell/Hotspot.tsx — the "click here first" ring (spec §6.3): teal 2 px ring pulsing scale 1 → 1.6,
- * opacity .8 → 0 just OUTSIDE the target's top-right corner (it never covers the target's text); disappears for
+ * opacity .8 → 0 just OUTSIDE the target's top-right corner (it never covers the target's text; Tahap 7: ring and label move to
+ * the first spot that covers no text or control of the canvas, and the label hides when there is none); disappears for
  * good (this session) once the target is clicked or `dismissHotspot(id)` is called; at most ONE active per screen
  * (first registered wins, the next one shows when it is gone); static ring in reduced motion.
  *
@@ -51,6 +52,29 @@ export interface HotspotProps {
    * covers the target itself and is clamped inside the viewport (flipping when the chosen side has no room).
    */
   placement?: 'auto' | 'below' | 'above'
+}
+
+/** re-test the ring / label spot for new content under it at most this often while the target rests */
+const RECHECK_MS = 1000
+
+/** a viewport point: the ring's centre, or the label's top-left corner */
+type Spot = [number, number]
+
+/** what a hint must not cover: controls, media, charts, and any element painting its own text */
+const CONTENT = 'button,a,input,select,textarea,label,img,svg,[role=button],[role=tab],[role=option],[role=switch],[role=checkbox],[role=slider]'
+
+/**
+ * Tahap 7 (item 6): true when the box (viewport px) covers no text or control (7 sample points via elementFromPoint;
+ * the hotspot itself has pointer-events: none, so it never answers). Off-screen = not free.
+ */
+function free(l: number, t: number, w: number, h: number): boolean {
+  if (l < -1 || t < -1 || l + w > innerWidth + 1 || t + h > innerHeight + 1) return false
+  for (const fy of [0.15, 0.5, 0.85])
+    for (const fx of fy === 0.5 ? [0.5] : [0, 0.5, 1]) {
+      const e = document.elementFromPoint(l + 1 + (w - 2) * fx, t + h * fy)
+      if (e && (e.closest(CONTENT) || [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()))) return false
+    }
+  return true
 }
 
 /** true when the point is painted by `el` (or a descendant): not clipped by a scroller and not covered by a sheet */
@@ -138,6 +162,7 @@ export function Hotspot({ target, id, label, root, placement = 'auto' }: Hotspot
     let dirty = true
     let lastAt = -Infinity
     let lastKey = ''
+    let checkedAt = -Infinity
     const mark = () => {
       dirty = true
     }
@@ -176,14 +201,12 @@ export function Hotspot({ target, id, label, root, placement = 'auto' }: Hotspot
       if (!inside || !visibleAt(cur, px, py)) return hide()
       // the ring (radius 11, pulse up to ×1.6) stays inside the canvas and the viewport: a target at the right or top
       // edge gets its ring just inside its corner instead of a clipped half ring
-      const edgeR = Math.min(window.innerWidth, box ? box.right : Infinity) - RING_EDGE
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const edgeR = Math.min(vw, box ? box.right : Infinity) - RING_EDGE
       const edgeT = Math.max(0, box ? box.top : 0) + RING_EDGE
-      const x = Math.min(b.right + RING_OUT, edgeR)
-      // a target that reaches the right edge (a full-width CTA on a phone): the ring moves ABOVE it, clear of its
-      // top edge, instead of sitting on its corner; only without room above does it fall back to the corner
-      const clampedX = b.right + RING_OUT > edgeR
-      const above = b.top - 11 - RING_GAP
-      const y = clampedX ? (above >= edgeT ? above : Math.max(b.top + 11 + 4, edgeT)) : Math.max(b.top - RING_OUT, edgeT)
+      const edgeL = Math.max(0, box ? box.left : 0) + RING_EDGE
+      const edgeB = Math.min(vh, box ? box.bottom : Infinity) - RING_EDGE
       const own = cur.getAttribute('data-hotspot-label')
       const text = own ?? label ?? ''
       if (lab && lab.textContent !== text) {
@@ -191,27 +214,38 @@ export function Hotspot({ target, id, label, root, placement = 'auto' }: Hotspot
         lab.hidden = !text
         lastKey = ''
       }
-      const k = `${x}|${y}|${b.bottom}|${window.innerWidth}|${window.innerHeight}`
       r.style.visibility = 'visible'
-      if (k === lastKey) return
+      // re-place when the target / viewport moved, and at most every RECHECK_MS otherwise (rows appearing under it)
+      const k = `${b.left}|${b.top}|${b.right}|${b.bottom}|${vw}|${vh}|${text}`
+      if (k === lastKey && now - checkedAt < RECHECK_MS) return
       lastKey = k
+      checkedAt = now
+      // Tahap 7 (item 6): the ring and the label never sit on text or controls of the canvas: the first free candidate
+      // wins. The default spot (outside the top-right corner; ABOVE a target that reaches the right edge) comes first,
+      // then the other three corners; no free spot = the default.
+      const clampedX = b.right + RING_OUT > edgeR
+      const above = b.top - 11 - RING_GAP
+      const def: Spot = [Math.min(b.right + RING_OUT, edgeR), clampedX ? (above >= edgeT ? above : Math.max(b.top + 11 + 4, edgeT)) : Math.max(b.top - RING_OUT, edgeT)]
+      const corner = (right: number, bottom: number): Spot => [
+        Math.max(edgeL, Math.min(edgeR, right ? b.right + RING_OUT : b.left - RING_OUT)),
+        Math.max(edgeT, Math.min(edgeB, bottom ? b.bottom + RING_OUT : b.top - RING_OUT)),
+      ]
+      const [x, y] = [def, corner(0, 0), corner(1, 1), corner(0, 1)].find((s) => free(s[0] - 12, s[1] - 12, 24, 24)) ?? def
       r.style.transform = `translate(${x}px, ${y}px)`
-      if (!lab) return
+      if (!lab || !text) return
       const lw = lab.offsetWidth
       const lh = lab.offsetHeight
-      const vh = window.innerHeight
-      const belowTop = b.bottom + 6
-      const aboveTop = y - lh - 16
-      const fitsBelow = belowTop + lh <= vh - 8
-      const fitsAbove = aboveTop >= 8
-      const below = placement === 'below' ? fitsBelow || !fitsAbove : placement === 'above' ? !fitsAbove && fitsBelow : fitsBelow || !fitsAbove
-      // vertical: under the target's bottom edge, or above the ring — never over the target
-      const top = (below ? belowTop : aboveTop) - y
-      // horizontal: right-aligned to the ring, clamped inside the viewport (8 px margin)
-      let left = 6 - lw
-      if (x + left < 8) left = 8 - x
-      if (x + left + lw > window.innerWidth - 8) left = window.innerWidth - 8 - lw - x
-      lab.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
+      // under the target / ring or above them, right-aligned to the ring or left-aligned to the target ('above' first
+      // when asked); a 6 px margin so it does not touch a neighbouring word, never over its own target
+      const tops = [Math.max(b.bottom, y + 11) + 6, Math.min(b.top, y - 11) - lh - 6]
+      if (placement === 'above') tops.reverse()
+      // (last: beside the ring, on the side away from the target)
+      const ls = ([...tops.map((t): Spot => [x + 6 - lw, t]), ...tops.map((t): Spot => [b.left, t]), [x > b.right ? x + 16 : x - 16 - lw, y - lh / 2]] as Spot[])
+        .map(([l, t]): Spot => [Math.max(8, Math.min(vw - 8 - lw, l)), t])
+        .find(([l, t]) => t >= 8 && t + lh <= vh - 8 && !(l < b.right && l + lw > b.left && t < b.bottom && t + lh > b.top) && free(l - 6, t - 2, lw + 12, lh + 4))
+      // no free spot: the ring alone (a label over a KPI or a button is worse than no label)
+      lab.style.visibility = ls ? '' : 'hidden'
+      if (ls) lab.style.transform = `translate(${Math.round(ls[0] - x)}px, ${Math.round(ls[1] - y)}px)`
     }
     place()
     gsap.ticker.add(place)

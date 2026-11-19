@@ -117,7 +117,7 @@ const id = {
   rText: 'Transkrip',
   rPlaceholder: 'Contoh: Keputusan rapat, Disperindag menyiapkan operasi pasar beras besok pukul 10.00. Diskominfo menyiarkan jadwalnya hari ini.',
   rSample: 'Isi contoh',
-  rSampleText: 'Selamat siang, rapat pengendalian inflasi kita mulai. Harga beras naik tiga persen minggu ini. Keputusan rapat: operasi pasar beras digelar di Pasar Kota. Disperindag siapkan operasi pasar besok pukul sepuluh. Dinas Pertanian laporkan stok gabah petani paling lambat lusa. Diskominfo siarkan jadwal operasi pasar hari ini.',
+  rSampleText: 'Selamat siang, rapat pengendalian inflasi kita mulai. Harga beras naik tiga persen minggu ini. Keputusan rapat: operasi pasar beras digelar di {market}. Disperindag siapkan operasi pasar besok pukul sepuluh. Dinas Pertanian laporkan stok gabah petani paling lambat lusa. Diskominfo siarkan jadwal operasi pasar hari ini.',
   rExtract: 'Susun notulen dengan AI',
   rResult: (d: number, a: number) => `${d} keputusan · ${a} tindak lanjut ditemukan`,
   rNone: 'AI belum menemukan tindak lanjut. Tambahkan kalimat berisi tugas, unit, dan tenggat.',
@@ -324,17 +324,17 @@ const id = {
   daySee: 'Lihat papan',
   dayNotes: {
     a4p: 'BPBD menyiapkan naskah peringatan dini untuk desa bantaran.',
-    a5p: 'Camat Kalitidu mulai menyiapkan Balai Desa Ngujo untuk evakuasi.',
-    a2i: 'Pinjam pakai 4 pompa disetujui; pompa tiba di lokasi genangan. Instruksi Bupati 09.15 soal pompa selesai.',
-    a1p: 'Dinas PUPR mulai menangani tanggul Ngujo; tim dan 1.500 karung pasir berangkat.',
+    a5p: 'Camat {kec} mulai menyiapkan Balai {Desa} untuk evakuasi.',
+    a2i: 'Pinjam pakai 4 pompa disetujui; pompa tiba di lokasi genangan. Instruksi {head} 09.15 soal pompa selesai.',
+    a1p: 'Dinas PUPR mulai menangani tanggul {desa}; tim dan 1.500 karung pasir berangkat.',
     a4: 'BPBD menyiarkan peringatan dini ke desa bantaran.',
     a3p: 'Dinsos mulai memverifikasi 50 berkas bansos banjir.',
     a2: 'Pinjam pakai 4 pompa disetujui; pompa tiba di lokasi genangan.',
-    a5: 'Balai Desa Ngujo siap sebagai titik evakuasi.',
-    a6: 'Camat Kalitidu melaporkan titik evakuasi siap.',
-    a1: 'Rembesan tanggul Ngujo tertangani.',
+    a5: 'Balai {Desa} siap sebagai titik evakuasi.',
+    a6: 'Camat {kec} melaporkan titik evakuasi siap.',
+    a1: 'Rembesan tanggul {desa} tertangani.',
     a3: 'Dinsos menuntaskan verifikasi 50 berkas bansos.',
-    instr: 'Bupati mengirim instruksi soal pompa (nota dinas di Surat Masuk); nota dinas PUPR tentang pompa ikut ditindaklanjuti.',
+    instr: '{head} mengirim instruksi soal pompa (nota dinas di Surat Masuk); nota dinas PUPR tentang pompa ikut ditindaklanjuti.',
   } as Record<string, string>,
   daySeed: (title: string, opd: string) => `${opd} menuntaskan “${title}”.`,
   daySeedStart: (title: string, opd: string) => `${opd} mulai mengerjakan “${title}”.`,
@@ -573,7 +573,7 @@ const en: Dict = {
   lPickOpd: 'Choose an agency…',
   lRemoveOpd: (o: string) => `Remove ${o}`,
   lNeedOpd: 'Choose at least one recipient agency.',
-  lApproved: (by: string, at: string) => `Dispositioned by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} · ${at}`,
+  lApproved: (by: string, at: string) => `Dispositioned by ${/^(Regent|Mayor|Regional)/.test(by) ? 'the ' : ''}${by} · ${at}`,
   lTasksMade: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} created for the recipient agencies`,
   lSeeTasks: 'View follow-ups',
   lStamp: 'DISPOSITION',
@@ -696,17 +696,17 @@ const en: Dict = {
   daySee: 'View the board',
   dayNotes: {
     a4p: 'BPBD drafts the early warning for the riverside villages.',
-    a5p: 'The Head of Kalitidu starts preparing Ngujo village hall for evacuation.',
-    a2i: 'The loan of 4 pumps is approved; the pumps reach the flooded area. The Regent’s 09:15 pump instruction is done.',
-    a1p: 'Public Works starts on the Ngujo embankment; the team and 1,500 sandbags are on their way.',
+    a5p: 'The Head of {kec} starts preparing {hall} for evacuation.',
+    a2i: 'The loan of 4 pumps is approved; the pumps reach the flooded area. The {head}’s 09:15 pump instruction is done.',
+    a1p: 'Public Works starts on the {desa} embankment; the team and 1,500 sandbags are on their way.',
     a4: 'BPBD broadcasts early warnings to the riverside villages.',
     a3p: 'Social Affairs starts verifying the 50 flood-aid files.',
     a2: 'The loan of 4 pumps is approved; the pumps reach the flooded area.',
-    a5: 'Ngujo village hall is ready as an evacuation point.',
-    a6: 'The Head of Kalitidu reports the evacuation point ready.',
-    a1: 'The Ngujo embankment seepage is under control.',
+    a5: '{hall} is ready as an evacuation point.',
+    a6: 'The Head of {kec} reports the evacuation point ready.',
+    a1: 'The {desa} embankment seepage is under control.',
     a3: 'Social Affairs finishes verifying the 50 aid files.',
-    instr: 'The Regent sends an instruction about the pumps (memo in Incoming); PUPR’s pump memo is handled with it.',
+    instr: 'The {head} sends an instruction about the pumps (memo in Incoming); PUPR’s pump memo is handled with it.',
   },
   daySeed: (title: string, opd: string) => `${opd} completes “${title}”.`,
   daySeedStart: (title: string, opd: string) => `${opd} starts work on “${title}”.`,
@@ -732,8 +732,8 @@ const en: Dict = {
   lTrailReceived: (t: string) => `Received ${t}`,
   lTrailRead: (t: string, lo: number, hi: number) => `Read by the AI ${t} · OCR confidence ${lo}–${hi}%`,
   lTrailDraft: (t: string, edited: boolean) => `${edited ? 'Draft edited by the Secretariat' : 'AI draft unchanged'} · submitted ${t}`,
-  lTrailApproved: (by: string, t: string) => `Approved by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} ${t} · simulated e-signature`,
-  lTrailDone: (by: string, t: string) => `Dispositioned by ${/^(Regent|Regional)/.test(by) ? 'the ' : ''}${by} ${t}`,
+  lTrailApproved: (by: string, t: string) => `Approved by ${/^(Regent|Mayor|Regional)/.test(by) ? 'the ' : ''}${by} ${t} · simulated e-signature`,
+  lTrailDone: (by: string, t: string) => `Dispositioned by ${/^(Regent|Mayor|Regional)/.test(by) ? 'the ' : ''}${by} ${t}`,
   lTrailTasks: (n: number) => `${n} ${pl(n, 'follow-up', 'follow-ups')} created`,
   lTrailLinked: (no: number) => `Linked to meeting follow-up no. ${no}`,
   lLinked: (no: number, pic: string, due: string) => `Already handled in the 06:30 meeting: follow-up no. ${no} · ${pic} · ${due}`,
@@ -810,6 +810,7 @@ const PIC_EN: Record<string, string> = {
   Camat: 'District Head',
   Sekda: 'Regional Secretary',
   Bupati: 'Regent',
+  'Wali Kota': 'Mayor',
   'Kepala Daerah': 'Regional Head',
 }
 /** common Indonesian agency short names → OPD id (PIC strings only carry the short name) */
@@ -850,6 +851,8 @@ const TITLES: readonly (readonly [string, string])[] = [
   ['Kepala Daerah', 'Regional Head'],
   ['Sekda', 'Regional Secretary'],
   ['Bupati', 'Regent'],
+  ['Wali Kota', 'Mayor'],
+  ['Sekda a.n. Wali Kota', 'Regional Secretary for the Mayor'],
   [id.by.sekretariat, en.by.sekretariat],
   [id.by['kepala-daerah'], en.by['kepala-daerah']],
   [id.by['kepala-opd'], en.by['kepala-opd']],
@@ -869,4 +872,21 @@ export function byText(by: string, lang: Lang): string {
     if (/^(Kepala|Camat|Kadis|Kadinsos|Kalaksa) /.test(by) || PIC_EN[by]) return picLabel(by, 'en')
   }
   return by
+}
+
+/* ------------------------------------------------------------------ Tahap 7: head of a kota */
+/** the head-title strings of the dictionaries (a kabupaten's Bupati / Regent, the defaults above) */
+const ORIG = {
+  id: { role: id.roleNote['kepala-daerah'], by: { ...id.by }, opdWho: id.lOpdWho },
+  en: { role: en.roleNote['kepala-daerah'], by: { ...en.by }, opdWho: en.lOpdWho },
+}
+/** a kota is led by a Wali Kota (EN Mayor), a kabupaten by a Bupati (Regent): swap the head title in the role note,
+ *  the signer titles and the OPD hint (model.setMeetingRegion calls this when the region changes) */
+export function setHeadTitle(kota: boolean): void {
+  const sw = (v: string) => (kota ? v.replace(/Bupati/g, 'Wali Kota').replace(/Regent/g, 'Mayor') : v)
+  for (const [d, o] of [[id, ORIG.id], [en, ORIG.en]] as const) {
+    d.roleNote['kepala-daerah'] = sw(o.role)
+    for (const k of Object.keys(o.by) as (keyof typeof d.by)[]) d.by[k] = sw(o.by[k])
+    d.lOpdWho = sw(o.opdWho)
+  }
 }

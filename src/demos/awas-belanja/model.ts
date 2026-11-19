@@ -6,11 +6,16 @@
  * All numbers come from the seeded world (world/satu-daerah selectors); companies and people are fictional.
  */
 import type { Bi, Procurement, ProcurementFinding, WorldState } from '../../demo-kit/world'
-import { DAY_MIN, rows } from '../../demo-kit/world/util'
+import { DAY_MIN, currentRegion, rows } from '../../demo-kit/world/util'
 import { clock } from '../../demo-kit/world/clock'
 import { affiliationEdges, analyzeProcurement, hpsVsMarket, localBenchmarks, type AffiliationEdge, type ItemDeviation } from '../../demo-kit/world/satu-daerah'
 import { num, percent, rupiah } from '../../demo-kit/viz/format'
 import type { Lang } from './strings'
+
+/** the head of a kota is a Wali Kota (EN Mayor), of a kabupaten a Bupati (Regent): wording follows the running region */
+export function headWord(t: string): string {
+  return currentRegion()?.type === 'kota' ? t.replace(/Bupati/g, 'Wali Kota').replace(/Regent/g, 'Mayor') : t
+}
 
 export const SLUG = 'awas-belanja' as const
 export const PUMP_KEY = 'pompa-darurat'
@@ -319,7 +324,7 @@ export function memoModel(s: WorldState, procurementId: string, role: string, la
   const lowest = Math.min(...(p.bids ?? []).map((b) => b.price))
   const mPct = Math.round(CORRECTION_MARGIN * 100)
   if (table.overpay > 0)
-    recs.push(L(r === 'inspektorat'
+    recs.push(headWord(L(r === 'inspektorat'
       ? {
           // the inspectorate (APIP) recommends a review; it does not propose the HPS itself (independence)
           id: `Merekomendasikan Bupati memerintahkan PPK/UKPBJ meninjau HPS ${rpFull(table.hps, 'id')}. Sebagai acuan: median harga pasar ${rpFull(table.market, 'id')} ditambah margin wajar ${mPct}% = ${rpFull(proposed, 'id')} (asumsi simulasi; ${ROUNDING_NOTE.id}). Penetapan HPS tetap wewenang PPK.`,
@@ -328,7 +333,7 @@ export function memoModel(s: WorldState, procurementId: string, role: string, la
       : {
           id: `Usulkan kepada PPK koreksi HPS dari ${rpFull(table.hps, 'id')} menjadi ${rpFull(proposed, 'id')}: median harga pasar ${rpFull(table.market, 'id')} ditambah margin keuntungan dan biaya umum wajar ${mPct}% (asumsi simulasi; ${ROUNDING_NOTE.id}). Penetapan HPS tetap wewenang PPK.`,
           en: `Propose to the PPK an HPS correction from ${rpFull(table.hps, 'en')} to ${rpFull(proposed, 'en')}: the market median ${rpFull(table.market, 'en')} plus a fair ${mPct}% margin for profit and overheads (simulation assumption; ${ROUNDING_NOTE.en}). Setting the HPS remains the PPK's decision.`,
-        }))
+        })))
   if (above.length && Number.isFinite(lowest))
     recs.push(L(above.length === (p.bids ?? []).length
       ? {
@@ -361,7 +366,7 @@ export function memoModel(s: WorldState, procurementId: string, role: string, la
   return {
     role: r,
     number: r === 'inspektorat' ? `700/AB-${p.code}/${year}` : `027/AB-${p.code}/${year}`,
-    to: L(r === 'inspektorat' ? { id: `Bupati ${s.region.shortName}`, en: `Regent of ${s.region.shortName}` } : { id: `Pejabat Pembuat Komitmen (PPK) ${opd}`, en: `Commitment Officer (PPK), ${opd}` }),
+    to: headWord(L(r === 'inspektorat' ? { id: `Bupati ${s.region.shortName}`, en: `Regent of ${s.region.shortName}` } : { id: `Pejabat Pembuat Komitmen (PPK) ${opd}`, en: `Commitment Officer (PPK), ${opd}` })),
     from: L(r === 'inspektorat' ? { id: 'Inspektur Daerah', en: 'Regional Inspector' } : { id: 'Kepala Bagian Pengadaan Barang/Jasa (UKPBJ)', en: 'Head of the Procurement Unit (UKPBJ)' }),
     cc: L(r === 'inspektorat' ? { id: `Kepala UKPBJ; Kepala ${opd}`, en: `Head of UKPBJ; Head of ${opd}` } : { id: `Inspektur Daerah; Kepala ${opd}`, en: `Regional Inspector; Head of ${opd}` }),
     subject: `${L(p.name)} (${p.code})`,

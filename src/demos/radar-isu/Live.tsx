@@ -22,6 +22,7 @@ import {
   manualTriggerAt,
   setAssessTarget,
   markManualTrigger,
+  damNameOf,
   mentionsToday,
   negIssues,
   prefetchBurst,
@@ -119,7 +120,7 @@ export default function Live({ onDeep, focus, onFocusDone }: LiveProps) {
   const seed = useWorld(selSeed)
   const complaints = useWorld(selComplaints)
   const gauge = gauges.byId[meta.facts.hoax.gaugeId]
-  const damName = meta.facts.hoax.damName || gauge?.name || 'Bendungan'
+  const damName = damNameOf(meta.facts.hoax, lang, gauge?.name)
 
   /* ---------------------------------------------------------------- derived */
   const kpis = radarKpis(mentions, now)

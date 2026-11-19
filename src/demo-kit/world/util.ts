@@ -3,6 +3,7 @@
  * No React, no DOM, no GSAP: everything here runs under `npx tsx` for the self-tests.
  */
 import type { LngLat, Minutes, Table, TableKey } from './types'
+import type { RegionPack } from '../region/types'
 
 /* ------------------------------------------------------------------ constants */
 export const WORLD = {
@@ -228,3 +229,12 @@ export function shallowEqual(a: unknown, b: unknown): boolean {
 export const HOUR_RHYTHM: readonly number[] = [
   0.08, 0.04, 0.03, 0.03, 0.08, 0.3, 0.65, 1.0, 1.2, 1.25, 1.15, 1.0, 0.7, 1.0, 1.1, 1.0, 0.75, 0.6, 0.5, 0.45, 0.38, 0.28, 0.18, 0.12,
 ]
+
+/* ------------------------------------------------------------------ Tahap 7: the current region */
+// The current region lives here (demo-core, always loaded on a demo page) so it adds no chunk of its own: docs/nik +
+// docs/extract read it (set by store.loadWorld; null in node self-tests and on pages without a world). The flood
+// anchor (places the flood story names) is region/anchor.ts.
+
+let currentPack: RegionPack | null = null
+export const setCurrentRegion = (p: RegionPack | null): void => void (currentPack = p)
+export const currentRegion = (): RegionPack | null => currentPack

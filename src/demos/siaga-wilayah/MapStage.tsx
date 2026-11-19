@@ -15,7 +15,7 @@ import { clock, rows, shallowEqual, useSession, useWorld, world, type WorldState
 import { harvestValues } from '../../demo-kit/world/satu-daerah'
 import { allGauges, arrivalAt, arrivals, canSend, confirmedIds, floodAlerts, floodReports, forecastRain, gaugeName, gaugeNow, keyFacilities, clockText, levelState, productHref, riverGauge, riverLevelAt, shelterOcc, shelters, suggestedLevel, swRole, warnZone } from './data'
 import { S, fill, nf, useT, type SKey } from './strings'
-import { camMoved, ensureDesa, forgetDesa, mapReady, mapRef, ui, useUi, type LayerId } from './ui'
+import { afterPaintDo, camMoved, ensureDesa, forgetDesa, mapReady, mapRef, ui, useUi, type LayerId } from './ui'
 
 const clockBucket = () => Math.floor(clock.get().minutes / 10) * 10
 const rainOf = (s: WorldState) => s.rainCells
@@ -259,7 +259,7 @@ function LayerMenu() {
   }, [open])
   return (
     <div className="dk-sg-layers" ref={boxRef}>
-      <button ref={btnRef} type="button" className="dk-sg-chipbtn" aria-expanded={open} aria-controls="dk-sg-layer-pop" onClick={() => ui.set({ layersOpen: !open })} data-sw="layers">
+      <button ref={btnRef} type="button" className="dk-sg-chipbtn" aria-expanded={open} aria-controls="dk-sg-layer-pop" onClick={() => afterPaintDo(() => ui.set({ layersOpen: !ui.get().layersOpen }))} data-sw="layers">
         <Icon name="layers" size={16} />
         {t('layers')}
         <span className="dk-sg-count dk-num">{count}</span>

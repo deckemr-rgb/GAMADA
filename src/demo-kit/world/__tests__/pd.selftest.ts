@@ -67,7 +67,9 @@ export async function runPdSelftest(ok: Ok, section: (n: string) => void, packs:
     const n1 = store.world.get().auditLog.ids.length
     const ran2 = await story.playDayStory({ gapMs: 0 })
     await store.settled()
-    ok(ran1.length === 5 && ran2.length === 0, `story: 5 steps the first time, none the second (${ran1.join(',')} / ${ran2.length})`)
+    // Tahap 7: another pack may close the cluster with Siti's own complaint ('neighbours' skipped); every step must be done
+    const allDone = Object.values(story.storyDone(store.world.get())).every(Boolean)
+    ok((real.id === 'bojonegoro' ? ran1.length === 5 : ran1.length >= 4 && allDone) && ran2.length === 0, `story: 5 steps the first time, none the second (${ran1.join(',')} / ${ran2.length})`)
     ok(store.world.get().auditLog.ids.length === n1, 'story twice ⇒ no new audit rows')
     const siti = story.sitiComplaint(store.world.get())
     const tr = siti ? dataTrail(store.world.get(), `complaints:${siti.id}`) : null

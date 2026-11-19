@@ -32,4 +32,4 @@ export { loadPersisted, savePersisted, clearPersisted, flushPersist, persistKey,
 export * from './selectors'
 export { computeScore, scoreOf, SCORE_WEIGHTS } from './score'
 export { CATEGORY_LABEL } from './labels'
-export { WORLD, DAY_MIN, HOUR_RHYTHM, rows, get, hhmm, isoDay, monthOf, worldDate, distanceKm, shallowEqual, fmtRp, ref, TABLE_KEYS } from './util'
+export { WORLD, DAY_MIN, HOUR_RHYTHM, rows, get, hhmm, isoDay, monthOf, worldDate, distanceKm, shallowEqual, fmtRp, ref, TABLE_KEYS, currentRegion } from './util'

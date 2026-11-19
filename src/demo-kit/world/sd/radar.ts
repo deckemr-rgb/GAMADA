@@ -5,7 +5,7 @@
  */
 import type { EventMap, Mention, Minutes, WorldState } from '../types'
 import { createParamSelector } from '../selectors'
-import { HOAX_OFFSETS, HOAX_SCENARIO, hoaxPost } from '../scenario-texts'
+import { HOAX_OFFSETS, HOAX_SCENARIO, hoaxDam, hoaxPost } from '../scenario-texts'
 import { rows } from '../util'
 import { kecName } from './base'
 
@@ -124,7 +124,7 @@ export function mentionStream(s: WorldState, now: Minutes, limit = 60): Mention[
 export function hoaxBurst(s: WorldState, at: Minutes): EventMap['mention.created'][] {
   const rumor = s.meta.facts.hoax.rumor || HOAX_SCENARIO.rumor
   if (rows(s.mentions).some((m) => m.rumor === rumor)) return []
-  const dam = s.meta.facts.hoax.damName || 'Bendungan'
+  const dam = hoaxDam(s.meta.facts.hoax)
   const k = kecName(s, s.region.floodKecamatanIds[0] ?? s.region.kecamatan[0]?.id ?? '')
   return HOAX_OFFSETS.map((_, i) => hoaxPost(i, at, dam, k, rumor))
 }

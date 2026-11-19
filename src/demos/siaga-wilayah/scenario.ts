@@ -6,7 +6,8 @@
  * Registered on import (imported only by the lazy Geo-AI drawer and the broadcast dialog).
  */
 import { registerScenario, type Lang, type Scenario, type SimContext, type SimResponse } from '../../demo-kit/ai/chat'
-import { clock, getSession, rows, world } from '../../demo-kit/world'
+import { clock, currentRegion, getSession, rows, world } from '../../demo-kit/world'
+import { regionalLanguageLabel } from '../../demo-kit/i18n'
 import { harvestValues } from '../../demo-kit/world/satu-daerah'
 import { FC_T0, arrivalAt, arrivals, clockText, confirmedIds, floodAlerts, floodClusterSize, floodReports, gaugeName, gaugeNow, harvestPasca, riverGauge, riverLevelAt, shelterOcc, shelters, warnZone } from './data'
 import { KIND_LABEL } from './sites'
@@ -129,7 +130,7 @@ function noForecast(ctx: SimContext): SimResponse {
 /**
  * The early-warning text. `rich` (the AI draft) adds what the model knows on top of the template: the arrival clock
  * time of the first villages of the chosen area, the shelter with the most places left there, the river reading and a
- * short Basa Jawa line for WhatsApp.
+ * short line in the regional language for WhatsApp.
  */
 export function draftAlert(g: GeoCtx, lang: Lang, level: 1 | 2 | 3 | 4 = 3, areas?: string[], onsetH?: number, rich = false): { level: 'waspada' | 'siaga' | 'awas'; areas: string[]; message: string; channels: ('wa' | 'sms' | 'sirine' | 'media-sosial' | 'radio')[] } {
   if (rich) return richDraft(g, lang, level, areas)
@@ -214,11 +215,21 @@ function richDraft(g: GeoCtx, lang: Lang, level: 1 | 2 | 3 | 4, areas?: string[]
     3: { id: `Segera menuju ${shelter}. Matikan listrik bila air masuk rumah.`, en: `Go to ${shelter} now. Switch off power if water enters the house.` },
     4: { id: `Evakuasi wajib sekarang ke ${shelter}. Ikuti arahan petugas.`, en: `Mandatory evacuation now to ${shelter}. Follow the officers.` },
   }[level][lang]
-  const jw = level >= 3 ? 'Banyu Bengawan munggah, enggal ngungsi menyang posko.' : 'Banyu kali munggah, siap-siap ngungsi.'
+  // one short line in the region's own language for WhatsApp (Basa Jawa / Sunda / Minang); none for other languages
+  const pack = currentRegion()
+  const code = pack?.languages.regional[0]
+  const rv = r ? riverOf(r.name) : ''
+  const local: Record<string, [string, string]> = {
+    jv: [`Banyu ${rv || 'kali'} munggah, enggal ngungsi menyang posko.`, 'Banyu kali munggah, siap-siap ngungsi.'],
+    su: [`Cai ${rv || 'walungan'} naek, geura ngungsi ka posko.`, 'Cai walungan naek, sasayagian ngungsi.'],
+    min: [`Aia ${rv || 'batang'} naiak, capek mangungsi ka posko.`, 'Aia batang naiak, basiap-siap mangungsi.'],
+  }
+  const jwPair = code ? local[code] : undefined
+  const jw = jwPair ? `(${regionalLanguageLabel(pack, lang === 'id' ? 'id' : 'en')}) ${level >= 3 ? jwPair[0] : jwPair[1]}` : ''
   const message =
     lang === 'id'
-      ? `[SIMULASI DEMO] [PERINGATAN DINI BANJIR · LEVEL ${level} ${lv}] BPBD ${g.region}: ${r ? `${river} ${nf(r.level, 'id', 2)} m (${st}) dan naik, ` : ''}diperkirakan meluap di Kec. ${kec.join(', ')}.${times ? ` Perkiraan air tiba: ${times}.` : ''} ${act} Darurat: 112. Info resmi hanya dari BPBD. (Jw) ${jw}`
-      : `[DEMO SIMULATION] [FLOOD EARLY WARNING · LEVEL ${level} ${lv}] BPBD ${g.region}: ${r ? `the ${river} is at ${nf(r.level, 'en', 2)} m (${st}) and rising, ` : ''}expected to overflow in ${kec.join(', ')}.${times ? ` Water expected: ${times}.` : ''} ${act} Emergency: 112. Official info only from BPBD. (Javanese) ${jw}`
+      ? `[SIMULASI DEMO] [PERINGATAN DINI BANJIR · LEVEL ${level} ${lv}] BPBD ${g.region}: ${r ? `${river} ${nf(r.level, 'id', 2)} m (${st}) dan naik, ` : ''}diperkirakan meluap di Kec. ${kec.join(', ')}.${times ? ` Perkiraan air tiba: ${times}.` : ''} ${act} Darurat: 112. Info resmi hanya dari BPBD.${jw ? ` ${jw}` : ''}`
+      : `[DEMO SIMULATION] [FLOOD EARLY WARNING · LEVEL ${level} ${lv}] BPBD ${g.region}: ${r ? `the ${river} is at ${nf(r.level, 'en', 2)} m (${st}) and rising, ` : ''}expected to overflow in ${kec.join(', ')}.${times ? ` Water expected: ${times}.` : ''} ${act} Emergency: 112. Official info only from BPBD.${jw ? ` ${jw}` : ''}`
   return { level: level >= 3 ? 'awas' : level === 2 ? 'siaga' : 'waspada', areas: kec, message: message.slice(0, 600), channels: level >= 3 ? ['wa', 'sms', 'sirine'] : ['wa', 'sms'] }
 }
 
@@ -233,7 +244,7 @@ const hoursInText = (text: string): number | null => {
 }
 
 /* ------------------------------------------------------------------ answers shared by several intents */
-/** the district named closest AFTER a topic word ("… posko di Malo" → Malo), else the first one named */
+/** the district named closest AFTER a topic word ("… posko di <kecamatan>" → that kecamatan), else the first one named */
 function kecNear(text: string, topic: RegExp): string | null {
   const names = kecInText(text)
   if (!names.length) return null
@@ -411,7 +422,7 @@ export const geoScenario: Scenario<GeoCtx> = {
   intents: [
     {
       id: 'status',
-      examples: ['Bagaimana situasi banjir sekarang?', 'Ringkas kondisi siaga banjir pagi ini', 'Apa status peringatan hari ini?', "What's the flood situation now?", 'Give me a status summary', 'Piye kahanan banjir saiki?', 'Kahanan kali saiki piye, wis bahaya durung?'],
+      examples: ['Bagaimana situasi banjir sekarang?', 'Ringkas kondisi siaga banjir pagi ini', 'Apa status peringatan hari ini?', "What's the flood situation now?", 'Give me a status summary', 'Piye kahanan banjir saiki?', 'Kahanan kali saiki piye, wis bahaya durung?', 'Kumaha kaayaan banjir ayeuna?', 'Baa kondisi banjia kini?'],
       respond: (ctx) => {
         const g = read(ctx.world)
         if (!g) return noForecast(ctx)
@@ -459,7 +470,7 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'river',
-      examples: ['Berapa tinggi muka air Bengawan Solo?', 'Status pos pantau sungai', 'Apakah sungai sudah siaga?', 'What is the river water level?', 'Is the river above the watch level?', 'Banyu kali saiki pira dhuwure?'],
+      examples: ['Berapa tinggi muka air sungai utama?', 'Status pos pantau sungai', 'Apakah sungai sudah siaga?', 'What is the river water level?', 'Is the river above the watch level?', 'Banyu kali saiki pira dhuwure?', 'Cai walungan ayeuna sabaraha luhurna?', 'Aia batang kini sabara tinggi?'],
       respond: (ctx) => {
         const g = read(ctx.world)
         const r = g?.river
@@ -475,7 +486,7 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'dam',
-      examples: ['Apakah bendungan aman?', 'Benarkan waduk akan jebol?', 'Ada kabar bendungan Pacal jebol', 'Is the dam safe?', 'Is it true the dam will burst?', 'Waduk Pacal jebol ta?', 'Krungu kabar waduk arep jebol, bener ora?'],
+      examples: ['Apakah bendungan aman?', 'Benarkan waduk akan jebol?', 'Ada kabar bendungan jebol', 'Is the dam safe?', 'Is it true the dam will burst?', 'Waduk jebol ta?', 'Krungu kabar waduk arep jebol, bener ora?', 'Leres bendungan bade bedah?', 'Batua bendungan ka jabuah?'],
       respond: (ctx) => {
         const g = read(ctx.world)
         const d = g?.dam
@@ -490,7 +501,7 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'draft',
-      examples: ['Susun peringatan dini untuk warga', 'Buatkan pesan peringatan banjir', 'Tulis draf peringatan level awas untuk Trucuk', 'Draft an early warning', 'Write a flood warning message for residents', 'Gawekna pengumuman peringatan banjir', 'Tulung gawe pesen peringatan kanggo warga'],
+      examples: ['Susun peringatan dini untuk warga', 'Buatkan pesan peringatan banjir', 'Tulis draf peringatan level awas untuk kecamatan bantaran', 'Draft an early warning', 'Write a flood warning message for residents', 'Gawekna pengumuman peringatan banjir', 'Jieun peringatan banjir keur warga', 'Buekan paringatan banjia untuak warga', 'Tulung gawe pesen peringatan kanggo warga'],
       respond: (ctx) => {
         const g = read(ctx.world)
         if (!g) return noForecast(ctx)
@@ -508,7 +519,7 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'shelters',
-      examples: ['Posko pengungsian mana yang masih kosong?', 'Kapasitas posko di zona banjir', 'Ke mana warga harus mengungsi?', 'Berapa posko yang masih kosong di Kec. Malo dan siapa camatnya?', 'Which shelters still have room?', 'Where should residents evacuate?', 'Ngungsi neng endi?', 'Posko sing isih kosong neng endi?'],
+      examples: ['Posko pengungsian mana yang masih kosong?', 'Kapasitas posko di zona banjir', 'Ke mana warga harus mengungsi?', 'Berapa posko yang masih kosong di kecamatan itu dan siapa camatnya?', 'Which shelters still have room?', 'Where should residents evacuate?', 'Ngungsi neng endi?', 'Kudu ngungsi ka mana?', 'Mangungsi ka ma?', 'Posko sing isih kosong neng endi?'],
       respond: (ctx) => {
         const g = read(ctx.world)
         if (!g) return noForecast(ctx)
@@ -555,7 +566,7 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'harvest',
-      examples: ['Bagaimana dampak banjir ke panen padi?', 'Berapa estimasi panen yang hilang?', 'Berapa estimasi kerugian panen di Kec. Kalitidu?', 'Dampak ke pertanian?', 'What is the impact on the rice harvest?', 'How much harvest could be lost?', 'Panen pari piye yen kebanjiran?'],
+      examples: ['Bagaimana dampak banjir ke panen padi?', 'Berapa estimasi panen yang hilang?', 'Berapa estimasi kerugian panen di satu kecamatan?', 'Dampak ke pertanian?', 'What is the impact on the rice harvest?', 'How much harvest could be lost?', 'Panen pari piye yen kebanjiran?'],
       respond: (ctx) => {
         const g = read(ctx.world)
         if (!g) return noForecast(ctx)
@@ -595,11 +606,11 @@ export const geoScenario: Scenario<GeoCtx> = {
     },
     {
       id: 'source',
-      examples: ['Dari mana sumber datanya?', 'Apakah data ini terhubung ke AWLR BBWS Bengawan Solo secara real-time?', 'Apakah terintegrasi dengan BMKG?', 'Data muka air diambil dari mana?', 'Where does the data come from?', 'Is this connected to real-time river gauges?', 'Is it integrated with BMKG?', 'Data e soko ngendi?'],
+      examples: ['Dari mana sumber datanya?', 'Apakah data ini terhubung ke AWLR BBWS secara real-time?', 'Apakah terintegrasi dengan BMKG?', 'Data muka air diambil dari mana?', 'Where does the data come from?', 'Is this connected to real-time river gauges?', 'Is it integrated with BMKG?', 'Data e soko ngendi?'],
       respond: (ctx) => ({
         text: L(ctx.lang, {
-          id: 'Di demo ini: batas wilayah, sungai dan lokasi pos pantau adalah data publik nyata (region pack); pembacaan muka air, radar hujan, laporan warga dan posko adalah simulasi. Belum ada sambungan langsung ke AWLR BBWS Bengawan Solo atau BMKG. Rancangan produksi: muka air ditarik dari telemetri AWLR BBWS lewat API (mis. tiap 15 menit), prakiraan cuaca & peringatan dari layanan data BMKG, laporan warga dari Sapa Warga; model genangan dihitung ulang setiap data baru masuk, dan sumber tiap angka tampil di panel "Sumber" peta.',
-          en: 'In this demo: boundaries, rivers and gauge sites are real public data (region pack); water readings, rain radar, citizen reports and shelters are simulated. There is no live link to the BBWS Bengawan Solo AWLR gauges or BMKG yet. Production design: river levels pulled from the BBWS AWLR telemetry via API (e.g. every 15 minutes), weather forecasts & warnings from BMKG data services, citizen reports from Sapa Warga; the flood model re-runs on every new reading, and each figure keeps its source in the map’s "Sources" panel.',
+          id: 'Di demo ini: batas wilayah, sungai dan lokasi pos pantau adalah data publik nyata (region pack); pembacaan muka air, radar hujan, laporan warga dan posko adalah simulasi. Belum ada sambungan langsung ke AWLR balai wilayah sungai (BBWS/BWS) atau BMKG. Rancangan produksi: muka air ditarik dari telemetri AWLR BBWS lewat API (mis. tiap 15 menit), prakiraan cuaca & peringatan dari layanan data BMKG, laporan warga dari Sapa Warga; model genangan dihitung ulang setiap data baru masuk, dan sumber tiap angka tampil di panel "Sumber" peta.',
+          en: 'In this demo: boundaries, rivers and gauge sites are real public data (region pack); water readings, rain radar, citizen reports and shelters are simulated. There is no live link to the river basin authority’s (BBWS/BWS) AWLR gauges or BMKG yet. Production design: river levels pulled from the BBWS AWLR telemetry via API (e.g. every 15 minutes), weather forecasts & warnings from BMKG data services, citizen reports from Sapa Warga; the flood model re-runs on every new reading, and each figure keeps its source in the map’s "Sources" panel.',
         }),
         followUps: [L(ctx.lang, { id: 'Siapa yang bisa melihat nomor HP warga penerima?', en: "Who can see recipients' phone numbers?" }), L(ctx.lang, { id: 'Berapa tinggi muka air sungai?', en: 'What is the river level?' })],
       }),

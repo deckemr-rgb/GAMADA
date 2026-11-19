@@ -4,7 +4,7 @@
  * stage action ("Kirim ke Meja Pimpinan" for a C13 op; "Mulai operasi pasar" disabled with its reason until approved,
  * enabled after) and the OpSimulator (`opSimulate`; mission 3 when "sesudah" differs from "tanpa operasi").
  */
-import { useEffect, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import AppLink from '../../components/AppLink'
 import { DEMO_READY } from '../registry'
 import { demoHref, useShell } from '../../demo-kit/shell'
@@ -287,7 +287,7 @@ function Simulator({ op, t, L, sw, now }: { op: MarketOperation | null; t: T; L:
       labels={{ volume: { id: S.id.volume, en: S.en.volume }, ton: { id: S.id.ton, en: S.en.ton }, days: { id: S.id.days, en: S.en.days }, dayUnit: { id: S.id.dayUnit, en: S.en.dayUnit } }}
       baseline={base.baseline}
       after={run ? run.forecastAfter : null}
-      onSimulate={() => setRan({ volume, days, key })}
+      onSimulate={() => startTransition(() => setRan({ volume, days, key }))}
       simulateLabel={t.simulate}
       baseLabel={t.base}
       afterLabel={t.after}

@@ -313,3 +313,6 @@ export function mapReady(raw: MapViewHandle): void {
   mapRef.current = h
   for (const fn of pending.splice(0)) fn(h)
 }
+
+/** INP: the press paints first, the step (model run, dialog mount, map fly, layer panel) starts in the next task */
+export const afterPaintDo = (fn: () => void): void => void requestAnimationFrame(() => setTimeout(fn, 0))

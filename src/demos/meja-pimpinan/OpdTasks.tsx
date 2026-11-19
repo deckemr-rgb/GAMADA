@@ -59,7 +59,7 @@ export default function OpdTasks({ opdId }: { opdId: string }) {
           {O.title[lang].replace('{o}', short)}
         </h3>
       </header>
-      <div className="dk-mp-pb">
+      <div className="dk-mp-pb" tabIndex={0}>
         {list.length ? (
           <ul className="dk-mp-task-list" aria-live="polite">
             {list.map((a) => {

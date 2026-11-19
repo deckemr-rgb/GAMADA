@@ -78,8 +78,11 @@ export async function runTourSelftest(ok: Ok, section: (n: string) => void, pack
   const a = await day()
   ok(store.world.scope() === 'tour', 'the probe ran on the tour scope')
   ok(clock.get().minutes === 17 * 60, `clock at 17:00 after the jumps (${clock.get().minutes})`)
-  ok(a.storyRan.join(',') === 'flood,siti,neighbours,instruction,recommend', `story keys at their chapters with until (${a.storyRan.join(',')})`)
-  ok(a.tourRows >= 4, `story events carry source 'tour' (${a.tourRows} audit rows)`)
+  // Tahap 7: in a dense city (REGION=bandung) Siti's complaint can already close a cluster, so 'neighbours' is skipped
+  const dense = real.id !== 'bojonegoro' && !a.storyRan.includes('neighbours')
+  const want = dense ? 'flood,siti,instruction,recommend' : 'flood,siti,neighbours,instruction,recommend'
+  ok(a.storyRan.join(',') === want, `story keys at their chapters with until (${a.storyRan.join(',')})`)
+  ok(a.tourRows >= (dense ? 3 : 4), `story events carry source 'tour' (${a.tourRows} audit rows)`)
   ok(a.natural > 50, `natural events ran during the day (${a.natural} clock rows)`)
   const s1 = store.world.get()
   ok(rows(s1.mentions).filter((m) => m.rumor && m.at >= 10 * 60).length >= 3, 'the 10:00 rumor burst ran (natural, ≥ 3 rumor posts)')

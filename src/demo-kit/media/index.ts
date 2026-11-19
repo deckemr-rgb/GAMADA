@@ -27,5 +27,5 @@ export {
 export { speak, cancel, loadVoices, pickVoice, hasVoiceFor, ttsSupported, TTS, type SpeakOptions, type SpeakHandle, type SpeakResult } from './tts'
 export { createRecognizer, recognitionSupported, speechLangs, SPEECH, type Recognizer, type RecognizerOptions, type RecognitionError } from './speech'
 export { openMic, micSupported, micPermission, MicOpenError, MIC, type MicHandle, type MicError } from './mic'
-export { MEETING_BANJIR, MEETING_BANJIR_NOTES, SALES_CALL, VOICE_NOTES, voiceNoteFromTemplate, type VoiceSample } from './samples'
+export { MEETING_BANJIR, MEETING_BANJIR_NOTES, meetingBanjirFor, meetingBanjirNotesFor, type MeetingPlaces, SALES_CALL, VOICE_NOTES, voiceNoteFromTemplate, type VoiceSample } from './samples'
 export { useCamera, type CameraState } from './camera'

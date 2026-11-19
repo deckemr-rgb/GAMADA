@@ -261,7 +261,7 @@ function Product() {
       feedPane
     ) : tab === 'detail' ? (
       openId ? (
-        <Detail tenderId={openId} onDoc={() => switchTab('dokumen')} t={t} lang={lang} sm={sm} />
+        <Detail tenderId={openId} onDoc={() => requestAnimationFrame(() => setTimeout(() => switchTab('dokumen'), 0))} t={t} lang={lang} sm={sm} />
       ) : (
         <p className="dk-tp-empty">{t.noTender}</p>
       )

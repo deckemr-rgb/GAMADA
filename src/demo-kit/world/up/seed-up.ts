@@ -408,11 +408,20 @@ export function extendUsahaPintar(s0: WorldState, pack: RegionPack | null): Worl
     usedTexts.set(day, used)
     let text: Bi = d.tpl.t
     let place = desaPick()
+    let vars: Record<string, string | number> = {}
     for (let k = 0; k < 6; k++) {
       place = desaPick()
-      const vars = { item: itemName(rb.pick(shopItems)), desa: place.desa, kec: place.kec, market: marketName, brand: d.brand, days: rb.int(1, 3) }
+      vars = { item: itemName(rb.pick(shopItems)), desa: place.desa, kec: place.kec, market: marketName, brand: d.brand, days: rb.int(1, 3) }
       text = fillBi(d.tpl.t, vars)
       if (!used.has(text.id)) break
+    }
+    // Tahap 7: a template without variables drawn twice in a day (other packs draw differently): take the next template
+    // of the same topic and tone that is still unused that day (no extra random draws, so other worlds are unchanged)
+    if (used.has(text.id)) {
+      const pool = d.brand === shopId ? BRAND_TEXT : d.brand === 'kategori' ? CATEGORY_TEXT : COMPETITOR_TEXT
+      const free = (t: (typeof pool)[number]) => !used.has(fillBi(t.t, vars).id)
+      const alt = pool.find((t) => t.topic === d.tpl.topic && Math.sign(t.s) === Math.sign(d.tpl.s) && free(t)) ?? pool.find((t) => Math.sign(t.s) === Math.sign(d.tpl.s) && free(t))
+      if (alt) text = fillBi(alt.t, vars)
     }
     used.add(text.id)
     const sc = d.tpl.s + rb.normal(0, 0.08)

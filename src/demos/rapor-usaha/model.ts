@@ -165,3 +165,8 @@ export function route(s: WorldState, raw: string, role: string): Route | null {
   if (tx && tx.businessId === shop) return { role: 'pemilik-toko', tab: 'rapor', open: { factor: 'pajak', flash: 'pajak' } }
   return null
 }
+
+/** run `fn` after the next paint: the pressed control answers in this frame, the heavy work follows (INP) */
+export const afterPaint = (fn: () => void): void => {
+  requestAnimationFrame(() => setTimeout(fn, 0))
+}

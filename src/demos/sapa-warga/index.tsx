@@ -377,7 +377,7 @@ export const missions: readonly Mission[] = [
   {
     id: 'voice',
     label: { id: 'Kirim voice note', en: 'Send a voice note' },
-    hint: { id: 'Ibu Siti: ketuk chip "Voice note contoh" (contoh Basa Jawa, ±3 detik), atau tahan tombol mikrofon untuk bicara', en: 'Ibu Siti: tap the "Sample voice note" chip (a 3-second Javanese sample), or hold the microphone to speak' },
+    hint: { id: 'Ibu Siti: ketuk chip "Voice note contoh" (contoh dalam bahasa daerah, ±3 detik), atau tahan tombol mikrofon untuk bicara', en: 'Ibu Siti: tap the "Sample voice note" chip (a 3-second sample in the regional language), or hold the microphone to speak' },
     done: (e) => isEvent(e, 'complaint.created') && e.payload.channel === 'voice' && e.source === 'sapa-warga',
   },
   {

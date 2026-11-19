@@ -12,6 +12,7 @@ import { Button, Drawer, Icon, InsightCallout, Select, SlaLabel, Stepper, Status
 import { CATEGORY_LABEL, DAY_MIN, emit, hhmm, onEvent, rows, useClock, useWorld, world, worldDate, type Bi, type ComplaintCategory, type TicketStatus, type WorldState } from '../../demo-kit/world'
 import { duplicateCandidates } from '../../demo-kit/world/satu-daerah'
 import { Photo } from './photos'
+import { languageLabel } from '../../demo-kit/i18n'
 import { SLUG, SW, advanceClock, afterPaint, desaName, durText, isEmergency, kecName, needKey, opdShort, slashBreak, stepMinutes, unit, type PhotoId } from './model'
 import { triageNoteText } from './triage'
 import { CHANNEL_LABEL, STATUS_LABEL, STATUS_ORDER, URGENCY_LABEL, fill, stringsFor, useT } from './strings'
@@ -341,7 +342,7 @@ export default function TicketDetail({ ticketId, open, onClose, readOnly, person
 
         <section className="dk-sw-dsec">
           <h3>{voice ? t.transcript : t.original}</h3>
-          {regional && <span className="dk-sw-badge">{complaint.lang === 'jv' ? (lang === 'id' ? 'Basa Jawa → Indonesia' : 'Javanese → English') : lang === 'id' ? 'Bahasa daerah → Indonesia' : 'Regional language → English'}</span>}
+          {regional && <span className="dk-sw-badge">{`${languageLabel(complaint.lang, lang)} → ${lang === 'id' ? 'Indonesia' : 'English'}`}</span>}
           <blockquote>{complaint.text}</blockquote>
           {(regional || complaint.summary[lang] !== complaint.text) && (
             <p className="dk-sw-trans">

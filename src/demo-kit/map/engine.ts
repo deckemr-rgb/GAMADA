@@ -134,6 +134,8 @@ export interface EngineOptions {
   /** svg markup per icon name (rendered by MapView from ui/icons) */
   iconSvgs: Record<string, string>
   callbacks: EngineCallbacks
+  /** Tahap 7: the first camera (MapView: the region's own centre, or the previous map's camera for a region-switch fly) */
+  start?: { center: LngLat; zoom: number }
 }
 
 interface KecInfo {
@@ -293,8 +295,9 @@ export class MapEngine {
     this.map = new MLMap({
       container: o.container,
       style,
-      center: [111.81, -7.26],
-      zoom: 8,
+      // no region baked in: the caller's start camera, else all of Indonesia until setRegion fits the pack
+      center: o.start?.center ?? [117.5, -2.5],
+      zoom: o.start?.zoom ?? 4.2,
       interactive: o.interactive,
       attributionControl: false,
       maplibreLogo: false,
@@ -366,7 +369,8 @@ export class MapEngine {
 
   /* ---------------------------------------------------------------- region */
 
-  async setRegion(pack: RegionPack, geo: RegionGeo, animate: boolean): Promise<void> {
+  /** `flyIn` (Tahap 7 region switch): a FIRST region still flies in from the start camera (ENGINE.flyDur) instead of jumping */
+  async setRegion(pack: RegionPack, geo: RegionGeo, animate: boolean, flyIn = false): Promise<void> {
     const token = ++this.regionToken
     await this.styleReady
     if (this.destroyed || token !== this.regionToken) return
@@ -398,7 +402,7 @@ export class MapEngine {
     this.installRegionLayers()
     this.buildLabels()
     this.applySpecs()
-    this.fitRegion(had && animate ? ENGINE.regionInDur : 0)
+    this.fitRegion(had && animate ? ENGINE.regionInDur : flyIn ? ENGINE.flyDur : 0)
   }
 
   private desaInfo(): DesaInfo[] {

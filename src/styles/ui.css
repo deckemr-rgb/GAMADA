@@ -487,13 +487,15 @@ html.has-custom-cursor [contenteditable]:not([contenteditable='false']) * {
 /* =================================================================== sound toggle */
 .sound-toggle {
   position: fixed;
-  left: var(--gutter);
-  bottom: clamp(20px, 3.4vh, 36px);
+  left: calc(var(--gutter) - 2px);
+  bottom: calc(clamp(20px, 3.4vh, 36px) - 2px);
+  min-width: 44px;
+  min-height: 44px;
   z-index: calc(var(--z-nav) - 1);
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  padding: 0;
+  padding: 0 0 0 2px;
   border: 0;
   background: transparent;
   color: var(--c-white);

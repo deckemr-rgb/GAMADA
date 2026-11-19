@@ -1,7 +1,7 @@
 /**
- * demos/pajak-beres/scenario.ts — Tanya Pajak simulation (spec §9.2): 14 intents with ID, EN and Basa Jawa
- * examples. Every number comes from the PbContext (ctx.ts: world selectors + rules.ts), so the answer equals the
- * screens; every answer ends with "cek ke KPP/konsultan pajak". Registered by the lazy Ask drawer, not the page.
+ * demos/pajak-beres/scenario.ts — Tanya Pajak simulation (spec §9.2): 14 intents with ID and EN examples, plus
+ * regional-language synonyms (Jawa, Sunda, Minang; "contoh", not checked by native speakers) so every region pack works.
+ * Every number comes from the PbContext (ctx.ts: world selectors + rules.ts), so the answer equals the screens; every answer ends with "cek ke KPP/konsultan pajak". Registered by the lazy Ask drawer, not the page.
  */
 import type { Intent, Lang, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import { registerScenario } from '../../demo-kit/ai/chat'
@@ -64,7 +64,7 @@ const INTENTS: Intent<PbContext>[] = [
     )
     return { text: end(L, text), structured: { kind: 'pajak-beres/tax-breakdown', data: breakdown(w, L) }, followUps: chips(L, 'tenggat', 'pph21', 'batas') }
   }),
-  I('pajak-bulan-ini', ['berapa pajak bulan ini', 'pajak saya berapa', 'how much tax this month', 'what do I owe this month', 'pajeke sasi iki pinten', 'pira pajeke wulan iki'], (ctx) => {
+  I('pajak-bulan-ini', ['berapa pajak bulan ini', 'pajak saya berapa', 'how much tax this month', 'what do I owe this month', 'pajeke sasi iki pinten', 'pira pajeke wulan iki', 'sabaraha pajeg bulan ieu', 'bara pajak bulan ko'], (ctx) => {
     const w = ctx.world
     const L = ctx.lang
     const m = monthName(w.period, L)
@@ -74,7 +74,7 @@ const INTENTS: Intent<PbContext>[] = [
       followUps: chips(L, 'naik', 'tenggat'),
     }
   }),
-  I('kapan-tenggat', ['kapan tenggat setor', 'kapan harus bayar pajak', 'deadline pajak', 'when is the deadline', 'when do I pay', 'kapan kudu setor pajek', 'tanggal pinten mbayar pajek'], (ctx) => {
+  I('kapan-tenggat', ['kapan tenggat setor', 'kapan harus bayar pajak', 'deadline pajak', 'when is the deadline', 'when do I pay', 'kapan kudu setor pajek', 'tanggal pinten mbayar pajek', 'iraha kudu mayar pajeg', 'bilo musti bayia pajak'], (ctx) => {
     const w = ctx.world
     const L = ctx.lang
     const lines = w.deadlines.map((d) => `- ${dateText(d.date, L)}: ${d.label}${d.amount != null ? ` · ${rp(d.amount, L)}` : ''}`).join('\n')
@@ -103,7 +103,7 @@ const INTENTS: Intent<PbContext>[] = [
       followUps: chips(L, 'naik', 'bank'),
     }
   }),
-  I('pph21-karyawan', ['berapa pph 21 karyawan', 'pph 21 karyawan saya', 'potongan pajak gaji', 'pph21 for my staff', 'employee tax', 'pph 21 pegawai pinten'], (ctx) => {
+  I('pph21-karyawan', ['berapa pph 21 karyawan', 'pph 21 karyawan saya', 'potongan pajak gaji', 'pph21 for my staff', 'employee tax', 'pph 21 pegawai pinten', 'pph 21 pagawe sabaraha', 'pph 21 karyawan bara'], (ctx) => {
     const w = ctx.world
     const L = ctx.lang
     const q = ctx.text.toLowerCase()
@@ -122,7 +122,7 @@ const INTENTS: Intent<PbContext>[] = [
     const zero = w.pph21.rows.filter((r) => r.amount === 0)
     return { text: end(L, T(L, `${zero.length} karyawan bergaji di baris TER 0% kategorinya (${zero.map((r) => `${r.name} ${rp(r.gross, 'id')}`).join(', ')}), jadi potongannya Rp 0 bulan ini. Desember dihitung ulang setahun dengan PTKP (TK/0 ${rpShort(PTKP.base, 'id')}).`, `${zero.length} employees earn within the 0% TER row of their category (${zero.map((r) => `${r.name} ${rp(r.gross, 'en')}`).join(', ')}), so nothing is withheld this month. December is recalculated for the year with PTKP (TK/0 ${rpShort(PTKP.base, 'en')}).`)), followUps: chips(L, 'pph21') }
   }),
-  I('untung-bulan-ini', ['berapa untung bulan ini', 'laba bulan ini', 'untung saya berapa', 'how much profit this month', 'what is my profit', 'bathine sasi iki pira', 'bati pinten'], (ctx) => {
+  I('untung-bulan-ini', ['berapa untung bulan ini', 'laba bulan ini', 'untung saya berapa', 'how much profit this month', 'what is my profit', 'bathine sasi iki pira', 'bati pinten', 'sabaraha untung bulan ieu', 'bara untuang bulan ko'], (ctx) => {
     const w = ctx.world
     const L = ctx.lang
     const m = monthName(w.period, L)

@@ -19,7 +19,7 @@ export function Events() {
           {tr('events', lang)}
         </h3>
       </header>
-      <div className="dk-mp-pb">
+      <div className="dk-mp-pb" tabIndex={0}>
         {list.length ? (
           <Timeline
             live

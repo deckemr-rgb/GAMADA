@@ -12,7 +12,7 @@ import { useAiChat } from '../../demo-kit/ai/chat'
 import { useShell } from '../../demo-kit/shell'
 import { dateWib } from '../../demo-kit/viz/format'
 import { emit, useSession, useWorld, world, type WorldState } from '../../demo-kit/world'
-import { DETECTOR_BY_ID, SLUG, aiContext, isAnalysed, memoModel, noteText, pct, qtyUnit, rpFull } from './model'
+import { DETECTOR_BY_ID, SLUG, aiContext, headWord, isAnalysed, memoModel, noteText, pct, qtyUnit, rpFull } from './model'
 import { memoSummary } from './scenario'
 import { useT } from './strings'
 import type { RoleKey } from './types'
@@ -132,7 +132,7 @@ export default function MemoTab({
           <>
             <p className="dk-ab-memo-ok" role="status">
               <Icon name="check" size={16} />
-              {t.memoSent[roleKey]}
+              {headWord(t.memoSent[roleKey] ?? '')}
             </p>
             <Button variant="secondary" icon="print" onClick={() => paper.current && printPaper(paper.current)}>
               {t.memoPrint}

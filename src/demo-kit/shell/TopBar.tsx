@@ -62,7 +62,7 @@ const TIGHT_MAX = 3
 function overflowing(bar: HTMLElement): boolean {
   const mid = bar.querySelector<HTMLElement>('.dk-topbar-mid')
   const name = bar.querySelector<HTMLElement>('.dk-crumbs-name')
-  return bar.scrollWidth > bar.clientWidth + 1 || (!!mid && mid.scrollWidth > mid.clientWidth + 1) || (!!name && name.scrollWidth > name.clientWidth + 1)
+  return bar.scrollWidth > bar.clientWidth + 1 || (!!mid && mid.scrollWidth > mid.clientWidth) || (!!name && name.scrollWidth > name.clientWidth + 1)
 }
 
 /** Start loose, then tighten one step at a time while the bar overflows (a few sync layouts, only on resize). */

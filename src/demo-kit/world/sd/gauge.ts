@@ -7,7 +7,8 @@ import type { Bi, Minutes, WaterGauge } from '../types'
 
 /** a gauge's display name: "Bengawan Solo · pos Bojonegoro" → EN "Bengawan Solo · Bojonegoro gauge" */
 export function gaugeName(g: WaterGauge): Bi {
-  return { id: g.name, en: g.name.replace(/\bpos ([^·]+)$/i, '$1 gauge') }
+  // Tahap 7: the no-dam packs' simulated gate "Pintu air Cikapundung" → EN "Cikapundung sluice gate"
+  return { id: g.name, en: g.name.replace(/\bpos ([^·]+)$/i, '$1 gauge').replace(/^Pintu air (.+)$/i, '$1 sluice gate') }
 }
 
 /**

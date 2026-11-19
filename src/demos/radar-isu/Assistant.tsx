@@ -7,7 +7,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Drawer, Icon, Input } from '../../demo-kit/ui'
 import { useAiChat, type ChatMessage, type Structured } from '../../demo-kit/ai/chat'
-import { clock, useSession, world } from '../../demo-kit/world'
+import { clock, currentRegion, useSession, world } from '../../demo-kit/world'
+import { regionalLanguageLabel } from '../../demo-kit/i18n'
 import { radarCtx } from './ctx'
 import { useDeferredOpen } from './model'
 import './scenario'
@@ -15,7 +16,7 @@ import './scenario'
 const S = {
   id: {
     title: 'Analis AI Radar Isu',
-    eyebrow: 'Tanya dalam Bahasa Indonesia, English, atau Basa Jawa',
+    eyebrow: 'Tanya dalam Bahasa Indonesia, English{rl}',
     placeholder: 'Mis. “Ada hoaks?” atau “isu apa wae dina iki?”',
     input: 'Pertanyaan untuk analis AI',
     send: 'Kirim',
@@ -58,7 +59,7 @@ const S = {
   },
   en: {
     title: 'Radar Isu AI analyst',
-    eyebrow: 'Ask in English, Bahasa Indonesia or Basa Jawa',
+    eyebrow: 'Ask in English, Bahasa Indonesia{rl}',
     placeholder: 'E.g. “Is there a hoax?” or “What’s trending today?”',
     input: 'Question for the AI analyst',
     send: 'Send',
@@ -270,6 +271,8 @@ export default function Assistant({
   const shown = useDeferredOpen(open, bodyRef)
   const lang = session.lang
   const t = S[lang]
+  // the region's own language (the analyst answers Basa Jawa / Sunda / Minang questions with a short opener in it)
+  const rlName = ['jv', 'su', 'min'].includes(currentRegion()?.languages.regional[0] ?? '') ? regionalLanguageLabel(currentRegion(), lang) : null
   const chat = useAiChat('radar-isu', {
     mode: session.aiMode,
     role: session.role,
@@ -331,7 +334,7 @@ export default function Assistant({
       open={shown}
       onClose={onClose}
       title={t.title}
-      eyebrow={t.eyebrow}
+      eyebrow={t.eyebrow.replace('{rl}', rlName ? `${lang === 'id' ? ', atau' : ' or'} ${rlName}` : '')}
       width={480}
       footer={
         <form className="dk-ri-ask" onSubmit={submit}>

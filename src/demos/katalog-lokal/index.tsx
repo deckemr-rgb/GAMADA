@@ -21,7 +21,7 @@ import { catalogKpi, needList, umkmInbox, type NeedTab } from '../../demo-kit/wo
 import { usePdStrings } from '../../demo-kit/i18n/pd'
 import Detail from './Detail'
 import { Composer, NeedList, PhonePeek } from './Pemda'
-import { SLUG, bizName, exampleKecs, kecName, resolveFocus, rpShort, type Side } from './model'
+import { SLUG, afterPaint, bizName, exampleKecs, kecName, resolveFocus, rpShort, type Side } from './model'
 import { STRINGS, useT } from './strings'
 import './katalog-lokal.css'
 
@@ -204,8 +204,11 @@ function Product() {
 
   const toggle = useCallback((to?: Side) => {
     const next = to ?? (getSession().role === 'pemilik-toko' ? 'pemda' : 'umkm')
-    setSession({ role: next === 'umkm' ? 'pemilik-toko' : 'ukpbj' })
-    setFocusKey((k) => k + 1)
+    // the role is a shell-wide store (sync render of the whole frame): flip after the pressed toggle has painted (INP)
+    afterPaint(() => {
+      setSession({ role: next === 'umkm' ? 'pemilik-toko' : 'ukpbj' })
+      setFocusKey((k) => k + 1)
+    })
   }, [])
 
   // arriving needs / order steps: one polite announcement per ≥ 6 s

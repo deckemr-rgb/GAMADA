@@ -315,7 +315,14 @@ function Kpis() {
   const m = monthName(period, lang)
   const money = useCallback((n: number) => rpShort(n, lang), [lang])
   const full = useCallback((n: number) => rp(n, lang), [lang])
+  // phones scroll the strip sideways: the scroller itself takes keyboard focus (axe scrollable-region-focusable)
+  const wrap = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = wrap.current?.firstElementChild as HTMLElement | null
+    if (el && window.matchMedia('(max-width: 767px)').matches) el.tabIndex = 0
+  }, [])
   return (
+    <div ref={wrap} style={{ display: 'contents' }}>
     <KpiStrip label={t.kpiLabel} className="dk-pb-kpis">
       <Kpi label={t.kpiDue} value={v.dueDays ?? 0} unit={lang === 'id' ? 'hari lagi' : 'days left'} caption={v.dueDays == null ? t.kpiDueNone : `${dateText(v.dueAt, lang)} · ${v.dueLabel}`} className="dk-pb-kpi-due" wrapLabel />
       <Kpi label={t.kpiOmzet(m)} value={v.omzet} format={money} caption={t.kpiOmzetCap} wrapLabel />
@@ -323,6 +330,7 @@ function Kpis() {
       <Kpi label={t.kpiPph(m)} value={v.pph} format={full} caption={t.kpiPphCap(pctText(PPH_FINAL.rate, lang))} wrapLabel />
       <Kpi label={t.kpiReview} value={v.review} caption={t.kpiReviewCap(v.review)} goodWhen="down" wrapLabel />
     </KpiStrip>
+    </div>
   )
 }
 

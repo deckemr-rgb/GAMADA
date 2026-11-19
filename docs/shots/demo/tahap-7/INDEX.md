@@ -1,0 +1,117 @@
+# Tahap 7 · screenshot akhir
+
+Diambil dari build produksi (`vite preview` di 4173, `dist/` dari integrator) pada 2026-11-20 dengan `.shots/t7-int/shots.mjs`. Desktop 1440×900 dan ponsel 390×844 (DPR 1, sentuh), tangkapan viewport (bukan halaman penuh), PNG ≤ 380 KB (dipalet dengan sharp bila lebih besar). Demo: seed default, jam dunia 07.00, panduan "Coba ini" dibiarkan seperti bawaan. Wilayah = Bojonegoro kecuali berkas `region-*`. Selama pengambilan 111 gambar: **0 error konsol, 0 error halaman, 0 gulir horizontal**.
+
+Kolom diff = persen piksel berubah dibanding tahap sebelumnya yang punya gambar dengan nama sama (`node tools/shot-diff.mjs`, pixelmatch ambang 0,1; baseline DPR 2 / halaman penuh diskalakan ke lebar baru lalu dibandingkan di layar pertama). Tabel lengkap: [DIFF.md](DIFF.md). Baseline = folder tahap-2…tahap-6 itu sendiri (tidak disalin ke `baseline/` karena disk hampir penuh). Hanya dua gambar > 5 %: `home-1440-id.png` dan `toko-autopilot-390-id-pemilik-toko.png` (alasan di bawah).
+
+- `awas-belanja-1440-id-inspektorat.png`: awas-belanja · 1440 ID · peran inspektorat · Bojonegoro · diff 0,0 %
+- `awas-belanja-1440-id-ukpbj.png`: awas-belanja · 1440 ID · peran ukpbj · Bojonegoro · diff 0,0 %
+- `awas-belanja-390-en-ukpbj.png`: awas-belanja · 390 EN · peran ukpbj · Bojonegoro · shot baru
+- `awas-belanja-390-id-ukpbj.png`: awas-belanja · 390 ID · peran ukpbj · Bojonegoro · diff 2,2 %
+- `cek-berkas-1440-id-dinsos.png`: cek-berkas · 1440 ID · peran dinsos · Bojonegoro · diff 0,0 %
+- `cek-berkas-1440-id-perizinan.png`: cek-berkas · 1440 ID · peran perizinan · Bojonegoro · diff 0,0 %. **Catatan:** galeri spesimen masih KTP/KK Bojonegoro (juga di Bandung/Padang; cacat terbuka)
+- `cek-berkas-390-en-perizinan.png`: cek-berkas · 390 EN · peran perizinan · Bojonegoro · shot baru
+- `cek-berkas-390-id-perizinan.png`: cek-berkas · 390 ID · peran perizinan · Bojonegoro · diff 2,9 %
+- `ekosistem-1440-id.png`: Situs ekosistem · 1440 ID · diff 3,8 %
+- `ekosistem-390-id.png`: Situs ekosistem · 390 ID · diff 7,2 %
+- `ekosistem-pasar-daerah-1440-id.png`: Situs ekosistem-pasar-daerah · 1440 ID · diff 0,4 %
+- `ekosistem-pasar-daerah-390-id.png`: Situs ekosistem-pasar-daerah · 390 ID · shot baru
+- `ekosistem-satu-daerah-1440-id.png`: Situs ekosistem-satu-daerah · 1440 ID · diff 0,2 %
+- `ekosistem-satu-daerah-390-id.png`: Situs ekosistem-satu-daerah · 390 ID · shot baru
+- `ekosistem-usaha-pintar-1440-id.png`: Situs ekosistem-usaha-pintar · 1440 ID · diff 0,4 %
+- `ekosistem-usaha-pintar-390-id.png`: Situs ekosistem-usaha-pintar · 390 ID · shot baru
+- `home-1440-id.png`: Situs home · 1440 ID · diff 37,8 %. **Catatan:** diff 37,8 % vs tahap-6: hero WebGL/animasi tertangkap pada fase berbeda (bukan perubahan tata letak)
+- `home-390-id.png`: Situs home · 390 ID · diff 0,5 %
+- `indeks-ekonomi-1440-id-bappeda.png`: indeks-ekonomi · 1440 ID · peran bappeda · Bojonegoro · diff 4,7 %
+- `indeks-ekonomi-1440-id-kepala-daerah.png`: indeks-ekonomi · 1440 ID · peran kepala-daerah · Bojonegoro · diff 2,5 %
+- `indeks-ekonomi-390-en-bappeda.png`: indeks-ekonomi · 390 EN · peran bappeda · Bojonegoro · shot baru
+- `indeks-ekonomi-390-id-bappeda.png`: indeks-ekonomi · 390 ID · peran bappeda · Bojonegoro · diff 1,9 %
+- `inti-1440-id-kepala-daerah.png`: inti · 1440 ID · peran kepala-daerah · Bojonegoro · diff 0,5 %
+- `inti-1440-id-pemilik-toko.png`: inti · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,0 %
+- `inti-390-en-kepala-daerah.png`: inti · 390 EN · peran kepala-daerah · Bojonegoro · shot baru
+- `inti-390-id-kepala-daerah.png`: inti · 390 ID · peran kepala-daerah · Bojonegoro · diff 1,7 %
+- `juara-jualan-1440-id-agen-sales.png`: juara-jualan · 1440 ID · peran agen-sales · Bojonegoro · diff 0,0 %
+- `juara-jualan-1440-id-supervisor-sales.png`: juara-jualan · 1440 ID · peran supervisor-sales · Bojonegoro · diff 0,9 %
+- `juara-jualan-390-en-supervisor-sales.png`: juara-jualan · 390 EN · peran supervisor-sales · Bojonegoro · shot baru
+- `juara-jualan-390-id-supervisor-sales.png`: juara-jualan · 390 ID · peran supervisor-sales · Bojonegoro · diff 4,1 %
+- `katalog-lokal-1440-id-pemilik-toko.png`: katalog-lokal · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,0 %
+- `katalog-lokal-1440-id-ukpbj.png`: katalog-lokal · 1440 ID · peran ukpbj · Bojonegoro · diff 0,3 %
+- `katalog-lokal-390-en-ukpbj.png`: katalog-lokal · 390 EN · peran ukpbj · Bojonegoro · shot baru
+- `katalog-lokal-390-id-ukpbj.png`: katalog-lokal · 390 ID · peran ukpbj · Bojonegoro · diff 1,8 %
+- `kenal-mitra-1440-id-analis-kyc.png`: kenal-mitra · 1440 ID · peran analis-kyc · Bojonegoro · diff 0,1 %
+- `kenal-mitra-1440-id-bank-mitra.png`: kenal-mitra · 1440 ID · peran bank-mitra · Bojonegoro · diff 0,0 %
+- `kenal-mitra-390-en-analis-kyc.png`: kenal-mitra · 390 EN · peran analis-kyc · Bojonegoro · shot baru
+- `kenal-mitra-390-id-analis-kyc.png`: kenal-mitra · 390 ID · peran analis-kyc · Bojonegoro · diff 1,6 %
+- `meja-pimpinan-1440-id-kepala-daerah.png`: meja-pimpinan · 1440 ID · peran kepala-daerah · Bojonegoro · diff 1,0 %
+- `meja-pimpinan-1440-id-kepala-opd.png`: meja-pimpinan · 1440 ID · peran kepala-opd · Bojonegoro · diff 0,9 %
+- `meja-pimpinan-390-en-kepala-daerah.png`: meja-pimpinan · 390 EN · peran kepala-daerah · Bojonegoro · shot baru
+- `meja-pimpinan-390-id-kepala-daerah.png`: meja-pimpinan · 390 ID · peran kepala-daerah · Bojonegoro · diff 3,6 %
+- `naskah-pintar-1440-id-kepala-daerah.png`: naskah-pintar · 1440 ID · peran kepala-daerah · Bojonegoro · diff 0,3 %
+- `naskah-pintar-1440-id-sekretariat.png`: naskah-pintar · 1440 ID · peran sekretariat · Bojonegoro · diff 0,3 %
+- `naskah-pintar-390-en-sekretariat.png`: naskah-pintar · 390 EN · peran sekretariat · Bojonegoro · shot baru
+- `naskah-pintar-390-id-sekretariat.png`: naskah-pintar · 390 ID · peran sekretariat · Bojonegoro · diff 2,4 %
+- `pajak-beres-1440-id-konsultan-pajak.png`: pajak-beres · 1440 ID · peran konsultan-pajak · Bojonegoro · diff 0,0 %
+- `pajak-beres-1440-id-pemilik-toko.png`: pajak-beres · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,0 %
+- `pajak-beres-390-en-pemilik-toko.png`: pajak-beres · 390 EN · peran pemilik-toko · Bojonegoro · shot baru
+- `pajak-beres-390-id-pemilik-toko.png`: pajak-beres · 390 ID · peran pemilik-toko · Bojonegoro · diff 2,5 %
+- `pantau-merek-1440-id-brand-manager.png`: pantau-merek · 1440 ID · peran brand-manager · Bojonegoro · diff 0,3 %
+- `pantau-merek-1440-id-pemilik-toko.png`: pantau-merek · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,3 %
+- `pantau-merek-390-en-brand-manager.png`: pantau-merek · 390 EN · peran brand-manager · Bojonegoro · shot baru
+- `pantau-merek-390-id-brand-manager.png`: pantau-merek · 390 ID · peran brand-manager · Bojonegoro · diff 3,0 %
+- `produk-juara-jualan-1440-id.png`: Situs produk-juara-jualan · 1440 ID · diff 4,1 %
+- `produk-juara-jualan-390-id.png`: Situs produk-juara-jualan · 390 ID · shot baru
+- `produk-sapa-warga-1440-id.png`: Situs produk-sapa-warga · 1440 ID · diff 4,9 %
+- `produk-sapa-warga-390-id.png`: Situs produk-sapa-warga · 390 ID · diff 0,4 %
+- `produk-toko-autopilot-1440-id.png`: Situs produk-toko-autopilot · 1440 ID · diff 5,1 %
+- `produk-toko-autopilot-390-id.png`: Situs produk-toko-autopilot · 390 ID · shot baru
+- `radar-isu-1440-id-humas.png`: radar-isu · 1440 ID · peran humas · Bojonegoro · diff 0,3 %
+- `radar-isu-1440-id-kepala-daerah.png`: radar-isu · 1440 ID · peran kepala-daerah · Bojonegoro · diff 0,3 %
+- `radar-isu-390-en-humas.png`: radar-isu · 390 EN · peran humas · Bojonegoro · shot baru
+- `radar-isu-390-id-humas.png`: radar-isu · 390 ID · peran humas · Bojonegoro · diff 4,0 %
+- `rapor-usaha-1440-id-bank-mitra.png`: rapor-usaha · 1440 ID · peran bank-mitra · Bojonegoro · diff 0,0 %
+- `rapor-usaha-1440-id-pemilik-toko.png`: rapor-usaha · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,0 %
+- `rapor-usaha-390-en-pemilik-toko.png`: rapor-usaha · 390 EN · peran pemilik-toko · Bojonegoro · shot baru
+- `rapor-usaha-390-id-pemilik-toko.png`: rapor-usaha · 390 ID · peran pemilik-toko · Bojonegoro · diff 1,8 %
+- `region-bandung-meja-pimpinan-1440-id.png`: Kota Bandung · meja-pimpinan · 1440 ID · shot baru
+- `region-bandung-sapa-warga-1440-id.png`: Kota Bandung · sapa-warga · 1440 ID (voice note contoh bahasa daerah + terjemahan) · shot baru
+- `region-bandung-siaga-wilayah-1440-id.png`: Kota Bandung · siaga-wilayah · 1440 ID · shot baru. **Catatan:** peta dasar OpenFreeMap tidak dimuat di lingkungan uji (tanpa ubin)
+- `region-bandung-siaga-wilayah-390-id.png`: Kota Bandung · siaga-wilayah · 390 ID · shot baru
+- `region-bandung-sinyal-pasar-1440-id.png`: Kota Bandung · sinyal-pasar · 1440 ID · shot baru
+- `region-bandung-toko-autopilot-1440-id.png`: Kota Bandung · toko-autopilot · 1440 ID · shot baru
+- `region-padang-meja-pimpinan-1440-id.png`: Kota Padang · meja-pimpinan · 1440 ID · shot baru
+- `region-padang-sapa-warga-1440-id.png`: Kota Padang · sapa-warga · 1440 ID (voice note contoh bahasa daerah + terjemahan) · shot baru
+- `region-padang-siaga-wilayah-1440-id.png`: Kota Padang · siaga-wilayah · 1440 ID · shot baru. **Catatan:** peta dasar OpenFreeMap tidak dimuat di lingkungan uji (tanpa ubin); batas kecamatan, sungai dan awan hujan dari pack tampil
+- `region-padang-siaga-wilayah-390-id.png`: Kota Padang · siaga-wilayah · 390 ID · shot baru
+- `region-padang-sinyal-pasar-1440-id.png`: Kota Padang · sinyal-pasar · 1440 ID · shot baru
+- `region-padang-toko-autopilot-1440-id.png`: Kota Padang · toko-autopilot · 1440 ID · shot baru
+- `sapa-warga-1440-id-petugas.png`: sapa-warga · 1440 ID · peran petugas · Bojonegoro · diff 0,2 %
+- `sapa-warga-1440-id-warga.png`: sapa-warga · 1440 ID · peran warga · Bojonegoro · diff 0,2 %
+- `sapa-warga-390-en-warga.png`: sapa-warga · 390 EN · peran warga · Bojonegoro · shot baru
+- `sapa-warga-390-id-warga.png`: sapa-warga · 390 ID · peran warga · Bojonegoro · diff 3,2 %
+- `siaga-wilayah-1440-id-bpbd.png`: siaga-wilayah · 1440 ID · peran bpbd · Bojonegoro · diff 0,7 %
+- `siaga-wilayah-1440-id-kepala-daerah.png`: siaga-wilayah · 1440 ID · peran kepala-daerah · Bojonegoro · diff 0,7 %
+- `siaga-wilayah-390-en-bpbd.png`: siaga-wilayah · 390 EN · peran bpbd · Bojonegoro · shot baru
+- `siaga-wilayah-390-id-bpbd.png`: siaga-wilayah · 390 ID · peran bpbd · Bojonegoro · diff 2,6 %
+- `sinyal-pasar-1440-id-disperindag.png`: sinyal-pasar · 1440 ID · peran disperindag · Bojonegoro · diff 1,0 %
+- `sinyal-pasar-1440-id-pemilik-toko.png`: sinyal-pasar · 1440 ID · peran pemilik-toko · Bojonegoro · diff 1,6 %
+- `sinyal-pasar-390-en-disperindag.png`: sinyal-pasar · 390 EN · peran disperindag · Bojonegoro · shot baru
+- `sinyal-pasar-390-id-disperindag.png`: sinyal-pasar · 390 ID · peran disperindag · Bojonegoro · diff 3,4 %
+- `tenderpilot-1440-id-vendor.png`: tenderpilot · 1440 ID · peran vendor · Bojonegoro · diff 0,1 %
+- `tenderpilot-390-en-vendor.png`: tenderpilot · 390 EN · peran vendor · Bojonegoro · diff 2,5 %
+- `tenderpilot-390-id-vendor.png`: tenderpilot · 390 ID · peran vendor · Bojonegoro · diff 2,6 %
+- `toko-autopilot-1440-id-kasir.png`: toko-autopilot · 1440 ID · peran kasir · Bojonegoro · diff 0,0 %
+- `toko-autopilot-1440-id-pemilik-toko.png`: toko-autopilot · 1440 ID · peran pemilik-toko · Bojonegoro · diff 0,0 %
+- `toko-autopilot-390-en-pemilik-toko.png`: toko-autopilot · 390 EN · peran pemilik-toko · Bojonegoro · shot baru
+- `toko-autopilot-390-id-pemilik-toko.png`: toko-autopilot · 390 ID · peran pemilik-toko · Bojonegoro · diff 11,3 %. **Catatan:** diff 11,3 % vs tahap-3: perbaikan item 10 (delta KPI tidak terpotong, tab "Jadwal Shift" turun ke baris kedua)
+- `tur-bab-01-1440-id.png`: Tur /tur · bab 01 · 1440 ID (Bojonegoro) · shot baru
+- `tur-bab-01-390-id.png`: Tur /tur · bab 01 · 390 ID (Bojonegoro) · shot baru
+- `tur-bab-07-1440-id.png`: Tur /tur · bab 07 · 1440 ID (Bojonegoro) · shot baru. **Catatan:** cacat lama 10c: panggung tergulir sehingga kepala produk terpotong; toast produk muncul di kiri bawah di atas kolom narasi
+- `tur-bab-07-390-id.png`: Tur /tur · bab 07 · 390 ID (Bojonegoro) · shot baru
+- `tur-bab-12-1440-id.png`: Tur /tur · bab 12 · 1440 ID (Bojonegoro) · shot baru
+- `tur-bab-12-390-id.png`: Tur /tur · bab 12 · 390 ID (Bojonegoro) · shot baru
+- `tur-bab-20-1440-id.png`: Tur /tur · bab 20 · 1440 ID (Bojonegoro) · shot baru
+- `tur-bab-20-390-id.png`: Tur /tur · bab 20 · 390 ID (Bojonegoro) · shot baru
+- `tur-opener-1440-id.png`: Tur /tur · pembuka · 1440 ID (Bojonegoro) · shot baru
+- `tur-opener-390-id.png`: Tur /tur · pembuka · 390 ID (Bojonegoro) · shot baru
+- `tur-ringkasan-1440-id.png`: Tur /tur · ringkasan · 1440 ID (Bojonegoro) · shot baru
+- `tur-ringkasan-390-id.png`: Tur /tur · ringkasan · 390 ID (Bojonegoro) · shot baru

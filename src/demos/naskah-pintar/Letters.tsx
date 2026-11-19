@@ -23,7 +23,7 @@ import { PaperFrame } from '../../demo-kit/frames'
 import { structuredOf, useNaskahAi, type ClassOut, type DispoOut } from './ai'
 import { buildCtx } from './ctx'
 import { metaOf, rowsOf, sampleMap, type Row } from './inbox'
-import { LETTER_LINKS, SCRIPT, clockText, dueText, existingAction, opdName, picFor, picLabel, resolveOpd, sampleMeeting, signer, NP, type NpRole } from './model'
+import { LETTER_LINKS, SCRIPT, clockText, dueText, existingAction, headTitle, opdName, picFor, picLabel, resolveOpd, sampleMeeting, signer, NP, type NpRole } from './model'
 import type { NpNav } from './index'
 import { STR, byText, opdLabel, useStr, type NpDict } from './strings'
 import { getTrail, setTrail, type Trail } from './trail'
@@ -749,7 +749,7 @@ function ArchiveLetter({ row, S, lang, day, opds, nav }: { row: Row; S: NpDict; 
           <dl className="dk-np-ameta">
             <div>
               <dt>{S.lNotaTo}</dt>
-              <dd>{nota ? to : 'Bupati'}</dd>
+              <dd>{nota ? to : headTitle()[lang]}</dd>
             </div>
             <div>
               <dt>{S.lFrom}</dt>

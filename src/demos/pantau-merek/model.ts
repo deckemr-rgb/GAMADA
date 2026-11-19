@@ -132,3 +132,8 @@ export const reviewSelection = {
   },
 }
 export const useSelection = (): readonly string[] => useSyncExternalStore(reviewSelection.subscribe, reviewSelection.get, reviewSelection.get)
+
+/** run `fn` after the next paint: the pressed control answers in this frame, the heavy work follows (INP) */
+export const afterPaint = (fn: () => void): void => {
+  requestAnimationFrame(() => setTimeout(fn, 0))
+}

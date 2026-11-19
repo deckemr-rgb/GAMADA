@@ -1029,3 +1029,78 @@ Home JS 252.7 (unchanged). `demo-core` +0.50 KB ⇒ every demo +0.5 (budget.mjs:
 +0.5, kenal-mitra +0.6 by rounding). The Tahap 4 fixes add on the PD landings: shared `forecast` +0.07, Rapor +0.09,
 `trace` +0.04 (lazy) ⇒ Katalog Lokal / Indeks Ekonomi / Inti +0.6, Rapor Usaha / Sinyal Pasar +0.6…0.7. `TourBar` is
 its own small lazy chunk (only on the tour stage / a taken-over sandbox).
+
+## Tahap 7 (2026-11-20): region picker, region-neutral kit, Hotspot overlap (plan `docs/build/tahap7-plan.md` §1.6, §2 items 2, 6, 16, 17)
+
+### Region picker + switch without reload (item 2)
+- `RegionSwitcher` (shell/controls): with ≥ 2 entries in `REGIONS` it is a real picker (TopBar ≥ 1280; the "⋯" sheet's
+  radio list below): every region with `name` ("Kota Bandung" / "Bandung City") + `sub` (type, plus the province when the
+  `REGIONS` entry carries `province`: "Kota · Jawa Barat" / "City · West Java"). Opening / hovering it calls
+  `preloadRegion` for every entry. One entry: the plain label as before. Labels: `regionLabel(entry, lang)` (kit i18n;
+  reuses `regionText`, so the type / province tables exist once). **Integrator:** add `province` to each `REGIONS` entry.
+- A pick writes the session (→ `?region=`). `DemoShell` sees a region different from the one it booted with and calls
+  `loadWorld(pack, seed, { scope, fresh: true })`: the saved copy of that region is forgotten, the new region starts from
+  its seed at `WORLD.clockStart`, `?focus=` is cleared, the stage remounts (skeleton meanwhile), and a toast says
+  "Wilayah: Kota Bandung". No page reload (a `window` marker survives).
+- Map fly: the stage remount unmounts `MapView`; its camera is handed to the next `MapView` of ANOTHER region mounted
+  within 8 s, which starts there and flies to its bbox (`ENGINE.flyDur` 1.2 s; a jump under reduced motion). The engine
+  no longer has a Bojonegoro start camera: `MapView` passes the pack's own centre (`EngineOptions.start`).
+- `loadWorld(p, seed, { fresh })` is new; `currentRegion()` (world barrel, `world/util`) = the pack of the running world
+  (set by `loadWorld`; null in node and on pages without a world).
+
+### Region-neutral kit (§1.6)
+- `region/anchor.ts` `floodAnchor(pack)` → `{ river, kecamatanId, kecamatan, desaId, desa, desaKind, floodKecamatan[],
+  market }`: kecamatan = `scenario.meetingKecamatanId` → first flood kecamatan; desa = `scenario.embankmentDesaId` → its
+  first desa/kelurahan. Its own tiny module (NOT re-exported by the world barrel, so it never joins demo-core); import it
+  from `demo-kit/region/anchor`. Both scenario fields are optional in `RegionPack` (types.ts).
+- The seeded flood meeting's camat uses the same rule (no `'kalitidu'` literal). **Integrator:** the Bojonegoro pack has
+  no `meetingKecamatanId` yet, so its meeting now names Camat **Trucuk** (first flood kecamatan) while the default clip
+  says Kalitidu/Ngujo: add `meetingKecamatanId: 'kalitidu', embankmentDesaId: 'kalitidu-ngujo'` to the Bojonegoro
+  scenario (tools/region/content/bojonegoro.mjs) and rebuild, or accept Trucuk and let Naskah Pintar use `meetingBanjirFor`.
+- `media`: `meetingBanjirFor(places)` + `meetingBanjirNotesFor(places)` template the flood meeting clip (river, flood
+  kecamatan list, camat, embankment desa/kelurahan, "Kelurahan" for a kota). `MEETING_BANJIR` / `MEETING_BANJIR_NOTES`
+  are unchanged byte for byte (= the default places). Naskah Pintar (P1): `meetingBanjirFor(floodAnchor(pack))`.
+- No-dam hoax: a pack without a dam landmark gets a SIMULATED sluice gate on the flood river: gauge `Pintu air <river>`
+  (kind `waduk`, own readings) and `facts.hoax = { damName: 'Pintu air <river>', damNameEn: '<river> sluice gate' }`.
+  `hoaxDam(facts)` (scenario-texts) → `Bi`; `hoaxPost(i, at, dam: string | Bi, k, rumor)`; reactions fill claim /
+  evidence / recovery per language. Evidence text now ends "Tidak ada laporan kerusakan." / "No damage reported."
+  `gaugeName()` EN: "Pintu air X" → "X sluice gate". Radar Isu (P1) should read the name through `hoaxDam(facts)` for EN.
+- `docs/nik`: `parseNik` defaults to `defaultNikRegions()` = the current region's Kemendagri codes + the built-in table;
+  `nikRegionName` reads the current region first. `docs/extract`: geotag / flood-zone checks accept the current region
+  (bbox, `floodKecamatanIds`) or the specimens' own region (the bundled sample photos stay Bojonegoro specimens).
+
+### Hotspot (item 6)
+The ring tries its default spot, then the other three corners of the target; the label tries below / above (right-
+aligned to the ring, then left-aligned to the target), then beside the ring. A spot is taken only when it covers no text
+or control (7 `elementFromPoint` samples; controls, img, svg and any element with its own text count) and the label
+never overlaps its target; no free label spot ⇒ the ring alone. Re-checked on move and every 1 s at rest.
+
+### Could items
+- 16 · `Waveform` markers within 3 % of an earlier one stack one lane up (`data-lane` 1–2, media.css).
+- 17 · `LineChart` takes `forecast` (band + dashed line) like `AreaChart`.
+- 15 · not done (no demo over 175 KB from the kit side).
+
+### Self-tests
+`REGION=bandung|padang npx tsx src/demo-kit/world/__tests__/world.selftest.ts` runs every section on that pack (default
+bojonegoro); section 9 (`region.selftest.ts`): anchors + meeting clip for every pack and a second-id city fixture (kota,
+no dam), the no-dam hoax in ID + EN, a fresh region switch (clock back to 07.00, complaints in the new region), NIK
+defaults. Tolerances for a dense city: the day story may skip `neighbours` (Siti's complaint already closes a cluster).
+
+### Sizes (gzip -9, chunk-by-chunk vs the Tahap 6 `dist/`)
+Home entry chunks unchanged. `demo-core` +0.62 KB (≈ +0.06 of it is the new pack URLs of `loader.ts`'s glob, not kit
+code), `demo-gen` +0.18 ⇒ about +0.75 KB on every demo first load; plus `samples` +0.30 (Naskah Pintar / Juara Jualan),
+`MapView` +0.15 (map demos), `extract` +0.09 (Cek Berkas), `Waveform` +0.05. Global `index.css` +48 B comes from a
+Tailwind arbitrary variant matched in `tests/e2e/tahap7/inp.spec.ts`, not from the kit.
+
+### Wave C (integrator, 2026-11-20)
+- **Boot race fixed** (`shell/DemoShell.tsx`): the "load region pack + world" effect returns early while the
+  render-time `session` differs from `getSession()` (the layout effect has just applied `?region` / `?seed` /
+  `?world`), and drops the result when cancelled before `loadWorld`. A cold `?region=bandung|padang` no longer fetches
+  two packs or installs Bojonegoro under a Bandung shell (seen ~50 % before; Bandung first loads fell back by ~15 KB).
+- **Waveform** (`media/Waveform.tsx`): `role="slider"` + tabIndex + aria-value* + pointer/key handlers moved from the
+  `.dk-wave` wrapper to an inner `.dk-wave-seek` layer (inset 0, before the marker buttons): axe nested-interactive
+  is gone. Focus ring is on `.dk-wave-seek:focus-visible`.
+- **TopBar fit**: `.dk-topbar-mid` now tightens on any overflow (was +1 px slack): Toko Autopilot at 1280 with the
+  region picker overflowed by 1 px (shell self-test fit).
+- **Bojonegoro pack**: `scenario.meetingKecamatanId = 'kalitidu'`, `embankmentDesaId = 'kalitidu-ngujo'` (from
+  `build-bojonegoro.mjs`), so `region/anchor.ts` keeps the Tahap 2 story (Kalitidu / Ngujo) on Bojonegoro.

@@ -1,0 +1,4616 @@
+{
+ "generated": "2026-11-19T23:05:10.065Z",
+ "method": "Playwright + Event Timing (durationThreshold 16) + LoAF attribution; web-vitals 6.2.3 attribution build as cross-check; Chrome, CPU ×4, vite preview build; 390×844 ×3 runs, 1440×900 ×1; worst run reported; < 16 ms reads as 16",
+ "limit": 200,
+ "summary": {
+  "measured": 114,
+  "over": 11,
+  "overByArea": {
+   "P1": 7,
+   "P2": 3,
+   "P3": 1
+  },
+  "unreached": [
+   "/ekosistem · star click @390: bintang Sapa Warga (buka) (optional, not reached: locator.waitFor: Timeout 15000ms exceeded.)",
+   "sinyal-pasar · Simulasikan @1440: buka anomali (optional, not reached: locator.waitFor: Timeout 15000ms exceeded.)",
+   "sinyal-pasar · Simulasikan @390: buka anomali (optional, not reached: locator.waitFor: Timeout 15000ms exceeded.)"
+  ],
+  "worst": [
+   "352 ms · siaga-wilayah · Kirim peringatan + layer @1440 · selesai",
+   "296 ms · siaga-wilayah · Kirim peringatan + layer @390 · selesai",
+   "264 ms · siaga-wilayah · Kirim peringatan + layer @390 · prakiraan +6 jam",
+   "264 ms · toko-autopilot · Bayar @390 · buka keranjang",
+   "256 ms · sapa-warga · Kirim aduan @390 · foto banjir",
+   "232 ms · region switch (siaga-wilayah, map fly) @1440 · Kota Bandung",
+   "232 ms · tenderpilot · Susun dokumen @390 · ke Dokumen",
+   "216 ms · cek-berkas · Verifikasi 50 berkas @390 · mode Massal",
+   "216 ms · meja-pimpinan · Susun briefing @390 · Susun briefing",
+   "216 ms · siaga-wilayah · Kirim peringatan + layer @390 · layer toggle (citra satelit)"
+  ]
+ },
+ "rows": [
+  {
+   "scenario": "/ekosistem · star click",
+   "area": "P4",
+   "hint": "src/routes/eco/Constellation.tsx",
+   "viewport": "1440",
+   "label": "bintang Sapa Warga",
+   "key": true,
+   "ms": 160,
+   "target": "pointerdown button.cst-btn[data-slug=\"sapa-warga\"]",
+   "loaf": [
+    {
+     "d": 123,
+     "b": 68,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 34
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 18
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 9
+      }
+     ]
+    },
+    {
+     "d": 100,
+     "b": 29,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 56
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    160
+   ]
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "area": "P4",
+   "hint": "src/routes/eco/Constellation.tsx",
+   "viewport": "390",
+   "label": "bintang Sapa Warga",
+   "key": true,
+   "ms": 144,
+   "target": "pointerdown button.cst-btn[data-slug=\"sapa-warga\"]",
+   "loaf": [
+    {
+     "d": 101,
+     "b": 48,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 34
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 8
+      }
+     ]
+    },
+    {
+     "d": 108,
+     "b": 25,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 51
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96,
+    144,
+    112
+   ]
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "area": "P4",
+   "hint": "src/routes/eco/Constellation.tsx",
+   "viewport": "390",
+   "label": "bintang Sapa Warga (buka)",
+   "key": true,
+   "ms": null,
+   "error": "optional, not reached: locator.waitFor: Timeout 15000ms exceeded.",
+   "runs": [
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "1440",
+   "label": "Mulai tur",
+   "key": true,
+   "ms": 96,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 82,
+     "b": 30,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 31
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "1440",
+   "label": "bab berikutnya",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [
+    {
+     "d": 53,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/engine-DC1k614_.js",
+       "f": "n",
+       "i": "TimerHandler:setTimeout",
+       "d": 36
+      }
+     ]
+    }
+   ],
+   "runs": [
+    56
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "1440",
+   "label": "putar bab 4",
+   "key": false,
+   "ms": 96,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 78,
+     "b": 23,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 32
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "1440",
+   "label": "Ambil alih",
+   "key": true,
+   "ms": 112,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 93,
+     "b": 43,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 64
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "1440",
+   "label": "Ringkasan (putar bab 20)",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 9
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    56
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "Mulai tur",
+   "key": true,
+   "ms": 112,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 97,
+     "b": 46,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 35
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 10
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104,
+    112,
+    112
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "bab berikutnya",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [],
+   "runs": [
+    56,
+    48,
+    48
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "putar bab 4",
+   "key": false,
+   "ms": 112,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 104,
+     "b": 45,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 48
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 12
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96,
+    112,
+    96
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "buka lembar",
+   "key": false,
+   "ms": 56,
+   "target": "pointerdown span",
+   "loaf": [],
+   "runs": [
+    48,
+    56,
+    40
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "Ambil alih",
+   "key": true,
+   "ms": 128,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 108,
+     "b": 57,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 73
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    128,
+    112
+   ]
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "area": "P4",
+   "hint": "src/demo-kit/tour/",
+   "viewport": "390",
+   "label": "Ringkasan (putar bab 20)",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 62,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    72,
+    72,
+    56
+   ]
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "area": "P1",
+   "hint": "src/demos/awas-belanja/",
+   "viewport": "1440",
+   "label": "buka paket pompa",
+   "key": false,
+   "ms": 128,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 85,
+     "b": 32,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 25
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 5
+      }
+     ]
+    },
+    {
+     "d": 73,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 28
+      },
+      {
+       "u": "/assets/awas-belanja-Cy71DDe5.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 12
+      }
+     ]
+    }
+   ],
+   "runs": [
+    128
+   ]
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "area": "P1",
+   "hint": "src/demos/awas-belanja/",
+   "viewport": "1440",
+   "label": "Analisis paket",
+   "key": true,
+   "ms": 128,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 82,
+     "b": 32,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 31
+      }
+     ]
+    }
+   ],
+   "runs": [
+    128
+   ]
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "area": "P1",
+   "hint": "src/demos/awas-belanja/",
+   "viewport": "390",
+   "label": "buka paket pompa",
+   "key": false,
+   "ms": 176,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 141,
+     "b": 91,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 30
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 13
+      }
+     ]
+    },
+    {
+     "d": 52,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/awas-belanja-Cy71DDe5.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 22
+      }
+     ]
+    }
+   ],
+   "runs": [
+    144,
+    168,
+    176
+   ]
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "area": "P1",
+   "hint": "src/demos/awas-belanja/",
+   "viewport": "390",
+   "label": "Analisis paket",
+   "key": true,
+   "ms": 160,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 116,
+     "b": 66,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 40
+      }
+     ]
+    }
+   ],
+   "runs": [
+    144,
+    160,
+    128
+   ]
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "area": "P1",
+   "hint": "src/demos/cek-berkas/",
+   "viewport": "1440",
+   "label": "mode Massal",
+   "key": false,
+   "ms": 112,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 70,
+     "b": 19,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 19
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 16
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112
+   ]
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "area": "P1",
+   "hint": "src/demos/cek-berkas/",
+   "viewport": "1440",
+   "label": "Verifikasi 50 berkas",
+   "key": true,
+   "ms": 160,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 71,
+     "b": 20,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    160
+   ]
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "area": "P1",
+   "hint": "src/demos/cek-berkas/",
+   "viewport": "390",
+   "label": "mode Massal",
+   "key": false,
+   "ms": 216,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 160,
+     "b": 108,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 32
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 23
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 21
+      }
+     ]
+    }
+   ],
+   "runs": [
+    168,
+    184,
+    216
+   ]
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "area": "P1",
+   "hint": "src/demos/cek-berkas/",
+   "viewport": "390",
+   "label": "Verifikasi 50 berkas",
+   "key": true,
+   "ms": 104,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 76,
+     "b": 26,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88,
+    104,
+    88
+   ]
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "area": "P2",
+   "hint": "src/demos/indeks-ekonomi/",
+   "viewport": "1440",
+   "label": "Play frame",
+   "key": true,
+   "ms": 80,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [
+    {
+     "d": 72,
+     "b": 9,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "#document.onmouseup",
+       "d": 5
+      }
+     ]
+    },
+    {
+     "d": 290,
+     "b": 220,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 196
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 58
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "Worker.onmessage",
+       "d": 17
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80
+   ]
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "area": "P2",
+   "hint": "src/demos/indeks-ekonomi/",
+   "viewport": "390",
+   "label": "Play frame",
+   "key": true,
+   "ms": 192,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [
+    {
+     "d": 59,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 11
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "#document.onmousemove",
+       "d": 7
+      }
+     ]
+    },
+    {
+     "d": 123,
+     "b": 71,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 18
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 11
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "#document.onmouseup",
+       "d": 8
+      }
+     ]
+    },
+    {
+     "d": 268,
+     "b": 212,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 250
+      }
+     ]
+    }
+   ],
+   "runs": [
+    192,
+    112,
+    120
+   ]
+  },
+  {
+   "scenario": "inti · replay story",
+   "area": "P2",
+   "hint": "src/demos/inti/",
+   "viewport": "1440",
+   "label": "Putar ulang cerita",
+   "key": true,
+   "ms": 96,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 66,
+     "b": 15,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 17
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 6
+      }
+     ]
+    },
+    {
+     "d": 62,
+     "b": 2,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "Si",
+       "i": "TimerHandler:setTimeout",
+       "d": 44
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "inti · replay story",
+   "area": "P2",
+   "hint": "src/demos/inti/",
+   "viewport": "390",
+   "label": "Putar ulang cerita",
+   "key": true,
+   "ms": 136,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 103,
+     "b": 51,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 24
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 12
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    136,
+    128
+   ]
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "area": "P2",
+   "hint": "src/demos/juara-jualan/",
+   "viewport": "1440",
+   "label": "Putar panggilan",
+   "key": true,
+   "ms": 120,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [
+    {
+     "d": 68,
+     "b": 17,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 25
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120
+   ]
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "area": "P2",
+   "hint": "src/demos/juara-jualan/",
+   "viewport": "390",
+   "label": "momen merah (buka panggilan)",
+   "key": false,
+   "ms": 128,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 90,
+     "b": 39,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 21
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 11
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      }
+     ]
+    },
+    {
+     "d": 282,
+     "b": 218,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 83
+      }
+     ]
+    }
+   ],
+   "runs": [
+    128,
+    112,
+    120
+   ]
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "area": "P2",
+   "hint": "src/demos/juara-jualan/",
+   "viewport": "390",
+   "label": "Putar panggilan",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown svg.dk-icon",
+   "loaf": [],
+   "runs": [
+    56,
+    64,
+    72
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "1440",
+   "label": "contoh kebutuhan",
+   "key": false,
+   "ms": 136,
+   "target": "pointerdown button.dk-kl-ex[data-kl=\"example\"]",
+   "loaf": [
+    {
+     "d": 87,
+     "b": 36,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 21
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 19
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    136
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "1440",
+   "label": "Terbitkan",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    64
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "1440",
+   "label": "flip ke sisi UMKM",
+   "key": true,
+   "ms": 48,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 74,
+     "b": 18,
+     "s": [
+      {
+       "u": "/assets/katalog-lokal-CF22DRbc.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 61
+      }
+     ]
+    }
+   ],
+   "runs": [
+    48
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "390",
+   "label": "contoh kebutuhan",
+   "key": false,
+   "ms": 184,
+   "target": "pointerdown button.dk-kl-ex[data-kl=\"example\"]",
+   "loaf": [
+    {
+     "d": 141,
+     "b": 89,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 33
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 22
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 14
+      }
+     ]
+    }
+   ],
+   "runs": [
+    168,
+    184,
+    168
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "390",
+   "label": "Terbitkan",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown button.dk-btn.dk-btn--primary[data-kl=\"publish\"]",
+   "loaf": [],
+   "runs": [
+    64,
+    56,
+    56
+   ]
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "area": "P2",
+   "hint": "src/demos/katalog-lokal/",
+   "viewport": "390",
+   "label": "flip ke sisi UMKM",
+   "key": true,
+   "ms": 40,
+   "target": "pointerdown span",
+   "loaf": [],
+   "runs": [
+    24,
+    40,
+    32
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "1440",
+   "label": "tab CV",
+   "key": false,
+   "ms": 80,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 2,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 13
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "1440",
+   "label": "unggah 200 CV",
+   "key": false,
+   "ms": 56,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 187,
+     "b": 135,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    56
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "1440",
+   "label": "Saring 200 CV",
+   "key": true,
+   "ms": 80,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 89,
+     "b": 36,
+     "s": [
+      {
+       "u": "/assets/Candidates-Bu_72Zkt.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 78
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "390",
+   "label": "tab CV",
+   "key": false,
+   "ms": 160,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 136,
+     "b": 86,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 37
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 18
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 8
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88,
+    160,
+    104
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "390",
+   "label": "unggah 200 CV",
+   "key": false,
+   "ms": 72,
+   "target": "pointerdown ",
+   "loaf": [],
+   "runs": [
+    72,
+    48,
+    64
+   ]
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "area": "P2",
+   "hint": "src/demos/kenal-mitra/",
+   "viewport": "390",
+   "label": "Saring 200 CV",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 79,
+     "b": 27,
+     "s": [
+      {
+       "u": "/assets/Candidates-Bu_72Zkt.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 68
+      }
+     ]
+    }
+   ],
+   "runs": [
+    64,
+    56,
+    64
+   ]
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (LangToggle) · src/demo-kit/i18n/",
+   "viewport": "1440",
+   "label": "EN",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown span",
+   "loaf": [],
+   "runs": [
+    72
+   ]
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (LangToggle) · src/demo-kit/i18n/",
+   "viewport": "390",
+   "label": "Kontrol lainnya",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown circle",
+   "loaf": [
+    {
+     "d": 85,
+     "b": 32,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 16
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 15
+      }
+     ]
+    },
+    {
+     "d": 172,
+     "b": 120,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 48
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80,
+    80,
+    104
+   ]
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (LangToggle) · src/demo-kit/i18n/",
+   "viewport": "390",
+   "label": "EN",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span",
+   "loaf": [],
+   "runs": [
+    64,
+    48,
+    48
+   ]
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "area": "P1",
+   "hint": "src/demos/meja-pimpinan/",
+   "viewport": "1440",
+   "label": "Susun briefing",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 1,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 6
+      }
+     ]
+    }
+   ],
+   "runs": [
+    72
+   ]
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "area": "P1",
+   "hint": "src/demos/meja-pimpinan/",
+   "viewport": "390",
+   "label": "Susun briefing",
+   "key": true,
+   "ms": 216,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 197,
+     "b": 132,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 46
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 34
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 13
+      }
+     ]
+    },
+    {
+     "d": 98,
+     "b": 1,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 27
+      },
+      {
+       "u": "/assets/meja-pimpinan-Q5Ez2ek7.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 16
+      },
+      {
+       "u": "/assets/meja-pimpinan-Q5Ez2ek7.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    104,
+    216
+   ]
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "area": "P1",
+   "hint": "src/demos/naskah-pintar/",
+   "viewport": "1440",
+   "label": "Putar rapat contoh",
+   "key": true,
+   "ms": 96,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 57,
+     "b": 7,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 13
+      }
+     ]
+    },
+    {
+     "d": 53,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/naskah-pintar-BySxcSx8.js",
+       "f": "Ve",
+       "i": "TimerHandler:setTimeout",
+       "d": 24
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "area": "P1",
+   "hint": "src/demos/naskah-pintar/",
+   "viewport": "390",
+   "label": "Putar rapat contoh",
+   "key": true,
+   "ms": 120,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 92,
+     "b": 41,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 25
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 15
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112,
+    120,
+    120
+   ]
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "area": "P2",
+   "hint": "src/demos/pajak-beres/",
+   "viewport": "1440",
+   "label": "Proses nota",
+   "key": true,
+   "ms": 48,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    48
+   ]
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "area": "P2",
+   "hint": "src/demos/pajak-beres/",
+   "viewport": "390",
+   "label": "Proses nota",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 51,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      }
+     ]
+    }
+   ],
+   "runs": [
+    72,
+    72,
+    72
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "1440",
+   "label": "tab Ulasan",
+   "key": false,
+   "ms": 120,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 81,
+     "b": 30,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 26
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "1440",
+   "label": "pilih 5",
+   "key": false,
+   "ms": 112,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 81,
+     "b": 31,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 26
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 8
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 5
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "1440",
+   "label": "buka balasan massal",
+   "key": false,
+   "ms": 88,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 68,
+     "b": 17,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 9
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 8
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "1440",
+   "label": "nada formal",
+   "key": false,
+   "ms": 88,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 69,
+     "b": 19,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 15
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV.onpointerover",
+       "d": 9
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onfocusin",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "1440",
+   "label": "Kirim 5 balasan",
+   "key": true,
+   "ms": 208,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 162,
+     "b": 112,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 74
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 27
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onfocusin",
+       "d": 11
+      }
+     ]
+    },
+    {
+     "d": 104,
+     "b": 52,
+     "s": [
+      {
+       "u": "/assets/BulkReply-iWoQVBrr.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 58
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    208
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "390",
+   "label": "tab Ulasan",
+   "key": false,
+   "ms": 136,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 100,
+     "b": 49,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 30
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    136,
+    128,
+    128
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "390",
+   "label": "pilih 5",
+   "key": false,
+   "ms": 112,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 86,
+     "b": 36,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 20
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 11
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112,
+    96,
+    112
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "390",
+   "label": "buka balasan massal",
+   "key": false,
+   "ms": 88,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 69,
+     "b": 18,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 16
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 9
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80,
+    88,
+    72
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "390",
+   "label": "nada formal",
+   "key": false,
+   "ms": 80,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 60,
+     "b": 9,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 15
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV.onpointerover",
+       "d": 9
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onfocusin",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    64,
+    72,
+    80
+   ]
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "area": "P2",
+   "hint": "src/demos/pantau-merek/",
+   "viewport": "390",
+   "label": "Kirim 5 balasan",
+   "key": true,
+   "ms": 136,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 106,
+     "b": 56,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 34
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 23
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onfocusin",
+       "d": 9
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    120,
+    136
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "1440",
+   "label": "picu hoaks",
+   "key": false,
+   "ms": 144,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 98,
+     "b": 47,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 24
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    144
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "1440",
+   "label": "Susun klarifikasi",
+   "key": true,
+   "ms": 96,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 1,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "1440",
+   "label": "Kirim klarifikasi (publish)",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    56
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "390",
+   "label": "picu hoaks",
+   "key": false,
+   "ms": 168,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 128,
+     "b": 76,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 36
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 13
+      }
+     ]
+    }
+   ],
+   "runs": [
+    152,
+    152,
+    168
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "390",
+   "label": "Susun klarifikasi",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 1,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 12
+      }
+     ]
+    }
+   ],
+   "runs": [
+    72,
+    72,
+    72
+   ]
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "area": "P1",
+   "hint": "src/demos/radar-isu/",
+   "viewport": "390",
+   "label": "Kirim klarifikasi (publish)",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    64,
+    56,
+    64
+   ]
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "area": "P2",
+   "hint": "src/demos/rapor-usaha/",
+   "viewport": "1440",
+   "label": "Rapikan jurnal",
+   "key": false,
+   "ms": 80,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 61,
+     "b": 10,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 14
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80
+   ]
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "area": "P2",
+   "hint": "src/demos/rapor-usaha/",
+   "viewport": "1440",
+   "label": "Setujui 3 saran",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    64
+   ]
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "area": "P2",
+   "hint": "src/demos/rapor-usaha/",
+   "viewport": "390",
+   "label": "Rapikan jurnal",
+   "key": false,
+   "ms": 160,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 150,
+     "b": 41,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 17
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    136,
+    120,
+    160
+   ]
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "area": "P2",
+   "hint": "src/demos/rapor-usaha/",
+   "viewport": "390",
+   "label": "Setujui 3 saran",
+   "key": true,
+   "ms": 72,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    48,
+    72,
+    48
+   ]
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (RegionSwitcher) · src/demo-kit/map/",
+   "viewport": "1440",
+   "label": "buka pemilih wilayah",
+   "key": false,
+   "ms": 96,
+   "target": "pointerdown span.dk-pick-label.dk-region-label",
+   "loaf": [
+    {
+     "d": 74,
+     "b": 23,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 31
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 12
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "#document.onmousemove",
+       "d": 6
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96
+   ]
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (RegionSwitcher) · src/demo-kit/map/",
+   "viewport": "1440",
+   "label": "Kota Bandung",
+   "key": true,
+   "ms": 232,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 184,
+     "b": 132,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 143
+      }
+     ]
+    }
+   ],
+   "runs": [
+    232
+   ]
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (RegionSwitcher) · src/demo-kit/map/",
+   "viewport": "390",
+   "label": "Kontrol lainnya",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown circle",
+   "loaf": [
+    {
+     "d": 84,
+     "b": 32,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 16
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 14
+      }
+     ]
+    },
+    {
+     "d": 188,
+     "b": 114,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 55
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80,
+    88,
+    104
+   ]
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "area": "P3",
+   "hint": "src/demo-kit/shell/controls.tsx (RegionSwitcher) · src/demo-kit/map/",
+   "viewport": "390",
+   "label": "Kota Bandung",
+   "key": true,
+   "ms": 168,
+   "target": "pointerdown span.dk-pick-sub",
+   "loaf": [
+    {
+     "d": 121,
+     "b": 69,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 47
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 20
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV.onpointerout",
+       "d": 13
+      }
+     ]
+    },
+    {
+     "d": 137,
+     "b": 75,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "ResizeObserverCallback",
+       "d": 37
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 34
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 26
+      }
+     ]
+    }
+   ],
+   "runs": [
+    168,
+    168,
+    136
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "1440",
+   "label": "persona Siti",
+   "key": false,
+   "ms": 128,
+   "target": "pointerdown span.dk-sw-pname",
+   "loaf": [
+    {
+     "d": 88,
+     "b": 36,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onpointerdown",
+       "d": 34
+      }
+     ]
+    }
+   ],
+   "runs": [
+    128
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "1440",
+   "label": "foto banjir",
+   "key": false,
+   "ms": 136,
+   "target": "pointerdown button.dk-sw-chip.is-act[data-sw=\"quick-photo\"]",
+   "loaf": [
+    {
+     "d": 85,
+     "b": 34,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 17
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 15
+      }
+     ]
+    }
+   ],
+   "runs": [
+    136
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "1440",
+   "label": "Kirim aduan",
+   "key": true,
+   "ms": 152,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 101,
+     "b": 51,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 36
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onsubmit",
+       "d": 11
+      }
+     ]
+    },
+    {
+     "d": 381,
+     "b": 328,
+     "s": [
+      {
+       "u": "/assets/sapa-warga-D5RItu8F.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 324
+      }
+     ]
+    }
+   ],
+   "runs": [
+    152
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "390",
+   "label": "persona Siti",
+   "key": false,
+   "ms": 128,
+   "target": "pointerdown span.dk-sw-pname",
+   "loaf": [
+    {
+     "d": 120,
+     "b": 66,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onpointerdown",
+       "d": 42
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 21
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80,
+    88,
+    128
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "390",
+   "label": "foto banjir",
+   "key": false,
+   "ms": 256,
+   "target": "pointerdown button.dk-sw-chip.is-act[data-sw=\"quick-photo\"]",
+   "loaf": [
+    {
+     "d": 86,
+     "b": 34,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 17
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 17
+      }
+     ]
+    },
+    {
+     "d": 171,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 16
+      }
+     ]
+    }
+   ],
+   "runs": [
+    216,
+    256,
+    224
+   ]
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "area": "P1",
+   "hint": "src/demos/sapa-warga/",
+   "viewport": "390",
+   "label": "Kirim aduan",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 377,
+     "b": 325,
+     "s": [
+      {
+       "u": "/assets/sapa-warga-D5RItu8F.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 338
+      },
+      {
+       "u": "/assets/sapa-warga-D5RItu8F.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 32
+      }
+     ]
+    }
+   ],
+   "runs": [
+    48,
+    56,
+    56
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "prakiraan +6 jam",
+   "key": false,
+   "ms": 112,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 98,
+     "b": 29,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 18
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "#document.onmouseup",
+       "d": 10
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 7
+      }
+     ]
+    }
+   ],
+   "runs": [
+    112
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "buka peringatan",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 51,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 11
+      }
+     ]
+    },
+    {
+     "d": 115,
+     "b": 63,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 60
+      },
+      {
+       "u": "/assets/siaga-wilayah-DwFjAa3g.js",
+       "f": "act",
+       "i": "TimerHandler:setTimeout",
+       "d": 24
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 13
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "Kirim peringatan",
+   "key": true,
+   "ms": 144,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 84,
+     "b": 33,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 23
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 14
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    144
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "selesai",
+   "key": false,
+   "ms": 352,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 96,
+     "b": 31,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 40
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 17
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 13
+      }
+     ]
+    },
+    {
+     "d": 219,
+     "b": 168,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 118
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 38
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 12
+      }
+     ]
+    },
+    {
+     "d": 81,
+     "b": 26,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 29
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 26
+      },
+      {
+       "u": "",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    352
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "Layer",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown button.dk-sg-chipbtn[data-sw=\"layers\"]",
+   "loaf": [
+    {
+     "d": 51,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 12
+      }
+     ]
+    },
+    {
+     "d": 123,
+     "b": 70,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 25
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 20
+      },
+      {
+       "u": "/assets/siaga-wilayah-DwFjAa3g.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 18
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "1440",
+   "label": "layer toggle (citra satelit)",
+   "key": true,
+   "ms": 120,
+   "target": "pointerdown span.dk-mlt-label",
+   "loaf": [
+    {
+     "d": 73,
+     "b": 22,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 16
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "prakiraan +6 jam",
+   "key": false,
+   "ms": 264,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 224,
+     "b": 138,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 33
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "Response.json.then",
+       "d": 26
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 14
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    120,
+    264
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "buka peringatan",
+   "key": false,
+   "ms": 128,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 81,
+     "b": 30,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 40
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 10
+      }
+     ]
+    },
+    {
+     "d": 62,
+     "b": 8,
+     "s": [
+      {
+       "u": "/assets/siaga-wilayah-DwFjAa3g.js",
+       "f": "act",
+       "i": "TimerHandler:setTimeout",
+       "d": 30
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 15
+      }
+     ]
+    }
+   ],
+   "runs": [
+    128,
+    104,
+    112
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "Kirim peringatan",
+   "key": true,
+   "ms": 136,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 92,
+     "b": 42,
+     "s": [
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 24
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 16
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    136,
+    136,
+    120
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "selesai",
+   "key": false,
+   "ms": 296,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 53,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 32
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 11
+      }
+     ]
+    },
+    {
+     "d": 172,
+     "b": 121,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 77
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 40
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 11
+      }
+     ]
+    },
+    {
+     "d": 191,
+     "b": 134,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 66
+      },
+      {
+       "u": "",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 54
+      },
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 30
+      }
+     ]
+    }
+   ],
+   "runs": [
+    280,
+    256,
+    296
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "Layer",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown button.dk-sg-chipbtn[data-sw=\"layers\"]",
+   "loaf": [
+    {
+     "d": 56,
+     "b": 5,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 15
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 12
+      }
+     ]
+    },
+    {
+     "d": 87,
+     "b": 35,
+     "s": [
+      {
+       "u": "/assets/siaga-wilayah-DwFjAa3g.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 15
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104,
+    88,
+    88
+   ]
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "area": "P1",
+   "hint": "src/demos/siaga-wilayah/",
+   "viewport": "390",
+   "label": "layer toggle (citra satelit)",
+   "key": true,
+   "ms": 216,
+   "target": "pointerdown span.dk-mlt-hint",
+   "loaf": [
+    {
+     "d": 159,
+     "b": 107,
+     "s": [
+      {
+       "u": "/assets/engine-BvajoZNi.js",
+       "f": "",
+       "i": "FrameRequestCallback",
+       "d": 67
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 16
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 15
+      }
+     ]
+    }
+   ],
+   "runs": [
+    168,
+    216,
+    160
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "1440",
+   "label": "putar banjir",
+   "key": false,
+   "ms": 160,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 105,
+     "b": 53,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 49
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 8
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 6
+      }
+     ]
+    }
+   ],
+   "runs": [
+    160
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "1440",
+   "label": "buka anomali",
+   "key": false,
+   "ms": null,
+   "error": "optional, not reached: locator.waitFor: Timeout 15000ms exceeded.",
+   "runs": [
+    null
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "1440",
+   "label": "tab Operasi",
+   "key": false,
+   "ms": 72,
+   "target": "pointerdown button.dk-sp-tab",
+   "loaf": [],
+   "runs": [
+    72
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "1440",
+   "label": "Simulasikan",
+   "key": true,
+   "ms": 48,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    48
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "390",
+   "label": "putar banjir",
+   "key": false,
+   "ms": 168,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 133,
+     "b": 81,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 54
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 13
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 8
+      }
+     ]
+    }
+   ],
+   "runs": [
+    168,
+    168,
+    144
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "390",
+   "label": "buka anomali",
+   "key": false,
+   "ms": null,
+   "error": "optional, not reached: locator.waitFor: Timeout 15000ms exceeded.",
+   "runs": [
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "390",
+   "label": "tab Operasi",
+   "key": false,
+   "ms": 88,
+   "target": "pointerdown button.dk-sp-tab",
+   "loaf": [
+    {
+     "d": 68,
+     "b": 16,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 22
+      }
+     ]
+    },
+    {
+     "d": 70,
+     "b": 13,
+     "s": [
+      {
+       "u": "",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 42
+      },
+      {
+       "u": "/assets/motion-BPpDxHUv.js",
+       "f": "u",
+       "i": "FrameRequestCallback",
+       "d": 18
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88,
+    80,
+    80
+   ]
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "area": "P2",
+   "hint": "src/demos/sinyal-pasar/",
+   "viewport": "390",
+   "label": "Simulasikan",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    48,
+    56,
+    48
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "1440",
+   "label": "buka tender",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown button.dk-tp-row-btn[data-hotspot=\"tp-open\"]",
+   "loaf": [
+    {
+     "d": 67,
+     "b": 16,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 25
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 5
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "1440",
+   "label": "ke Dokumen",
+   "key": false,
+   "ms": 184,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 65,
+     "b": 13,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 31
+      }
+     ]
+    }
+   ],
+   "runs": [
+    184
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "1440",
+   "label": "Susun dokumen",
+   "key": true,
+   "ms": 64,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    64
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "390",
+   "label": "buka tender",
+   "key": false,
+   "ms": 136,
+   "target": "pointerdown span.dk-tp-row-title",
+   "loaf": [
+    {
+     "d": 108,
+     "b": 56,
+     "s": [
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "DOMWindow.onpointerdown",
+       "d": 18
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 14
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 10
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96,
+    136,
+    104
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "390",
+   "label": "ke Dokumen",
+   "key": false,
+   "ms": 232,
+   "target": "pointerdown ",
+   "loaf": [
+    {
+     "d": 73,
+     "b": 0,
+     "s": []
+    }
+   ],
+   "runs": [
+    232,
+    216,
+    184
+   ]
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "area": "P2",
+   "hint": "src/demos/tenderpilot/",
+   "viewport": "390",
+   "label": "Susun dokumen",
+   "key": true,
+   "ms": 56,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [],
+   "runs": [
+    48,
+    48,
+    56
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "1440",
+   "label": "tab Kasir",
+   "key": false,
+   "ms": 88,
+   "target": "pointerdown button.dk-ta-tab[data-hotspot=\"kasir-tab\"]",
+   "loaf": [
+    {
+     "d": 54,
+     "b": 3,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 17
+      }
+     ]
+    }
+   ],
+   "runs": [
+    88
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "1440",
+   "label": "tambah barang",
+   "key": false,
+   "ms": 104,
+   "target": "pointerdown span.dk-ta-iprice.dk-num",
+   "loaf": [
+    {
+     "d": 75,
+     "b": 24,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 31
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "1440",
+   "label": "Bayar",
+   "key": true,
+   "ms": 104,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 81,
+     "b": 30,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 32
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerout",
+       "d": 13
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onfocusin",
+       "d": 8
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "1440",
+   "label": "QRIS",
+   "key": false,
+   "ms": 72,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 52,
+     "b": 0,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 11
+      }
+     ]
+    }
+   ],
+   "runs": [
+    72
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "1440",
+   "label": "Bayar QRIS",
+   "key": true,
+   "ms": 48,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 167,
+     "b": 115,
+     "s": [
+      {
+       "u": "/assets/Payment-Qxx6T9Zj.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 131
+      }
+     ]
+    }
+   ],
+   "runs": [
+    48
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "tab Kasir",
+   "key": false,
+   "ms": 152,
+   "target": "pointerdown button.dk-ta-tab[data-hotspot=\"kasir-tab\"]",
+   "loaf": [
+    {
+     "d": 132,
+     "b": 73,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 21
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV#root.onpointerover",
+       "d": 20
+      },
+      {
+       "u": "/assets/demo-core-s3JdGSH1.js",
+       "f": "e",
+       "i": "#document.onclick",
+       "d": 17
+      }
+     ]
+    }
+   ],
+   "runs": [
+    120,
+    152,
+    128
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "tambah barang",
+   "key": false,
+   "ms": 96,
+   "target": "pointerdown span.dk-ta-iprice.dk-num",
+   "loaf": [
+    {
+     "d": 64,
+     "b": 14,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV#root.onclick",
+       "d": 25
+      }
+     ]
+    }
+   ],
+   "runs": [
+    96,
+    88,
+    96
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "buka keranjang",
+   "key": false,
+   "ms": 264,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 84,
+     "b": 32,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 29
+      }
+     ]
+    },
+    {
+     "d": 93,
+     "b": 42,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "E",
+       "i": "MessagePort.onmessage",
+       "d": 79
+      }
+     ]
+    }
+   ],
+   "runs": [
+    208,
+    264,
+    208
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "Bayar",
+   "key": true,
+   "ms": 104,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 99,
+     "b": 24,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 42
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "vh",
+       "i": "DIV.onpointerout",
+       "d": 18
+      },
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onfocusin",
+       "d": 8
+      }
+     ]
+    }
+   ],
+   "runs": [
+    104,
+    88,
+    80
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "QRIS",
+   "key": false,
+   "ms": 96,
+   "target": "pointerdown span",
+   "loaf": [
+    {
+     "d": 65,
+     "b": 3,
+     "s": [
+      {
+       "u": "/assets/vendor-CEUTAxwI.js",
+       "f": "_h",
+       "i": "DIV.onclick",
+       "d": 14
+      }
+     ]
+    }
+   ],
+   "runs": [
+    80,
+    96,
+    80
+   ]
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "area": "P2",
+   "hint": "src/demos/toko-autopilot/",
+   "viewport": "390",
+   "label": "Bayar QRIS",
+   "key": true,
+   "ms": 48,
+   "target": "pointerdown span.dk-btn-label",
+   "loaf": [
+    {
+     "d": 164,
+     "b": 112,
+     "s": [
+      {
+       "u": "/assets/Payment-Qxx6T9Zj.js",
+       "f": "",
+       "i": "TimerHandler:setTimeout",
+       "d": 124
+      }
+     ]
+    }
+   ],
+   "runs": [
+    48,
+    48,
+    40
+   ]
+  }
+ ],
+ "pageInp": [
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "awas-belanja · Analisis paket",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "cek-berkas · Verifikasi 50 berkas",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "indeks-ekonomi · Play frame",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "inti · replay story",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "inti · replay story",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "inti · replay story",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "inti · replay story",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "juara-jualan · Putar panggilan",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "katalog-lokal · Terbitkan + flip",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "kenal-mitra · Saring 200 CV",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "language switch (sapa-warga)",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "meja-pimpinan · Susun briefing",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "naskah-pintar · Putar rapat contoh",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pajak-beres · Proses nota",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "pantau-merek · Kirim 5 balasan",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "radar-isu · Kirim klarifikasi",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "rapor-usaha · Setujui 3 saran",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "region switch (siaga-wilayah, map fly)",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sapa-warga · Kirim aduan",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "siaga-wilayah · Kirim peringatan + layer",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "sinyal-pasar · Simulasikan",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "tenderpilot · Susun dokumen",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "toko-autopilot · Bayar",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/ekosistem · star click",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "viewport": "1440",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "viewport": "390",
+   "run": 1,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "viewport": "390",
+   "run": 2,
+   "webVitalsINP": null
+  },
+  {
+   "scenario": "/tur · Mulai, next, Ambil alih, Ringkasan",
+   "viewport": "390",
+   "run": 3,
+   "webVitalsINP": null
+  }
+ ]
+}

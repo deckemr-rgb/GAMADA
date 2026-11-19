@@ -3,7 +3,7 @@
  * cross-product activity feed. "Putar jejak" loads world/story on click and plays the missing steps of the day
  * story; every lane lights when its Audit Log row lands. Node click ⇒ NodeDrawer (lazy).
  */
-import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react'
 import { intentProps, useShell } from '../../demo-kit/shell'
 import { ActivityFeed, Button, Icon, Kpi, KpiStrip, motionMode } from '../../demo-kit/ui'
 import { hhmm, rows, useClock, useWorld, world, type AuditEntry, type WorldState } from '../../demo-kit/world'
@@ -73,12 +73,17 @@ export default function Data({ scope, root, setRoot, onAudit }: DataProps) {
   )
 
   const [playing, setPlaying] = useState(false)
+  const started = useRef(false)
   const play = async () => {
-    if (playing) return
+    if (playing || started.current) return
+    started.current = true
+    // the pressed button paints first; the busy state, the guide hold and the story's first emit follow that frame (INP)
+    const m0 = loadStory()
+    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)))
     setPlaying(true)
     shell.holdGuide(true)
     try {
-      const m = await loadStory()
+      const m = await m0
       const pick = () => {
         const c = m.sitiComplaint(world.get())
         if (c) setRoot(`complaints:${c.id}`)
@@ -87,6 +92,7 @@ export default function Data({ scope, root, setRoot, onAudit }: DataProps) {
       await m.playDayStory({ gapMs: 600, onStep: () => pick() })
       pick()
     } finally {
+      started.current = false
       setPlaying(false)
       shell.holdGuide(false)
     }

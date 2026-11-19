@@ -12,7 +12,7 @@ import { emit, shallowEqual, useClock, useWorld, world } from '../../demo-kit/wo
 import { createRecognizer, recognitionSupported, speechLangs, type Recognizer } from '../../demo-kit/media/speech'
 import { structuredOf, useNaskahAi, type MinutesOut } from './ai'
 import { buildCtx } from './ctx'
-import { clockText, openMeetings, opdName, picFor, resolveOpd } from './model'
+import { clockText, openMeetings, opdName, picFor, placeText, resolveOpd } from './model'
 import { dueLabel, parseDue } from './due'
 import { useStr } from './strings'
 
@@ -74,7 +74,7 @@ export default function Recorder({ onClose, sampleMeetingId }: { onClose: () => 
   }
   /* "Isi contoh" is the inflation meeting's transcript: minute it for that meeting when it is on today's list */
   const fillSample = () => {
-    setText(S.rSampleText)
+    setText(placeText(S.rSampleText, lang))
     const infl = meetings.find((m) => /inflasi|inflation/i.test(m.title.id))
     if (infl && !picked.current) setTarget(infl.id)
   }

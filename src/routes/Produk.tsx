@@ -23,6 +23,7 @@ import { fill } from './EcoParts'
 import { Hero } from './produk/Hero'
 import { Chapters, Cta, Faq, Highlights, Problems, Related, Roles, Security, Steps } from './produk/Sections'
 import { PR } from './produk/strings'
+import { SITE } from '../content/site'
 import '../styles/produk.css'
 
 /** Legacy products folded into an ecosystem product: anchor id + where its module opens (spec §2.1). */
@@ -76,6 +77,23 @@ function Page({ slug }: { slug: ProductSlug }) {
     <>
       <title>{fill(e.product.docTitle, { name: `${p.name}: ${p.descriptor[lang]}` })}</title>
       <meta name="description" content={p.tagline[lang]} />
+      {/* Tahap 7 (plan item 12): structured data without price or rating */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: `${p.name}`,
+            description: p.tagline[lang],
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web',
+            inLanguage: lang,
+            url: `${SITE.url}/produk/${p.slug}`,
+            publisher: { '@type': 'Organization', name: SITE.name, url: `${SITE.url}/` },
+          }).replace(/</g, '\\u003c'),
+        }}
+      />
       <div className="pr-page" data-eco={p.eco} data-copy={copy ? 'ready' : 'loading'}>
         <Hero p={p} copy={copy} tryLabel={tryLabel} wa={wa} />
         <Merged p={p} />

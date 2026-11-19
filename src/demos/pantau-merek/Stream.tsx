@@ -114,7 +114,7 @@ export const Stream = memo(function Stream({ items, t, lang, shopId, compact }: 
         {said}
       </p>
       {list.length ? (
-        <ul ref={ul} className="dk-pm-mlist" data-pm="stream">
+        <ul ref={ul} className="dk-pm-mlist" data-pm="stream" tabIndex={0} aria-labelledby="dk-pm-stream-h">
           {list.map((m) => (
             <MentionRow key={m.id} m={m} t={t} lang={lang} shopId={shopId} />
           ))}

@@ -6,7 +6,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { Button, Icon, StatusChip, Timeline, dropChips, motionMode, type TimelineItem } from '../../demo-kit/ui'
 import { auditFor, hhmm, useWorld, type AuditEntry, type ProcurementFinding, type WorldState } from '../../demo-kit/world'
-import { DETECTORS, LEVEL_TONE, isAnalysed, noteText, rpFull, weightOf, type Detector } from './model'
+import { DETECTORS, LEVEL_TONE, headWord, isAnalysed, noteText, rpFull, weightOf, type Detector } from './model'
 import { useT, type Strings, type Lang } from './strings'
 import type { RoleKey } from './types'
 
@@ -137,7 +137,7 @@ function AuditTrail({ id, lang, roleKey }: { id: string; lang: Lang; roleKey: Ro
         time: hhmm(a.at),
         title:
           a.type === 'procurement.recommended' && p?.recommendation
-            ? `${t.trailRecommended[roleKey]} · ${roleKey === 'inspektorat' ? t.trailReview(rpFull(p.recommendation.hpsCorrected, lang)) : t.trailHps(rpFull(p.hps, lang), rpFull(p.recommendation.hpsCorrected, lang))}`
+            ? `${headWord(t.trailRecommended[roleKey] ?? '')} · ${roleKey === 'inspektorat' ? t.trailReview(rpFull(p.recommendation.hpsCorrected, lang)) : t.trailHps(rpFull(p.hps, lang), rpFull(p.recommendation.hpsCorrected, lang))}`
             : a.summary[lang],
         source: actorOf(a, t, roleKey),
         tone: a.type === 'procurement.flagged' ? 'danger' : a.type === 'procurement.recommended' ? 'done' : 'neutral',

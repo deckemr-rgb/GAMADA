@@ -52,6 +52,9 @@ export interface WaveformProps {
   className?: string
 }
 
+/** Tahap 7 (item 16): a marker within this fraction of earlier ones stacks one lane up (0–2) instead of covering them */
+const MARKER_GAP = 0.03
+
 export function Waveform({ peaks, level, progress, active = false, bars = 40, height = 48, markers, onSeek, onMarker, label, valueText, className }: WaveformProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const baseG = useRef<SVGGElement>(null)
@@ -134,19 +137,7 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
       ref={wrap}
       className={`dk-wave${live ? ' is-live' : ''}${active ? ' is-active' : ''}${seekable ? ' is-seek' : ''}${className ? ` ${className}` : ''}`}
       style={{ height }}
-      {...(seekable
-        ? {
-            role: 'slider',
-            tabIndex: 0,
-            'aria-label': label,
-            'aria-valuemin': 0,
-            'aria-valuemax': 100,
-            'aria-valuenow': Math.round((progress?.() ?? 0) * 100),
-            ...(valueText ? { 'aria-valuetext': valueText } : {}),
-            onPointerDown: onPointer,
-            onKeyDown: onKey,
-          }
-        : { role: 'img', 'aria-label': label })}
+      {...(seekable ? {} : { role: 'img', 'aria-label': label })}
     >
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         <g ref={baseG} className="dk-wave-base">
@@ -162,13 +153,29 @@ export function Waveform({ peaks, level, progress, active = false, bars = 40, he
           </div>
         </div>
       )}
-      {markers?.map((m) => (
+      {seekable && (
+        // Tahap 7 (axe nested-interactive): the slider is its own layer under the marker buttons, not their parent
+        <div
+          className="dk-wave-seek"
+          role="slider"
+          tabIndex={0}
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round((progress?.() ?? 0) * 100)}
+          aria-valuetext={valueText || undefined}
+          onPointerDown={onPointer}
+          onKeyDown={onKey}
+        />
+      )}
+      {markers?.map((m, i) => (
         <button
           key={m.id}
           type="button"
           className={`dk-wave-mk is-${m.tone ?? 'neutral'}`}
           data-tone={m.tone ?? 'neutral'}
           data-marker={m.id}
+          data-lane={markers.filter((o, j) => j < i && Math.abs(o.at - m.at) < MARKER_GAP).length % 3 || undefined}
           style={{ left: `${m.at * 100}%` }}
           aria-label={m.label}
           title={m.label}

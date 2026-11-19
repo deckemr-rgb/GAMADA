@@ -7,22 +7,52 @@ import { peaksForClip, timeline, type ClipMarker, type SpeechClip } from './play
 
 /* ------------------------------------------------------------------ meeting (Naskah Pintar) */
 
-const MEETING_LINES = [
-  { speaker: 'sekda', text: 'Selamat pagi. Rapat koordinasi penanganan banjir kita mulai. Agenda pertama, kondisi Bengawan Solo pagi ini.', en: 'Good morning. Let us open the flood-response coordination meeting. First item: the Bengawan Solo this morning.' },
-  { speaker: 'bpbd', text: 'Pos pantau kota Siaga dua dan masih naik. Genangan ada di Trucuk, Kalitidu, Bojonegoro, dan Kanor, tiga ratus dua belas rumah terdampak.', en: 'The city gauge is at alert level two and rising. Flooding in Trucuk, Kalitidu, Bojonegoro and Kanor, three hundred and twelve homes affected.' },
-  { speaker: 'camat', text: 'Di Kalitidu tanggul Desa Ngujo merembes sekitar enam puluh meter. Warga minta karung pasir hari ini.', en: 'In Kalitidu the Ngujo embankment is seeping for about sixty metres. Residents ask for sandbags today.' },
-  { speaker: 'pupr', text: 'Kami bisa kirim tim dan seribu lima ratus karung pasir siang ini. Pompa kami hanya enam unit, kurang empat.', en: 'We can send a team and one thousand five hundred sandbags this afternoon. We only have six pumps, four short.' },
-  { speaker: 'sekda', text: 'Keputusan pertama: Dinas PUPR menangani tanggul Ngujo hari ini, paling lambat pukul enam belas.', en: 'Decision one: Public Works handles the Ngujo embankment today, by four p.m. at the latest.' },
-  { speaker: 'sekda', text: 'Kedua, ajukan pinjam pakai empat pompa ke balai wilayah sungai, tenggat besok.', en: 'Two: request a loan of four pumps from the river basin office, due tomorrow.' },
-  { speaker: 'dinsos', text: 'Dapur umum sudah siap tiga titik. Kami butuh data penerima bansos yang sudah diverifikasi.', en: 'Three public kitchens are ready. We need verified aid-recipient data.' },
-  { speaker: 'sekda', text: 'Dinas Sosial verifikasi berkas pendaftar bansos banjir, target lima puluh berkas hari ini, lewat Cek Berkas.', en: 'Social Affairs verifies flood-aid applications, fifty files today, through Cek Berkas.' },
-  { speaker: 'bpbd', text: 'Kami siapkan peringatan dini untuk desa di bantaran. Siaran lewat kanal resmi jam sepuluh.', en: 'We will prepare early warnings for riverside villages, broadcast on official channels at ten.' },
-  { speaker: 'camat', text: 'Kecamatan siapkan balai desa Ngujo sebagai titik evakuasi sementara, termasuk untuk lansia.', en: 'The district will prepare Ngujo village hall as a temporary evacuation point, including for the elderly.' },
-  { speaker: 'sekda', text: 'Baik. Camat Kalitidu laporkan kesiapan titik evakuasi sore ini. Rapat evaluasi besok pukul delapan.', en: 'Good. The Head of Kalitidu reports evacuation readiness this afternoon. Review meeting tomorrow at eight.' },
-]
+/**
+ * Tahap 7: the flood meeting is templated from the region (region/anchor.ts floodAnchor), so every pack gets its own
+ * river, flood kecamatan, camat and embankment desa/kelurahan: `meetingBanjirFor(floodAnchor(pack))` +
+ * `meetingBanjirNotesFor(…)`. MEETING_BANJIR / MEETING_BANJIR_NOTES stay as the default-world clip (same text as before).
+ */
+export interface MeetingPlaces {
+  river: string
+  /** flood kecamatan names, in order */
+  floodKecamatan: readonly string[]
+  /** the camat's kecamatan + the embankment's desa/kelurahan */
+  kecamatan: string
+  desa: string
+  desaKind: 'desa' | 'kelurahan'
+}
 
-export const MEETING_BANJIR: SpeechClip = (() => {
-  const segments = timeline(MEETING_LINES)
+/** the default world's places (the clip as recorded in Tahap 2) */
+const DEFAULT_PLACES: MeetingPlaces = { river: 'Bengawan Solo', floodKecamatan: ['Trucuk', 'Kalitidu', 'Bojonegoro', 'Kanor'], kecamatan: 'Kalitidu', desa: 'Ngujo', desaKind: 'desa' }
+
+const listId = (a: readonly string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')}, dan ${a[a.length - 1]}`)
+const listEn = (a: readonly string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`)
+
+function meetingLines(p: MeetingPlaces) {
+  const river = p.river || 'sungai'
+  const Kind = p.desaKind === 'kelurahan' ? 'Kelurahan' : 'Desa'
+  const kind = Kind.toLowerCase()
+  const hallEn = p.desaKind === 'kelurahan' ? 'ward hall' : 'village hall'
+  const areasEn = p.desaKind === 'kelurahan' ? 'riverside wards' : 'riverside villages'
+  const kecs = p.floodKecamatan.length ? p.floodKecamatan : [p.kecamatan]
+  return [
+    { speaker: 'sekda', text: `Selamat pagi. Rapat koordinasi penanganan banjir kita mulai. Agenda pertama, kondisi ${river} pagi ini.`, en: `Good morning. Let us open the flood-response coordination meeting. First item: the ${river} this morning.` },
+    { speaker: 'bpbd', text: `Pos pantau kota Siaga dua dan masih naik. Genangan ada di ${listId(kecs)}, tiga ratus dua belas rumah terdampak.`, en: `The city gauge is at alert level two and rising. Flooding in ${listEn(kecs)}, three hundred and twelve homes affected.` },
+    { speaker: 'camat', text: `Di ${p.kecamatan} tanggul ${Kind} ${p.desa} merembes sekitar enam puluh meter. Warga minta karung pasir hari ini.`, en: `In ${p.kecamatan} the ${p.desa} embankment is seeping for about sixty metres. Residents ask for sandbags today.` },
+    { speaker: 'pupr', text: 'Kami bisa kirim tim dan seribu lima ratus karung pasir siang ini. Pompa kami hanya enam unit, kurang empat.', en: 'We can send a team and one thousand five hundred sandbags this afternoon. We only have six pumps, four short.' },
+    { speaker: 'sekda', text: `Keputusan pertama: Dinas PUPR menangani tanggul ${p.desa} hari ini, paling lambat pukul enam belas.`, en: `Decision one: Public Works handles the ${p.desa} embankment today, by four p.m. at the latest.` },
+    { speaker: 'sekda', text: 'Kedua, ajukan pinjam pakai empat pompa ke balai wilayah sungai, tenggat besok.', en: 'Two: request a loan of four pumps from the river basin office, due tomorrow.' },
+    { speaker: 'dinsos', text: 'Dapur umum sudah siap tiga titik. Kami butuh data penerima bansos yang sudah diverifikasi.', en: 'Three public kitchens are ready. We need verified aid-recipient data.' },
+    { speaker: 'sekda', text: 'Dinas Sosial verifikasi berkas pendaftar bansos banjir, target lima puluh berkas hari ini, lewat Cek Berkas.', en: 'Social Affairs verifies flood-aid applications, fifty files today, through Cek Berkas.' },
+    { speaker: 'bpbd', text: `Kami siapkan peringatan dini untuk ${kind} di bantaran. Siaran lewat kanal resmi jam sepuluh.`, en: `We will prepare early warnings for ${areasEn}, broadcast on official channels at ten.` },
+    { speaker: 'camat', text: `Kecamatan siapkan balai ${kind} ${p.desa} sebagai titik evakuasi sementara, termasuk untuk lansia.`, en: `The district will prepare ${p.desa} ${hallEn} as a temporary evacuation point, including for the elderly.` },
+    { speaker: 'sekda', text: `Baik. Camat ${p.kecamatan} laporkan kesiapan titik evakuasi sore ini. Rapat evaluasi besok pukul delapan.`, en: `Good. The Head of ${p.kecamatan} reports evacuation readiness this afternoon. Review meeting tomorrow at eight.` },
+  ]
+}
+
+/** the flood meeting recording for a region's places (same timing shape, speakers and segment ids for every region) */
+export function meetingBanjirFor(p: MeetingPlaces): SpeechClip {
+  const segments = timeline(meetingLines(p))
   return {
     id: 'rapat-banjir',
     title: { id: 'Rapat Koordinasi Penanganan Banjir', en: 'Flood-response coordination meeting' },
@@ -32,29 +62,37 @@ export const MEETING_BANJIR: SpeechClip = (() => {
       { id: 'pupr', label: { id: 'Kadis PUPR', en: 'Head of Public Works' } },
       { id: 'bpbd', label: { id: 'Kalaksa BPBD', en: 'Head of the Disaster Agency' } },
       { id: 'dinsos', label: { id: 'Kadinsos', en: 'Head of Social Affairs' } },
-      { id: 'camat', label: { id: 'Camat Kalitidu', en: 'Head of Kalitidu District' } },
+      { id: 'camat', label: { id: `Camat ${p.kecamatan}`, en: `Head of ${p.kecamatan} District` } },
     ],
     segments,
     peaks: peaksForClip(segments, 140, 11),
   }
-})()
+}
 
-/** What the minutes extractor should find in MEETING_BANJIR (segment ids → items), for Naskah Pintar. */
-export const MEETING_BANJIR_NOTES = {
-  decisions: [
-    { seg: 's5', text: { id: 'Dinas PUPR menangani tanggul Ngujo hari ini', en: 'Public Works repairs the Ngujo embankment today' } },
-    { seg: 's6', text: { id: 'Ajukan pinjam pakai 4 pompa ke balai wilayah sungai', en: 'Request a loan of 4 pumps from the river basin office' } },
-    { seg: 's8', text: { id: 'Verifikasi 50 berkas bansos banjir hari ini', en: 'Verify 50 flood-aid files today' } },
-  ],
-  actions: [
-    { seg: 's5', opdId: 'pupr', pic: 'Kadis PUPR', due: '2026-11-17T16:00', text: { id: 'Tangani rembesan tanggul Desa Ngujo + kirim 1.500 karung pasir', en: 'Fix the Ngujo embankment seepage + send 1,500 sandbags' } },
-    { seg: 's6', opdId: 'pupr', pic: 'Kadis PUPR', due: '2026-11-18T12:00', text: { id: 'Ajukan pinjam pakai 4 pompa air portabel', en: 'Request the loan of 4 portable pumps' } },
-    { seg: 's8', opdId: 'dinsos', pic: 'Kadinsos', due: '2026-11-17T17:00', text: { id: 'Verifikasi 50 berkas pendaftar bansos banjir', en: 'Verify 50 flood-aid applications' } },
-    { seg: 's9', opdId: 'bpbd', pic: 'Kalaksa BPBD', due: '2026-11-17T10:00', text: { id: 'Siarkan peringatan dini desa bantaran', en: 'Broadcast early warnings to riverside villages' } },
-    { seg: 's10', opdId: 'kecamatan', pic: 'Camat Kalitidu', due: '2026-11-17T15:00', text: { id: 'Siapkan balai Desa Ngujo sebagai titik evakuasi', en: 'Prepare Ngujo village hall as an evacuation point' } },
-    { seg: 's11', opdId: 'kecamatan', pic: 'Camat Kalitidu', due: '2026-11-17T16:00', text: { id: 'Laporkan kesiapan titik evakuasi', en: 'Report evacuation-point readiness' } },
-  ],
-} as const
+export const MEETING_BANJIR: SpeechClip = meetingBanjirFor(DEFAULT_PLACES)
+
+/** What the minutes extractor should find in a meeting clip (segment ids → items), for Naskah Pintar. */
+export function meetingBanjirNotesFor(p: MeetingPlaces) {
+  const Kind = p.desaKind === 'kelurahan' ? 'Kelurahan' : 'Desa'
+  const hallEn = p.desaKind === 'kelurahan' ? 'ward hall' : 'village hall'
+  const camat = `Camat ${p.kecamatan}`
+  return {
+    decisions: [
+      { seg: 's5', text: { id: `Dinas PUPR menangani tanggul ${p.desa} hari ini`, en: `Public Works repairs the ${p.desa} embankment today` } },
+      { seg: 's6', text: { id: 'Ajukan pinjam pakai 4 pompa ke balai wilayah sungai', en: 'Request a loan of 4 pumps from the river basin office' } },
+      { seg: 's8', text: { id: 'Verifikasi 50 berkas bansos banjir hari ini', en: 'Verify 50 flood-aid files today' } },
+    ],
+    actions: [
+      { seg: 's5', opdId: 'pupr', pic: 'Kadis PUPR', due: '2026-11-17T16:00', text: { id: `Tangani rembesan tanggul ${Kind} ${p.desa} + kirim 1.500 karung pasir`, en: `Fix the ${p.desa} embankment seepage + send 1,500 sandbags` } },
+      { seg: 's6', opdId: 'pupr', pic: 'Kadis PUPR', due: '2026-11-18T12:00', text: { id: 'Ajukan pinjam pakai 4 pompa air portabel', en: 'Request the loan of 4 portable pumps' } },
+      { seg: 's8', opdId: 'dinsos', pic: 'Kadinsos', due: '2026-11-17T17:00', text: { id: 'Verifikasi 50 berkas pendaftar bansos banjir', en: 'Verify 50 flood-aid applications' } },
+      { seg: 's9', opdId: 'bpbd', pic: 'Kalaksa BPBD', due: '2026-11-17T10:00', text: { id: `Siarkan peringatan dini ${Kind.toLowerCase()} bantaran`, en: `Broadcast early warnings to riverside ${p.desaKind === 'kelurahan' ? 'wards' : 'villages'}` } },
+      { seg: 's10', opdId: 'kecamatan', pic: camat, due: '2026-11-17T15:00', text: { id: `Siapkan balai ${Kind} ${p.desa} sebagai titik evakuasi`, en: `Prepare ${p.desa} ${hallEn} as an evacuation point` } },
+      { seg: 's11', opdId: 'kecamatan', pic: camat, due: '2026-11-17T16:00', text: { id: 'Laporkan kesiapan titik evakuasi', en: 'Report evacuation-point readiness' } },
+    ],
+  } as const
+}
+export const MEETING_BANJIR_NOTES = meetingBanjirNotesFor(DEFAULT_PLACES)
 
 /* ------------------------------------------------------------------ sales call (Juara Jualan) */
 

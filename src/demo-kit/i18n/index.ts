@@ -15,6 +15,7 @@
 import { use } from 'react'
 import { langRequestSeq, preloadLang, useI18n, type Lang, type SetLangOptions } from '../../lib/i18n'
 import type { RegionPack } from '../region/types'
+import { regionText } from '../region/loader'
 import { id, type DemoDict } from './id'
 
 export { id as DEMO_ID } from './id'
@@ -125,4 +126,14 @@ export function regionalLanguages(pack: Pick<RegionPack, 'languages'> | null | u
     code,
     label: languageLabel(code, lang),
   }))
+}
+
+/**
+ * Tahap 7: a region registry entry (region/loader REGIONS, or a pack) as the picker shows it: `name` "Kota Bandung" /
+ * "Bandung City", `sub` "Kota · Jawa Barat" / "City · West Java" (the province only when the entry carries one). Reuses
+ * the loader's labels (regionText) on a stub pack, so the type / province tables exist once.
+ */
+export function regionLabel(r: { name: string; shortName: string; type: 'kabupaten' | 'kota'; province?: string }, lang: Lang): { name: string; sub: string } {
+  const x = regionText({ ...r, province: r.province ?? '', kecamatan: [], stats: { population: 0, area_km2: 0 }, sources: [] } as unknown as RegionPack, lang)
+  return { name: x.name, sub: r.province ? `${x.typeLabel} · ${x.place.slice(r.shortName.length + 2)}` : x.typeLabel }
 }

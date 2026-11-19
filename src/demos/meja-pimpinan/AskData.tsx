@@ -11,7 +11,7 @@ import { PRODUCT_BY_SLUG, isProductSlug } from '../../content/products'
 import { registerScenario, useAiChat, type ChatMessage, type Structured } from '../../demo-kit/ai/chat'
 import { Button, Icon, IconButton, Input, dropChips } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
-import { clock, emit, useSession, useWorld, world, type EventMap } from '../../demo-kit/world'
+import { clock, currentRegion, emit, useSession, useWorld, world, type EventMap } from '../../demo-kit/world'
 import AppLink from '../../components/AppLink'
 import { demoHref } from '../../demo-kit/shell'
 import { causeQuestion, mpBriefingItems, risingCategory, useNow, withControls } from './data'
@@ -19,10 +19,15 @@ import { opdsInText } from './data-ext'
 import { askContext } from './ideas'
 import { parseSpec, runQuery } from './query'
 import { QueryChart } from './QueryChart'
-import { draftInstruction, kecInText, scenario } from './scenario'
+import { draftInstruction, kecInText, scenarioFor } from './scenario'
 import type { AskProps } from './AskBox'
 
-registerScenario(scenario)
+/** the scenario with this region's place names in its examples (re-registered when the region changes) */
+function registerForRegion(): void {
+  const p = currentRegion()
+  registerScenario(scenarioFor(world.get().region ?? null, p?.rivers.find((r) => r.id === p.scenario.floodRiverId)?.name ?? p?.rivers[0]?.name ?? ''))
+}
+registerForRegion()
 
 const A = {
   title: { id: 'Tanya data', en: 'Ask the data' },
@@ -60,6 +65,8 @@ const A = {
 export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, pending, onPendingTaken, autoFocus }: AskProps & { draft: string; pending: string | null; onPendingTaken: () => void; autoFocus?: { current: boolean } }) {
   const { lang } = useI18n()
   const session = useSession()
+  const regionId = useWorld((s) => s.region?.id)
+  useMemo(() => registerForRegion(), [regionId])
   const now = useNow(60)
   const [text, setText] = useState(draft)
   const formRef = useRef<HTMLFormElement>(null)
@@ -189,7 +196,7 @@ export default function AskData({ onFly, onInstruct, onAnswered, leader, draft, 
           </span>
         )}
       </header>
-      <div ref={logRef} className="dk-mp-pb dk-mp-log" aria-live="polite" aria-relevant="additions text">
+      <div ref={logRef} className="dk-mp-pb dk-mp-log" tabIndex={0} aria-live="polite" aria-relevant="additions text">
         {chat.messages.length === 0 ? (
           <>
             <p className="dk-mp-meta">{A.hint[lang]}</p>

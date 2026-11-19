@@ -9,7 +9,7 @@ import type { RadarCtx } from './ctx'
 import { CLARIFY_TEXT, clarification, toneFromText } from './clarify-text'
 import { TOPIC } from './strings'
 import { analyze, matchTopic } from './deep-model'
-import { clock, world } from '../../demo-kit/world'
+import { clock, currentRegion, world } from '../../demo-kit/world'
 
 type L = 'id' | 'en'
 type Ctx = SimContext<RadarCtx>
@@ -41,9 +41,25 @@ function top(x: RadarCtx) {
   return x.negIssues[0] ?? null
 }
 
-/** Basa Jawa question → a short Javanese opener (krama where it addresses the user) + its translation line */
-function jvWrap(ctx: Ctx, r: SimResponse, jv: [jv: string, id: string, en: string]): SimResponse {
-  if (!isJv(ctx.text)) return r
+/** Basa Sunda / Baso Minang input (only in a region that speaks it): a short opener in that language + translation */
+const SU = /\b(naon|kumaha|ayeuna|dinten|ieu|eta|abdi|punten|mangga|sabaraha|iraha|dimana|teu|henteu|bejana|hoaks teu)\b/i
+const MIN = /\b(apo|baa|indak|ambo|ado|dima|sadonyo|caliak|bana|iko|tu ha)\b/i
+const OPENER: Record<'su' | 'min', [string, string, string]> = {
+  su: ['Mangga, ieu katerangan ti abdi.', 'Silakan, ini keterangan dari saya.', 'Here is what I found.'],
+  min: ['Iko keterangan dari ambo.', 'Ini keterangan dari saya.', 'Here is what I found.'],
+}
+function regionalOpener(text: string): [string, string, string] | null {
+  const code = currentRegion()?.languages.regional[0]
+  if (code === 'su' && SU.test(text)) return OPENER.su
+  if (code === 'min' && MIN.test(text)) return OPENER.min
+  return null
+}
+
+/** Basa Jawa question → a short Javanese opener (krama where it addresses the user) + its translation line; Sunda /
+ *  Minang (in their region) → a short opener in that language */
+function jvWrap(ctx: Ctx, r: SimResponse, jv0: [jv: string, id: string, en: string]): SimResponse {
+  const jv = regionalOpener(ctx.text) ?? (isJv(ctx.text) ? jv0 : null)
+  if (!jv) return r
   return {
     ...r,
     text: `${jv[0]}
@@ -98,7 +114,7 @@ export function assess(text: string, x: RadarCtx | null, lang: L) {
       .slice(0, 3)
       .map((w) => `“${w}”`)
       .join(', ')
-  const dam = /bendungan|waduk|\bdam\b/i.test(body)
+  const dam = /bendungan|waduk|pintu air|sluice gate|\bdam\b/i.test(body)
   const caps = (body.match(/[A-Z]{4,}/g)?.length ?? 0) > 0
   let likelihood = Math.min(0.97, 0.06 + hoaxHits * 0.16 + (dam && /jebol|burst/i.test(body) ? 0.35 : 0) + (caps ? 0.08 : 0))
   if (x?.hoax && dam) likelihood = Math.max(likelihood, x.hoax.score)

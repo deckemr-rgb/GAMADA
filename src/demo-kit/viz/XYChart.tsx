@@ -95,7 +95,8 @@ function XYChart(props: Inner) {
   const h = height ?? (w < 520 ? 200 : 240)
   const N = Math.max(1, x.length)
   const actualN = series[0]?.values.length ?? 0
-  const fc = kind === 'area' && forecast && forecast.values.length ? forecast : null
+  // Tahap 7 (item 17): lines take the forecast band too (no AreaChart workaround needed)
+  const fc = forecast && forecast.values.length ? forecast : null
 
   /* target domain (niced) */
   const domain = useMemo<[number, number]>(() => {
@@ -306,8 +307,8 @@ function XYChart(props: Inner) {
   )
 }
 
-/** Multi-series line chart (≤ 6 series). */
-export function LineChart(props: XYProps) {
+/** Multi-series line chart (≤ 6 series), with an optional forecast band (10% area + dashed line) after the first series. */
+export function LineChart(props: AreaProps) {
   return <XYChart {...props} kind="line" />
 }
 

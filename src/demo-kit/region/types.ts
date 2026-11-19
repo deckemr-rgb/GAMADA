@@ -141,6 +141,10 @@ export const RegionPack = z.object({
     damLandmarkId: z.string().optional(),
     floodKecamatanIds: z.array(z.string()),
     shopMarketId: z.string(),
+    /** Tahap 7 (optional): the kecamatan whose camat speaks in the flood meeting + the desa/kelurahan of the seeping
+     *  embankment (region/anchor.ts floodAnchor). Absent: the first flood kecamatan and its first desa. */
+    meetingKecamatanId: z.string().optional(),
+    embankmentDesaId: z.string().optional(),
   }),
   sources: z.array(Source),
 })

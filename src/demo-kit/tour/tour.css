@@ -865,3 +865,30 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
     width: auto;
   }
 }
+
+/* presenter notes window (/tur?notes=1) */
+.dk-tour-notes {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+.dk-tour-notes .dk-tour-body {
+  font-size: 1.15rem;
+  line-height: 1.6;
+}
+.dk-tour-notes-timer {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.6rem;
+  color: var(--c-muted);
+}
+.dk-tour-notes-timer[data-playing] {
+  color: var(--c-peach-soft);
+}
+.dk-tour-notes-list {
+  margin: 0;
+  padding-left: 1.2em;
+  line-height: 1.6;
+}

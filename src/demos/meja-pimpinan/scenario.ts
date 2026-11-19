@@ -256,9 +256,9 @@ const intents: Intent[] = [
   {
     id: 'bandingkan-kecamatan',
     examples: [
-      'Bandingkan Kalitidu dan Dander', 'Bandingkan aduan Trucuk dengan Kanor', 'Kalitidu versus Baureno', 'Perbandingan dua kecamatan',
-      'Compare Kalitidu and Dander', 'How does Trucuk compare with Kanor?', 'Compare two districts',
-      'Bandingna Kalitidu karo Dander', 'Luwih akeh endi aduane Trucuk karo Kanor?',
+      'Bandingkan {k0} dan {k1}', 'Bandingkan aduan {k2} dengan {k3}', '{k0} versus {k4}', 'Perbandingan dua kecamatan',
+      'Compare {k0} and {k1}', 'How does {k2} compare with {k3}?', 'Compare two districts',
+      'Bandingna {k0} karo {k1}', 'Luwih akeh endi aduane {k2} karo {k3}?',
     ],
     respond: (ctx) => {
       const { s, now } = ws(ctx)
@@ -354,7 +354,7 @@ const intents: Intent[] = [
     id: 'status-banjir',
     examples: [
       'Bagaimana status banjir dan muka air sungai?', 'Ada peringatan banjir aktif?', 'Kondisi muka air sungai sekarang', 'Berapa aduan banjir hari ini?',
-      'Kenapa peringatan aktif nol padahal sungai sudah tinggi?', 'Status Bengawan Solo sekarang siaga atau awas?', 'Perlu kirim peringatan banjir?',
+      'Kenapa peringatan aktif nol padahal sungai sudah tinggi?', 'Status {river} sekarang siaga atau awas?', 'Perlu kirim peringatan banjir?',
       "What's the flood situation?", 'Are there active flood warnings?', 'How high is the river now?', 'Why are there no warnings while the river is high?',
       'Banyu kali munggah ora?', 'Piye kahanan banjir saiki?', 'Omah kebanjiran akeh ora?',
     ],
@@ -555,7 +555,7 @@ const intents: Intent[] = [
   {
     id: 'beri-instruksi',
     examples: [
-      'Instruksikan BPBD kerahkan pompa ke Kanor', 'Perintahkan Dinas PUPR memperbaiki jalan di Ngasem', 'Minta Diskominfo terbitkan klarifikasi', 'Tugaskan Disperindag pantau harga cabai',
+      'Instruksikan BPBD kerahkan pompa ke {k3}', 'Perintahkan Dinas PUPR memperbaiki jalan di {k5}', 'Minta Diskominfo terbitkan klarifikasi', 'Tugaskan Disperindag pantau harga cabai',
       'Instruct the BPBD to deploy pumps', 'Tell the public works office to fix the roads', 'Order the communications office to publish a clarification',
       'Kongkon BPBD ngirim pompa', 'Prentahna Dinas PUPR ndandani dalan',
     ],
@@ -587,7 +587,7 @@ const intents: Intent[] = [
     respond: (ctx) => {
       const { s, now } = ws(ctx)
       const L = ctx.lang
-      // "Berapa aduan banjir di Kanor hari ini?": a named category or district is a count question, not the overview
+      // "Berapa aduan banjir di <kecamatan> hari ini?": a named category or district is a count question, not the overview
       if (categoryOf(ctx.text) || kecInText(s, ctx.text).length) return countAnswer(ctx)
       const spec: QuerySpec = { metric: 'complaints', groupBy: 'category', range: 'today', chart: 'bar' }
       const r = runQuery(s, now, spec, L)
@@ -602,9 +602,9 @@ const intents: Intent[] = [
     // a count with the entities the question names: category, district(s) and period ("bulan ini" = 30 days)
     id: 'jumlah-aduan',
     examples: [
-      'Berapa aduan jalan rusak di Dander bulan ini?', 'Berapa aduan sampah minggu ini?', 'Jumlah aduan banjir di Kanor 30 hari terakhir', 'Ada berapa laporan PJU mati di Kalitidu?', 'Berapa keluhan air bersih bulan ini?',
-      'How many road complaints in Dander this month?', 'How many waste complaints this week?', 'Number of flood reports in Kanor in the last 30 days',
-      'Pira aduan dalan rusak ing Dander sasi iki?', 'Aduan sampah minggu iki pira?',
+      'Berapa aduan jalan rusak di {k1} bulan ini?', 'Berapa aduan sampah minggu ini?', 'Jumlah aduan banjir di {k3} 30 hari terakhir', 'Ada berapa laporan PJU mati di {k0}?', 'Berapa keluhan air bersih bulan ini?',
+      'How many road complaints in {k1} this month?', 'How many waste complaints this week?', 'Number of flood reports in {k3} in the last 30 days',
+      'Pira aduan dalan rusak ing {k1} sasi iki?', 'Aduan sampah minggu iki pira?',
     ],
     // "Kenapa aduan air bersih naik?" shares words with a count question: a "why" always goes to the cause answer
     respond: (ctx, slots) => (WHY.test(ctx.text) ? intents.find((i) => i.id === 'penyebab-kenaikan')!.respond(ctx, slots) : countAnswer(ctx)),
@@ -702,7 +702,7 @@ const WHY = /\b(kenapa|mengapa|knp|kok|penyebab|sebab|why|cause|caused|kenging|n
 /** urgent wording => the draft's deadline is today */
 const URGENT = /segera|darurat|hari ini|urgent|today|now|sekarang|klarifikasi|clarif|hoaks|hoax/i
 
-/** "Berapa aduan jalan rusak di Dander bulan ini?" -- counts with the category, district(s) and period the question names */
+/** "Berapa aduan jalan rusak di <kecamatan> bulan ini?" -- counts with the category, district(s) and period the question names */
 function countAnswer(ctx: SimContext): SimResponse {
   const { s, now } = ws(ctx)
   const L = ctx.lang
@@ -732,7 +732,7 @@ function hh(m: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}.${String(m % 60).padStart(2, '0')}`
 }
 
-/** "Instruksikan BPBD kerahkan pompa ke Kanor" → a clear, measurable instruction: what, where, when to report */
+/** "Instruksikan BPBD kerahkan pompa ke <kecamatan>" → a clear, measurable instruction: what, where, when to report */
 export function draftInstruction(s: WorldState, text: string, L: Lang, kec: string | undefined): string {
   const t = text.toLowerCase()
   const where = kec ? (L === 'id' ? `di Kec. ${kecName(s, kec)}` : `in ${kecName(s, kec)}`) : ''
@@ -774,5 +774,24 @@ export const scenario: Scenario = {
   intents,
   threshold: 0.3,
   fallback: (ctx) => outOfScope(ctx),
+}
+
+/**
+ * Tahap 7: the scenario with its example place words filled from the running region ({k0}…{k5} = the flood kecamatan
+ * first, then the others; {river} = the flood river), so the matcher learns this region's names. A new object per
+ * region (the engine caches one matcher per scenario object).
+ */
+const filled = new Map<string, Scenario>()
+export function scenarioFor(r: WorldState['region'] | null, river: string): Scenario {
+  if (!r) return scenario
+  const key = `${r.id}|${river}`
+  const hit = filled.get(key)
+  if (hit) return hit
+  const ids = [...r.floodKecamatanIds, ...r.kecamatan.map((k) => k.id)]
+  const names = [...new Set(ids)].map((id) => r.kecamatan.find((k) => k.id === id)?.name ?? '').filter((n) => n && norm(n) !== norm(r.shortName))
+  const fill = (x: string) => x.replace(/\{k(\d)\}/g, (_, i: string) => names[Number(i) % Math.max(1, names.length)] ?? r.shortName).replace(/\{river\}/g, river || 'sungai')
+  const out: Scenario = { ...scenario, intents: intents.map((it) => ({ ...it, examples: it.examples.map(fill) })) }
+  filled.set(key, out)
+  return out
 }
 

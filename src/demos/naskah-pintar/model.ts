@@ -2,15 +2,18 @@
  * naskah-pintar/model.ts — the sample meeting as a minutes "script" (what the AI writes at which transcript line),
  * time helpers and small world helpers shared by the three tabs. No React.
  *
- * The meeting is the kit clip MEETING_BANJIR (+ MEETING_BANJIR_NOTES: decisions and 6 follow-ups with PIC + due).
+ * The meeting is the kit clip meetingBanjirFor(floodAnchor(pack)) (+ meetingBanjirNotesFor: decisions and 6 follow-ups
+ * with PIC + due), so river, kecamatan and embankment follow the selected region (Tahap 7). setMeetingRegion() rebuilds
+ * the live bindings below (CLIP, SCRIPT, SUMMARY ...) when the region changes; index.tsx calls it before the tabs render.
  * Participants, agenda and discussion points below are derived from the same transcript lines.
  */
 import type { ActionItem, Bi, Meeting, Minutes, WorldState } from '../../demo-kit/world'
 import { DAY_MIN, hhmm, rows } from '../../demo-kit/world/util'
 import type { ClipSegment } from '../../demo-kit/media/playback'
-import { MEETING_BANJIR, MEETING_BANJIR_NOTES } from '../../demo-kit/media/samples'
+import { MEETING_BANJIR, meetingBanjirFor, meetingBanjirNotesFor } from '../../demo-kit/media/samples'
+import { floodAnchor, type AnchorSource, type FloodAnchor } from '../../demo-kit/region/anchor'
 import type { RoleId } from '../../content/products'
-import { STR, opdLabel, picLabel } from './strings'
+import { STR, opdLabel, picLabel, setHeadTitle } from './strings'
 
 type Lang = 'id' | 'en'
 
@@ -25,14 +28,17 @@ export const NP = {
   defaultOpd: 'pupr',
 } as const
 
-export const CLIP = MEETING_BANJIR
-export const SEGS_VOICE: ClipSegment[] = CLIP.segments
-export const SEGS_FAST: ClipSegment[] = CLIP.segments.map((s) => ({ ...s, start: Math.round((s.start / NP.fast) * 100) / 100, end: Math.round((s.end / NP.fast) * 100) / 100 }))
+/** the places of the region's flood story (set by setMeetingRegion; index.tsx sets it before any tab renders) */
+let PLACES: FloodAnchor = { river: '', kecamatanId: '', kecamatan: '', desaId: '', desa: '', desaKind: 'desa', floodKecamatan: [], market: '' }
+let HEAD: Bi = { id: 'Bupati', en: 'Regent' }
+export let CLIP = MEETING_BANJIR
+export let SEGS_VOICE: ClipSegment[] = CLIP.segments
+export let SEGS_FAST: ClipSegment[] = []
 
 const segIdx = (seg: string) => Math.max(0, CLIP.segments.findIndex((s) => s.id === seg))
 
 /** ISO local time of the notes ("2026-11-17T16:00") → world minutes, day 0 = the first date in the notes */
-const BASE_DAY = MEETING_BANJIR_NOTES.actions.map((a) => a.due.slice(0, 10)).sort()[0] ?? '2026-11-17'
+let BASE_DAY = '2026-11-17'
 function dueMinutes(iso: string): Minutes {
   const day = Math.round((Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) - Date.parse(`${BASE_DAY}T00:00:00Z`)) / 86_400_000)
   const [h, m] = iso.slice(11, 16).split(':').map(Number) as [number, number]
@@ -53,37 +59,88 @@ export interface ScriptLine {
   text: Bi
 }
 
-/** what the minutes contain, keyed by the transcript line that reveals it */
-export const SCRIPT = {
-  agenda: [{ key: 'ag1', seg: 0, text: { id: 'Kondisi Bengawan Solo dan langkah penanganan banjir', en: 'Bengawan Solo conditions and flood-response steps' } }] as ScriptLine[],
-  topics: [
-    { key: 't1', seg: 1, text: { id: 'Pos pantau kota Siaga II dan masih naik; genangan di Trucuk, Kalitidu, Bojonegoro, Kanor (312 rumah).', en: 'City gauge at alert level II and rising; flooding in Trucuk, Kalitidu, Bojonegoro, Kanor (312 homes).' } },
-    { key: 't2', seg: 2, text: { id: 'Tanggul Desa Ngujo merembes ±60 m; warga minta karung pasir hari ini.', en: 'The Ngujo embankment seeps for ~60 m; residents ask for sandbags today.' } },
-    { key: 't3', seg: 3, text: { id: 'Dinas PUPR siap kirim tim dan 1.500 karung pasir; pompa tersedia 6, kurang 4.', en: 'Public Works can send a team and 1,500 sandbags; 6 pumps available, 4 short.' } },
-    { key: 't4', seg: 6, text: { id: 'Dapur umum siap di 3 titik; Dinsos butuh data penerima bansos terverifikasi.', en: 'Public kitchens ready at 3 points; Social Affairs needs verified aid-recipient data.' } },
-    { key: 't5', seg: 8, text: { id: 'BPBD menyiapkan peringatan dini untuk desa bantaran, siaran pukul 10.00.', en: 'BPBD prepares early warnings for riverside villages, broadcast at 10:00.' } },
-    { key: 't6', seg: 9, text: { id: 'Balai Desa Ngujo disiapkan sebagai titik evakuasi sementara, termasuk untuk lansia.', en: 'Ngujo village hall becomes a temporary evacuation point, including for the elderly.' } },
-  ] as ScriptLine[],
-  decisions: [
-    ...MEETING_BANJIR_NOTES.decisions.map((d, i) => ({ key: `d${i + 1}`, seg: segIdx(d.seg), text: { id: d.text.id, en: d.text.en } })),
-    { key: 'd4', seg: segIdx('s11'), text: { id: 'Rapat evaluasi besok pukul 08.00', en: 'Review meeting tomorrow at 08:00' } },
-  ] as ScriptLine[],
-  actions: MEETING_BANJIR_NOTES.actions.map((a, i) => ({ key: `a${i + 1}`, seg: segIdx(a.seg), opdId: a.opdId, pic: a.pic, dueAt: dueMinutes(a.due), text: { id: a.text.id, en: a.text.en } })) as ScriptAction[],
+const listId = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} dan ${xs[xs.length - 1]}` : (xs[0] ?? ''))
+const listEn = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : (xs[0] ?? ''))
+
+/**
+ * Region words inside a static string: {kec} the camat's kecamatan, {desa} the embankment desa/kelurahan, {Desa}
+ * "Desa X" / "Kelurahan X", {hall} "X village hall" / "X ward hall", {river}, {market}, {head} Bupati / Wali Kota
+ * (EN Regent / Mayor).
+ */
+export function placeText(t: string, lang: Lang): string {
+  const p = PLACES
+  const kel = p.desaKind === 'kelurahan'
+  return t
+    .replace(/\{kec\}/g, p.kecamatan)
+    .replace(/\{desa\}/g, p.desa)
+    .replace(/\{Desa\}/g, `${kel ? 'Kelurahan' : 'Desa'} ${p.desa}`)
+    .replace(/\{hall\}/g, `${p.desa} ${kel ? 'ward hall' : 'village hall'}`)
+    .replace(/\{river\}/g, p.river || (lang === 'id' ? 'sungai' : 'the river'))
+    .replace(/\{market\}/g, p.market || (lang === 'id' ? 'pasar induk' : 'the main market'))
+    .replace(/\{head\}/g, HEAD[lang])
 }
 
+/** what the minutes contain, keyed by the transcript line that reveals it */
+export let SCRIPT: { agenda: ScriptLine[]; topics: ScriptLine[]; decisions: ScriptLine[]; actions: ScriptAction[] } = { agenda: [], topics: [], decisions: [], actions: [] }
 /** speakers in order of their first line */
-export const SPEAKER_FIRST: { id: string; seg: number }[] = (() => {
+export let SPEAKER_FIRST: { id: string; seg: number }[] = []
+export let SUMMARY: Bi = { id: '', en: '' }
+/** the conclusion of the official minutes (section IV): impersonal register of a government memo, no AI voice */
+export let CONCLUSION: Bi = { id: '', en: '' }
+
+let regionKey = ''
+/** Rebuild the sample meeting for a region (no-op when unchanged). No pack → the kit's default clip. */
+export function setMeetingRegion(pack: (AnchorSource & { id?: string; type?: string }) | null): void {
+  const key = pack ? (pack.id ?? pack.shortName) : '-'
+  if (key === regionKey) return
+  regionKey = key
+  if (pack) {
+    PLACES = floodAnchor(pack)
+    HEAD = pack.type === 'kota' ? { id: 'Wali Kota', en: 'Mayor' } : { id: 'Bupati', en: 'Regent' }
+    setHeadTitle(pack.type === 'kota')
+  }
+  const P = PLACES
+  CLIP = pack ? meetingBanjirFor(P) : MEETING_BANJIR
+  const notes = meetingBanjirNotesFor(P)
+  SEGS_VOICE = CLIP.segments
+  SEGS_FAST = CLIP.segments.map((s) => ({ ...s, start: Math.round((s.start / NP.fast) * 100) / 100, end: Math.round((s.end / NP.fast) * 100) / 100 }))
+  BASE_DAY = notes.actions.map((a) => a.due.slice(0, 10)).sort()[0] ?? '2026-11-17'
+  const river = P.river || 'sungai'
+  const riverEn = P.river || 'river'
+  const Desa = placeText('{Desa}', 'id')
+  const kel = P.desaKind === 'kelurahan'
+  const kecs = P.floodKecamatan.length ? P.floodKecamatan : [P.kecamatan]
+  SCRIPT = {
+    agenda: [{ key: 'ag1', seg: 0, text: { id: `Kondisi ${river} dan langkah penanganan banjir`, en: `${riverEn} conditions and flood-response steps` } }],
+    topics: [
+      { key: 't1', seg: 1, text: { id: `Pos pantau Siaga II dan masih naik; genangan di ${listId(kecs)} (312 rumah).`, en: `River gauge at alert level II and rising; flooding in ${listEn(kecs)} (312 homes).` } },
+      { key: 't2', seg: 2, text: { id: `Tanggul ${Desa} merembes ±60 m; warga minta karung pasir hari ini.`, en: `The ${P.desa} embankment seeps for ~60 m; residents ask for sandbags today.` } },
+      { key: 't3', seg: 3, text: { id: 'Dinas PUPR siap kirim tim dan 1.500 karung pasir; pompa tersedia 6, kurang 4.', en: 'Public Works can send a team and 1,500 sandbags; 6 pumps available, 4 short.' } },
+      { key: 't4', seg: 6, text: { id: 'Dapur umum siap di 3 titik; Dinsos butuh data penerima bansos terverifikasi.', en: 'Public kitchens ready at 3 points; Social Affairs needs verified aid-recipient data.' } },
+      { key: 't5', seg: 8, text: { id: `BPBD menyiapkan peringatan dini untuk ${kel ? 'kelurahan' : 'desa'} bantaran, siaran pukul 10.00.`, en: `BPBD prepares early warnings for riverside ${kel ? 'wards' : 'villages'}, broadcast at 10:00.` } },
+      { key: 't6', seg: 9, text: { id: `Balai ${Desa} disiapkan sebagai titik evakuasi sementara, termasuk untuk lansia.`, en: `${placeText('{hall}', 'en')} becomes a temporary evacuation point, including for the elderly.` } },
+    ],
+    decisions: [
+      ...notes.decisions.map((d, i) => ({ key: `d${i + 1}`, seg: segIdx(d.seg), text: { id: d.text.id, en: d.text.en } })),
+      { key: 'd4', seg: segIdx('s11'), text: { id: 'Rapat evaluasi besok pukul 08.00', en: 'Review meeting tomorrow at 08:00' } },
+    ],
+    actions: notes.actions.map((a, i) => ({ key: `a${i + 1}`, seg: segIdx(a.seg), opdId: a.opdId, pic: a.pic, dueAt: dueMinutes(a.due), text: { id: a.text.id, en: a.text.en } })),
+  }
   const seen = new Map<string, number>()
   CLIP.segments.forEach((s, i) => {
     if (!seen.has(s.speaker)) seen.set(s.speaker, i)
   })
-  return [...seen.entries()].map(([id, seg]) => ({ id, seg }))
-})()
-
-export const SUMMARY: Bi = {
-  id: 'Rapat koordinasi membahas kenaikan muka air Bengawan Solo dan rembesan tanggul Ngujo. Diputuskan: PUPR menangani tanggul hari ini, pinjam pakai 4 pompa, Dinsos memverifikasi 50 berkas bansos, BPBD menyiarkan peringatan dini, dan Camat Kalitidu menyiapkan titik evakuasi.',
-  en: 'The coordination meeting covered the rising Bengawan Solo and the Ngujo embankment seepage. Decided: Public Works fixes the embankment today, 4 pumps are borrowed, Social Affairs verifies 50 aid files, BPBD broadcasts early warnings and the Head of Kalitidu prepares an evacuation point.',
+  SPEAKER_FIRST = [...seen.entries()].map(([id, seg]) => ({ id, seg }))
+  SUMMARY = {
+    id: `Rapat koordinasi membahas kenaikan muka air ${river} dan rembesan tanggul ${P.desa}. Diputuskan: PUPR menangani tanggul hari ini, pinjam pakai 4 pompa, Dinsos memverifikasi 50 berkas bansos, BPBD menyiarkan peringatan dini, dan Camat ${P.kecamatan} menyiapkan titik evakuasi.`,
+    en: `The coordination meeting covered the rising ${riverEn} and the ${P.desa} embankment seepage. Decided: Public Works fixes the embankment today, 4 pumps are borrowed, Social Affairs verifies 50 aid files, BPBD broadcasts early warnings and the Head of ${P.kecamatan} prepares an evacuation point.`,
+  }
+  CONCLUSION = {
+    id: `Rapat menyimpulkan bahwa penanganan rembesan tanggul ${Desa}, pengadaan pompa tambahan melalui pinjam pakai, verifikasi data penerima bantuan sosial, penyiaran peringatan dini, dan penyiapan titik evakuasi dilaksanakan sesuai tenggat dalam tabel tindak lanjut. Setiap perangkat daerah melaporkan pelaksanaannya kepada Sekretaris Daerah, dan hasilnya dievaluasi dalam rapat berikutnya.`,
+    en: `The meeting concluded that the ${P.desa} embankment seepage, the additional pumps on loan, the verification of aid-recipient data, the early-warning broadcast and the evacuation point are to be carried out by the deadlines in the follow-up table. Each agency reports its progress to the Regional Secretary, and the results are reviewed at the next meeting.`,
+  }
 }
+setMeetingRegion(null)
 
 /** the transcript as plain text for the AI ("Sekda: …") */
 export function transcriptText(lang: Lang, segments: ClipSegment[] = CLIP.segments, upTo = segments.length - 1): string {
@@ -108,9 +165,6 @@ export interface MeetingFacts {
 }
 const factsCache = new Map<string, MeetingFacts | null>()
 const nId = (n: number, d: number) => n.toFixed(d).replace('.', ',')
-const listId = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} dan ${xs[xs.length - 1]}` : (xs[0] ?? ''))
-const listEn = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : (xs[0] ?? ''))
-
 export function meetingFacts(s: WorldState, meetingId: string | undefined, now: Minutes): MeetingFacts | null {
   const key = `${s.day}:${meetingId ?? '-'}`
   if (factsCache.has(key)) return factsCache.get(key) ?? null
@@ -136,7 +190,7 @@ export function meetingFacts(s: WorldState, meetingId: string | undefined, now: 
   const trend = rising ? { id: 'masih naik', en: 'still rising' } : { id: 'mulai stabil', en: 'levelling off' }
   const where = names.length ? { id: listId(names), en: listEn(names) } : null
   const spoken = river.name.replace(/\s*·\s*/g, ' ')
-  /* English: "Bengawan Solo · pos Bojonegoro" reads as "the Bengawan Solo gauge at Bojonegoro" (no untranslated "pos") */
+  /* English: "<river> · pos <place>" reads as "the <river> gauge at <place>" (no untranslated "pos") */
   const [rName = river.name, station] = river.name.split(/\s*·\s*/)
   const stationEn = station ? station.replace(/^pos\s+/i, '') : null
   const gaugeEn = stationEn ? `${rName} gauge at ${stationEn}` : `${rName} gauge`
@@ -275,8 +329,10 @@ export function npRole(r: RoleId): NpRole {
 
 /** who signs a disposition approved by this role (titles only) */
 export function signer(role: NpRole): string {
-  return role === 'kepala-daerah' ? 'Bupati' : 'Sekda'
+  return role === 'kepala-daerah' ? HEAD.id : 'Sekda'
 }
+/** the regional head's title in the current region (Bupati / Wali Kota) */
+export const headTitle = (): Bi => HEAD
 
 export { picLabel }
 
@@ -287,7 +343,7 @@ export { picLabel }
  * the disposition links to that follow-up instead of creating a second task for the same agency.
  */
 export const LETTER_LINKS: Readonly<Record<string, string>> = {
-  '140/087/412.416.12/2026': 'a1', // Desa Ngujo: sandbags + embankment = decision 1 (Kadis PUPR, today 16.00)
+  '140/087/412.416.12/2026': 'a1', // the embankment desa: sandbags + embankment = decision 1 (Kadis PUPR, today 16.00)
   '600/1189/412.205/2026': 'a2', // PUPR memo: portable pumps = follow-up 2 (pump loan)
 }
 
@@ -304,10 +360,4 @@ export function fullDue(at: Minutes, lang: Lang, day: string): string {
   const date = new Date(Date.parse(`${day}T00:00:00Z`) + d * 86_400_000).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const t = clockText(((at % DAY_MIN) + DAY_MIN) % DAY_MIN, lang)
   return lang === 'id' ? `${date} pukul ${t} WIB` : `${date}, ${t} WIB`
-}
-
-/** section IV of the official minutes: the conclusion in the impersonal register of a government memo (no AI voice) */
-export const CONCLUSION: Bi = {
-  id: 'Rapat menyimpulkan bahwa penanganan rembesan tanggul Desa Ngujo, pengadaan pompa tambahan melalui pinjam pakai, verifikasi data penerima bantuan sosial, penyiaran peringatan dini, dan penyiapan titik evakuasi dilaksanakan sesuai tenggat dalam tabel tindak lanjut. Setiap perangkat daerah melaporkan pelaksanaannya kepada Sekretaris Daerah, dan hasilnya dievaluasi dalam rapat berikutnya.',
-  en: 'The meeting concluded that the Ngujo embankment seepage, the additional pumps on loan, the verification of aid-recipient data, the early-warning broadcast and the evacuation point are to be carried out by the deadlines in the follow-up table. Each agency reports its progress to the Regional Secretary, and the results are reviewed at the next meeting.',
 }
