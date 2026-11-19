@@ -412,7 +412,7 @@ Integrator: add `/tur` to `npm run perf` targets (spec §14), budget table, scre
 
 ---
 
-## 6 · Owner questions (each with a default)
+## 6 · Owner questions: ALL APPROVED by the owner on 2026-11-19 ("oke semua"); use the defaults exactly as written below
 
 **P1 · Dunia tur terpisah.** Tur memakai dunia demonya sendiri (mulai bersih pukul 06:00 setiap "Mulai tur"), jadi
 apa pun yang pengunjung lakukan di sandbox biasa tidak terhapus oleh tur. "Ambil alih" membuka produk di dunia tur
