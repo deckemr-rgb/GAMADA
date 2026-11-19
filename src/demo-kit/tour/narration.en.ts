@@ -46,7 +46,7 @@ const N: Narration = {
   },
   8: {
     title: 'Needs matched to local SMEs',
-    body: 'The need for {bags} sandbags and {tarps} tarps is matched to local SMEs that carry the Verified and Tax Tidy badges: {matches} matches. The order goes to {biz}.',
+    body: 'The need for {bags} sandbags and {tarps} tarps is matched to local SMEs that fit best (the Verified and Tax Tidy badges count in the score): {matches} matches. The order goes to {biz}.',
     happened: ['{matches} SMEs matched', 'Order sent to {biz}'],
     caps: ['The SME matching board', 'Order sent to {biz}'],
   },

@@ -173,7 +173,7 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
 function Poster({ lang }: { lang: Lang }) {
   const st = useTour()
   const t = TOUR_STRINGS[lang]
-  const slug = (st.stage?.slug ?? null) as ProductSlug | null
+  const slug = st.posterSlug
   return (
     <div className="dk-tour-poster" aria-busy={st.busy || undefined}>
       {st.poster && !st.busy ? (

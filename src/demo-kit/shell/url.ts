@@ -62,7 +62,9 @@ export function readDemoQuery(search: string, product?: ProductSlug): DemoQuery 
 }
 
 /** The params the shell writes for a session + clock (defaults are left out to keep links short). */
-export function sessionParams(s: DemoSession, minutes: number): Record<string, string | null> {
+export function sessionParams(s: DemoSession, minutes: number): Record<string, string | null | undefined> {
+  // ?from= is shared: products use it too (Pajak Beres ?from=tenderpilot); only a stale tour value (tur-<n>) is removed
+  const staleTourFrom = typeof window !== 'undefined' && /^tur-/.test(new URLSearchParams(window.location.search).get('from') ?? '')
   return {
     region: s.regionId,
     role: s.role,
@@ -72,7 +74,7 @@ export function sessionParams(s: DemoSession, minutes: number): Record<string, s
     ai: s.aiMode === 'live' ? 'live' : null,
     present: s.present ? '1' : null,
     world: s.scope === 'tour' ? 'tour' : null,
-    from: s.from,
+    from: s.from ?? (staleTourFrom ? null : undefined),
   }
 }
 

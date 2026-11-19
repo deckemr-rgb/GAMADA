@@ -100,7 +100,7 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
   const snapY = (s: Snap) => {
     const h = typeof window !== 'undefined' ? window.innerHeight : 800
     const full = h * 0.9
-    return s === 'full' ? 0 : s === 'half' ? full - h * 0.5 : full - 120
+    return s === 'full' ? 0 : s === 'half' ? full - h * 0.5 : full - 140
   }
   const onDown = (e: React.PointerEvent) => {
     drag.current = { y0: e.clientY, t0: performance.now(), base: snapY(snap), moved: false }
@@ -110,7 +110,8 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
     const d = drag.current
     if (!d || !sheet.current) return
     const dy = e.clientY - d.y0
-    if (Math.abs(dy) > 4) d.moved = true
+    if (!d.moved && Math.abs(dy) <= 4) return
+    d.moved = true
     sheet.current.style.transition = 'none'
     sheet.current.style.transform = `translateY(${Math.max(0, d.base + dy)}px)`
   }
@@ -120,7 +121,8 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
     if (!d || !sheet.current) return
     sheet.current.style.transition = ''
     sheet.current.style.transform = ''
-    if (!d.moved) return
+    // a tap (pointer captured by the handle, so the button's own click does not fire): toggle peek ⇄ half
+    if (!d.moved) return setSnap(snap === 'peek' ? 'half' : 'peek')
     const dy = e.clientY - d.y0
     const v = dy / Math.max(1, performance.now() - d.t0)
     const y = d.base + dy
@@ -220,7 +222,7 @@ export default function Player({ lang, onExit }: { lang: Lang; onExit: () => voi
           </div>
           <div ref={sheet} className={`dk-tour-sheet is-${snap}`} aria-label={t.sheet}>
             <div className="dk-tour-sheet-handle" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-              <button type="button" className="dk-tour-sheet-grip" aria-label={t.sheetToggle} aria-expanded={snap !== 'peek'} onClick={() => !drag.current && setSnap(snap === 'peek' ? 'half' : 'peek')} data-tour-ctl="sheet">
+              <button type="button" className="dk-tour-sheet-grip" aria-label={t.sheetToggle} aria-expanded={snap !== 'peek'} onClick={(e) => e.detail === 0 && setSnap(snap === 'peek' ? 'half' : 'peek')} data-tour-ctl="sheet">
                 <span aria-hidden="true" />
               </button>
             </div>

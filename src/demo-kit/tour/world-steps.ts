@@ -458,7 +458,7 @@ export function chapterFacts(n: number, lang: Lang, s: WorldState = world.get())
       const c = sitiComplaint(s, now)
       const t = c ? dataTrail(s, ref('complaints', c.id)) : null
       f.lanes = t ? t.spine.filter((x) => !!x.auditId).length : 0
-      f.events = platformPulse(s, now).todayCount
+      f.events = nf(platformPulse(s, now).todayCount, lang)
       break
     }
   }

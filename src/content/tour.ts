@@ -34,10 +34,10 @@ export interface TourChapter {
 }
 
 export const TOUR_CHAPTERS: readonly TourChapter[] = [
-  { n: 1, time: '06:00', products: ['siaga-wilayah'], title: { id: 'Sel hujan masuk; prediksi genangan +6 jam; 4 desa terancam', en: 'Rain cells move in; flooding forecast +6 h; 4 villages at risk' } },
+  { n: 1, time: '06:00', products: ['siaga-wilayah'], title: { id: 'Sel hujan masuk; prediksi genangan +6 jam; 4 kecamatan waspada', en: 'Rain cells move in; flooding forecast +6 h; 4 districts on alert' } },
   { n: 2, time: '06:20', products: ['siaga-wilayah', 'sapa-warga'], title: { id: 'Peringatan dini terkirim ke camat dan kepala desa; warga di zona menerima pesan', en: 'Early warning sent to district and village heads; residents in the zone get a message' } },
   { n: 3, time: '07:00', products: ['meja-pimpinan'], title: { id: 'Briefing pagi tersusun sendiri; pimpinan bertanya "Desa mana paling berisiko?"', en: 'The morning briefing assembles itself; the head asks "Which village is most at risk?"' } },
-  { n: 4, time: '08:15', products: ['sapa-warga'], title: { id: 'Ibu Siti mengirim voice note berbahasa Jawa; tiket terbentuk; klaster aduan banjir', en: 'Ibu Siti sends a voice note in Javanese; a ticket forms; flood complaints cluster' } },
+  { n: 4, time: '08:15', products: ['sapa-warga'], title: { id: 'Ibu Siti mengirim pesan suara berbahasa Jawa; tiket terbentuk; klaster aduan banjir', en: 'Ibu Siti sends a voice note in Javanese; a ticket forms; flood complaints cluster' } },
   { n: 5, time: '09:00', products: ['naskah-pintar'], title: { id: 'Rapat koordinasi; notulen dan 6 tindak lanjut tersusun live; disposisi ke OPD', en: 'Coordination meeting; minutes and 6 follow-ups written live; dispositions to agencies' } },
   { n: 6, time: '10:00', products: ['radar-isu'], title: { id: 'Hoaks "bendungan jebol" terdeteksi; klarifikasi terbit; sentimen pulih', en: 'A "dam burst" hoax is detected; a clarification goes out; sentiment recovers' } },
   { n: 7, time: '11:00', products: ['awas-belanja'], title: { id: 'Paket darurat pompa air dianalisis: HPS kemahalan dan peserta terafiliasi', en: 'Emergency water-pump package analysed: overpriced estimate and affiliated bidders' } },

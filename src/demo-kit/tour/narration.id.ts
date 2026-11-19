@@ -46,7 +46,7 @@ const N: Narration = {
   },
   8: {
     title: 'Kebutuhan dicocokkan ke UMKM lokal',
-    body: 'Kebutuhan {bags} karung pasir dan {tarps} terpal dicocokkan ke UMKM lokal yang sudah berlencana Terverifikasi dan Pajak Rapi: {matches} kecocokan. Pesanan dikirim ke {biz}.',
+    body: 'Kebutuhan {bags} karung pasir dan {tarps} terpal dicocokkan ke UMKM lokal yang paling cocok (lencana Terverifikasi dan Pajak Rapi ikut dinilai): {matches} kecocokan. Pesanan dikirim ke {biz}.',
     happened: ['{matches} UMKM cocok', 'Pesanan dikirim ke {biz}'],
     caps: ['Papan pencocokan UMKM', 'Pesanan terkirim ke {biz}'],
   },

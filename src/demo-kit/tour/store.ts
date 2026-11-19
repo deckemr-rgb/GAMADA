@@ -37,6 +37,8 @@ export interface TourState {
   seen: Partial<Record<ProductSlug, number>>
   /** the chapter's product is not READY (or ?tourDegrade=) */
   poster: boolean
+  /** the product shown as a poster */
+  posterSlug: ProductSlug | null
   /** visitor touched the stage while playing */
   interrupted: boolean
   fills: Fills
@@ -48,7 +50,7 @@ export interface TourState {
 }
 
 let state: TourState = {
-  phase: 'opener', n: 1, step: 0, playing: false, rate: 1, busy: false, cap: null, stage: null, spot: null, seen: {}, poster: false,
+  phase: 'opener', n: 1, step: 0, playing: false, rate: 1, busy: false, cap: null, stage: null, spot: null, seen: {}, poster: false, posterSlug: null,
   interrupted: false, fills: {}, presenter: false, black: false, drawer: false, curtain: false,
 }
 const subs = new Set<() => void>()

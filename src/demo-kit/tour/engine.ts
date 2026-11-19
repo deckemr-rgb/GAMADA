@@ -11,6 +11,9 @@ import { DEMO_READY, preloadDemo } from '../../demos/registry'
 import { CHAPTERS, SUMMARY_N, SUMMARY_SECONDS, chapterOf } from './chapters'
 import { clickHook, findHook, inStage, isDisabled, realDelay, reveal, setFieldValue, stageIsPhone } from './exec'
 import { tourStore, type StageSpec } from './store'
+// named static imports only: a dynamic import('../world') would pull the whole barrel namespace (incl. its demo-gen
+// re-exports) into the demo-core chunk and create a demo-core ⇄ demo-gen cycle that breaks every /demo page
+import { clock as wClock, loadWorld, resetWorld, rows as wRows, setNaturalEvents, setSession, world as wWorld } from '../world'
 import type { ChapterScript, Lang, Step } from './types'
 
 type WS = typeof import('./world-steps')
@@ -140,15 +143,14 @@ async function refreshFills(): Promise<void> {
 
 /** load the tour's world (scope 'tour'), optionally reset it to 06:00 ("Mulai tur"), register UP + PD */
 export async function bootWorld(opts: { reset: boolean; regionId: string; seed: number }): Promise<void> {
-  const world = await import('../world')
   const { loadRegion } = await import('../region/loader')
-  world.setSession({ scope: 'tour', regionId: opts.regionId, seed: opts.seed, from: null, aiMode: 'sim', present: false })
+  setSession({ scope: 'tour', regionId: opts.regionId, seed: opts.seed, from: null, aiMode: 'sim', present: false })
   const pack = await loadRegion(opts.regionId)
-  const w = world.world
-  if (w.status() !== 'ready' || w.scope() !== 'tour' || w.get().regionId !== opts.regionId || w.get().seed !== opts.seed) await world.loadWorld(pack, opts.seed, { scope: 'tour' })
-  if (opts.reset) await world.resetWorld({ clock: 6 * 60 })
-  world.clock.pause()
-  world.setNaturalEvents(true)
+  const w = wWorld
+  if (w.status() !== 'ready' || w.scope() !== 'tour' || w.get().regionId !== opts.regionId || w.get().seed !== opts.seed) await loadWorld(pack, opts.seed, { scope: 'tour' })
+  if (opts.reset) await resetWorld({ clock: 6 * 60 })
+  wClock.pause()
+  setNaturalEvents(true)
   const ws = await loadWorldSteps()
   await ws.ensureTourWorld()
   await ws.caughtUp()
@@ -189,6 +191,13 @@ async function runStep(step: Step, ch: ChapterScript, alive: () => boolean, ws: 
       break
     }
     case 'navigate': {
+      // a non-READY (or ?tourDegrade=) product inside a chapter: the rest of the chapter plays as a poster
+      if (degraded(step.slug)) {
+        flushDwell()
+        dwellSlug = step.slug
+        tourStore.set((s) => ({ poster: true, posterSlug: step.slug, stage: null, spot: null, seen: { ...s.seen, [step.slug]: s.seen[step.slug] ?? 0 } }))
+        break
+      }
       const key = mount({ slug: step.slug, role: step.role, tab: step.tab, focus: step.focus ? ws.focusOf(step.focus) : null, q: step.q })
       tourStore.set({ busy: true })
       await waitStage(key, alive)
@@ -257,7 +266,7 @@ async function playChapter(n: number, my: number): Promise<void> {
   if (!alive()) return
   if (!ch) return showSummary(my)
   const poster = degraded(ch.product)
-  tourStore.set({ phase: 'player', n, step: 0, cap: null, spot: null, busy: true, poster, stage: null, curtain: true, interrupted: false })
+  tourStore.set({ phase: 'player', n, step: 0, cap: null, spot: null, busy: true, poster, posterSlug: poster ? ch.product : null, stage: null, curtain: true, interrupted: false })
   syncUrl(n)
   // world first (instant, no UI): earlier chapters' keys + this chapter's time, with no product mounted
   await locked(() => ws.prepareThrough(n))
@@ -282,7 +291,7 @@ async function playChapter(n: number, my: number): Promise<void> {
       tourStore.set({ step: i })
       const st = ch.steps[i]!
       // a poster plays only the world steps (plan §2.0)
-      if (poster && !['story', 'world', 'setClock', 'await', 'wait', 'caption'].includes(st.k)) continue
+      if (tourStore.get().poster && !['story', 'world', 'setClock', 'await', 'wait', 'caption'].includes(st.k)) continue
       await runStep(st, ch, alive, ws)
       if (st.k === 'story' || st.k === 'world' || st.k === 'setClock') tourStore.set({ fills: ws.chapterFacts(n, lang) })
     }
@@ -306,7 +315,9 @@ async function showSummary(my: number): Promise<void> {
   if (my !== token) return
   flushDwell()
   dwellSlug = null
+  // the whole day (clock jumps included: a cold /tur/20 needs the 10:00 rumour, the afternoon prices …), idempotent
   await locked(async () => {
+    await ws.prepareThrough(SUMMARY_N)
     for (const ch of CHAPTERS) for (const k of ch.world) await ws.runKey(k)
   })
   tourStore.set({ phase: 'summary', n: SUMMARY_N, stage: null, spot: null, cap: null, busy: false, curtain: false, fills: ws.chapterFacts(SUMMARY_N, lang) })
@@ -427,10 +438,9 @@ export function exposeForTests(): void {
     engine,
     /** audit rows ≥ 06:00 as text ("at|type|refs") + FNV fingerprint (plan §5 test 6) */
     audit: async () => {
-      const w = await import('../world')
-      const s = w.world.get()
+      const s = wWorld.get()
       const NL = String.fromCharCode(10)
-      const lines = w.rows(s.auditLog).filter((r) => r.at >= 360).map((r) => `${r.at}|${r.type}|${r.entityRefs.join(',')}`).reverse()
+      const lines = wRows(s.auditLog).filter((r) => r.at >= 360).map((r) => `${r.at}|${r.type}|${r.entityRefs.join(',')}`).reverse()
       const text = lines.join(NL)
       let h = 0x811c9dc5
       for (let i = 0; i < text.length; i++) {
@@ -441,8 +451,7 @@ export function exposeForTests(): void {
     },
     summary: async () => {
       const ws = await loadWorldSteps()
-      const w = await import('../world')
-      return ws.tourSummary(w.world.get(), Object.keys(tourStore.get().seen))
+      return ws.tourSummary(wWorld.get(), Object.keys(tourStore.get().seen))
     },
   }
 }

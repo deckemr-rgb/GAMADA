@@ -730,7 +730,7 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
 /* phone: stage above a bottom sheet */
 .dk-tour-player.is-phone .dk-tour-stagebox {
   position: absolute;
-  inset: 0 0 120px;
+  inset: 0 0 140px;
   padding: 8px;
 }
 .dk-tour-player.is-phone .dk-tour-curtain {
@@ -753,7 +753,7 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
   will-change: transform;
 }
 .dk-tour-sheet.is-peek {
-  transform: translateY(calc(90dvh - 120px));
+  transform: translateY(calc(90dvh - 140px));
 }
 .dk-tour-sheet.is-half {
   transform: translateY(40dvh);
@@ -771,8 +771,8 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
 }
 .dk-tour-sheet-grip {
   width: 88px;
-  height: 24px;
-  min-height: 24px;
+  height: 44px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   display: grid;
