@@ -399,7 +399,7 @@ errors · screenshots present · commit "tahap6: halaman situs" (small commits p
 
 ---
 
-## 7 · Owner questions (each has a default; the build uses the default unless the owner changes it)
+## 7 · Owner questions: ALL APPROVED by the owner on 2026-11-19 ("oke semua"); use the defaults exactly as written below (FAQ: no claims)
 
 1. **Mini-demo di halaman produk = komponen asli yang diputar, tanpa peta sungguhan.** Setiap halaman produk memutar
    loop 8–14 detik dari komponen produk itu sendiri dengan data contoh kecil. Untuk produk berpeta, wilayah digambar
