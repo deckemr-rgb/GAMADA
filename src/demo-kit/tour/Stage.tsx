@@ -21,6 +21,7 @@ import { saveResume, tourStore, useTour, type StageSpec } from './store'
 import { TOUR_STRINGS } from './strings'
 import type { Lang } from './types'
 import { Spotlight } from './Spotlight'
+import { appPath } from '../../lib/base'
 
 /** /demo/<slug>?world=tour&from=tur-<n>… for the current stage (the visitor's world is never touched) */
 export function takeoverHref(slug: ProductSlug, n: number, lang: Lang, role?: RoleId | null, focus?: string | null): string {
@@ -142,7 +143,7 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
     }
     const link = (e: MouseEvent) => {
       const a = (e.target as Element | null)?.closest?.('a[href]')
-      const href = a?.getAttribute('href') ?? ''
+      const href = appPath(a?.getAttribute('href') ?? '')
       if (!a || !href.startsWith('/demo/')) return
       e.preventDefault()
       e.stopPropagation()

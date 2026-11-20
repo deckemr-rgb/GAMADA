@@ -21,6 +21,7 @@ import { omzetByMonth, pendingReviews, pnlMonthly, taxCalendar } from '../../dem
 import { PPH_FINAL, pctText } from './rules'
 import { SLUG, TAB_IDS, dateText, isTab, isoOf, monthName, periodOf, roleKeyOf, rp, rpShort, taxAmountOf, taxItemOf, type RoleKey, type TabId } from './model'
 import { STRINGS, useT } from './strings'
+import { withBase } from '../../lib/base'
 import './pajak-beres.css'
 
 const loaders: Record<TabId, () => Promise<unknown>> = {
@@ -256,7 +257,7 @@ function PajakBeres() {
           <p className="dk-pb-fromtp">
             <Icon name="tender" size={14} /> {t.fromTpText}
             {tpReady ? (
-              <a href={`/demo/tenderpilot${new URLSearchParams(window.location.search).get('controls') === 'all' ? '?controls=all' : ''}`} className="dk-pb-link">
+              <a href={withBase(`/demo/tenderpilot${new URLSearchParams(window.location.search).get('controls') === 'all' ? '?controls=all' : ''}`)} className="dk-pb-link">
                 {t.fromTp}
               </a>
             ) : null}

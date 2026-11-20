@@ -16,7 +16,8 @@
       // /demo/<slug> only: a static first paint (top bar + cards + "preparing") while the JS chain arrives, so a cold
       // load on a slow phone never shows an empty page. Removed by DemoShell's first layout pass (or by RootLayout /
       // RouteError on any other outcome). No animation; same colours as the demo shell.
-      if (/^\/demo\/[a-z-]+\/?$/.test(location.pathname)) {
+      // The path is read without the deploy base (Vite's BASE_URL: '/' by default, '/GAMADA/' on GitHub Pages).
+      if (/^\/demo\/[a-z-]+\/?$/.test(location.pathname.slice('%BASE_URL%'.length - 1))) {
         var q = location.search, en = /[?&]lang=en(&|$)/.test(q)
         if (!en && !/[?&]lang=id(&|$)/.test(q)) try { en = localStorage.getItem('gamada.lang') === 'en' } catch (e) {}
         var b = document.createElement('div')

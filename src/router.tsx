@@ -9,6 +9,7 @@ import Home from './routes/Home'
 import RouteError from './routes/RouteError'
 import { LOADERS } from './routeLoaders'
 import { isProductSlug } from './content/productSlugs'
+import { BASENAME } from './lib/base'
 
 const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({ Component: (await load()).default })
 
@@ -32,6 +33,9 @@ const tourScreen: RouteHandle = { chrome: 'none' }
 function PageFallback() {
   return <div className="page-fallback" aria-hidden="true" />
 }
+
+/** A sub-path deploy (GitHub Pages: /GAMADA/) routes under that basename; the default build has none. */
+const ROUTER_OPTS = BASENAME ? { basename: BASENAME } : undefined
 
 export const router = createBrowserRouter([
   {
@@ -62,4 +66,4 @@ export const router = createBrowserRouter([
       { path: '*', lazy: page(LOADERS.notFound) },
     ],
   },
-])
+], ROUTER_OPTS)

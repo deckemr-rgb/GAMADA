@@ -2,7 +2,9 @@
  * routeState.ts — knows whether the visit is still on its first page (the preloader only runs on a
  * cold home load). Pure read, so StrictMode's double-invoked initialisers get the same answer.
  */
-const firstPath = typeof window !== 'undefined' ? window.location.pathname : '/'
+import { appPath } from './base'
+
+const firstPath = typeof window !== 'undefined' ? appPath(window.location.pathname) : '/'
 let navigated = false
 
 /** Called by RootLayout on every in-app navigation after the first render. */

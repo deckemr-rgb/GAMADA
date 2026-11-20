@@ -6,6 +6,7 @@
 import generated from './layers.generated.json'
 import { CANVAS } from './assets'
 import { LAYER_BOX } from './frame'
+import { BASENAME, withBase } from './base'
 
 interface Variant {
   canvasW: number
@@ -22,7 +23,20 @@ export interface ArtEntry {
   blur?: { bbox: { x: number; y: number; w: number; h: number }; avif: string; webp: string; w: number; h: number }
 }
 
-const ART = generated as unknown as Record<string, ArtEntry | undefined>
+/** The generated file lists public paths from the site root ('/scenes/…'); a sub-path deploy prefixes its base. */
+function rebase(all: Record<string, ArtEntry>): Record<string, ArtEntry> {
+  const out: Record<string, ArtEntry> = {}
+  for (const [k, a] of Object.entries(all)) {
+    out[k] = {
+      ...a,
+      files: a.files.map((f) => ({ ...f, avif: withBase(f.avif), webp: withBase(f.webp) })),
+      ...(a.blur ? { blur: { ...a.blur, avif: withBase(a.blur.avif), webp: withBase(a.blur.webp) } } : {}),
+    }
+  }
+  return out
+}
+
+const ART = (BASENAME ? rebase(generated as unknown as Record<string, ArtEntry>) : generated) as unknown as Record<string, ArtEntry | undefined>
 
 export function getArt(key: string): ArtEntry | undefined {
   return ART[key]

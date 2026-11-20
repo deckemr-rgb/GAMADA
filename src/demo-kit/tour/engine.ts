@@ -15,6 +15,7 @@ import { tourStore, type StageSpec } from './store'
 // re-exports) into the demo-core chunk and create a demo-core ⇄ demo-gen cycle that breaks every /demo page
 import { clock as wClock, loadWorld, resetWorld, rows as wRows, setNaturalEvents, setSession, world as wWorld } from '../world'
 import type { ChapterScript, FocusKey, Lang, Step } from './types'
+import { withBase } from '../../lib/base'
 
 type WS = typeof import('./world-steps')
 let wsP: Promise<WS> | null = null
@@ -355,7 +356,7 @@ export function syncUrl(n: number | null, extra: Record<string, string> = {}): v
   }
   for (const [k, v] of Object.entries(extra)) p.set(k, v)
   const q = p.toString()
-  const next = `${n ? `/tur/${n}` : '/tur'}${q ? `?${q}` : ''}`
+  const next = withBase(`${n ? `/tur/${n}` : '/tur'}${q ? `?${q}` : ''}`)
   if (next !== window.location.pathname + window.location.search) window.history.replaceState(window.history.state, '', next)
 }
 

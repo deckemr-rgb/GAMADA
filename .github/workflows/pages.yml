@@ -1,0 +1,64 @@
+# GitHub Pages: static frontend at https://deckemr-rgb.github.io/GAMADA/ (repo sub-path, case-sensitive).
+# AI stays in Simulasi (VITE_AI_PROXY_URL is not set here; server/ai-proxy is not deployed).
+# Settings → Pages → Build and deployment → Source must be "GitHub Actions".
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time; a newer push does not cancel a deployment that is already running
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Node 22 (>= 22.18): Vite 8 needs ^20.19 || >= 22.12, and `npm run build` runs tools/region/validate.mjs,
+      # which imports .ts modules through Node's built-in type stripping (unflagged since 22.18).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/configure-pages@v6
+
+      # tsc --noEmit + region pack validation + vite build, with every URL under /GAMADA/
+      - name: Build
+        run: npm run build
+        env:
+          GAMADA_BASE: /GAMADA/
+
+      # SPA deep links: Pages answers an unknown path (/GAMADA/demo/sapa-warga?region=…) with 404.html, which is the
+      # app itself; react-router then renders the route (or the app's own 404 page). .nojekyll: serve files as is.
+      - name: SPA fallback
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+          include-hidden-files: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

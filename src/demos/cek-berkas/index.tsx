@@ -17,6 +17,7 @@ import { clock, emit, hhmm, onEvent, rows, shallowEqual, useClock, useNaturalEve
 import { useI18n, type Lang } from '../../lib/i18n'
 import { asRole, bulkLog, DEFAULT_MODE, GALLERY, HOTSPOT_ID, pad2, resumeSession, saveWorldNow, sessionLog, type BulkRun, type CekRole, type Mode } from './model'
 import { STR } from './strings'
+import { withBase } from '../../lib/base'
 import Single from './Single'
 import './cek-berkas.css'
 
@@ -414,7 +415,7 @@ function ConnectedView({ lang }: { lang: Lang }) {
       <h3>{t.linksTitle}</h3>
       <ul>
         <li>
-          <a href={demoHref('siaga-wilayah', session)} onClick={saveWorldNow}>
+          <a href={withBase(demoHref('siaga-wilayah', session))} onClick={saveWorldNow}>
             <Icon name="water" size={16} />
             <span>
               <b>Siaga Wilayah</b>
@@ -424,7 +425,7 @@ function ConnectedView({ lang }: { lang: Lang }) {
           </a>
         </li>
         <li>
-          <a href={demoHref('meja-pimpinan', session)} onClick={saveWorldNow}>
+          <a href={withBase(demoHref('meja-pimpinan', session))} onClick={saveWorldNow}>
             <Icon name="chart" size={16} />
             <span>
               <b>Meja Pimpinan</b>
@@ -610,7 +611,7 @@ function ProgramBanner({ program, lang, role, onOpen }: { program: Program | nul
           <Button size="sm" variant="primary" icon="play" onClick={watchQuota} title={t.jumpQuotaHint} aria-label={`${t.jumpQuota}: ${t.jumpQuotaHint}`}>
             {t.jumpQuota}
           </Button>
-          <a className="dk-cb-link" href={demoHref('siaga-wilayah', session)}>
+          <a className="dk-cb-link" href={withBase(demoHref('siaga-wilayah', session))}>
             {t.openSiaga}
             <Icon name="arrowRight" size={14} />
           </a>

@@ -2,6 +2,7 @@
 import { useLayoutEffect } from 'react'
 import { useRouteError } from 'react-router'
 import { useI18n } from '../lib/i18n'
+import { withBase } from '../lib/base'
 
 export default function RouteError() {
   const { t } = useI18n()
@@ -17,7 +18,7 @@ export default function RouteError() {
         <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
           {t.error.reload}
         </button>
-        <a href="/">{t.error.home}</a>
+        <a href={withBase('/')}>{t.error.home}</a>
       </p>
     </main>
   )

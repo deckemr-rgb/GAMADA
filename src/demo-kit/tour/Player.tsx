@@ -20,6 +20,7 @@ import Stage, { AmbilAlih } from './Stage'
 import { tourStore, useTour } from './store'
 import { TOUR_STRINGS, fill } from './strings'
 import type { Lang } from './types'
+import { withBase } from '../../lib/base'
 
 const Summary = lazy(() => import('./Summary'))
 const SPEEDS = [0.75, 1, 1.5] as const
@@ -297,7 +298,7 @@ function openNotes() {
   const q = new URLSearchParams({ notes: '1' })
   const l = p.get('lang')
   if (l) q.set('lang', l)
-  window.open(`/tur?${q.toString()}`, 'gamada-tour-notes', 'popup,width=560,height=760')
+  window.open(withBase(`/tur?${q.toString()}`), 'gamada-tour-notes', 'popup,width=560,height=760')
 }
 
 function Curtain({ on }: { on: boolean }) {

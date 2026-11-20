@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { gsap } from 'gsap'
 import { PRODUCT_BY_SLUG, type Bi, type ProductDef, type ProductSlug } from '../../content/products'
 import { preloadLang, useI18n } from '../../lib/i18n'
+import { appPath } from '../../lib/base'
 import { goTo } from '../../components/AppLink'
 import { EmptyState, Icon, LoadingText, Modal, Button, Skeleton, motionMode, useToastQueue, type ToastData, type ToastPlacement } from '../ui'
 import { DEFAULT_REGION_ID, loadRegion, type RegionPack } from '../region/loader'
@@ -287,7 +288,7 @@ function DemoShellFrame({ product: slug, canvas, children, missions: missionsPro
     }
     function on(e: Event) {
       const a = (e.target as Element | null)?.closest?.('a[href]')
-      const href = a?.getAttribute('href') ?? ''
+      const href = appPath(a?.getAttribute('href') ?? '')
       if (!a || !href.startsWith('/') || href.startsWith('/demo/')) return
       off()
       void preloadLang(lang)

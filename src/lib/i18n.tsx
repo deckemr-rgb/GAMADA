@@ -16,6 +16,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { id, type Dict } from '../content/i18n/id'
+import { appPath } from './base'
 
 export type Lang = 'id' | 'en'
 
@@ -91,7 +92,7 @@ const I18nContext = createContext<I18nValue | null>(null)
  * page's English copy. No slug check here: the slug list would become one more chunk on the home page.
  */
 function sandboxRoute(): boolean {
-  return typeof window !== 'undefined' && /^\/demo\/[a-z-]+\/?$/.test(window.location.pathname)
+  return typeof window !== 'undefined' && /^\/demo\/[a-z-]+\/?$/.test(appPath(window.location.pathname))
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

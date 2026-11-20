@@ -5,11 +5,20 @@ import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 
 /**
+ * Deploy base path. Default '/' (dev, preview, e2e, the budgets). The GitHub Pages build serves the site under the
+ * repository's sub-path: GAMADA_BASE=/GAMADA/ npm run build (.github/workflows/pages.yml). Always '/…/'.
+ */
+const BASE = ((b: string) => {
+  const inner = b.replace(/^\/+|\/+$/g, '')
+  return inner ? `/${inner}/` : '/'
+})(process.env.GAMADA_BASE?.trim() || '/')
+
+/**
  * Preload ONLY what the first paint needs: the latin fonts and the hero layers (1920 AVIF variant,
  * the one most desktops pick; phones get the 1280 variant through <picture media>, which the
  * browser preloads by itself as soon as it parses the markup).
  */
-function preloadHero(): Plugin {
+function preloadHero(base: string): Plugin {
   return {
     name: 'gamada-preload-hero',
     transformIndexHtml: {
@@ -17,20 +26,20 @@ function preloadHero(): Plugin {
       handler(html, ctx) {
         const tags: string[] = []
         const fonts = Object.keys(ctx.bundle ?? {}).filter((f) => /(fraunces-latin-wght-normal|manrope-latin-wght-normal).*\.woff2$/.test(f))
-        for (const f of fonts) tags.push(`<link rel="preload" href="/${f}" as="font" type="font/woff2" crossorigin>`)
+        for (const f of fonts) tags.push(`<link rel="preload" href="${base}${f}" as="font" type="font/woff2" crossorigin>`)
         const layers = JSON.parse(readFileSync('src/lib/layers.generated.json', 'utf8')) as Record<string, { files: { canvasW: number; avif: string }[] }>
         const hero: string[] = []
         for (const [key, v] of Object.entries(layers)) {
           if (!key.startsWith('hero/')) continue
           const f = v.files.find((x) => x.canvasW === 1920) ?? v.files[v.files.length - 1]
-          if (f) hero.push(f.avif)
+          if (f) hero.push(base + f.avif.replace(/^\//, ''))
         }
         // The hero layers belong to the home page only: a deep link to /demo/*, /produk/* … would download ~250 KB of
         // images it never shows ("preloaded but not used"). A tiny inline script right after <meta charset> adds the same
-        // <link rel=preload> tags, only when the page is '/', before the parser reaches the stylesheet and the entry
+        // <link rel=preload> tags, only when the page is '/' (the base), before the parser reaches the stylesheet and the entry
         // script (so the hero requests start no later than the old static tags at the end of <head>).
         const heroScript = hero.length
-          ? `<script>if(location.pathname==='/')for(const h of ${JSON.stringify(hero)}){const l=document.createElement('link');l.rel='preload';l.as='image';l.type='image/avif';l.media='(min-width: 769px)';l.href=h;document.head.appendChild(l)}</script>`
+          ? `<script>if(location.pathname==='${base}')for(const h of ${JSON.stringify(hero)}){const l=document.createElement('link');l.rel='preload';l.as='image';l.type='image/avif';l.media='(min-width: 769px)';l.href=h;document.head.appendChild(l)}</script>`
           : ''
         const charset = /<meta charset="UTF-8" \/>/i
         const withHero = heroScript && charset.test(html) ? html.replace(charset, (m) => `${m}\n    ${heroScript}`) : html
@@ -159,7 +168,8 @@ function barrelImports(barrels: Record<string, string>): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), preloadHero(), barrelImports({ 'world/satu-daerah': 'world/sd', 'world/usaha-pintar': 'world/up', 'world/pasar-daerah': 'world/pd' })],
+  base: BASE,
+  plugins: [react(), tailwindcss(), preloadHero(BASE), barrelImports({ 'world/satu-daerah': 'world/sd', 'world/usaha-pintar': 'world/up', 'world/pasar-daerah': 'world/pd' })],
   // client-side routes (/karya, /faq …): dev + preview serve index.html for unknown paths.
   // Static hosts need the same rewrite (e.g. Netlify `/* /index.html 200`, Vercel rewrites).
   appType: 'spa',
@@ -186,7 +196,9 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]|preload-helper/, priority: 10 },
-            { name: 'motion', test: /node_modules[\\/](lenis[\\/]|gsap[\\/](?!Draggable|InertiaPlugin|utils[\\/](matrix|VelocityTracker)))|src[\\/]lib[\\/](motion|perf|smoothScroll)\.ts/, priority: 9 },
+            { name: 'motion', test: /node_modules[\\/](lenis[\\/]|gsap[\\/](?!Draggable|InertiaPlugin|utils[\\/](matrix|VelocityTracker)))|src[\\/]lib[\\/](motion|perf|smoothScroll|base)\.ts/, priority: 9 },
+            // (lib/base.ts: the deploy-base helpers, imported by home and the lazy demo/tour chunks alike; in this
+            // always-loaded group it never becomes a separate home request)
             // Demo size limit (≤ 180 KB per demo first load): every /demo/:slug loads the same kit core (shell, UI atoms,
             // world store + selectors, region loader, registry) and, on a first visit, the world generator. Left alone they
             // come as ~30 small chunks, each with its own import/export wrapper and its own gzip window; two groups keep
