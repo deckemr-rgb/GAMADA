@@ -112,6 +112,9 @@ function TourMain({ bab }: { bab: number | null }) {
   async function start(n: number, reset: boolean) {
     setStarting(true)
     const [{ engine, setEngineLang }] = await Promise.all([loadEngine(), loadPlayer()])
+    // Tahap 8 (INP "Mulai tur"): the button's busy state paints first; the player mount runs after that frame even
+    // when both chunks are already cached
+    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)))
     setEngineLang(lang)
     setStarting(false)
     setDrawer(false)

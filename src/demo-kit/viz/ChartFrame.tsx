@@ -4,9 +4,7 @@
  * keyboard exploration. `bare` drops the card chrome but keeps the accessible parts.
  */
 import type { CSSProperties, ReactNode } from 'react'
-import { useI18n } from '../../lib/i18n'
-import { formatters, type Formatters, type Lang } from './format'
-import { VT, type VizStrings } from './i18n'
+import { useVizLang } from './lang'
 import { useUid } from './core'
 import './viz.css'
 
@@ -48,11 +46,7 @@ export interface ChartFrameProps extends FrameProps {
   children: ReactNode
 }
 
-/** Language + bound formatters + strings for charts. */
-export function useVizLang(): { lang: Lang; f: Formatters; s: VizStrings } {
-  const { lang } = useI18n()
-  return { lang, f: formatters(lang), s: VT[lang] }
-}
+export { useVizLang } from './lang'
 
 export function Legend({ items }: { items: LegendItem[] }) {
   if (!items.length) return null

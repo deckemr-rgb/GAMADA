@@ -24,6 +24,61 @@ import './cek-berkas.css'
 const SingleMode = memo(Single)
 const loadBulk = () => import('./Bulk')
 const Bulk = lazy(() => loadBulk().then((m) => ({ default: memo(m.default) })))
+/** the mode tab the visitor pressed (the heavy `mode` subtree follows one paint later) */
+let tabNow: Mode = 'single'
+const tabSubs = new Set<() => void>()
+const tabStore = {
+  get: (): Mode => tabNow,
+  /** the root's first render: no subscriber to tell yet */
+  init(m: Mode): void {
+    tabNow = m
+  },
+  set(m: Mode): void {
+    if (m === tabNow) return
+    tabNow = m
+    tabSubs.forEach((f) => f())
+  },
+  sub(f: () => void): () => void {
+    tabSubs.add(f)
+    return () => void tabSubs.delete(f)
+  },
+}
+const useTab = () => useSyncExternalStore(tabStore.sub, tabStore.get, tabStore.get)
+
+const Head = memo(function Head({ lang, role, onMode, onIntent }: { lang: Lang; role: CekRole; onMode: (m: Mode) => void; onIntent: (m: Mode) => void }) {
+  const t = STR[lang]
+  const tab = useTab()
+  return (
+    <header className="dk-cb-head">
+      <div className="dk-cb-title">
+        <h2>
+          <Icon name="shield" size={18} />
+          {tab === 'single' ? t.single : t.bulk}
+        </h2>
+        <p className="dk-cb-value">{t.value[tab]}</p>
+        <Proof lang={lang} />
+        <p className="dk-cb-role">{t.roleNote[role]}</p>
+        <p className="dk-cb-lead">{t.lead[tab]}</p>
+      </div>
+      <Segmented<Mode>
+        label={t.modes}
+        value={tab}
+        onChange={onMode}
+        onIntent={onIntent}
+        options={[
+          { value: 'single', label: t.single, icon: 'doc' },
+          { value: 'bulk', label: t.bulk, icon: 'layers', hook: 'cb-bulk' },
+        ]}
+      />
+    </header>
+  )
+})
+
+// the canvas root's other parts only read lang / role: a mode-tab press leaves them alone (INP)
+const ClockDriver = memo(ClockDriverView)
+const Proof = memo(ProofView)
+const Connected = memo(ConnectedView)
+const Stats = memo(StatsView)
 
 /* ------------------------------------------------------------------ module exports for DemoShell */
 
@@ -140,7 +195,7 @@ function useAutoplay(present: boolean) {
 
 /** Mounted with the canvas: the clock opens the bansos quota at 07:20 (scenario warning, natural events on) and
  *  announces new desk files while it runs. Renders nothing. */
-function ClockDriver({ lang }: { lang: Lang }) {
+function ClockDriverView({ lang }: { lang: Lang }) {
   const { minutes } = useClock()
   const natural = useNaturalEvents()
   const shell = useShell()
@@ -223,10 +278,11 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
   })
   // `tab` answers the click at once (segmented control); `mode` swaps the heavy subtree one paint later (INP)
   const [mode, setModeNow] = useState<Mode>(() => (resumed ? 'bulk' : DEFAULT_MODE[role]))
-  const [tab, setTab] = useState<Mode>(mode)
+  // the tab lives in a tiny store: a press re-renders only the header + banner, never the canvas root (INP)
+  useState(() => tabStore.init(mode))
   const swap = useRef(0)
   const setMode = useCallback((m: Mode) => {
-    setTab(m)
+    tabStore.set(m)
     saveMode(m)
     const id = ++swap.current
     requestAnimationFrame(() =>
@@ -266,6 +322,7 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
   }, [focus, clearFocus, setMode])
 
   const onMode = setMode
+  const onBulk = useCallback(() => setMode('bulk'), [setMode])
   const onFocusDone = useCallback(() => setFocusDoc(null), [])
   const [seen, setSeen] = useState<Mode[]>(() => [mode])
   useEffect(() => setSeen((s) => (s.includes(mode) ? s : [...s, mode])), [mode])
@@ -290,31 +347,10 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
     <BrowserFrame path={`${product}/${mode === 'single' ? 'satu-berkas' : 'massal'}`} label={t.frame} className="dk-cb-frame">
       <ClockDriver lang={lang} />
       <div className="dk-cb" data-mode={mode}>
-        <header className="dk-cb-head">
-          <div className="dk-cb-title">
-            <h2>
-              <Icon name="shield" size={18} />
-              {tab === 'single' ? t.single : t.bulk}
-            </h2>
-            <p className="dk-cb-value">{t.value[tab]}</p>
-            <Proof lang={lang} />
-            <p className="dk-cb-role">{t.roleNote[role]}</p>
-            <p className="dk-cb-lead">{t.lead[tab]}</p>
-          </div>
-          <Segmented<Mode>
-            label={t.modes}
-            value={tab}
-            onChange={onMode}
-            onIntent={onIntent}
-            options={[
-              { value: 'single', label: t.single, icon: 'doc' },
-              { value: 'bulk', label: t.bulk, icon: 'layers', hook: 'cb-bulk' },
-            ]}
-          />
-        </header>
+        <Head lang={lang} role={role} onMode={onMode} onIntent={onIntent} />
 
         <div className="dk-cb-status">
-          <ProgramBanner program={program} lang={lang} mode={tab} role={role} onOpen={() => setMode('bulk')} />
+          <ProgramBanner program={program} lang={lang} role={role} onOpen={onBulk} />
           <Stats role={role} lang={lang} />
         </div>
 
@@ -346,7 +382,7 @@ export default function CekBerkas({ product }: DemoCanvasProps) {
 
 /* ------------------------------------------------------------------ the session's real numbers under the value line */
 
-function Proof({ lang }: { lang: Lang }) {
+function ProofView({ lang }: { lang: Lang }) {
   const t = STR[lang]
   const log = useSessionLog()
   const bulk = useBulkLog()
@@ -369,7 +405,7 @@ function Proof({ lang }: { lang: Lang }) {
 
 /* ------------------------------------------------------------------ cross-product links (what really flows in and out) */
 
-function Connected({ lang }: { lang: Lang }) {
+function ConnectedView({ lang }: { lang: Lang }) {
   const t = STR[lang]
   const session = useSession()
   const [audit, setAudit] = useState(false)
@@ -538,7 +574,8 @@ function AuditList({ lang }: { lang: Lang }) {
 
 /* ------------------------------------------------------------------ programme banner (consumes eligibility.opened) */
 
-function ProgramBanner({ program, lang, mode, role, onOpen }: { program: Program | null; lang: Lang; mode: Mode; role: CekRole; onOpen: () => void }) {
+function ProgramBanner({ program, lang, role, onOpen }: { program: Program | null; lang: Lang; role: CekRole; onOpen: () => void }) {
+  const mode = useTab()
   const t = STR[lang]
   const session = useSession()
   const kec = useWorld(kecNames)
@@ -619,7 +656,7 @@ function Stat({ label, value, decimals = 0, unit, caption, lang }: { label: stri
   )
 }
 
-function Stats({ role, lang }: { role: 'perizinan' | 'dinsos'; lang: Lang }) {
+function StatsView({ role, lang }: { role: 'perizinan' | 'dinsos'; lang: Lang }) {
   const t = STR[lang]
   const log = useSessionLog()
   const bulk = useBulkLog()

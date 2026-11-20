@@ -32,17 +32,7 @@ export default function SiagaWilayah({ product }: DemoCanvasProps) {
   const { size, focus, clearFocus, setToastPlacement } = useShell()
   const role = swRole(useSession().role)
   const open = useUi((s) => s.panelOpen)
-  const broadcastOpen = useUi((s) => s.broadcastOpen)
-  const aiOpen = useUi((s) => s.aiOpen)
   const status = useWorldStatus()
-
-  // shell toasts: bottom-left would sit on this product's left panel (its buttons) on wide layouts; bottom-right sits
-  // over the HUD / legend (no controls). While the warning dialog (footer button bottom-right) or the Geo-AI drawer
-  // (right side) is open, the panel behind is inert, so they go bottom-left. Phones keep the kit default.
-  const overlay = broadcastOpen || aiOpen
-  useEffect(() => {
-    setToastPlacement({ wide: overlay ? 'bottom-left' : 'bottom-right', sm: 'bottom-left' })
-  }, [setToastPlacement, overlay])
   useEffect(() => () => setToastPlacement(null), [setToastPlacement])
   // citizen flood reports arrive on their own while the world clock runs (scripted from the morning scenario)
   useEffect(() => clock.onMinute(scriptedReport), [])
@@ -130,6 +120,37 @@ export default function SiagaWilayah({ product }: DemoCanvasProps) {
           <Panel />
         </div>
       </BrowserFrame>
+      <Overlays />
+    </div>
+  )
+}
+
+/**
+ * The warning dialog and the Geo-AI drawer. Their open flags are read here, not in the product root, so opening or
+ * closing one re-renders only this (INP: map, panel and timeline are not re-rendered in that click).
+ */
+function Overlays() {
+  const { setToastPlacement } = useShell()
+  const broadcastOpen = useUi((s) => s.broadcastOpen)
+  const aiOpen = useUi((s) => s.aiOpen)
+  // shell toasts: bottom-left would sit on this product's left panel (its buttons) on wide layouts; bottom-right sits
+  // over the HUD / legend (no controls). While the warning dialog (footer button bottom-right) or the Geo-AI drawer
+  // (right side) is open, the panel behind is inert, so they go bottom-left. Phones keep the kit default.
+  // A placement change re-renders the whole shell: it follows after the next paint, not inside the opening / closing
+  // click (INP).
+  const overlay = broadcastOpen || aiOpen
+  useEffect(() => {
+    let tm = 0
+    const raf = requestAnimationFrame(() => {
+      tm = window.setTimeout(() => setToastPlacement({ wide: overlay ? 'bottom-left' : 'bottom-right', sm: 'bottom-left' }), 0)
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(tm)
+    }
+  }, [setToastPlacement, overlay])
+  return (
+    <>
       {broadcastOpen && (
         <Suspense fallback={null}>
           <Broadcast />
@@ -140,7 +161,7 @@ export default function SiagaWilayah({ product }: DemoCanvasProps) {
           <AskAi />
         </Suspense>
       )}
-    </div>
+    </>
   )
 }
 

@@ -435,7 +435,7 @@ function Rating({ ticketId }: { ticketId: string }) {
 
 /* ------------------------------------------------------------------ the thread */
 
-export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef, quickChips = EMPTY_CHIPS }: {
+export const Thread = memo(function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef, quickChips = EMPTY_CHIPS }: {
   /** the texts / labels of the phone's fixed quick-chip row (a follow-up chip never repeats one) */
   quickChips?: readonly string[]
   conv: Conv
@@ -555,4 +555,4 @@ export function Thread({ conv, worldMsgs, greeting, tips, actions, scrollRef, qu
       <div ref={end} />
     </div>
   )
-}
+})

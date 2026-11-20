@@ -77,10 +77,18 @@ export const overlayOpen = (): boolean => stack.length > 0
 let inertRaf = 0
 function scheduleInert() {
   if (inertRaf) return
+  // Tahap 8: rAF + setTimeout(0) runs after the closing frame's paint (a bare rAF runs before it, inside the INP)
   inertRaf = requestAnimationFrame(() => {
-    inertRaf = 0
-    applyInert()
+    window.setTimeout(() => {
+      inertRaf = 0
+      applyInert()
+    }, 0)
   })
+}
+
+/** run after the next paint (rAF alone runs before the paint of the current frame) */
+function afterPaint(fn: () => void) {
+  requestAnimationFrame(() => window.setTimeout(fn, 0))
 }
 
 function applyInert() {
@@ -162,7 +170,7 @@ function useOverlay(open: boolean, onClose: () => void, panel: RefObject<HTMLEle
       const last = !stack.length
       // inert restore, Lenis restart and the focus return run in the next frame, not inside the closing click (INP)
       scheduleInert()
-      requestAnimationFrame(() => {
+      afterPaint(() => {
         if (last && stopped && !stack.length) lenis?.start()
         const act = document.activeElement
         // focus moved on by itself (another overlay opened, the product focused something): leave it there

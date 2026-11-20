@@ -15,7 +15,7 @@ import { emit, formatTime, hhmm, rows, useClock, useSession, useWorld, world, ty
 import { useWorldReady, type WorldModule } from '../../demo-kit/world/ready'
 import { alertsFor, demandForecast, priceSubsOf, umkmPoPayload, type UmkmAlert } from '../../demo-kit/world/pasar-daerah'
 import { SpSkeleton } from './Skel'
-import { floodOf, playFlood, useAutoplay, useFloodAutoplay } from './live'
+import { floodOf, playFlood, useAnomalyFastForward, useAutoplay, useFloodAutoplay } from './live'
 import { cName, latestTick, mName } from './model'
 import { pct, tm, type Lang } from './strings'
 import { useUi } from './store'
@@ -104,6 +104,7 @@ export default function Umkm() {
   const [tab, setTab] = useState<'peringatan' | 'langganan'>('peringatan')
   useAutoplay(shell.present)
   useFloodAutoplay()
+  useAnomalyFastForward()
   useEffect(() => {
     if (u.alert) setTab('peringatan')
   }, [u.alert, u.n])

@@ -9,10 +9,11 @@ import { DocArt, DocViewer, ExtractPanel, TamperToggle, VERDICT_LABEL, getSample
 import type { Extracted } from '../../demo-kit/ai/types'
 import { dismissHotspot, useShell } from '../../demo-kit/shell'
 import { Button, Icon, LoadingText, motionMode } from '../../demo-kit/ui'
-import { clock, emit, hhmm, useSession, world } from '../../demo-kit/world'
+import { clock, currentRegion, emit, hhmm, useSession, useWorld, world } from '../../demo-kit/world'
 import { useI18n, type Lang } from '../../lib/i18n'
 import { CEK, GALLERY, HOTSPOT_ID, saveWorldSoon, sessionLog, worldDocFor, type CekContext, type CekRole, type LogRow } from './model'
 import { STR } from './strings'
+import { regionalDoc, regionalExtract, swapFor } from './regional'
 
 const AskAi = lazy(() => import('./AskAi'))
 const UploadDialog = lazy(() => import('./UploadOwn').then((m) => ({ default: m.UploadDialog })))
@@ -25,6 +26,7 @@ export interface OwnDoc {
 }
 
 const isEdited = (d: SampleDoc) => d.id.endsWith('-edit')
+const regionIdOf = (s: { region: { id: string } }) => s.region.id
 
 /** family-card relation words in English notes (the kit keeps the Indonesian word) */
 const REL_EN: Record<string, string> = { istri: 'wife', suami: 'husband', anak: 'child', 'kepala keluarga': 'head of household', 'orang tua': 'parent', menantu: 'child-in-law', cucu: 'grandchild', famili: 'relative', 'famili lain': 'other relative' }
@@ -70,10 +72,13 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
   const t = STR[lang]
   const shell = useShell()
   const session = useSession()
-  const docs = useMemo(() => GALLERY[role].map((id) => getSample(id)).filter((d): d is SampleDoc => !!d), [role])
-  const doc = getSample(pick) ?? docs[0]!
+  // the specimens speak the active region (province, kota / kabupaten, kecamatan, kelurahan, NIK area codes)
+  const regionId = useWorld(regionIdOf)
+  const swap = useMemo(() => (regionId ? swapFor(currentRegion()) : null), [regionId])
+  const docs = useMemo(() => GALLERY[role].map((id) => regionalDoc(getSample(id), swap)).filter((d): d is SampleDoc => !!d), [role, swap])
+  const doc = regionalDoc(getSample(pick), swap) ?? docs[0]!
   // the kit localises presence values ('ada' → 'present') and formats Rupiah for amount fields only
-  const extracted = useMemo(() => localise(simulateExtract(doc, { lang }), lang), [doc, lang])
+  const extracted = useMemo(() => regionalExtract(localise(simulateExtract(doc, { lang }), lang), swap), [doc, lang, swap])
   const total = extracted.fields.length
   const listed = useMemo(() => maskIds(extracted), [extracted])
 
@@ -139,8 +144,8 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     if (emitted.current === key) return
     emitted.current = key
     const v = verdictOf(extracted)
-    const idv = verdictOf(localise(simulateExtract(doc, { lang: 'id' }), 'id'))
-    const env = verdictOf(localise(simulateExtract(doc, { lang: 'en' }), 'en'))
+    const idv = verdictOf(regionalExtract(localise(simulateExtract(doc, { lang: 'id' }), 'id'), swap))
+    const env = verdictOf(regionalExtract(localise(simulateExtract(doc, { lang: 'en' }), 'en'), swap))
     // the desk record this specimen stands for (the world only knows its own documents)
     const documentId = worldDocFor(world.get(), doc.id)
     if (documentId) {
@@ -165,7 +170,7 @@ export default function Single({ role, pick, onPick }: { role: CekRole; pick: st
     }
     // one column (tablet / phone): bring the verdict into view, the document stays partly visible above it
     if (narrowLayout()) requestAnimationFrame(() => sideRef.current?.querySelector('.dk-cb-verdict')?.scrollIntoView({ block: 'nearest', behavior: smooth() }))
-  }, [done, run, doc, extracted, shell])
+  }, [done, run, doc, extracted, shell, swap])
 
   const cells = extracted.tamper ?? NO_CELLS
   const maxScore = useMemo(() => cells.reduce((m, c) => Math.max(m, c.score), 0), [cells])

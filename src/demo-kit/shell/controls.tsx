@@ -45,7 +45,9 @@ export function RegionSwitcher({ inline }: { inline?: boolean }) {
   const warm = () => list.forEach((r) => preloadRegion(r.id))
   const pick = (id: string) => {
     sfx.click()
-    setSession({ regionId: id })
+    // Tahap 8 (INP): the picker closes in this click's frame; the session write (whole shell + guide re-render, the
+    // product canvas remounts) runs after that paint, not inside the click
+    requestAnimationFrame(() => window.setTimeout(() => setSession({ regionId: id }), 0))
   }
   const options = list.map((r) => {
     const l = regionLabel(r, lang)

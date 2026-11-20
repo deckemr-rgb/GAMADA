@@ -241,21 +241,30 @@ export default function Broadcast() {
     if (b) b.scrollTop = 0
   }, [stage])
 
+  const closing = useRef(false)
   const close = () => {
+    if (closing.current) return
+    closing.current = true
     const done = stage === 'done'
-    ui.set({ broadcastOpen: false })
-    if (!done) return
-    // INP: the dialog closes in this frame; the map work follows after that paint
+    // INP: the dialog disappears in this frame (one inline opacity: not inherited, so no style pass over the dialog's
+    // subtree; a second click meanwhile is ignored above); unmounting it (focus return, the page behind it
+    // un-inerted, the shell's toast placement) follows after that paint, the map work one task later
+    const ov = bodyRef.current?.closest<HTMLElement>('.dk-ov')
+    if (ov) ov.style.opacity = '0'
     void afterPaint().then(() => {
-      // the dialog already listed every chain effect: on a phone the same notifications would cover the result, so
-      // they go; then the map with the new warning zone comes into view
-      if (size === 'sm') {
-        document.querySelectorAll<HTMLButtonElement>('.dk-toasts .dk-toast-x').forEach((b) => b.click())
-        revealMap()
-      }
-      // the whole new warning zone in view (the flood stretch the model framed), not one district close up
-      focusFloodArea()
+      ui.set({ broadcastOpen: false })
+      if (done) void afterPaint().then(after)
     })
+  }
+  const after = () => {
+    // the dialog already listed every chain effect: on a phone the same notifications would cover the result, so
+    // they go; then the map with the new warning zone comes into view
+    if (size === 'sm') {
+      document.querySelectorAll<HTMLButtonElement>('.dk-toasts .dk-toast-x').forEach((b) => b.click())
+      revealMap()
+    }
+    // the whole new warning zone in view (the flood stretch the model framed), not one district close up
+    focusFloodArea()
   }
   const footer =
     stage === 'done' ? (

@@ -1,8 +1,10 @@
-# Laporan akhir · Demo Ekosistem GAMADA (Tahap 2–7)
+# Laporan akhir · Demo Ekosistem GAMADA (Tahap 2–8)
 
 Ditulis 2026-11-20 oleh integrator Tahap 7 (Wave C). Semua angka di bawah diukur pada build produksi yang sama
 (`npm run build` → `dist/`, disajikan `vite preview` di port 4173), kecuali disebut lain. Belum di-commit, belum di-push,
 belum di-deploy.
+
+Tahap 8 (putaran perbaikan cacat terbuka) ada di §8; §6 sudah diperbarui sesudah Tahap 8.
 
 ---
 
@@ -133,21 +135,48 @@ perbaikan lanjutan (Q4).
 
 ## 6 · Yang belum selesai
 
-**Cacat terbuka (diketahui, tidak diperbaiki di Tahap 7):**
-- INP > 200 ms di 11 interaksi (tabel §3), terburuk Siaga Wilayah "selesai" 352 ms.
-- Meja Pimpinan di atas target internal 175 KB (EN 178,2; batas 180 terpenuhi); semua demo ≈ +1 KB dibanding awal Tahap 7.
-- Cek Berkas: galeri spesimen KTP/KK/surat masih dokumen Bojonegoro (Provinsi Jawa Timur) di wilayah Bandung/Padang.
-- Naskah Pintar: petunjuk misi "Setujui sebagai Bupati" masih statis (judul, penanda tangan dan catatan peran sudah "Wali Kota"/"Mayor" di kota sejak Wave C).
+Diperbarui sesudah Tahap 8 (§8). Yang sudah beres di Tahap 8 tidak lagi tercantum di sini.
+
+**Cacat terbuka:**
+- **INP > 200 ms di 16 interaksi** pada run Tahap 8 (`docs/build/tahap8-inp.json`, tabel §8). Dari daftar sasaran
+  Tahap 7 yang masih di atas 200: Cek Berkas "mode Massal" 390 (240), Meja Pimpinan "Susun briefing" 390 (216) dan
+  Siaga Wilayah "citra satelit" 390 (216). Siaga Wilayah juga masih di atas 200 untuk "Kirim peringatan" 1440 (248)
+  dan "buka peringatan" (208). Sisanya interaksi yang tidak disentuh dan di Tahap 7 masih ≤ 200: Awas Belanja 312,
+  Indeks Ekonomi 288, Radar Isu 272, Sinyal Pasar 256, Inti 216. Selama pengukuran, dua server dev Vite (salah satunya
+  proyek lain) terus memakai ±3 inti CPU. Akibatnya angka naik ±30–60 % juga untuk demo yang kodenya tidak berubah
+  (Pajak Beres 48 → 88). Belum diukur ulang di mesin yang tenang.
+- Sinyal Pasar "buka anomali" tidak tercapai oleh skrip INP. Anomali kini muncul 6,6–7,4 dtk setelah banjir, tetapi
+  hanya kalau jam berjalan, sedangkan skrip INP menjeda jam. Cukup tambahkan `__gamada.clock.play()` sebelum
+  "putar banjir"; ini belum dikerjakan.
+- Spesimen wilayah: galeri Cek Berkas sudah ikut wilayah, tetapi mode Massal, ZoneMap dan AskAi belum dicek. Di Bandung
+  dan Padang, spesimen KTP Kenal Mitra (`ktpSpecimen`) dan contoh kit (`src/demo-kit/docs/samples`) masih bertuliskan
+  Provinsi Jawa Timur / Bojonegoro. Helper `swapFor`/`regionalDoc` di `src/demos/cek-berkas/regional.ts` bisa dipakai
+  ulang untuk itu.
+- Tur:
+  - "Ambil alih" bab 11 membuka `focus=PO-0012` tanpa `outlet=warung`. Outlet diambil dari data PO, sedangkan plan
+    Tahap 5 menyebut warung.
+  - `/tur` belum masuk `tools/perf.mjs`.
+  - Add-on per bab masih 106–172 KB (diterima apa adanya).
+  - Long task autoplay belum diukur di build produksi.
+- Kit: keadaan tekan `.dk-btn` hanya berupa `transform`, yang dikerjakan compositor. Chrome kadang tidak menganggapnya
+  perubahan visual, sehingga kerja yang sudah ditunda tetap masuk hitungan INP. Usulnya keadaan tekan yang di-paint
+  (misalnya ganti warna latar); belum dikerjakan.
+- Siaga Wilayah "Kirim peringatan" 1440: `setStage('sending')` merender ulang seluruh form dialog hanya untuk tombol
+  sibuk. Usulnya footer dipisah jadi komponen sendiri.
 - Situs (`sapa-warga/copy.ts`, 5 `mini.tsx`) tetap Bojonegoro (disengaja, Q5).
-- Cacat tur Tahap 5 (10c) sebagian: panggung tergulir sehingga kepala produk terpotong, toast produk di kiri bawah.
-- Item 11 "kelancaran" hanya lewat penundaan INP; tidak ada pass terpisah untuk long task autoplay / layout shift baris baru.
-- `/ekosistem` bintang: lulus di build ini (144/160 ms), tetapi biaya frame dasar halaman eko tinggi (ticker GSAP); bisa melewati 200 ms di mesin lebih lambat.
-- Lighthouse LCP `/produk/:slug`, perf `/tur` dan Siaga Wilayah dengan pack Bandung (plan §3.3) tidak dijalankan ulang.
-- `docs/shots/demo/baseline/` tidak dibuat: baseline = folder tahap-2…tahap-6 (disk C: hampir penuh).
+- Item 11 "kelancaran" hanya ditangani lewat penundaan INP. Belum ada pass terpisah untuk long task autoplay dan
+  layout shift saat baris baru muncul.
+- `/ekosistem` bintang: lulus (136/144 ms), tetapi biaya frame dasar halaman eko tinggi (ticker GSAP).
+- Perf beranda run Tahap 8 (CPU 1×): p95 7,2 / 12,3 / 11,7 / 12,9 / 12,3 ms. Angka ini setara Tahap 1 tetapi lebih
+  tinggi dari run Tahap 7, karena beban CPU di atas; kode beranda tidak berubah.
+- Lighthouse LCP `/produk/:slug`, perf `/tur`, dan perf Siaga Wilayah dengan pack Bandung (plan §3.3) tidak dijalankan
+  ulang.
+- `docs/shots/demo/baseline/` tidak dibuat; baseline-nya folder tahap-2…tahap-6 (disk C: hampir penuh). Screenshot
+  Tahap 8 juga tidak dibuat.
 
 **Sengaja tidak dikerjakan (plan §8):** redesign `/karya`; pemilih wilayah di halaman situs dan narasi tur Bandung/Padang; putaran ulang wow; partikel OGL konstelasi (Could 18); refaktor ukuran kit (item 15); statistik resmi, peta BNPB, zona tsunami, cuaca BMKG langsung, pemeriksaan penutur asli Sunda/Minang; unggah CSV sendiri di Pajak Beres, layar PKP/PPN, bukti potong.
 
-**Menunggu pemilik:** kunci API + batas anggaran + hosting proxy untuk Live mode; kontak di `src/content/site.ts` (masih TODO) dan domain (sitemap/JSON-LD memakai `https://gamada.id`; `robots.txt` belum ada); perintah commit/push/deploy.
+**Menunggu pemilik:** kunci API + batas biaya + hosting proxy untuk Live mode; kontak di `src/content/site.ts` (masih TODO) dan domain (sitemap/JSON-LD memakai `https://gamada.id`; `robots.txt` belum ada); perintah commit/push/deploy.
 
 ## 7 · Cara menjalankan
 
@@ -156,7 +185,7 @@ npm install
 npm run dev                 # http://127.0.0.1:5173
 npm run build               # tsc + region:validate (3 pack) + vite build → dist/
 npm run preview             # http://127.0.0.1:4173
-npm run region:validate     # zod, anggaran gzip, label simulasi, round-trip .min
+npm run region:validate     # zod, batas ukuran gzip, label simulasi, round-trip .min
 npm run test:e2e            # build .e2e/dist + Playwright (677 tes, ±30 mnt, 3 worker)
 npm run perf                # A/B scroll beranda (butuh preview di 4173)
 npm run ai:test             # proxy AI + matcher/stream/fallback
@@ -171,3 +200,108 @@ pack terdekat (kota → Bandung/Padang, kabupaten → Bojonegoro), ganti pcode A
 satu baris ke `REGIONS` di `src/demo-kit/region/loader.ts` (≤ 0,3 KB) dan satu bagian sumber/lisensi di
 `packs/README.md`; jalankan `REGION=<id>` world self-test dan `tests/e2e/tahap7/regions.spec.ts`. Langkah rinci:
 `src/demo-kit/region/packs/README.md` § "Adding a fourth region".
+
+## 8 · Putaran perbaikan (Tahap 8)
+
+Ditulis 2026-11-20 oleh integrator Tahap 8. Empat fixer (INP A, INP B, tur, konten) masing-masing hanya mengubah
+berkasnya sendiri. Integrator lalu menerapkan handoff yang murah dan memperbaiki dua regresi yang ditemukan saat gate.
+Setelah itu semuanya diukur ulang di build produksi (`dist/` di port 4173; e2e memakai `.e2e/dist`). Belum di-commit.
+
+### Status tiap cacat
+
+| Cacat (§6 Tahap 7 / tahap7-plan 10c) | Status | Catatan |
+|---|---|---|
+| INP > 200 ms di 11 interaksi | **sebagian** | 7 dari 11 kini ≤ 200 (lihat tabel INP). Masih di atas: Cek Berkas mode Massal 390, Meja Pimpinan 390, Siaga citra satelit 390. |
+| Ganti wilayah 232 ms | **beres** | `RegionSwitcher.pick` menutup pemilih lebih dulu; `setSession` baru jalan sesudah paint (rAF + setTimeout). 1440: 232 → 144. |
+| Meja Pimpinan > 175 KB | **beres** | Sparkline dibuat sendiri, tidak lagi menarik ChartFrame. ID 176,6 → 169,2; EN 178,2 → 170,7. |
+| Cek Berkas: spesimen Bojonegoro di Bandung/Padang | **beres** (galeri) | KTP/KK/domisili memakai nama dan kode NIK wilayah (Bandung 3273…). Ada tes baru di `regions.spec`, dan Cek Berkas keluar dari daftar pengecualian. Permukaan lain: lihat §6. |
+| Naskah Pintar: "Setujui sebagai Bupati" statis | **beres** | Bupati/Regent di kabupaten, Wali Kota/Mayor di kota. Kop notulen ikut menjadi "Kota"/"City". Dicek di matriks 18 × 3. |
+| Katalog Lokal: bagi pesanan tanpa terpal | **beres** | Usulan mencakup semua barang, dikelompokkan per UMKM. Barang tanpa UMKM lokal disebut di bawah usulan. |
+| Sinyal Pasar: anomali > 15 dtk setelah banjir | **sebagian** | Kini 6,6–7,4 dtk kalau jam berjalan (jam ×60 sampai anomali pertama). Skrip INP menjeda jam, jadi "buka anomali" tetap tidak tercapai. |
+| Rapor Usaha: kartu bank satu kata per baris | **beres** | Diperbaiki di CSS produk; dicek pada lebar 560 px. |
+| Tur 10c (lihat daftar di bawah tabel) | **beres**, kecuali outlet | Lihat daftar di bawah tabel. `outlet=warung`, `/tur` di perf.mjs dan ukuran add-on: lihat §6. |
+| (baru, ditemukan saat gate) Tur di HP: "Ambil alih" tak terjangkau | **beres** | Saat lembar narasi di posisi *half*, 40dvh bagian bawahnya ada di luar layar. Kini isi lembar berakhir di tepi layar dan bisa digulir. Di Tahap 7 tes ini lolos hanya karena Playwright bisa menggulir pemain yang `overflow: hidden`. |
+| (baru, regresi Tahap 8) "Ambil alih" 248–296 ms | **beres** | Penyimpanan dunia yang sinkron (structured clone) dan pindah rute kini jalan sesudah keadaan tekan ter-paint. Hasilnya 72 / 80 ms. |
+
+Cacat tur 10c yang dicakup baris di atas:
+- toast produk muncul di kolom narasi;
+- panel chat Toko menutupi seluruh jendela;
+- panggung tergulir sehingga kepala produk terpotong;
+- HARGA / 7 HARI tumpang tindih;
+- garis Katalog melintasi Daftar kebutuhan;
+- baris kontrol di layar ringkasan;
+- Ambil alih tanpa `focus=`, dan jam 13.00 vs 13.10.
+
+Perbaikannya: portal produk (toast, drawer, modal) kini dipasang di dalam panggung, produk di-zoom 0,85 di
+desktop/tablet, dan gulir panggung dikunci. Fixer memeriksanya di dev pada 1440 dan 390, ID dan EN (bab 7, 8, 11, 14,
+17, 19 dan ringkasan).
+
+Handoff kit yang diterapkan integrator:
+- `Overlay`: pemulihan inert, kembalinya fokus dan `lenis.start` kini jalan sesudah paint.
+- `Hotspot`: pengukuran cincin "mulai di sini" dipindah ke task sesudah paint, tidak lagi di ticker.
+- `useVizLang` dipindah ke `viz/lang.ts`, sehingga Micro tidak lagi menarik ChartFrame.
+
+Tidak diterapkan: keadaan tekan `.dk-btn` dan `clock.play()` di skrip INP (lihat §6).
+
+### INP (×4 CPU, `inp.spec.ts`, build produksi, 390 = 3 run, 1440 = 1 run, angka terburuk, 2 worker)
+
+Diukur 113 interaksi; **16 di atas 200 ms** (Tahap 7: 11 dari 114). Hasil lengkap ada di `docs/build/tahap8-inp.json`;
+`tahap7-inp.json` tidak diubah.
+
+**Catatan kondisi:** selama pengukuran, dua server dev Vite (satu dari proyek lain) memakai ±3 inti CPU. Interaksi yang
+kodenya tidak berubah ikut naik ±30–60 % (Pajak Beres 48 → 88, Indeks Ekonomi 192 → 288). Artinya kondisi ukur Tahap 8
+lebih berat daripada Tahap 7, jadi angka Tahap 8 di tabel cenderung terlalu tinggi, bukan terlalu rendah.
+
+| Skenario | Tahap 7 → Tahap 8 · 390 | Tahap 7 → Tahap 8 · 1440 |
+|---|---|---|
+| Siaga Wilayah · selesai | 296 → **192** | 352 → **128** |
+| Siaga Wilayah · prakiraan +6 jam / citra satelit | 264 → 128 / 216 → **216** | 120 / 120 → 112 |
+| Siaga Wilayah · buka / Kirim peringatan | 128 → **208** / 136 → 200 | 104 → **208** / 144 → **248** |
+| Toko Autopilot · buka keranjang | 264 → **72** | — |
+| Sapa Warga · foto banjir | 256 → **48** | 136 → 184 |
+| TenderPilot · ke Dokumen | 232 → **192** | 184 → 192 |
+| Ganti wilayah · Kota Bandung | 168 → 152 | 232 → **144** |
+| Cek Berkas · mode Massal / Verifikasi 50 | 216 → **240** / 104 → 160 | 112 → 104 / 160 → **296** |
+| Meja Pimpinan · Susun briefing | 216 → **216** | 72 → 152 |
+| Pantau Merek · Kirim 5 balasan | 136 → 112 | 208 → **104** |
+| `/tur` · Ambil alih | 128 → 80 | 112 → 72 |
+| Tidak disentuh, kini > 200 | Awas Belanja 176 → 312 (buka paket), Indeks Ekonomi 192 → 288, Radar Isu 168 → 272, Sinyal Pasar 168 → 256, Inti 136 → 216 | Awas Belanja 128 → 248, Indeks Ekonomi 80 → 224 |
+
+### Ukuran muatan awal (gzip -9, skrip yang sama, `.shots/t8-int/budget2.log`)
+
+| Demo | Tahap 7 ID / EN | Tahap 8 ID / EN | Bandung ID / Padang EN |
+|---|---:|---:|---:|
+| meja-pimpinan | 176,6 / 178,2 | **169,2 / 170,7** | 163,9 / 160,7 |
+| cek-berkas | 161,1 / 162,6 | 163,5 / 165,1 (+2,4, spesimen per wilayah) | 162,6 / 162,4 |
+| toko-autopilot | 167,0 / 168,6 | 166,5 / 168,1 | 165,6 / 165,4 |
+| katalog-lokal | 155,7 / 157,2 | 156,1 / 157,7 | 155,2 / 155,0 |
+| `/tur` · `/tur/7` | 83,9 · 86,9 / 91,9 · 95,0 | 84,5 · 87,4 / 92,5 · 95,6 | |
+| demo lain | | berubah ≤ ±0,4 | |
+
+- **Semua demo ≤ 175** di ID, EN, Bandung dan Padang; tertinggi meja-pimpinan EN 170,7 dan rapor-usaha EN 170,6.
+  Peran alternatif tertinggi adalah sinyal-pasar pemilik-toko 172,6 / 174,1: masih di bawah 175, tetapi paling dekat.
+  Tidak ada yang > 175, dan batas ukuran 180 terpenuhi semua.
+- **Beranda JS awal: 253,09 KB** (≤ 253,6, tidak berubah).
+
+### Hasil uji
+
+- **e2e penuh** (`npx playwright test --workers=2`, `.e2e/dist`, 43,9 menit): **666 lulus, 11 gagal, 1 dilewati** dari
+  678 tes.
+  - 9 gagal: soft assert INP > 200 ms di bawah beban.
+  - 1 gagal: misi Pantau Merek 1440. Tes membaca event langsung sesudah klik, padahal demi INP emit kini baru terjadi dua
+    paint kemudian. Tes sekarang menunggu event itu muncul lalu tetap menuntut **tepat satu** `brand.replied`;
+    assertion tidak dilemahkan.
+  - 1 gagal: Katalog Lokal `?focus=`, flaky di bawah beban.
+- Dijalankan ulang tersendiri:
+  - Pantau Merek + Katalog Lokal: **24/24 lulus**.
+  - Sesudah perbaikan tur, `tahap5/tour` + `tahap7/final`: **23/23 lulus**.
+  - axe `tahap7/a11y`: **56/56**, 0 temuan (`docs/build/tahap8-a11y.json`).
+- Skrip INP: di HP, langkah "buka lembar" kini hanya diklik kalau lembar masih *peek*. Saat jeda lembar naik sendiri ke
+  *half*, dan klik di posisi *half* justru melipatnya kembali.
+- **Self-test**:
+  - `tsc -b` bersih; `region:validate` 3 pack lulus.
+  - `world.selftest`: Bojonegoro 2392, Bandung 2374, Padang 2374 lulus, 0 gagal.
+  - region/tour/up/pd exit 0; ui selftest lulus; shell selftest (dev) lulus.
+  - viz: force 42, format 97, monotone 3673 lulus.
+  - `npm run ai:test`: semua OK.
+- Grep byte kontrol: kosong. `git status`: tidak ada berkas terhapus. Tidak ada `.only` di tes.

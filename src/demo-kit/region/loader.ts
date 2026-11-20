@@ -183,9 +183,20 @@ export const pick = (b: Bi, lang: Lang): string => b[lang]
  * Language-aware labels for one pack. `name` is localised ("Bojonegoro Regency" in EN), numbers use the
  * locale's separators, and template text can be read in the regional language or a translation.
  */
+/** Intl formatters are costly to build (the region picker calls regionText for every pack on each render): one per language */
+const NF = new Map<Lang, [Intl.NumberFormat, Intl.NumberFormat]>()
+function formatters(lang: Lang): [Intl.NumberFormat, Intl.NumberFormat] {
+  let f = NF.get(lang)
+  if (!f) {
+    const loc = lang === 'id' ? 'id-ID' : 'en-GB'
+    f = [new Intl.NumberFormat(loc), new Intl.NumberFormat(loc, { maximumFractionDigits: 1, minimumFractionDigits: 1 })]
+    NF.set(lang, f)
+  }
+  return f
+}
+
 export function regionText(pack: RegionPack, lang: Lang) {
-  const nf = new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB')
-  const nf1 = new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: 1, minimumFractionDigits: 1 })
+  const [nf, nf1] = formatters(lang)
   const type = TYPE_LABEL[pack.type][lang]
   const desaCount = pack.kecamatan.reduce((a, k) => a + k.desa.length, 0)
   return {

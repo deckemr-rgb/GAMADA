@@ -4,16 +4,19 @@
  * as its `link`, like a cross-product toast); once the product is ready they are removed again. Links inside the
  * stage that lead to a sandbox (toasts, "Buka di …") become "Ambil alih" (they keep world=tour and get from=tur-<n>).
  * A visitor's pointerdown / keydown in the stage pauses the tour.
+ * Tahap 8: the product runs in a zoom box (desktop / tablet: the products' wide layouts fit the 62 % stage); its
+ * body-level portals (toasts, drawers, modals) are pinned to the stage's rect through CSS variables on <html>
+ * (tour.css), and a product dialog no longer makes the narration column inert.
  */
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { PRODUCT_BY_SLUG, type ProductSlug, type RoleId } from '../../content/products'
 import { demoComponent } from '../../demos/registry'
 import { DemoShell } from '../shell'
-import { getSession, useWorldStatus } from '../world'
+import { WORLD, clock, getSession, savePersisted, useWorldStatus, world } from '../world'
 import { Icon } from '../ui/icons'
-import { engine, markStageReady, syncUrl } from './engine'
-import { realDelay, setStageRoot } from './exec'
+import { engine, focusNow, markStageReady, syncUrl } from './engine'
+import { realDelay, setStageRoot, settleStage } from './exec'
 import { saveResume, tourStore, useTour, type StageSpec } from './store'
 import { TOUR_STRINGS } from './strings'
 import type { Lang } from './types'
@@ -41,7 +44,10 @@ export function useTakeover(lang: Lang): (href?: string) => void {
     if (!spec && !href) return
     saveResume({ chapter: st.n, rate: st.rate, seen: st.seen })
     engine.stop()
-    navigate(href ?? takeoverHref(spec!.slug, st.n, lang, spec!.role ?? getSession().role, spec!.focus))
+    // the sandbox loads the tour world from IndexedDB: save it with the clock as it is now (a chapter's setClock moves
+    // only the clock, which schedules no save, so the sandbox opened at the chapter's start time, e.g. 13.00 vs 13.10)
+    if (world.scope() === 'tour' && world.status() === 'ready') void savePersisted({ format: 'gamada-world', version: WORLD.version, clock: clock.get().minutes, state: world.get(), scope: 'tour' })
+    navigate(href ?? takeoverHref(spec!.slug, st.n, lang, spec!.role ?? getSession().role, focusNow(spec!.focusKey) ?? spec!.focus))
   }
 }
 
@@ -52,7 +58,14 @@ export function AmbilAlih({ lang, disabledReason }: { lang: Lang; disabledReason
   const reason = disabledReason ?? (st.stage ? null : t.posterOnly)
   return (
     <span className="dk-tour-takeover-wrap">
-      <button type="button" className="dk-tour-btn dk-tour-btn--accent dk-tour-takeover" data-tour="takeover" disabled={!!reason} aria-describedby={reason ? 'dk-tour-takeover-why' : undefined} title={reason ?? t.takeoverHint} onClick={() => go()}>
+      <button type="button" className="dk-tour-btn dk-tour-btn--accent dk-tour-takeover" data-tour="takeover" disabled={!!reason} aria-describedby={reason ? 'dk-tour-takeover-why' : undefined} title={reason ?? t.takeoverHint} onClick={(e) => {
+          // Tahap 8 (INP): the pressed state paints first; the world save (a structured clone) and the route change
+          // to the sandbox run after that frame
+          const b = e.currentTarget
+          if (b.getAttribute('aria-busy') === 'true') return
+          b.setAttribute('aria-busy', 'true')
+          requestAnimationFrame(() => window.setTimeout(() => go(), 0))
+        }}>
         <Icon name="arrowUpRight" size={16} />
         <span>{t.takeover}</span>
       </button>
@@ -85,7 +98,9 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
     if (spec.tab) extra.tab = spec.tab
     if (spec.focus) extra.focus = spec.focus
     syncUrl(tourStore.get().n, extra)
-    setActive(spec)
+    // Tahap 8 (long tasks on chapter change): the product swap (old unmount + new mount) renders as a transition,
+    // which React slices into short tasks; the curtain keeps the old product dimmed meanwhile
+    startTransition(() => setActive(spec))
   }, [spec, active?.key])
 
   // ready: world ready, the shell rendered, no busy skeleton for two polls ⇒ tell the engine, clean the URL
@@ -105,8 +120,12 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
         if (calm >= 2) break
       }
       if (!alive) return
+      settleStage()
       syncUrl(tourStore.get().n)
       markStageReady(active.key)
+      // a product's smooth focus scroll may land after the ready poll: settle once more unless a step spotlights by then
+      await realDelay(700)
+      if (alive && !tourStore.get().spot) settleStage()
     })()
     return () => {
       alive = false
@@ -143,6 +162,50 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
     }
   }, [go])
 
+  // body-level portals of the product (toasts, drawers, modals) follow the stage's rect (tour.css), and an open product
+  // dialog leaves the tour frame usable: the dialog is part of the stage, the narration and controls are not behind it
+  const live = !!active
+  useEffect(() => {
+    const el = root.current
+    if (!live || !el) return
+    const html = document.documentElement
+    let raf = 0
+    const put = () => {
+      raf = 0
+      const r = el.getBoundingClientRect()
+      const s = html.style
+      s.setProperty('--dk-tour-st-x', `${Math.round(r.left)}px`)
+      s.setProperty('--dk-tour-st-y', `${Math.round(r.top)}px`)
+      s.setProperty('--dk-tour-st-w', `${Math.round(r.width)}px`)
+      s.setProperty('--dk-tour-st-h', `${Math.round(r.height)}px`)
+      s.setProperty('--dk-tour-st-r', `${Math.round(html.clientWidth - r.right)}px`)
+      s.setProperty('--dk-tour-st-b', `${Math.round(html.clientHeight - r.bottom)}px`)
+    }
+    const later = () => {
+      if (!raf) raf = requestAnimationFrame(put)
+    }
+    put()
+    html.setAttribute('data-dk-tour-stage', '')
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(later) : null
+    ro?.observe(el)
+    window.addEventListener('resize', later)
+    const app = Array.from(document.body.children).find((c) => c.contains(el)) as HTMLElement | undefined
+    const mo = app
+      ? new MutationObserver(() => {
+          if (app.inert) app.inert = false
+        })
+      : null
+    mo?.observe(app!, { attributes: true, attributeFilter: ['inert'] })
+    return () => {
+      cancelAnimationFrame(raf)
+      ro?.disconnect()
+      mo?.disconnect()
+      window.removeEventListener('resize', later)
+      html.removeAttribute('data-dk-tour-stage')
+      for (const k of ['x', 'y', 'w', 'h', 'r', 'b']) html.style.removeProperty(`--dk-tour-st-${k}`)
+    }
+  }, [live])
+
   const Canvas = active ? demoComponent(active.slug) : null
   // INP (Tahap 7): the product subtree is memoised on the stage spec, so the tour's own store updates (curtain, step,
   // caption, fills) re-render the frame only, never the whole product
@@ -168,7 +231,7 @@ export default function Stage({ lang, phone }: { lang: Lang; phone: boolean }) {
   )
   return (
     <div ref={root} className="dk-tour-stage" aria-label={TOUR_STRINGS[lang].stage} role="region" data-stage={active?.slug ?? ''}>
-      {shell ?? <Poster lang={lang} />}
+      {shell ? <div className="dk-tour-zoom">{shell}</div> : <Poster lang={lang} />}
       <Spotlight />
     </div>
   )

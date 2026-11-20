@@ -107,6 +107,8 @@ async function missionFlow(page: Page, phone: boolean) {
   for (const id of pickIds) await page.locator(`[data-kl-card="${id}"] [data-kl="pick"]`).check()
   await page.locator('[data-kl="compare"]').click()
   await expect(page.locator('[data-kl="compare-drawer"]')).toHaveAttribute('data-n', '2')
+  // T8: the split suggestion covers every item of the need list (terpal too), or names the one without a local UMKM
+  for (const item of await g(page, (x) => x.world.get().catalogNeeds.byId[x.world.get().catalogNeeds.ids.find((n: string) => x.world.get().catalogNeeds.byId[n].by === 'ai')].items.map((i: any) => i.name.id as string))) await expect(page.locator('[data-kl="split"]')).toContainText(item)
   // mission 3: Pilih → Ringkas → Pagu → Kirim
   const chosen = pickIds[0]!
   await page.locator(`[data-kl-offer="${chosen}"] [data-kl="choose"]`).click()

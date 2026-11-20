@@ -4,7 +4,7 @@
  */
 import { useEffect } from 'react'
 import { motionMode } from '../../demo-kit/ui'
-import { clock, rows, world, type WorldState } from '../../demo-kit/world'
+import { clock, onEvent, rows, world, type ClockSpeed, type WorldState } from '../../demo-kit/world'
 
 export const FLOOD_AT = 7 * 60 + 6
 const AUTOPLAY_KEY = 'gamada:sp:autoplay'
@@ -63,6 +63,44 @@ export function useFloodAutoplay(): void {
     const offs = [clock.onMinute(check), clock.onJump((_f: number, to: number) => check(to))]
     return () => {
       for (const off of offs) off()
+    }
+  }, [])
+}
+
+/** the flood's shock leaves the seasonal band at shock +2 (world/pd/natural-pd SHOCK_STEPS); give up after +5 */
+const FF_MAX_MIN = 5
+/**
+ * After the flood, while the clock runs, the world clock runs at ×60 until the shock's first anomaly lands (flood +2
+ * world minutes ⇒ ≈ 2 s instead of ≈ 12–18 s at ×10), then the visitor's speed comes back. Only the pace changes:
+ * every world minute still runs (same natural path, same numbers as the tour / Indeks Ekonomi read for that minute).
+ * A paused clock is left alone; a speed or pause chosen meanwhile wins (no restore over it).
+ */
+export function useAnomalyFastForward(): void {
+  useEffect(() => {
+    let prev: ClockSpeed | null = null
+    let until = -1
+    const stop = () => {
+      const c = clock.get()
+      if (prev !== null && c.running && c.speed === 60) clock.setSpeed(prev)
+      prev = null
+      until = -1
+    }
+    const offs = [
+      onEvent('flood.alert', (e) => {
+        const c = clock.get()
+        if (prev !== null || !c.running || c.speed >= 60 || rows(world.get().prices).some((p) => p.anomaly && p.updatedAt >= e.at)) return
+        prev = c.speed
+        until = e.at + FF_MAX_MIN
+        clock.setSpeed(60)
+      }),
+      onEvent('price.anomaly', () => stop()),
+      clock.onMinute((m) => {
+        if (prev !== null && m >= until) stop()
+      }),
+    ]
+    return () => {
+      for (const off of offs) off()
+      stop()
     }
   }, [])
 }

@@ -2,8 +2,8 @@
  * Katalog Lokal — small helpers shared by the Pemda side and the lazy chunks: formatting, kecamatan names, the
  * example kecamatan of the pack, and the ?focus= router (need / order / match / tender / business ids).
  */
-import type { WorldState } from '../../demo-kit/world'
-import { catalogShortlist } from '../../demo-kit/world/pasar-daerah'
+import type { Bi, WorldState } from '../../demo-kit/world'
+import { catalogShortlist, splitSuggestion } from '../../demo-kit/world/pasar-daerah'
 
 export const SLUG = 'katalog-lokal' as const
 
@@ -60,4 +60,45 @@ export function flashEl(el: Element | null, flash: (el: HTMLElement) => void) {
   if (!(el instanceof HTMLElement)) return
   el.scrollIntoView({ block: 'center', behavior: 'smooth' })
   flash(el)
+}
+
+export interface SplitLine { bizId: string; category: string; name: Bi; qty: number; unit: string }
+export interface SplitPlan { lines: SplitLine[]; missing: { category: string; name: Bi }[] }
+/**
+ * "Usulan bagi pesanan" over the WHOLE need list: the world's `splitSuggestion` splits the item the best card cannot
+ * cover alone between two UMKM; every other item goes to a verified supplier in the shortlist (the split's two UMKM
+ * first, then shortlist order; one with enough stock before one without). An item no verified local UMKM supplies is
+ * listed in `missing`, so the suggestion never silently drops it. null = no split needed.
+ */
+export function splitPlan(s: WorldState, needId: string): SplitPlan | null {
+  const n = s.catalogNeeds.byId[needId]
+  const sp = splitSuggestion(s, needId)
+  if (!n || sp.length !== 2) return null
+  const top = catalogShortlist(s, needId).top
+  const item = (cat: string) => n.items.find((i) => i.category === cat)
+  const lines: SplitLine[] = sp.map((x) => ({ bizId: x.bizId, category: x.category, name: item(x.category)?.name ?? { id: x.category, en: x.category }, qty: x.qty, unit: item(x.category)?.unit ?? '' }))
+  const missing: SplitPlan['missing'] = []
+  const pref = (id: string) => { const i = sp.findIndex((x) => x.bizId === id); return i < 0 ? 2 : i }
+  for (const it of n.items) {
+    if (it.category === sp[0]!.category) continue
+    const avail = (c: (typeof top)[number]) => c.offer.lines.find((l) => l.category === it.category)?.qtyAvailable ?? 0
+    const sup = top
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.business.supplies.includes(it.category))
+      .sort((a, b) => Number(avail(b.c) >= it.qty) - Number(avail(a.c) >= it.qty) || pref(a.c.business.id) - pref(b.c.business.id) || a.i - b.i)[0]
+    if (!sup) missing.push({ category: it.category, name: it.name })
+    else lines.push({ bizId: sup.c.business.id, category: it.category, name: it.name, qty: it.qty, unit: it.unit })
+  }
+  return { lines, missing }
+}
+
+/** the split lines grouped per UMKM, in first-appearance order ("A: karung 80, terpal 50 + B: karung 1.920") */
+export function splitByBiz<T extends { bizId: string }>(lines: readonly T[]): { bizId: string; lines: T[] }[] {
+  const out: { bizId: string; lines: T[] }[] = []
+  for (const l of lines) {
+    const g = out.find((x) => x.bizId === l.bizId)
+    if (g) g.lines.push(l)
+    else out.push({ bizId: l.bizId, lines: [l] })
+  }
+  return out
 }

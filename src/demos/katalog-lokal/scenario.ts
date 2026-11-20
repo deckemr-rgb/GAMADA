@@ -8,9 +8,9 @@
 import type { Lang, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import { registerScenario, registerStructuredSchema } from '../../demo-kit/ai/chat'
 import { world, type WorldState } from '../../demo-kit/world'
-import { catalogKpi, catalogShortlist, listingOf, needView, splitSuggestion, type MatchParts } from '../../demo-kit/world/pasar-daerah'
+import { catalogKpi, catalogShortlist, listingOf, needView, type MatchParts } from '../../demo-kit/world/pasar-daerah'
 import { parseNeed } from './parse'
-import { SLUG, kecName, nf, rp } from './model'
+import { SLUG, kecName, nf, rp, splitByBiz, splitPlan } from './model'
 
 /** the context sent with each turn (≤ 6 KB): the need, its top 6 offers, HPS, Awas Belanja flags, KPIs */
 export interface KlContext {
@@ -19,7 +19,10 @@ export interface KlContext {
   flags: number[]
   top: { ref: string; name: string; verified: boolean; taxTidy: boolean; score: number | null; km: number; match: number; parts: MatchParts; available: string; unitPrices: string; total: number; short: boolean; leadDays: number; source: string }[]
   waiting: { name: string; request: string | null }[]
-  split: { ref: string; name: string; category: string; qty: number }[]
+  /** the split suggestion over the whole need list (first two lines = the item split between two UMKM) */
+  split: { ref: string; name: string; category: string; item: string; qty: number }[]
+  /** need items no verified local UMKM supplies (said aloud, never dropped silently) */
+  splitMissing: string[]
   kpi: { spendMonth: number; paidOrdersMonth: number; verifiedLocal: number; openNeeds: number }
 }
 
@@ -27,6 +30,7 @@ export function aiContext(s: WorldState, needId: string | null, lang: Lang, now:
   const v = needId ? needView(s, needId) : null
   const sl = needId ? catalogShortlist(s, needId) : { top: [], waiting: [] }
   const k = catalogKpi(s, now)
+  const sp = needId ? splitPlan(s, needId) : null
   return {
     need: v
       ? { code: v.need.code, title: v.need.title[lang], kecamatan: kecName(s, v.need.kecamatanId), items: v.need.items.map((i) => `${nf(lang, i.qty)} ${i.unit} ${i.name[lang]}`), deadlineDays: v.need.deadlineDays, emergency: v.need.emergency, budget: v.need.budget ?? null }
@@ -41,12 +45,15 @@ export function aiContext(s: WorldState, needId: string | null, lang: Lang, now:
       leadDays: Math.max(1, ...c.offer.lines.map((l) => listingOf(s, c.business.id, l.category).leadDays)), source: c.offer.source,
     })),
     waiting: sl.waiting.map((c) => ({ name: c.business.name, request: c.requestId ?? null })),
-    split: needId ? splitSuggestion(s, needId).map((x) => ({ ref: x.bizId, name: s.businesses.byId[x.bizId]?.name ?? x.bizId, category: x.category, qty: x.qty })) : [],
+    split: (sp?.lines ?? []).map((x) => ({ ref: x.bizId, name: s.businesses.byId[x.bizId]?.name ?? x.bizId, category: x.category, item: x.name[lang], qty: x.qty })),
+    splitMissing: (sp?.missing ?? []).map((m) => m.name[lang]),
     kpi: { spendMonth: k.spendMonth, paidOrdersMonth: k.paidOrdersMonth, verifiedLocal: k.verifiedLocal, openNeeds: k.openNeeds },
   }
 }
 
 type Ctx = SimContext<KlContext>
+/** "A: Karung pasir 80, Terpal 50 + B: Karung pasir 1.920" (one group per UMKM) */
+const splitText = (w: KlContext, L: Lang) => splitByBiz(w.split.map((x) => ({ ...x, bizId: x.ref }))).map((g) => `${g.lines[0]!.name}: ${g.lines.map((x) => `${x.item} ${nf(L, x.qty)}`).join(', ')}`).join(' + ')
 const T = (lang: Lang, id: string, en: string) => (lang === 'id' ? id : en)
 const chips = (lang: Lang, ...k: ('why' | 'cmp' | 'split' | 'price' | 'badge' | 'pay' | 'rule')[]) =>
   k.map(
@@ -138,10 +145,10 @@ function compare(c: Ctx): SimResponse {
   return {
     text: T(
       L,
-      `Untuk ${w.need.code}, saya condong ke ${pick.name}: ${ranking.find((r) => r.businessId === pick.ref)?.reason}. ${top.filter((x) => x !== pick).map((x) => `${x.name} ${rp(x.total)}`).join('; ')}.${w.split.length ? ` Usulan bagi pesanan: ${w.split.map((x) => `${x.name} ${nf(L, x.qty)}`).join(' + ')}.` : ''}`,
-      `For ${w.need.code} I lean to ${pick.name}: ${ranking.find((r) => r.businessId === pick.ref)?.reason}. ${top.filter((x) => x !== pick).map((x) => `${x.name} ${rp(x.total)}`).join('; ')}.${w.split.length ? ` Suggested split: ${w.split.map((x) => `${x.name} ${nf(L, x.qty)}`).join(' + ')}.` : ''}`,
+      `Untuk ${w.need.code}, saya condong ke ${pick.name}: ${ranking.find((r) => r.businessId === pick.ref)?.reason}. ${top.filter((x) => x !== pick).map((x) => `${x.name} ${rp(x.total)}`).join('; ')}.${w.split.length ? ` Usulan bagi pesanan: ${splitText(w, L)}.${w.splitMissing.length ? ` ${w.splitMissing.join(', ')} belum ada UMKM lokal terverifikasi.` : ''}` : ''}`,
+      `For ${w.need.code} I lean to ${pick.name}: ${ranking.find((r) => r.businessId === pick.ref)?.reason}. ${top.filter((x) => x !== pick).map((x) => `${x.name} ${rp(x.total)}`).join('; ')}.${w.split.length ? ` Suggested split: ${splitText(w, L)}.${w.splitMissing.length ? ` No verified local SME for ${w.splitMissing.join(', ')} yet.` : ''}` : ''}`,
     ),
-    structured: { kind: 'katalog-lokal/compare', data: { pickId: pick.ref, ranking, ...(w.split.length ? { split: w.split.map((x) => ({ businessId: x.ref, category: x.category, qty: x.qty })) } : {}), risks } },
+    structured: { kind: 'katalog-lokal/compare', data: { pickId: pick.ref, ranking, ...(w.split.length ? { split: w.split.slice(0, 2).map((x) => ({ businessId: x.ref, category: x.category, qty: x.qty })) } : {}), risks } },
     toolCalls: [{ name: 'compare_offers', input: { need: w.need.code, offers: top.length } }],
     followUps: chips(L, 'split', 'price', 'rule'),
   }
@@ -153,7 +160,7 @@ function split(c: Ctx): SimResponse {
   const L = c.lang
   return {
     text: w.split.length
-      ? T(L, `Stok UMKM teratas tidak cukup sendiri. Usulan: ${w.split.map((x) => `${x.name} ${nf(L, x.qty)}`).join(' + ')} untuk ${w.split[0]!.category}. Tombol "Pakai usulan bagi pesanan" ada di jendela pembanding.`, `The top SME’s stock is not enough alone. Suggestion: ${w.split.map((x) => `${x.name} ${nf(L, x.qty)}`).join(' + ')} for ${w.split[0]!.category}. The "Use the split suggestion" button is in the comparison.`)
+      ? T(L, `Stok UMKM teratas tidak cukup sendiri untuk ${w.split[0]!.item}. Usulan: ${splitText(w, L)}.${w.splitMissing.length ? ` ${w.splitMissing.join(', ')}: belum ada UMKM lokal terverifikasi, pesan terpisah.` : ''} Tombol "Pakai usulan bagi pesanan" ada di jendela pembanding.`, `The top SME’s stock is not enough alone for ${w.split[0]!.item}. Suggestion: ${splitText(w, L)}.${w.splitMissing.length ? ` ${w.splitMissing.join(', ')}: no verified local SME yet, order it separately.` : ''} The "Use the split suggestion" button is in the comparison.`)
       : T(L, `Tidak perlu: UMKM teratas sanggup memenuhi seluruh ${w.need.code} sendiri.`, `Not needed: the top SME can supply all of ${w.need.code} alone.`),
     followUps: chips(L, 'cmp', 'price'),
   }

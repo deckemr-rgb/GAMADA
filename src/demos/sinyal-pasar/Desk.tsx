@@ -10,7 +10,7 @@ import { DEMO_READY } from '../registry'
 import { demoHref, intentProps, replaceQuery, usePreloadOnIntent, useShell } from '../../demo-kit/shell'
 import { BrowserFrame } from '../../demo-kit/frames'
 import { Button, IconButton, Kpi, KpiStrip, LoadingText, Select, flashNewRow, motionMode } from '../../demo-kit/ui'
-import { FLOOD_AT, floodOf, nextPaint, playFlood, useAutoplay, useFloodAutoplay } from './live'
+import { FLOOD_AT, floodOf, nextPaint, playFlood, useAnomalyFastForward, useAutoplay, useFloodAutoplay } from './live'
 import { hhmm, onEvent, rows, useClock, useSession, useWorld, world, DAY_MIN, type WorldState } from '../../demo-kit/world'
 import { pdKpi, priceBoard, priceTicker, weekChangeOf } from '../../demo-kit/world/pasar-daerah'
 import { Ticker, type TickerItem } from './Ticker'
@@ -75,6 +75,7 @@ export default function Desk() {
   const askRef = usePreloadOnIntent<HTMLButtonElement>(loadAssist)
   useAutoplay(shell.present)
   useFloodAutoplay()
+  useAnomalyFastForward()
   useEventToasts(t, lang)
   useEffect(() => void replaceQuery({ tab: u.tab === 'ringkasan' ? null : u.tab, commodity: u.commodity || null, market: u.market || null }), [u.tab, u.commodity, u.market])
 

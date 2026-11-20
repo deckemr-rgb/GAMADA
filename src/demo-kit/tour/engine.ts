@@ -14,11 +14,14 @@ import { tourStore, type StageSpec } from './store'
 // named static imports only: a dynamic import('../world') would pull the whole barrel namespace (incl. its demo-gen
 // re-exports) into the demo-core chunk and create a demo-core ⇄ demo-gen cycle that breaks every /demo page
 import { clock as wClock, loadWorld, resetWorld, rows as wRows, setNaturalEvents, setSession, world as wWorld } from '../world'
-import type { ChapterScript, Lang, Step } from './types'
+import type { ChapterScript, FocusKey, Lang, Step } from './types'
 
 type WS = typeof import('./world-steps')
 let wsP: Promise<WS> | null = null
-export const loadWorldSteps = (): Promise<WS> => (wsP ??= import('./world-steps'))
+let wsMod: WS | null = null
+export const loadWorldSteps = (): Promise<WS> => (wsP ??= import('./world-steps').then((m) => (wsMod = m)))
+/** Tahap 8: a stage's focus entity as the world is NOW (Ambil alih after the chapter created it, e.g. ch. 11's sent PO) */
+export const focusNow = (key: FocusKey | null | undefined): string | null => (key && wsMod ? wsMod.focusOf(key) : null)
 
 class Cancelled extends Error {}
 
@@ -198,7 +201,7 @@ async function runStep(step: Step, ch: ChapterScript, alive: () => boolean, ws: 
         tourStore.set((s) => ({ poster: true, posterSlug: step.slug, stage: null, spot: null, seen: { ...s.seen, [step.slug]: s.seen[step.slug] ?? 0 } }))
         break
       }
-      const key = mount({ slug: step.slug, role: step.role, tab: step.tab, focus: step.focus ? ws.focusOf(step.focus) : null, q: step.q })
+      const key = mount({ slug: step.slug, role: step.role, tab: step.tab, focus: step.focus ? ws.focusOf(step.focus) : null, focusKey: step.focus, q: step.q })
       tourStore.set({ busy: true })
       await waitStage(key, alive)
       tourStore.set({ busy: false })
@@ -276,7 +279,7 @@ async function playChapter(n: number, my: number): Promise<void> {
     dwellSlug = ch.product
     tourStore.set((s) => ({ stage: null, seen: { ...s.seen, [ch.product]: s.seen[ch.product] ?? 0 } }))
   } else {
-    const key = mount({ slug: ch.product, role: ch.role, tab: ch.tab, focus: ch.focus ? ws.focusOf(ch.focus) : null, q: ch.q })
+    const key = mount({ slug: ch.product, role: ch.role, tab: ch.tab, focus: ch.focus ? ws.focusOf(ch.focus) : null, focusKey: ch.focus, q: ch.q })
     await waitStage(key, alive)
   }
   if (!alive()) return

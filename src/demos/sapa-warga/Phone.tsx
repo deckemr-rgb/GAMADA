@@ -7,7 +7,7 @@
  * Ticket creation: a voice note or a photo report creates the ticket at once (complaint.created, source sapa-warga),
  * then the AI answers about that ticket; a typed report creates it when the AI's `ticket` card arrives.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useI18n } from '../../lib/i18n'
 import { useAiChat, registerScenario, type ChatMessage } from '../../demo-kit/ai/chat'
 import type { SimContext, SimResponse } from '../../demo-kit/ai/types'
@@ -303,9 +303,14 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
     },
     [chatSend, chatFlush],
   )
+  // a warm-up on focus (pointerdown on a chip focuses it): it runs after the next paint, never inside the tap (INP)
   const prepare = useCallback(() => {
-    chatPrepare()
-    void loadScenario().catch(() => undefined)
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        chatPrepare()
+        void loadScenario().catch(() => undefined)
+      }, 0),
+    )
   }, [chatPrepare])
 
   /* chat messages → timeline (+ the pending media meta of user messages; assigned here, never inside an updater) */
@@ -524,19 +529,27 @@ function Chat({ persona, convs, onCreated, openSheet, staged, setStaged, voiceRe
   const quick = useMemo(() => quickFor(persona, rlCode), [persona, rlCode])
   const quickChips = useMemo(() => quick.flatMap((q) => [q.label[lang], ...(q.text ? [typeof q.text === 'string' ? q.text : q.text[lang]] : [])]), [quick, lang])
   const onQuick = (q: Quick) => {
+    // the visitor has started: the "start here" ring retires (its per-frame placement would otherwise weigh on every
+    // later tap on this phone; after the paint, not inside this one)
+    afterPaint(() => dismissHotspot('sapa-warga:voice'))
     if (q.act === 'voice') openSheet({ k: 'voice', quick: true })
     else if (q.act === 'photo') {
-      setStaged({ photo: { id: 'genangan', title: PHOTO_META.genangan.title }, loc: true })
-      setText(PHOTO_META.genangan.caption[lang])
+      // INP: the staged photo + caption render as a transition (the chip's pressed state paints first)
+      startTransition(() => {
+        setStaged({ photo: { id: 'genangan', title: PHOTO_META.genangan.title }, loc: true })
+        setText(PHOTO_META.genangan.caption[lang])
+      })
     } else if (q.act === 'queue') openSheet({ k: 'slots', serviceId: persona === 'raka' ? 'nib-oss' : 'ktp-el' })
     else if (q.text) void ask(typeof q.text === 'string' ? q.text : q.text[lang])
   }
   const hasStaged = !!staged.photo || !!staged.loc
+  // one object per change, so the memoised thread skips composer-only renders (typing, staging a photo)
+  const threadConv = useMemo(() => ({ ...conv, messages: chat.messages }), [conv, chat.messages])
 
   return (
     <>
       <div ref={scroll} className="dk-sw-scroll">
-        <Thread conv={{ ...conv, messages: chat.messages }} worldMsgs={worldById} greeting={greeting} tips={tips} actions={actions} scrollRef={scroll} quickChips={quickChips} />
+        <Thread conv={threadConv} worldMsgs={worldById} greeting={greeting} tips={tips} actions={actions} scrollRef={scroll} quickChips={quickChips} />
       </div>
       {notice}
       <div className="dk-sw-quick" role="group" aria-label={t.quick}>

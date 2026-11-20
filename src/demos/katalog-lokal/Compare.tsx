@@ -1,6 +1,6 @@
 /**
  * Compare drawer (lazy, preloaded on the "Bandingkan" intent): ≤ 3 offers side by side (unit prices, total, km,
- * available, lead days, badges, ScoreDial), `splitSuggestion` "Pakai usulan bagi pesanan", then "Pilih <UMKM>" →
+ * available, lead days, badges, ScoreDial), `splitPlan` "Pakai usulan bagi pesanan" (covers every need item), then "Pilih <UMKM>" →
  * Ringkas → Pagu (MoneyInput, ≥ total) → Kirim ⇒ order.created (orderPayload; source katalog-lokal).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -8,9 +8,9 @@ import { useShell } from '../../demo-kit/shell'
 import { BizBadges, Button, Drawer, MoneyInput, Stepper } from '../../demo-kit/ui'
 import { ScoreDial } from '../../demo-kit/viz'
 import { emit, useWorld, type EventMap, type WorldState } from '../../demo-kit/world'
-import { SCORE_BANDS, catalogShortlist, listingOf, needView, orderPayload, splitSuggestion } from '../../demo-kit/world/pasar-daerah'
+import { SCORE_BANDS, catalogShortlist, listingOf, needView, orderPayload } from '../../demo-kit/world/pasar-daerah'
 import { useI18n } from '../../lib/i18n'
-import { SLUG, bizName, nf, rp } from './model'
+import { SLUG, bizName, nf, rp, splitByBiz, splitPlan } from './model'
 
 const C = {
   id: {
@@ -29,6 +29,7 @@ const C = {
     short: 'stok kurang dari permintaan',
     split: 'Usulan bagi pesanan',
     splitBtn: 'Pakai usulan bagi pesanan',
+    splitNone: (items: string) => `${items}: belum ada UMKM lokal terverifikasi; pesan terpisah di luar usulan ini.`,
     steps: ['Ringkas', 'Pagu', 'Kirim'],
     stepsLabel: 'Langkah pesanan',
     change: 'Ubah pilihan',
@@ -58,6 +59,7 @@ const C = {
     short: 'stock below the request',
     split: 'Split suggestion',
     splitBtn: 'Use the split suggestion',
+    splitNone: (items: string) => `${items}: no verified local SME yet; order it separately, outside this suggestion.`,
     steps: ['Summary', 'Budget', 'Send'],
     stepsLabel: 'Order steps',
     change: 'Change the pick',
@@ -83,7 +85,7 @@ export default function Compare({ needId, picks, onClose, onOrdered }: { needId:
   const v = needView(s, needId)
   const top = catalogShortlist(s, needId).top
   const cards = picks.map((id) => top.find((c) => c.business.id === id)).filter((c): c is NonNullable<typeof c> => !!c)
-  const split = splitSuggestion(s, needId)
+  const split = useMemo(() => splitPlan(s, needId), [s, needId])
   const [choice, setChoice] = useState<'split' | string | null>(null)
   const [step, setStep] = useState(0)
   const [pagu, setPagu] = useState<number | null>(null)
@@ -101,15 +103,16 @@ export default function Compare({ needId, picks, onClose, onOrdered }: { needId:
       const p = orderPayload(s, needId, choice)
       return p ? [p] : []
     }
-    const [a, b] = split
-    if (!a || !b) return []
-    const pa = orderPayload(s, needId, a.bizId)
-    const pb = orderPayload(s, needId, b.bizId)
-    if (!pa || !pb) return []
-    return [
-      { ...pa, items: pa.items.map((i) => (i.category === a.category ? { ...i, qty: a.qty } : i)).filter((i) => i.qty > 0) },
-      { ...pb, items: pb.items.filter((i) => i.category === b.category).map((i) => ({ ...i, qty: b.qty })) },
-    ]
+    if (!split) return []
+    /* one order per UMKM of the split, each with only the items (and quantities) the suggestion gives it */
+    const out: Plan = []
+    for (const { bizId, lines: mine } of splitByBiz(split.lines)) {
+      const p = orderPayload(s, needId, bizId)
+      if (!p) return []
+      const items = p.items.flatMap((i) => mine.filter((l) => l.category === i.category).map((l) => ({ ...i, qty: l.qty }))).filter((i) => i.qty > 0)
+      if (items.length) out.push({ ...p, items })
+    }
+    return out
   }, [choice, s, needId, split])
   const total = plan.reduce((a, p) => a + p.items.reduce((x, i) => x + i.qty * i.price, 0), 0)
   const ref0 = v?.need.budget ?? v?.hps ?? null
@@ -187,10 +190,11 @@ export default function Compare({ needId, picks, onClose, onOrdered }: { needId:
                 )
               })}
             </div>
-            {split.length === 2 && (
+            {split && (
               <div className="dk-kl-split" data-kl="split">
                 <b>{L.split}</b>
-                <span>{split.map((x) => `${bizName(s, x.bizId)} ${nf(lang, x.qty)}`).join(' + ')}</span>
+                <span>{splitByBiz(split.lines).map((g) => `${bizName(s, g.bizId)}: ${g.lines.map((x) => `${x.name[lang]} ${nf(lang, x.qty)}`).join(', ')}`).join(' + ')}</span>
+                {split.missing.length > 0 && <small data-kl="split-missing">{L.splitNone(split.missing.map((m) => m.name[lang]).join(', '))}</small>}
                 <Button size="sm" variant="secondary" onClick={() => setChoice('split')}>
                   {L.splitBtn}
                 </Button>

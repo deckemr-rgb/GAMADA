@@ -53,6 +53,10 @@ export const S = {
   spark7: { id: 'Aduan 7 hari', en: 'Complaints, 7 days' },
   sparkSla: { id: 'SLA harian 14 hari', en: 'Daily SLA, 14 days' },
   sparkNeg: { id: 'Mention negatif per jam', en: 'Negative mentions per hour' },
+  sparkAria: { id: '{l}: {t} dari {a} ke {b}', en: '{l}: {t} from {a} to {b}' },
+  sparkUp: { id: 'naik', en: 'up' },
+  sparkDown: { id: 'turun', en: 'down' },
+  sparkFlat: { id: 'tetap', en: 'flat' },
   // OPD role KPIs
   kOpdOpen: { id: 'Tiket terbuka', en: 'Open tickets' },
   kOpdSla: { id: 'SLA OPD 30 hari', en: 'Agency SLA, 30 days' },

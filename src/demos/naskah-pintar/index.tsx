@@ -322,7 +322,12 @@ export const missions: readonly Mission[] = [
   {
     id: 'disposisi-surat',
     label: { id: 'Disposisikan 1 surat', en: 'Disposition 1 letter' },
-    hint: { id: 'Tab Surat Masuk (di HP: Surat) → pilih surat → “Baca & susun disposisi” → Ajukan ke Sekda → Setujui sebagai Sekda (atau Setujui sebagai Bupati).', en: 'Incoming tab (Letters on a phone) → pick a letter → “Read & draft disposition” → Submit to the Regional Secretary → Approve as the Regional Secretary (or Approve as the Regent).' },
+    /* the head title follows the world's region (a kota: Wali Kota / Mayor; a kabupaten: Bupati / Regent), read when
+       the guide renders (it can render before the canvas has set the meeting region) */
+    get hint() {
+      const h = /^kota\s/i.test(world.get().region?.name ?? '') ? { id: 'Wali Kota', en: 'Mayor' } : { id: 'Bupati', en: 'Regent' }
+      return { id: `Tab Surat Masuk (di HP: Surat) → pilih surat → “Baca & susun disposisi” → Ajukan ke Sekda → Setujui sebagai Sekda (atau Setujui sebagai ${h.id}).`, en: `Incoming tab (Letters on a phone) → pick a letter → “Read & draft disposition” → Submit to the Regional Secretary → Approve as the Regional Secretary (or Approve as the ${h.en}).` }
+    },
     done: (e) => isEvent(e, 'letter.dispositioned') && e.source === 'naskah-pintar' && !e.payload.instructionId && !isAutoDisposition(e.payload.letterId),
   },
   {

@@ -127,6 +127,9 @@ for (const size of ['1440', '390'] as const) {
         else if (m.item) expect(after[i]).toContain(m.item)
       }
       await page.locator('[data-pm="bulk-send"]').dblclick()
+      // Tahap 8 (INP): the sheet closes first and the one emit follows two paints later: wait for it to land, then
+      // still assert exactly one (the double click must not send twice)
+      await expect.poll(async () => (await events(page)).some((e) => e.type === 'brand.replied' && e.source === SLUG), { timeout: 5_000 }).toBe(true)
       await settled(page)
       const ev2 = await events(page)
       const rep = ev2.filter((e) => e.type === 'brand.replied' && e.source === SLUG)

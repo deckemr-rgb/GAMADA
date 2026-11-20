@@ -33,10 +33,10 @@ const PACK = Object.fromEntries(
 ) as Record<RegionId, PackLite>
 /**
  * Demos whose first screen names no place at all (a shop dashboard, a call-QA list, a procurement desk, the Inti
- * overview) and Cek Berkas (its specimen gallery is still the bundled Bojonegoro KTP/KK: a known Tahap 7 defect,
- * LAPORAN-AKHIR §6). For these the region is asserted on the world (regionId) and the TopBar only.
+ * overview). For these the region is asserted on the world (regionId) and the TopBar only. Cek Berkas left this list in
+ * Tahap 8: its specimen gallery follows the active pack (test at the end of this file).
  */
-const NO_PLACE_ON_FIRST_SCREEN = new Set<string>(['awas-belanja', 'cek-berkas', 'toko-autopilot', 'juara-jualan', 'inti'])
+const NO_PLACE_ON_FIRST_SCREEN = new Set<string>(['awas-belanja', 'toko-autopilot', 'juara-jualan', 'inti'])
 const NEXT: Record<RegionId, RegionId> = { bojonegoro: 'bandung', bandung: 'padang', padang: 'bojonegoro' }
 /** WORLD.clockStart (07:00): a fresh region starts there */
 const CLOCK_START = 7 * 60
@@ -81,6 +81,8 @@ for (const slug of SLUGS) {
         }, { timeout: 10_000, message: `a ${region} name in the ${slug} canvas` })
         .toBe(true)
       await expect(page.locator(ROOT[slug as Slug]).first()).toBeVisible()
+      // T8: the Naskah Pintar disposition hint names this region's head (kabupaten Bupati, kota Wali Kota)
+      if (slug === 'naskah-pintar') await expect(page.locator('.dk-guide-hint').filter({ hasText: 'Setujui sebagai Sekda' })).toContainText(region === 'bojonegoro' ? 'Setujui sebagai Bupati' : 'Setujui sebagai Wali Kota')
 
       // switch from the picker: no reload, world reset to the new region's seed at the morning clock
       const to = NEXT[region]
@@ -134,3 +136,17 @@ for (const region of ['bandung', 'padang'] as const) {
     expect(errors.filter(notNoise)).toEqual([])
   })
 }
+
+// T8: the Cek Berkas specimens (KTP, KK, domisili, house photo) are documents of the active region, not Bojonegoro
+test('Cek Berkas bandung: the specimen gallery is a Kota Bandung set (Jawa Barat, Bandung NIK codes, no Bojonegoro)', async ({ page, errors }) => {
+  await openDemo(page, 'cek-berkas', { extra: 'region=bandung' })
+  expect(await worldRegion(page)).toBe('bandung')
+  const cb = page.locator('.dk-cb').first()
+  await expect(cb).toContainText('PROVINSI JAWA BARAT', { timeout: 20_000 })
+  await expect(cb).toContainText('KOTA BANDUNG')
+  await expect(cb).toContainText('Bandung')
+  // Kemendagri area code of Kota Bandung (32.73) on the KTP NIK
+  await expect(cb).toContainText(/(?<!\d)3273\d{12}(?!\d)/)
+  expect(await cb.textContent()).not.toMatch(/Bojonegoro|BOJONEGORO|Jawa Timur|JAWA TIMUR/)
+  expect(errors.filter(notNoise)).toEqual([])
+})

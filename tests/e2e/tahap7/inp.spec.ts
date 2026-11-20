@@ -225,7 +225,10 @@ const SCENARIOS: Scenario[] = [
     await m.click('putar bab 4', $(p, '[data-tour-ctl="play-chapter"]'), { after: 1000 })
     await p.waitForFunction(() => { const s = (window as G).__gamadaTour?.state; return s && s.n === 4 && !s.busy && s.stage?.focus }, null, { timeout: 90_000, polling: 200 }).catch(() => undefined)
     await p.evaluate(() => (window as G).__gamadaTour?.engine?.pause?.())
-    if (isPhone(p)) await m.click('buka lembar', $(p, '[data-tour-ctl="sheet"]'), { optional: true })
+    // the sheet rises to half by itself on pause: the grip only opens it when it is still in peek (a tap on a half
+    // sheet folds it back to peek, hiding Ambil alih; Tahap 7 reached it only through a scroll of the clipped player)
+    await p.waitForTimeout(400)
+    if (isPhone(p) && (await p.locator('.dk-tour-sheet.is-peek').count())) await m.click('buka lembar', $(p, '[data-tour-ctl="sheet"]'), { optional: true })
     await m.click('Ambil alih', $(p, isPhone(p) ? '.dk-tour-sheet [data-tour="takeover"]' : '[data-tour="takeover"]'), { key: true, after: 2500 })
     // Ringkasan: chapter 20 is the summary
     await p.goto('/tur/20?e2e=1&off=preloader&rate=8')

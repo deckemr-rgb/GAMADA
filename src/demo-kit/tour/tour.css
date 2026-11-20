@@ -401,6 +401,72 @@
   overflow: hidden;
   border-radius: var(--radius-lg);
 }
+/* Tahap 8: a product's own scrollIntoView (focus arrival, new rows) also scrolls overflow:hidden ancestors, which
+   shifted the whole stage up and cut the product header; clip frames cannot be scrolled at all */
+.dk-tour-player,
+.dk-tour-stage,
+.dk-tour-stage .dk-shell {
+  overflow: clip;
+}
+/* Tahap 8: the product runs zoomed out on desktop / tablet, so its wide layouts (queue cards, price board columns,
+   match lines) fit the 62 % stage; the phone stage keeps 1 (the products' own phone layouts) */
+.dk-tour-zoom {
+  height: 100%;
+}
+.dk-tour-player:not(.is-phone) .dk-tour-zoom {
+  zoom: 0.85;
+}
+/* Katalog Lokal in the stage: its need tabs need ~250 px, so the 36 % left column overflowed into the match rail and
+   the match lines ran over "Daftar kebutuhan"; a wider left column keeps the rail clear */
+.dk-tour-stage[data-stage='katalog-lokal'] .dk-kl-body {
+  grid-template-columns: minmax(0, 46fr) minmax(0, 54fr);
+}
+/* the product's body-level portals stay inside the stage (Stage.tsx writes the stage rect on <html>): toasts at the
+   stage's bottom-right (never over the narration column), drawers / modals and their scrim within the stage */
+html[data-dk-tour-stage] .dk-toast-host > .dk-toasts {
+  top: auto;
+  left: auto;
+  right: calc(var(--dk-tour-st-r, 16px) + 12px);
+  bottom: calc(var(--dk-tour-st-b, 16px) + 12px);
+  width: min(360px, calc(var(--dk-tour-st-w, 392px) - 24px));
+}
+/* below the stage's product bar (56 px × the 0.85 zoom), so "Ambil alih" there stays reachable while a drawer is open */
+html[data-dk-tour-stage] {
+  --dk-tour-st-bar: 48px;
+}
+html[data-dk-tour-stage] .dk-portal:not(.dk-toast-host) > .dk-ov {
+  inset: auto;
+  left: var(--dk-tour-st-x, 0px);
+  top: calc(var(--dk-tour-st-y, 0px) + var(--dk-tour-st-bar));
+  width: var(--dk-tour-st-w, 100vw);
+  height: calc(var(--dk-tour-st-h, 100dvh) - var(--dk-tour-st-bar));
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+}
+html[data-dk-tour-stage] .dk-portal:not(.dk-toast-host) > .dk-ov > .dk-drawer {
+  height: 100%;
+  max-width: 100%;
+}
+html[data-dk-tour-stage] .dk-portal:not(.dk-toast-host) > .dk-ov > .dk-modal {
+  max-width: 100%;
+  max-height: calc(var(--dk-tour-st-h, 100dvh) - var(--dk-tour-st-bar) - 32px);
+}
+/* phone: the stage sits above the narration sheet, which rises over it when paused: toasts go under the product bar
+   and the product's portals stay below the sheet (z 20), so neither ever covers the narration */
+@media (max-width: 639.98px) {
+  html[data-dk-tour-stage] {
+    --dk-tour-st-bar: 56px;
+  }
+  html[data-dk-tour-stage] .dk-toast-host > .dk-toasts {
+    top: calc(var(--dk-tour-st-y, 8px) + 64px);
+    bottom: auto;
+  }
+  html[data-dk-tour-stage] .dk-toast-host,
+  html[data-dk-tour-stage] .dk-toast-host > .dk-toasts,
+  html[data-dk-tour-stage] .dk-portal:not(.dk-toast-host) > .dk-ov {
+    z-index: 19;
+  }
+}
 .dk-tour-poster {
   display: grid;
   place-items: center;
@@ -649,8 +715,13 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
   font-size: 0.86rem;
   color: var(--c-muted);
 }
-.dk-tour-summary .dk-tour-controls {
-  margin-top: 16px;
+.dk-tour-sum-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: -12px 0 12px;
+}
+.dk-tour-summary > .dk-tour-h2 {
+  margin-top: 40px;
 }
 .dk-tour-try {
   list-style: none;
@@ -757,6 +828,15 @@ html.dk-cursor-idle .dk-tour-player.is-presenter {
 }
 .dk-tour-sheet.is-half {
   transform: translateY(40dvh);
+}
+/* Tahap 8: in half the lower 40dvh of the sheet sits below the screen (the player clips it): the body ends at the
+   screen edge and scrolls, so "Ambil alih" and the controls stay reachable without dragging the sheet up */
+.dk-tour-takeover[aria-busy='true'] {
+  opacity: 0.72;
+  cursor: progress;
+}
+.dk-tour-sheet.is-half .dk-tour-sheet-body {
+  margin-bottom: 40dvh;
 }
 .dk-tour-sheet.is-full {
   transform: translateY(0);

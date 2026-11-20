@@ -4,7 +4,7 @@
  * n balasan" ⇒ ONE `brand.replied` (source pantau-merek) ⇒ replies under each review, "belum dibalas" −n and the
  * reputation up at once (a replied negative weighs × 0.5).
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Button, Drawer, motionMode } from '../../demo-kit/ui'
 import { useShell } from '../../demo-kit/shell'
 import { emit, useSession, world, type Bi } from '../../demo-kit/world'
@@ -120,17 +120,21 @@ export default function BulkReply({ open, ids, alertId, onClose }: { open: boole
   }, [drafts, open])
 
   const ready = shown >= drafts.length && drafts.length > 0
-  const send = () => {
+  const send = (e: MouseEvent<HTMLButtonElement>) => {
     if (sent.current || !ready) return
     sent.current = true
     const mentionIds = ms.map((m) => m!.id)
     const payload = repliesPayload(mentionIds, tone, drafts, role, alertId ?? undefined)
-    onClose()
-    // the sheet closes in this frame; the one heavy emit (stream, reputation chart, KPIs) follows the paint (INP)
+    // this frame only hides the sheet (a DOM attribute, no render); React closes it after that paint (closing
+    // re-renders the review list) and the one heavy emit (stream, reputation chart, KPIs) one paint later (INP)
+    e.currentTarget.closest('.dk-pm-bulk')?.setAttribute('data-closing', '')
     afterPaint(() => {
-      emit('brand.replied', payload, SLUG)
-      reviewSelection.set([])
-      shell.toast({ title: fill(L.sent, { n: mentionIds.length }), body: L.sentBody, tone: 'accent', icon: 'check' })
+      startTransition(onClose)
+      afterPaint(() => {
+        emit('brand.replied', payload, SLUG)
+        reviewSelection.set([])
+        shell.toast({ title: fill(L.sent, { n: mentionIds.length }), body: L.sentBody, tone: 'accent', icon: 'check' })
+      })
     })
   }
 

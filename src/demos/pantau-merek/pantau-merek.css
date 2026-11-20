@@ -231,3 +231,8 @@
   .dk-pm-tabs > .dk-tablist { padding: 0; overflow-x: auto; }
   .dk-pm-head-act .dk-btn { min-height: 44px; }
 }
+
+/* "Kirim": the sheet disappears in the click frame; React's close + the heavy emit follow the paint (INP) */
+.dk-pm-bulk[data-closing] {
+  visibility: hidden;
+}

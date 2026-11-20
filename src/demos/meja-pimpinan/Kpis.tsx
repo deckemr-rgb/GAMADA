@@ -6,12 +6,40 @@
 import { useI18n } from '../../lib/i18n'
 import type { RoleId } from '../../content/products'
 import { Kpi, KpiStrip } from '../../demo-kit/ui'
-import { Sparkline } from '../../demo-kit/viz'
 import { DAY_MIN, rows, shallowEqual, useWorld, type Minutes } from '../../demo-kit/world'
 import { kpiStrip } from '../../demo-kit/world/satu-daerah'
 import { negativeIssues } from '../../demo-kit/world'
 import { complaintDays, mpLeaderboard, mpServiceIndex, negativeHours, rankedCount, riverNow, riverState, slaDays, useNow } from './data'
-import { topicLabel, tr, trf } from './strings'
+import { nf, topicLabel, tr, trf } from './strings'
+
+/**
+ * The tiles' sparkline: line, optional 16% area, end dot, and a spoken summary ("naik dari 12 ke 19"). Drawn here
+ * rather than with the kit's viz Sparkline, which brings the chart frame and the number formatters (≈ 8 KB gzip) into
+ * this first screen for three 28 px lines. The SVG stretches to the slot (no ResizeObserver); the stroke keeps 1.5 px.
+ */
+function Spark({ values, label, area, color = 'currentColor' }: { values: number[]; label: string; area?: boolean; color?: string }) {
+  const { lang } = useI18n()
+  const n = values.length
+  const H = 28
+  const lo = n ? Math.min(...values) : 0
+  const hi = n ? Math.max(...values) : 1
+  const x = (i: number) => 3 + (i / Math.max(1, n - 1)) * 93
+  const y = (v: number) => H - 3 - ((v - lo) / (hi - lo || 1)) * (H - 6)
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(v).toFixed(2)}`).join('')
+  const first = values[0] ?? 0
+  const last = values[n - 1] ?? 0
+  const num = (v: number) => nf(lang, v, Number.isInteger(v) ? 0 : 1)
+  const trend = tr(last > first ? 'sparkUp' : last < first ? 'sparkDown' : 'sparkFlat', lang)
+  return (
+    <div className="dk-mp-spark" role="img" aria-label={trf('sparkAria', lang, { l: label, t: trend, a: num(first), b: num(last) })}>
+      <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        {area && n > 1 && <path d={`${line}L${x(n - 1).toFixed(2)},${H}L${x(0).toFixed(2)},${H}Z`} style={{ fill: color, fillOpacity: 0.16 }} />}
+        <path d={line} fill="none" vectorEffect="non-scaling-stroke" style={{ stroke: color, strokeWidth: 1.5, strokeLinejoin: 'round', strokeLinecap: 'round' }} />
+      </svg>
+      {n > 0 && <span className="dk-mp-spark-dot" style={{ left: `${x(n - 1)}%`, top: y(last), background: color }} aria-hidden="true" />}
+    </div>
+  )
+}
 
 export function Kpis({ role, opdId, compact }: { role: RoleId; opdId: string; compact?: boolean }) {
   const { lang } = useI18n()
@@ -33,10 +61,10 @@ export function Kpis({ role, opdId, compact }: { role: RoleId; opdId: string; co
   const sekda = role === 'sekretariat'
   return (
     <KpiStrip label={tr('kpis', lang)} className={cls}>
-      <Kpi label={tr('kComplaints', lang)} value={k.complaints.today} delta={k.complaints.delta} goodWhen="down" spark={!compact && <Sparkline values={days} label={tr('spark7', lang)} area />} />
-      <Kpi label={tr('kSla', lang)} value={svc.sla} unit="%" target={90} spark={!compact && <Sparkline values={sla} label={tr('sparkSla', lang)} />} />
+      <Kpi label={tr('kComplaints', lang)} value={k.complaints.today} delta={k.complaints.delta} goodWhen="down" spark={!compact && <Spark values={days} label={tr('spark7', lang)} area />} />
+      <Kpi label={tr('kSla', lang)} value={svc.sla} unit="%" target={90} spark={!compact && <Spark values={sla} label={tr('sparkSla', lang)} />} />
       <Kpi label={tr('kAlerts', lang)} value={k.alerts} caption={alertsCap} className={k.alerts ? 'is-danger' : river !== 'normal' ? 'is-warn' : undefined} />
-      <Kpi label={tr('kNegative', lang)} value={k.negativeIssues} caption={topNeg ? `${tr('cNegative', lang)} ${topicLabel(topNeg, lang)} · ${tr('cNeg24', lang)}` : tr('cNeg24', lang)} spark={!compact && <Sparkline values={neg} label={tr('sparkNeg', lang)} color="var(--dk-warn)" />} />
+      <Kpi label={tr('kNegative', lang)} value={k.negativeIssues} caption={topNeg ? `${tr('cNegative', lang)} ${topicLabel(topNeg, lang)} · ${tr('cNeg24', lang)}` : tr('cNeg24', lang)} spark={!compact && <Spark values={neg} label={tr('sparkNeg', lang)} color="var(--dk-warn)" />} />
       <Kpi label={tr('kOverdue', lang)} value={k.overdue} caption={tr('cOverdue', lang)} hero={sekda} className={k.overdue ? 'is-warn' : undefined} />
       <Kpi label={tr('kIndex', lang)} value={index} unit="/100" caption={tr('cIndex', lang)} hero={!sekda} />
     </KpiStrip>

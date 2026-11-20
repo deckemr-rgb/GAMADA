@@ -69,6 +69,11 @@ test.describe('sinyal-pasar · desktop', () => {
     for (const r of rows) expect(r.price).toBe(rp(await W<number>(page, `return s.prices.byId['${r.id}'].price`)))
     const kpi = await page.locator('.dk-sp-kpis').innerText()
     expect(kpi).toContain(String(await W<number>(page, `return s.region.commodities.length`)))
+    // T8: a flood while the clock runs ⇒ the anomaly row within ~5 s (×60 until it lands, then the chosen speed again)
+    await page.evaluate(() => (window as G).__gamada.clock.play())
+    await page.locator('[data-sp="play-flood"]').first().click()
+    await expect(page.locator('.dk-sp-row').filter({ hasText: 'Anomali' }).first()).toBeVisible({ timeout: 5_000 })
+    await expect.poll(() => page.evaluate(() => (window as G).__gamada.clock.get().speed), { timeout: 3_000 }).toBe(10)
     expect(errors).toEqual([])
   })
 

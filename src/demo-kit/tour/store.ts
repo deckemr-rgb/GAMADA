@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { ProductSlug, RoleId } from '../../content/products'
-import type { Fills } from './types'
+import type { Fills, FocusKey } from './types'
 
 export type Phase = 'opener' | 'poster' | 'player' | 'summary'
 export type Rate = number
@@ -14,6 +14,8 @@ export interface StageSpec {
   role?: RoleId
   tab?: string
   focus?: string | null
+  /** the chapter / step focus key (Ambil alih re-resolves it: the entity may only exist after the chapter's steps) */
+  focusKey?: FocusKey
   q?: Record<string, string>
   /** remount key */
   key: number

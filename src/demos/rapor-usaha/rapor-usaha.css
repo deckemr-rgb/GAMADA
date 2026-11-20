@@ -752,10 +752,12 @@
 }
 
 /* ------------------------------------------------------------------ bank queue + history */
+/* flex + wrap, not a media query: in a narrow container on a wide screen (the tour stage) the badges / chip column
+   drops below the business instead of squeezing its name to one word per line */
 .dk-ru-qrow {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   padding: 6px 8px;
@@ -764,6 +766,7 @@
 }
 .dk-ru-qbtn {
   display: flex;
+  flex: 1 1 280px;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -792,8 +795,10 @@
 }
 .dk-ru-qside {
   display: grid;
+  flex: 0 1 auto;
   gap: 6px;
   justify-items: end;
+  margin-left: auto;
 }
 .dk-ru-hist li {
   display: grid;
@@ -868,11 +873,12 @@
   .dk-ru-tl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .dk-ru-qrow {
-    grid-template-columns: minmax(0, 1fr);
+  .dk-ru-qbtn {
+    flex-basis: 100%;
   }
   .dk-ru-qside {
     justify-items: start;
+    margin-left: 0;
   }
   .dk-ru-scopedata li {
     grid-template-columns: minmax(0, 1fr);

@@ -1623,6 +1623,16 @@ export class MapEngine {
     if (this.labelRaf) cancelAnimationFrame(this.labelRaf)
     window.clearInterval(this.fpsTimer)
     for (const l of [...this.kecLabels.values(), ...this.desaLabels.values()]) l.el.remove()
-    this.map.remove()
+    // tearing down the WebGL map is the costly part (≈ 15–20 ms at ×4): a region switch unmounts the map inside the
+    // picker's click, so it runs after that paint (the engine is already inert: `destroyed` guards every callback)
+    let gone = false
+    const remove = () => {
+      if (gone) return
+      gone = true
+      this.map.remove()
+    }
+    requestAnimationFrame(() => window.setTimeout(remove, 0))
+    // a hidden tab runs no frames
+    window.setTimeout(remove, 500)
   }
 }

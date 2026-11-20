@@ -237,6 +237,27 @@
   padding: 10px 14px;
   container-type: inline-size;
 }
+/* the tiles' own sparkline (Kpis.tsx): fills what is left beside the number, 28 px high, end dot over the line */
+.dk-mp-kpis .dk-kpi-spark > .dk-mp-spark {
+  position: relative;
+  flex: 0 1 120px;
+  width: 120px;
+  min-width: 0;
+  height: 28px;
+}
+.dk-mp-spark > svg {
+  display: block;
+  width: 100%;
+  height: 28px;
+  overflow: visible;
+}
+.dk-mp-spark-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+}
 /* the kit sizes the spark beside the number; it does not make .dk-kpi a container, so the narrow-tile hide is ours */
 @container (max-width: 160px) {
   .dk-mp-kpis .dk-kpi-spark {

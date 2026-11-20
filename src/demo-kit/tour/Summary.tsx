@@ -94,6 +94,8 @@ export default function Summary({ lang, controls }: { lang: Lang; controls: Reac
 
   return (
     <section className="dk-tour-summary" aria-labelledby="dk-tour-sum-h">
+      {/* Tahap 8: the player controls sit in their own bar above the summary, not between the CTAs and "Coba sendiri" */}
+      <div className="dk-tour-sum-bar">{controls}</div>
       <div className="dk-tour-sum-grid">
         <div>
           <p className="dk-tour-eyebrow">{fill(t.chapterOf, { n: 20, total: 20 })}</p>
@@ -124,7 +126,6 @@ export default function Summary({ lang, controls }: { lang: Lang; controls: Reac
           <p id="dk-tour-pdf-hint" className="dk-tour-fine">
             {t.pdfHint}
           </p>
-          {controls}
         </div>
         <Constellation seen={st.seen} lang={lang} all size={220} />
       </div>

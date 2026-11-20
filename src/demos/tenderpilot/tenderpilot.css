@@ -1044,3 +1044,12 @@
     transition: none;
   }
 }
+
+/* the pressed look paints in the click frame; the heavy work follows the paint (INP). A painted change (outline,
+   background): a transform / filter change on the button runs on the compositor and does not end the interaction */
+.dk-tp [data-pressing],
+[data-tp="to-doc"][data-pressing] {
+  outline: 2px solid color-mix(in srgb, var(--dk-accent) 55%, transparent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--dk-accent) 82%, #000);
+}

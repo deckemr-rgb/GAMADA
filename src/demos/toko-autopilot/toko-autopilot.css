@@ -494,6 +494,12 @@ a.dk-ta-chip {
   flex: 1 1 auto;
   justify-content: center;
 }
+/* pressThen: the pressed look paints in the click frame, the heavy work follows (INP) */
+.dk-ta [data-pressing],
+.dk-ta-sticky [data-pressing] {
+  filter: brightness(0.9);
+  transform: scale(0.98);
+}
 .dk-ta-notice {
   border-color: var(--dk-line-act);
 }

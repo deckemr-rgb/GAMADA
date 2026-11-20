@@ -877,16 +877,18 @@ export function byText(by: string, lang: Lang): string {
 /* ------------------------------------------------------------------ Tahap 7: head of a kota */
 /** the head-title strings of the dictionaries (a kabupaten's Bupati / Regent, the defaults above) */
 const ORIG = {
-  id: { role: id.roleNote['kepala-daerah'], by: { ...id.by }, opdWho: id.lOpdWho },
-  en: { role: en.roleNote['kepala-daerah'], by: { ...en.by }, opdWho: en.lOpdWho },
+  id: { role: id.roleNote['kepala-daerah'], by: { ...id.by }, opdWho: id.lOpdWho, addr: id.oAddr },
+  en: { role: en.roleNote['kepala-daerah'], by: { ...en.by }, opdWho: en.lOpdWho, addr: en.oAddr },
 }
 /** a kota is led by a Wali Kota (EN Mayor), a kabupaten by a Bupati (Regent): swap the head title in the role note,
- *  the signer titles and the OPD hint (model.setMeetingRegion calls this when the region changes) */
+ *  the signer titles, the OPD hint and the letterhead address (model.setMeetingRegion calls this when the region changes) */
 export function setHeadTitle(kota: boolean): void {
   const sw = (v: string) => (kota ? v.replace(/Bupati/g, 'Wali Kota').replace(/Regent/g, 'Mayor') : v)
   for (const [d, o] of [[id, ORIG.id], [en, ORIG.en]] as const) {
     d.roleNote['kepala-daerah'] = sw(o.role)
     for (const k of Object.keys(o.by) as (keyof typeof d.by)[]) d.by[k] = sw(o.by[k])
     d.lOpdWho = sw(o.opdWho)
+    /* the letterhead address: a kota's government centre, not a kabupaten's */
+    d.oAddr = kota ? o.addr.replace(/Kabupaten/g, 'Kota').replace(/Regency/g, 'City') : o.addr
   }
 }

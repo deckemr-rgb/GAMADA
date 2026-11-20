@@ -257,11 +257,16 @@ export function ensureDesa(): Promise<boolean> {
   if (state.desaReady) return Promise.resolve(true)
   const h = mapRef.current
   if (!h) return Promise.resolve(false)
+  // the village model (a pass over every desa) and the re-render it starts run in a task after a paint: the load is
+  // started by a pointerdown and often lands inside that click's frame (INP)
   desaPromise ??= h.loadDesa().then(
-    () => {
-      ui.set({ desaReady: true, impact6: impactAt(6) })
-      return true
-    },
+    () =>
+      new Promise<boolean>((res) =>
+        afterPaintDo(() => {
+          ui.set({ desaReady: true, impact6: impactAt(6) })
+          res(true)
+        }),
+      ),
     () => {
       desaPromise = null
       return false

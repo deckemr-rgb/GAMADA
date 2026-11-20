@@ -184,7 +184,8 @@ export const MapStage = memo(function MapStage() {
   )
   const imageryOn = on.imagery
   useEffect(() => {
-    if (imageryOn) markMission('imagery')
+    // the guide's tick re-renders the whole shell: after the paint, not inside the toggle's click (INP)
+    if (imageryOn) afterPaintDo(() => markMission('imagery'))
   }, [imageryOn, markMission])
 
   // narrow map (laptop + guide panel open): the overlays fold into chips
@@ -237,6 +238,9 @@ function LayerMenu() {
   const { lang, t } = useT()
   const open = useUi((s) => s.layersOpen)
   const on = useUi((s) => s.layers)
+  // INP: a switch flips at once (this menu only); the map, legend and badges follow the store after that paint
+  const [flip, setFlip] = useState<Partial<Record<LayerId, boolean>>>({})
+  useEffect(() => setFlip((f) => (Object.keys(f).length ? {} : f)), [on])
   const boxRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const count = TOGGLES.filter((x) => on[x.id]).length
@@ -268,8 +272,11 @@ function LayerMenu() {
         <div id="dk-sg-layer-pop" className="dk-sg-layer-pop" role="dialog" aria-label={t('layersTitle')}>
           <LayerToggle
             title={t('layersTitle')}
-            items={TOGGLES.map((x) => ({ id: x.id, label: S[x.label][lang], hint: x.hint ? S[x.hint][lang] : undefined, icon: x.icon, checked: on[x.id] }))}
-            onChange={(id, v) => ui.layer(id as LayerId, v)}
+            items={TOGGLES.map((x) => ({ id: x.id, label: S[x.label][lang], hint: x.hint ? S[x.hint][lang] : undefined, icon: x.icon, checked: flip[x.id] ?? on[x.id] }))}
+            onChange={(id, v) => {
+              setFlip((f) => ({ ...f, [id]: v }))
+              afterPaintDo(() => ui.layer(id as LayerId, v))
+            }}
           />
         </div>
       )}

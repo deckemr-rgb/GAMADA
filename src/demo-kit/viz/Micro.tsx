@@ -6,7 +6,7 @@
  */
 import { useRef } from 'react'
 import { extentOf, monotoneArea, monotoneLine } from './monotone'
-import { useVizLang } from './ChartFrame'
+import { useVizLang } from './lang'
 import { rv, useAttrTween, useReveal, useRevealDom, useSize, vizMode } from './core'
 import './viz.css'
 

@@ -61,3 +61,12 @@ export const keyOfOutlet = (o: Record<Exclude<OutKey, 'semua'>, string>, id: str
 export const afterPaint = (fn: () => void): void => {
   requestAnimationFrame(() => setTimeout(fn, 0))
 }
+/** a press that opens something heavy: the control paints a pressed look in THIS frame (a frame with no visual change
+ *  is not presented, so the click would only "end" after the heavy render), the work follows the paint (INP) */
+export const pressThen = (el: HTMLElement, fn: () => void): void => {
+  el.setAttribute('data-pressing', '')
+  afterPaint(() => {
+    el.removeAttribute('data-pressing')
+    fn()
+  })
+}

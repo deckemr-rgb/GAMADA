@@ -147,7 +147,7 @@ export const CHAPTERS: readonly ChapterScript[] = [
       { k: 'wait', ms: 1500 },
       { k: 'focus', sel: '[data-tour="forecast-chart"]', cap: 1, wide: true },
       { k: 'wait', ms: 1500 },
-      { k: 'navigate', slug: 'toko-autopilot', role: 'pemilik-toko', tab: 'po' },
+      { k: 'navigate', slug: 'toko-autopilot', role: 'pemilik-toko', tab: 'po', focus: 'po' },
       { k: 'click', sel: '[data-tour="po-approve"]', fb: 'po', cap: 2 },
       { k: 'wait', ms: 800 },
       { k: 'world', key: 'po' },

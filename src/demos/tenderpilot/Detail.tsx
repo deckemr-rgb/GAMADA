@@ -22,6 +22,13 @@ const AiSummary = lazy(() => loadAi().then((m) => ({ default: m.AiSummary })))
 const loadDeadlines = () => import('./Deadlines')
 const Deadlines = lazy(loadDeadlines)
 export const loadComposer = () => import('./Composer')
+/** the press paints in the click frame (a frame without a visual change is not presented, so the click would only
+ *  "end" after the tab swap rendered); the caller defers the heavy work past that paint (INP) */
+function pressed(el: HTMLElement, fn: () => void): void {
+  el.setAttribute('data-pressing', '')
+  fn()
+  window.setTimeout(() => el.removeAttribute('data-pressing'), 600)
+}
 
 const whole = (s: WorldState) => s
 
@@ -154,7 +161,7 @@ export default function Detail({ tenderId, onDoc, t, lang, sm }: { tenderId: str
 
       <div className="dk-tp-next">
         <p className="dk-tp-muted">{t.toDocNote}</p>
-        <Button variant="primary" icon="doc" onClick={onDoc} {...intentProps(loadComposer)} data-tp="to-doc">
+        <Button variant="primary" icon="doc" onClick={(e) => pressed(e.currentTarget, onDoc)} {...intentProps(loadComposer)} data-tp="to-doc">
           {t.toDoc}
         </Button>
       </div>

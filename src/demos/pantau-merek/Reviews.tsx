@@ -3,7 +3,7 @@
  * on unanswered complaints, "Pilih 5 dari lonjakan" and a sticky "Balas n terpilih" bar that opens the bulk reply
  * sheet (lazy). Replies sent show under each review (ReplyChip + text). `?focus=BM-…` selects and scrolls to a review.
  */
-import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Chip, flashNewRow, motionMode } from '../../demo-kit/ui'
 import { intentProps, useShell } from '../../demo-kit/shell'
 import { world, type BrandMention } from '../../demo-kit/world'
@@ -126,10 +126,11 @@ export default function Reviews({ now, arrive }: { now: number; arrive: Arrival 
   useEffect(() => {
     if (valid.length !== sel.length) reviewSelection.set(valid)
   }, [valid, sel])
-  const toggle = (id: string) => {
+  // stable: the memoised cards stay put when the list re-renders (the bulk sheet closing, a filter)
+  const toggle = useCallback((id: string) => {
     const cur = reviewSelection.get()
     reviewSelection.set(cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])
-  }
+  }, [])
   const pick5 = () => {
     const s = world.get()
     const c = replyCandidates(s, now, alert?.id)

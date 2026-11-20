@@ -1,0 +1,24 @@
+{
+ "generated": "2026-11-20T08:35:40.561Z",
+ "tool": "axe-core via @axe-core/playwright, tags wcag2a wcag2aa wcag21aa; fail on serious + critical",
+ "exclusions": {
+  "selectors": [
+   ".maplibregl-canvas"
+  ],
+  "contrastAccepted": {}
+ },
+ "summary": {
+  "axe": {
+   "total": 0,
+   "byImpact": {},
+   "byArea": {},
+   "byRule": {}
+  },
+  "targets": {
+   "total": 0,
+   "byArea": {}
+  }
+ },
+ "axe": [],
+ "targets": []
+}

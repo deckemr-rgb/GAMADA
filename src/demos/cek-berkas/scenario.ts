@@ -5,6 +5,8 @@
  */
 import type { Lang, Scenario, SimContext, SimResponse } from '../../demo-kit/ai/types'
 import type { CekContext } from './model'
+import { currentRegion } from '../../demo-kit/world'
+import { swapFor, swapText } from './regional'
 
 type Ctx = SimContext<CekContext>
 
@@ -194,7 +196,7 @@ export const cekScenario: Scenario<CekContext> = {
         const c = w(ctx)
         const lang = ctx.lang
         const chk = c.doc?.checks.find((x) => x.id === 'name-kk' || x.id === 'kk-attached')
-        if (!c.doc?.verdict || !chk) return { text: L(lang, 'Cek silang nama dilakukan pada KTP yang punya KK di berkas yang sama. Verifikasi KTP Siti Nurjanah untuk melihatnya: namanya dicocokkan dengan anggota KK Mojosari.', 'The name cross-check runs on an ID card that has a family card in the same file. Verify Siti Nurjanah’s ID card to see it: her name is matched against the Mojosari family card.'), followUps: chips(lang, 'nik', 'why') }
+        if (!c.doc?.verdict || !chk) return { text: swapText(L(lang, 'Cek silang nama dilakukan pada KTP yang punya KK di berkas yang sama. Verifikasi KTP Siti Nurjanah untuk melihatnya: namanya dicocokkan dengan anggota KK Mojosari.', 'The name cross-check runs on an ID card that has a family card in the same file. Verify Siti Nurjanah’s ID card to see it: her name is matched against the Mojosari family card.'), swapFor(currentRegion())), followUps: chips(lang, 'nik', 'why') }
         return { text: L(lang, `${chk.label}: ${chk.status === 'ok' ? 'cocok' : 'tidak cocok'}${chk.note ? ` (${chk.note})` : ''}.`, `${chk.label}: ${chk.status === 'ok' ? 'match' : 'no match'}${chk.note ? ` (${chk.note})` : ''}.`), toolCalls: [step('match_family_card', { documentId: c.doc.id }, 220)], followUps: chips(lang, 'why', 'msg') }
       },
     },

@@ -176,9 +176,20 @@ export function Hotspot({ target, id, label, root, placement = 'auto' }: Hotspot
       r.style.visibility = 'hidden'
       lastKey = ''
     }
+    // Tahap 8 (INP): the ticker only decides whether a measure is due; the measure itself (getBoundingClientRect +
+    // elementFromPoint, a forced layout when the DOM just changed) runs in a task after this frame's paint, so a click
+    // that changes the canvas is presented before the ring is re-placed
+    let pending = 0
+    const tick = () => {
+      if (pending) return
+      if (!dirty && performance.now() - lastAt < POLL_MS) return
+      pending = window.setTimeout(() => {
+        pending = 0
+        place()
+      }, 0)
+    }
     const place = () => {
       const now = performance.now()
-      if (!dirty && now - lastAt < POLL_MS) return
       dirty = false
       lastAt = now
       // remounted, or no longer the target (its data-hotspot moved to another element): look it up again
@@ -248,9 +259,10 @@ export function Hotspot({ target, id, label, root, placement = 'auto' }: Hotspot
       if (ls) lab.style.transform = `translate(${Math.round(ls[0] - x)}px, ${Math.round(ls[1] - y)}px)`
     }
     place()
-    gsap.ticker.add(place)
+    gsap.ticker.add(tick)
     return () => {
-      gsap.ticker.remove(place)
+      gsap.ticker.remove(tick)
+      clearTimeout(pending)
       ro?.disconnect()
       window.removeEventListener('scroll', mark, { capture: true })
       window.removeEventListener('resize', mark)
